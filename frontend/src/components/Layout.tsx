@@ -7,10 +7,9 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div style={{ display: 'flex', minHeight: '100vh', background: t.bg }}>
       <Sidebar />
       <main style={{
-        flex: 1,
-        padding: '28px 32px',
-        overflowY: 'auto',
-        minWidth: 0,
+        flex: 1, padding: '32px 36px',
+        overflowY: 'auto', minWidth: 0,
+        animation: 'fadeIn .2s ease',
       }}>
         {children}
       </main>

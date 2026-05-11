@@ -1,29 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Odoo Consultant Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      html { font-size: 14px; }
+      html { font-size: 14px; -webkit-text-size-adjust: 100%; }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        background: #f0eeeb;
-        color: #212529;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
         line-height: 1.5;
         -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
       a { color: #017e84; text-decoration: none; }
       a:hover { text-decoration: underline; }
-      input, select, textarea, button {
-        font-family: inherit;
-        font-size: inherit;
+      input, select, textarea, button { font-family: inherit; font-size: inherit; }
+      button:focus-visible, input:focus-visible, select:focus-visible {
+        outline: 2px solid #017e84; outline-offset: 2px;
       }
-      /* Odoo-style scrollbar */
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
       ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #c0bdb8; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes indeterminate {
+        0%   { left: -40%; width: 40%; }
+        100% { left: 110%; width: 40%; }
+      }
     </style>
   </head>
   <body>

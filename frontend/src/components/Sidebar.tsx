@@ -1,13 +1,14 @@
 import { NavLink } from 'react-router-dom'
 import { t } from '../theme'
+import Icon, { IconName } from './Icon'
 
-const links = [
-  { to: '/dashboard', label: 'Dashboard',  icon: '⊞' },
-  { to: '/sources',   label: 'Sources',    icon: '⬇' },
-  { to: '/profiles',  label: 'Mes projets', icon: '🏢' },
-  { to: '/projects',  label: 'Dépôts',     icon: '📁' },
-  { to: '/query',     label: 'Requêtes',   icon: '🔍' },
-  { to: '/history',   label: 'Historique', icon: '🕐' },
+const links: { to: string; label: string; icon: IconName }[] = [
+  { to: '/dashboard', label: 'Tableau de bord', icon: 'dashboard' },
+  { to: '/sources',   label: 'Sources',          icon: 'download'  },
+  { to: '/profiles',  label: 'Mes projets',      icon: 'building'  },
+  { to: '/projects',  label: 'Dépôts',           icon: 'folder'    },
+  { to: '/query',     label: 'Requêtes',         icon: 'search'    },
+  { to: '/history',   label: 'Historique',       icon: 'clock'     },
 ]
 
 export default function Sidebar() {
@@ -15,70 +16,77 @@ export default function Sidebar() {
     <nav style={{
       width: t.navWidth,
       minHeight: '100vh',
-      background: t.brand,
+      background: t.sidebarBg,
       display: 'flex',
       flexDirection: 'column',
       flexShrink: 0,
       position: 'sticky',
       top: 0,
       overflowY: 'auto',
+      borderRight: '1px solid rgba(255,255,255,.06)',
     }}>
-      {/* Logo / Brand */}
+      {/* Logo */}
       <div style={{
-        padding: '18px 20px 20px',
-        borderBottom: `1px solid rgba(255,255,255,.12)`,
+        padding: '20px 16px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        borderBottom: '1px solid rgba(255,255,255,.07)',
         marginBottom: 8,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 32, height: 32,
-            background: t.action,
-            borderRadius: t.radius,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, fontWeight: 700, color: '#fff', flexShrink: 0,
-          }}>O</div>
-          <div>
-            <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, lineHeight: 1.2 }}>Odoo</div>
-            <div style={{ color: 'rgba(255,255,255,.6)', fontSize: 11 }}>Consultant Portal</div>
-          </div>
+        <div style={{
+          width: 34, height: 34, borderRadius: 8,
+          background: `linear-gradient(135deg, ${t.brand} 0%, ${t.brandDark} 100%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, boxShadow: '0 2px 8px rgba(1,126,132,.4)',
+        }}>
+          <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.5px' }}>O</span>
+        </div>
+        <div>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>Odoo Portal</div>
+          <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 11, marginTop: 1 }}>Consultant</div>
         </div>
       </div>
 
-      {/* Navigation links */}
-      <div style={{ flex: 1, padding: '4px 8px' }}>
+      {/* Nav */}
+      <div style={{ flex: 1, padding: '4px 10px' }}>
         {links.map(l => (
           <NavLink
             key={l.to}
             to={l.to}
             style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '9px 12px',
-              borderRadius: t.radius,
-              color: isActive ? '#fff' : 'rgba(255,255,255,.72)',
-              textDecoration: 'none',
-              fontWeight: isActive ? 600 : 400,
-              fontSize: 13,
-              background: isActive ? 'rgba(255,255,255,.15)' : 'transparent',
-              marginBottom: 2,
-              transition: 'background .15s',
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 12px', borderRadius: 6, marginBottom: 2,
+              color: isActive ? t.sidebarTextActive : t.sidebarText,
+              background: isActive ? 'rgba(255,255,255,.1)' : 'transparent',
+              textDecoration: 'none', fontWeight: isActive ? 600 : 400,
+              fontSize: 13, transition: 'background .12s, color .12s',
             })}
           >
-            <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{l.icon}</span>
-            {l.label}
+            {({ isActive }) => (
+              <>
+                <Icon
+                  name={l.icon}
+                  size={15}
+                  color={isActive ? t.brand : 'rgba(255,255,255,.5)'}
+                />
+                {l.label}
+              </>
+            )}
           </NavLink>
         ))}
       </div>
 
-      {/* Version footer */}
+      {/* Footer */}
       <div style={{
-        padding: '12px 20px',
-        borderTop: 'rgba(255,255,255,.1) 1px solid',
-        color: 'rgba(255,255,255,.4)',
+        padding: '12px 16px',
+        borderTop: '1px solid rgba(255,255,255,.07)',
+        color: 'rgba(255,255,255,.25)',
         fontSize: 11,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        v0.1.0
+        <span>v0.1.0</span>
+        <span>MVP</span>
       </div>
     </nav>
   )
