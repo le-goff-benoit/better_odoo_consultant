@@ -51,31 +51,53 @@ async def list_profiles(session: AsyncSession = Depends(get_session)):
 @router.post("/detect")
 async def detect_odoo_info(body: DetectRequest):
     """Connect to an Odoo instance and detect its version + installed modules."""
-    client = OdooClient(body.db_url, body.db_name, body.login, body.api_key)
+    import asyncio
+    import logging
+
+    log = logging.getLogger(__name__)
+
+    # Normalise URL — add https:// if missing, strip trailing slash
+    url = body.db_url.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    url = url.rstrip("/")
+
+    client = OdooClient(url, body.db_name, body.login, body.api_key)
+
+    loop = asyncio.get_event_loop()
+
+    # Authenticate (run blocking xmlrpc in thread)
     try:
-        uid = client.authenticate()
+        uid = await loop.run_in_executor(None, client.authenticate)
     except Exception as exc:
-        raise HTTPException(400, f"Connexion échouée : {exc}")
+        log.warning("detect /authenticate failed: %s", exc)
+        _raise_friendly(exc, url, body.db_name)
 
-    # Detect server version
+    # Server version (non-blocking, best-effort)
+    odoo_version = None
     try:
-        server_version: str = client._common.version().get("server_version", "")
-        # Normalise to major.minor (e.g. "17.0.1.3" → "17.0")
-        parts = server_version.split(".")
-        odoo_version = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else server_version
-    except Exception:
-        odoo_version = None
+        def _get_version():
+            return client._common.version()
+        info = await loop.run_in_executor(None, _get_version)
+        sv = info.get("server_version", "")
+        parts = sv.split(".")
+        odoo_version = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else sv or None
+    except Exception as exc:
+        log.debug("detect /version failed (non-fatal): %s", exc)
 
-    # List installed modules
+    # Installed modules (non-blocking, best-effort)
+    modules: list = []
     try:
-        modules = client.search_read(
-            "ir.module.module",
-            [["state", "=", "installed"]],
-            ["name", "shortdesc", "installed_version"],
-            limit=500,
-        )
-    except Exception:
-        modules = []
+        def _get_modules():
+            return client.search_read(
+                "ir.module.module",
+                [["state", "=", "installed"]],
+                ["name", "shortdesc", "installed_version"],
+                limit=500,
+            )
+        modules = await loop.run_in_executor(None, _get_modules)
+    except Exception as exc:
+        log.debug("detect /modules failed (non-fatal): %s", exc)
 
     return {
         "uid": uid,
@@ -83,6 +105,25 @@ async def detect_odoo_info(body: DetectRequest):
         "modules": modules,
         "module_count": len(modules),
     }
+
+
+def _raise_friendly(exc: Exception, url: str, db_name: str) -> None:
+    msg = str(exc).lower()
+    if "authentication failed" in msg or "access denied" in msg or "uid" in msg:
+        raise HTTPException(400, (
+            f"Identifiants incorrects pour la base « {db_name} » sur {url}. "
+            "Vérifiez le nom de base, le login et la clé API."
+        ))
+    if "connection refused" in msg or "nodename nor servname" in msg or "name or service not known" in msg:
+        raise HTTPException(400, (
+            f"Impossible de joindre {url}. "
+            "Vérifiez l'URL et votre connexion internet."
+        ))
+    if "timed out" in msg or "timeout" in msg:
+        raise HTTPException(400, f"Le serveur {url} ne répond pas (timeout). Réessayez.")
+    if "ssl" in msg or "certificate" in msg:
+        raise HTTPException(400, f"Erreur SSL sur {url}. Vérifiez que l'URL est correcte (https://).")
+    raise HTTPException(400, f"Connexion échouée : {exc}")
 
 
 @router.post("/")
@@ -136,6 +177,7 @@ async def delete_profile(profile_id: int, session: AsyncSession = Depends(get_se
 
 @router.post("/{profile_id}/test")
 async def test_connection(profile_id: int, session: AsyncSession = Depends(get_session)):
+    import asyncio
     profile = await session.get(Profile, profile_id)
     if not profile:
         raise HTTPException(404, "Projet introuvable")
@@ -144,7 +186,8 @@ async def test_connection(profile_id: int, session: AsyncSession = Depends(get_s
         raise HTTPException(400, "Aucune clé API enregistrée pour ce projet")
     client = OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
     try:
-        uid = client.authenticate()
+        loop = asyncio.get_event_loop()
+        uid = await loop.run_in_executor(None, client.authenticate)
         return {"ok": True, "uid": uid}
     except Exception as exc:
-        raise HTTPException(400, str(exc))
+        _raise_friendly(exc, profile.db_url, profile.db_name)

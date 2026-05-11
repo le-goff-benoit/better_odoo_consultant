@@ -1,13 +1,14 @@
+import asyncio
+import time
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Any, Optional
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.database import get_session
 from ...core.models import Profile
 from ...services.odoo_client import OdooClient
 from ...services.profile_manager import get_profile_api_key
 from ...services import history_service
-import time
 
 router = APIRouter()
 
@@ -15,7 +16,7 @@ router = APIRouter()
 def _get_client(profile: Profile) -> OdooClient:
     api_key = get_profile_api_key(profile.name)
     if not api_key:
-        raise HTTPException(400, "No API key for profile")
+        raise HTTPException(400, "Aucune clé API enregistrée pour ce profil")
     return OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
 
 
@@ -34,11 +35,15 @@ class SearchRequest(BaseModel):
 async def search(req: SearchRequest, session: AsyncSession = Depends(get_session)):
     profile = await session.get(Profile, req.profile_id)
     if not profile:
-        raise HTTPException(404, "Profile not found")
+        raise HTTPException(404, "Profil introuvable")
     client = _get_client(profile)
+    loop = asyncio.get_event_loop()
     t0 = time.time()
     try:
-        records = client.search_read(req.model, req.domain, req.fields, req.limit, req.offset, req.order)
+        records = await loop.run_in_executor(
+            None,
+            lambda: client.search_read(req.model, req.domain, req.fields, req.limit, req.offset, req.order),
+        )
         duration_ms = int((time.time() - t0) * 1000)
         export_path = None
         result_text = None
@@ -50,19 +55,21 @@ async def search(req: SearchRequest, session: AsyncSession = Depends(get_session
             from ...core.config import settings
             import datetime
             path = str(settings.data_dir / f"export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
-            client.export_excel(records, path)
+            await loop.run_in_executor(None, lambda: client.export_excel(records, path))
             export_path = path
         await history_service.add_entry(
             session,
             profile_name=profile.name,
             mode="search",
             prompt=f"{req.model} {req.domain}",
-            result_summary=f"{len(records)} records",
+            result_summary=f"{len(records)} enregistrements",
             exported_file_path=export_path,
             status="done",
             duration_ms=duration_ms,
         )
         return {"records": records, "count": len(records), "export": result_text, "export_path": export_path}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(400, str(exc))
 
@@ -71,10 +78,11 @@ async def search(req: SearchRequest, session: AsyncSession = Depends(get_session
 async def fields(profile_id: int, model: str, session: AsyncSession = Depends(get_session)):
     profile = await session.get(Profile, profile_id)
     if not profile:
-        raise HTTPException(404, "Profile not found")
+        raise HTTPException(404, "Profil introuvable")
     client = _get_client(profile)
+    loop = asyncio.get_event_loop()
     try:
-        return client.fields_get(model)
+        return await loop.run_in_executor(None, lambda: client.fields_get(model))
     except Exception as exc:
         raise HTTPException(400, str(exc))
 
@@ -83,9 +91,11 @@ async def fields(profile_id: int, model: str, session: AsyncSession = Depends(ge
 async def modules(profile_id: int, session: AsyncSession = Depends(get_session)):
     profile = await session.get(Profile, profile_id)
     if not profile:
-        raise HTTPException(404, "Profile not found")
+        raise HTTPException(404, "Profil introuvable")
     client = _get_client(profile)
+    loop = asyncio.get_event_loop()
     try:
-        return {"modules": client.get_installed_modules()}
+        result = await loop.run_in_executor(None, client.get_installed_modules)
+        return {"modules": result}
     except Exception as exc:
         raise HTTPException(400, str(exc))
