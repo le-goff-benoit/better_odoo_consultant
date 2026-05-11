@@ -96,8 +96,8 @@ export default function Sources() {
               <strong>Pas d'accès SSH à GitHub détecté</strong>
               <div style={{ fontSize: 13, color: t.muted, marginTop: 2 }}>
                 {hasKeys
-                  ? 'Une clé SSH existe mais n'est pas encore autorisée sur GitHub. Suivez les étapes ci-dessous.'
-                  : 'Aucune clé SSH trouvée. Créez-en une pour pouvoir télécharger Odoo Enterprise.'}
+                  ? "Une clé SSH existe mais n'est pas encore autorisée sur GitHub. Suivez les étapes ci-dessous."
+                  : "Aucune clé SSH trouvée. Créez-en une pour pouvoir télécharger Odoo Enterprise."}
               </div>
             </div>
             {sshStep === 'idle' && (
