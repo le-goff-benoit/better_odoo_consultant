@@ -26,6 +26,9 @@ class Profile(SQLModel, table=True):
     odoo_version: Optional[str] = None
     # JSON array: [{"name":"staging","db_name":"...","db_url":"...","branch":"..."}]
     environments: Optional[str] = Field(default=None)
+    company_name: Optional[str] = None
+    company_city: Optional[str] = None
+    company_logo: Optional[str] = Field(default=None)  # data URI base64
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

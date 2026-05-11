@@ -1,18 +1,19 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listProfiles, createProfile, deleteProfile, testProfile, diagnoseOdoo } from '../api/client'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo } from '../api/client'
 import { t } from '../theme'
 
 interface Env { name: string; db_url: string; branch: string }
 interface Profile {
   id: number; name: string; db_url: string; db_name: string
   login: string; odoo_version?: string; odoo_sh_url?: string; github_repo?: string
-  environments?: string
+  environments?: string; company_name?: string; company_city?: string; company_logo?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
 interface DiagResult {
   steps: DiagStep[]; uid: number | null; odoo_version: string | null
   module_count: number; db_name_suggestion: string
+  company_name?: string; company_city?: string; company_logo?: string
 }
 
 const VERSIONS = ['15.0', '16.0', '17.0', '18.0', '19.0']
@@ -55,6 +56,8 @@ export default function Profiles() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm(p => ({ ...p, [k]: e.target.value }))
 
+  const [companyInfo, setCompanyInfo] = useState<{ name?: string; city?: string; logo?: string } | null>(null)
+
   const diagnose = useMutation({
     mutationFn: () => diagnoseOdoo({
       db_url: form.db_url, db_name: form.db_name,
@@ -66,14 +69,22 @@ export default function Profiles() {
       if (d.odoo_version) setForm(p => ({ ...p, odoo_version: d.odoo_version! }))
       if (d.db_name_suggestion && !form.db_name)
         setForm(p => ({ ...p, db_name: d.db_name_suggestion }))
+      if (d.company_name || d.company_logo)
+        setCompanyInfo({ name: d.company_name ?? undefined, city: d.company_city ?? undefined, logo: d.company_logo ?? undefined })
     },
   })
 
   const create = useMutation({
-    mutationFn: () => createProfile({ ...form, environments: JSON.stringify(envs) }),
+    mutationFn: () => createProfile({
+      ...form,
+      environments: JSON.stringify(envs),
+      company_name: companyInfo?.name,
+      company_city: companyInfo?.city,
+      company_logo: companyInfo?.logo,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] })
-      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([])
+      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null)
       notify('Projet ajouté avec succès !')
     },
     onError: (e: ApiErr) =>
@@ -249,11 +260,25 @@ export default function Profiles() {
 
                   {diagOk && (
                     <div style={{
-                      marginTop: 12, padding: '8px 12px',
+                      marginTop: 12, padding: '10px 14px',
                       background: `${t.success}18`, border: `1px solid ${t.success}40`,
-                      borderRadius: t.radius, fontSize: 13, color: t.success, fontWeight: 600,
+                      borderRadius: t.radius,
                     }}>
-                      ✓ Connexion réussie — Odoo {diag!.odoo_version} · {diag!.module_count} modules
+                      <div style={{ fontSize: 13, color: t.success, fontWeight: 600, marginBottom: companyInfo ? 10 : 0 }}>
+                        ✓ Connexion réussie — Odoo {diag!.odoo_version} · {diag!.module_count} modules
+                      </div>
+                      {companyInfo && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {companyInfo.logo && (
+                            <img src={companyInfo.logo} alt="logo"
+                              style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 4, background: '#fff', border: `1px solid ${t.border}`, padding: 2 }} />
+                          )}
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: t.text }}>{companyInfo.name}</div>
+                            {companyInfo.city && <div style={{ fontSize: 12, color: t.muted }}>{companyInfo.city}</div>}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -378,7 +403,9 @@ export default function Profiles() {
           {profiles.map(p => (
             <ProjectCard key={p.id} profile={p}
               onTest={() => testConn.mutate(p.id)}
-              onDelete={() => del.mutate(p.id)} />
+              onDelete={() => del.mutate(p.id)}
+              onUpdateEnvs={(envs) => updateProfile(p.id, { environments: JSON.stringify(envs) })
+                .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))} />
           ))}
         </div>
       )}
@@ -411,11 +438,29 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ProjectCard({ profile, onTest, onDelete }: {
+function ProjectCard({ profile, onTest, onDelete, onUpdateEnvs }: {
   profile: Profile; onTest: () => void; onDelete: () => void
+  onUpdateEnvs: (envs: Env[]) => void
 }) {
   const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
-  const envs: Env[] = (() => { try { return JSON.parse(profile.environments ?? '[]') } catch { return [] } })()
+  const [envs, setEnvs] = useState<Env[]>(() => { try { return JSON.parse(profile.environments ?? '[]') } catch { return [] } })
+  const [addingEnv, setAddingEnv] = useState(false)
+  const [newEnv, setNewEnv] = useState<Env>({ name: '', db_url: '', branch: '' })
+
+  const saveEnv = () => {
+    if (!newEnv.name || !newEnv.db_url) return
+    const updated = [...envs, newEnv]
+    setEnvs(updated)
+    onUpdateEnvs(updated)
+    setNewEnv({ name: '', db_url: '', branch: '' })
+    setAddingEnv(false)
+  }
+
+  const removeEnv = (i: number) => {
+    const updated = envs.filter((_, j) => j !== i)
+    setEnvs(updated)
+    onUpdateEnvs(updated)
+  }
 
   return (
     <div style={{
@@ -427,8 +472,9 @@ function ProjectCard({ profile, onTest, onDelete }: {
       <div style={{ height: 4, background: `linear-gradient(90deg, ${t.brand}, ${t.action})` }} />
 
       <div style={{ padding: '18px 20px', flex: 1 }}>
+        {/* Header: name + logo */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: t.text, marginBottom: 4 }}>{profile.name}</div>
             {profile.odoo_version && (
               <span style={{
@@ -437,36 +483,92 @@ function ProjectCard({ profile, onTest, onDelete }: {
               }}>Odoo {profile.odoo_version}</span>
             )}
           </div>
-          <div style={{ fontSize: 24 }}>🏢</div>
+          {profile.company_logo ? (
+            <img src={profile.company_logo} alt="logo" style={{
+              width: 44, height: 44, objectFit: 'contain', borderRadius: 6,
+              background: t.bgMuted, border: `1px solid ${t.border}`, padding: 4, flexShrink: 0,
+            }} />
+          ) : (
+            <div style={{ fontSize: 24, flexShrink: 0 }}>🏢</div>
+          )}
         </div>
 
-        <div style={{ fontSize: 12, color: t.muted, marginBottom: 3 }}>🔗 {profile.db_url}</div>
-        <div style={{ fontSize: 12, color: t.muted, marginBottom: envs.length ? 10 : 14 }}>👤 {profile.login}</div>
-
-        {/* Environments */}
-        {envs.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: t.muted, marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Environnements
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-              {envs.map((env, i) => (
-                <a key={i} href={env.db_url} target="_blank" rel="noreferrer" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  padding: '3px 9px', borderRadius: 3,
-                  border: `1px solid ${t.border}`, background: t.bgMuted,
-                  color: t.textSub, fontSize: 11, fontWeight: 600, textDecoration: 'none',
-                }}>
-                  🌿 {env.name}
-                  {env.branch && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 10 }}>({env.branch})</span>}
-                </a>
-              ))}
-            </div>
+        {/* Company name/city */}
+        {profile.company_name && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: t.textSub, marginBottom: 2 }}>
+            {profile.company_name}{profile.company_city ? ` — ${profile.company_city}` : ''}
           </div>
         )}
 
+        <div style={{ fontSize: 12, color: t.muted, marginBottom: 3 }}>🔗 {profile.db_url}</div>
+        <div style={{ fontSize: 12, color: t.muted, marginBottom: 12 }}>👤 {profile.login}</div>
+
+        {/* Environments */}
+        <div style={{ marginBottom: 12 }}>
+          {envs.length > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: t.muted, marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Environnements
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {envs.map((env, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <a href={env.db_url} target="_blank" rel="noreferrer" style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '3px 9px', borderRadius: '3px 0 0 3px',
+                      border: `1px solid ${t.border}`, background: t.bgMuted,
+                      color: t.textSub, fontSize: 11, fontWeight: 600, textDecoration: 'none',
+                    }}>
+                      🌿 {env.name}
+                      {env.branch && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 10 }}>({env.branch})</span>}
+                    </a>
+                    <button onClick={() => removeEnv(i)} style={{
+                      padding: '3px 6px', fontSize: 11, background: t.bgMuted,
+                      border: `1px solid ${t.border}`, borderLeft: 'none',
+                      borderRadius: '0 3px 3px 0', cursor: 'pointer', color: t.muted, lineHeight: 1,
+                    }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {addingEnv ? (
+            <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '10px 12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 6, marginBottom: 8 }}>
+                <input placeholder="Nom" value={newEnv.name}
+                  onChange={e => setNewEnv(p => ({ ...p, name: e.target.value }))}
+                  style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
+                <input placeholder="URL" value={newEnv.db_url}
+                  onChange={e => setNewEnv(p => ({ ...p, db_url: e.target.value }))}
+                  style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
+                <input placeholder="Branche" value={newEnv.branch}
+                  onChange={e => setNewEnv(p => ({ ...p, branch: e.target.value }))}
+                  style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={saveEnv} disabled={!newEnv.name || !newEnv.db_url}
+                  style={{ ...styles.btnPrimary, fontSize: 11, padding: '4px 12px', opacity: (!newEnv.name || !newEnv.db_url) ? .5 : 1 }}>
+                  Ajouter
+                </button>
+                <button onClick={() => setAddingEnv(false)} style={{ ...styles.btnSecondary, fontSize: 11, padding: '4px 10px' }}>
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setAddingEnv(true)} style={{
+              fontSize: 11, color: t.action, background: 'none',
+              border: `1px dashed ${t.border}`, borderRadius: t.radius,
+              padding: '4px 12px', cursor: 'pointer', width: '100%',
+            }}>
+              + Environnement de test
+            </button>
+          )}
+        </div>
+
         {/* Quick links */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
           <QuickLink href={profile.db_url} label="Ouvrir Odoo" icon="🌐" color={t.action} />
           {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
           {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="🐙" color="#24292f" />}

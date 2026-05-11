@@ -27,6 +27,10 @@ class ProfileCreate(BaseModel):
     github_repo: Optional[str] = None
     default_branch: Optional[str] = None
     odoo_version: Optional[str] = None
+    environments: Optional[str] = None
+    company_name: Optional[str] = None
+    company_city: Optional[str] = None
+    company_logo: Optional[str] = None
 
 
 class ProfileUpdate(BaseModel):
@@ -38,6 +42,10 @@ class ProfileUpdate(BaseModel):
     github_repo: Optional[str] = None
     default_branch: Optional[str] = None
     odoo_version: Optional[str] = None
+    environments: Optional[str] = None
+    company_name: Optional[str] = None
+    company_city: Optional[str] = None
+    company_logo: Optional[str] = None
 
 
 class DiagnoseRequest(BaseModel):
@@ -150,6 +158,29 @@ async def diagnose(body: DiagnoseRequest):
     except Exception as exc:
         step("Modules installés", False, f"Non récupérés (non bloquant) : {exc}")
 
+    # Step 4 — company info (best-effort, not shown as a step)
+    company_name = company_city = company_logo = None
+    try:
+        import base64 as _b64
+        companies = await loop.run_in_executor(
+            None,
+            lambda: client.search_read(
+                "res.company", [], ["name", "city", "logo_web"], limit=1
+            )
+        )
+        if companies:
+            c = companies[0]
+            company_name = c.get("name") or None
+            company_city = c.get("city") or None
+            raw = c.get("logo_web") or c.get("logo")
+            if raw:
+                if hasattr(raw, "data"):
+                    company_logo = "data:image/png;base64," + _b64.b64encode(raw.data).decode()
+                else:
+                    company_logo = f"data:image/png;base64,{raw}"
+    except Exception:
+        pass
+
     return {
         "steps": steps,
         "uid": uid,
@@ -157,6 +188,9 @@ async def diagnose(body: DiagnoseRequest):
         "modules": modules,
         "module_count": len(modules),
         "db_name_suggestion": _suggest_db_name(url),
+        "company_name": company_name,
+        "company_city": company_city,
+        "company_logo": company_logo,
     }
 
 
