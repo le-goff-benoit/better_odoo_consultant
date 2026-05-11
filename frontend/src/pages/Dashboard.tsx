@@ -1,17 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { health, listProfiles, listProjects } from '../api/client'
+import { health, listProfiles } from '../api/client'
 import { t } from '../theme'
 import Icon, { IconName } from '../components/Icon'
 
 export default function Dashboard() {
   const { data: h }        = useQuery({ queryKey: ['health'],   queryFn: health })
   const { data: profRes }  = useQuery({ queryKey: ['profiles'], queryFn: listProfiles })
-  const { data: projRes }  = useQuery({ queryKey: ['projects'], queryFn: listProjects })
 
   const online   = h?.data?.status === 'ok'
   const profiles = profRes?.data?.length ?? 0
-  const projects = projRes?.data?.length ?? 0
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -33,7 +31,6 @@ export default function Dashboard() {
           bg={online ? t.successBg : t.dangerBg}
         />
         <StatCard label="Projets" value={String(profiles)} icon="building" color={t.brand} bg={t.brandLight} />
-        <StatCard label="Dépôts" value={String(projects)} icon="folder" color={t.info} bg="#eff6ff" />
       </div>
 
       {/* Quick actions */}
@@ -45,7 +42,6 @@ export default function Dashboard() {
           <QuickAction to="/profiles" icon="building" title="Nouveau projet"    desc="Connecter une instance Odoo" />
           <QuickAction to="/sources"  icon="download" title="Télécharger Odoo"  desc="Sources Community / Enterprise" />
           <QuickAction to="/query"    icon="search"   title="Requêter Odoo"     desc="Lire des données en direct" />
-          <QuickAction to="/projects" icon="folder"   title="Gérer un dépôt"    desc="Cloner ou synchroniser" />
         </div>
       </div>
 
