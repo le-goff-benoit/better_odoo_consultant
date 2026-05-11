@@ -1,16 +1,21 @@
+import asyncio
+import logging
+from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.database import get_session
 from ...core.models import Profile
 from ...services.profile_manager import store_profile_secrets, get_profile_api_key, delete_profile_secrets
 from ...services.odoo_client import OdooClient
-from datetime import datetime
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
+
+# ── Pydantic models ────────────────────────────────────────────
 
 class ProfileCreate(BaseModel):
     name: str
@@ -35,12 +40,30 @@ class ProfileUpdate(BaseModel):
     odoo_version: Optional[str] = None
 
 
-class DetectRequest(BaseModel):
+class DiagnoseRequest(BaseModel):
     db_url: str
     db_name: str
     login: str
     api_key: str
 
+
+# ── Helpers ────────────────────────────────────────────────────
+
+def _normalise_url(raw: str) -> str:
+    url = raw.strip().rstrip("/")
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
+
+
+def _suggest_db_name(url: str) -> str:
+    """Extract subdomain from URL as db_name suggestion."""
+    import re
+    m = re.match(r"https?://([^./]+)", url)
+    return m.group(1) if m else ""
+
+
+# ── Routes ─────────────────────────────────────────────────────
 
 @router.get("/")
 async def list_profiles(session: AsyncSession = Depends(get_session)):
@@ -48,82 +71,93 @@ async def list_profiles(session: AsyncSession = Depends(get_session)):
     return result.scalars().all()
 
 
-@router.post("/detect")
-async def detect_odoo_info(body: DetectRequest):
-    """Connect to an Odoo instance and detect its version + installed modules."""
-    import asyncio
-    import logging
-
-    log = logging.getLogger(__name__)
-
-    # Normalise URL — add https:// if missing, strip trailing slash
-    url = body.db_url.strip()
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-    url = url.rstrip("/")
-
-    client = OdooClient(url, body.db_name, body.login, body.api_key)
-
+@router.post("/diagnose")
+async def diagnose(body: DiagnoseRequest):
+    """
+    Step-by-step connection test. Always returns 200 with per-step results —
+    never raises 400. The frontend decides what to show.
+    """
+    url = _normalise_url(body.db_url)
     loop = asyncio.get_event_loop()
+    steps: list[dict] = []
 
-    # Authenticate (run blocking xmlrpc in thread)
-    try:
-        uid = await loop.run_in_executor(None, client.authenticate)
-    except Exception as exc:
-        log.warning("detect /authenticate failed: %s", exc)
-        _raise_friendly(exc, url, body.db_name)
+    def step(name: str, ok: bool, detail: str, data: dict | None = None):
+        steps.append({"name": name, "ok": ok, "detail": detail, **(data or {})})
 
-    # Server version (non-blocking, best-effort)
+    # Step 1 — server reachable + version (no auth needed)
     odoo_version = None
+    server_version_raw = None
     try:
-        def _get_version():
-            return client._common.version()
-        info = await loop.run_in_executor(None, _get_version)
-        sv = info.get("server_version", "")
-        parts = sv.split(".")
-        odoo_version = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else sv or None
+        import xmlrpc.client
+        common = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/common")
+        info = await loop.run_in_executor(None, common.version)
+        server_version_raw = info.get("server_version", "")
+        parts = server_version_raw.split(".")
+        odoo_version = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else server_version_raw
+        step("Serveur joignable", True,
+             f"Odoo {odoo_version} détecté sur {url}",
+             {"odoo_version": odoo_version, "server_version": server_version_raw})
     except Exception as exc:
-        log.debug("detect /version failed (non-fatal): %s", exc)
+        msg = str(exc)
+        if "refused" in msg.lower() or "name or service" in msg.lower() or "nodename" in msg.lower():
+            detail = f"Impossible de joindre {url} — vérifiez l'URL et votre connexion internet."
+        elif "timeout" in msg.lower():
+            detail = f"Le serveur {url} ne répond pas (timeout)."
+        elif "ssl" in msg.lower() or "certificate" in msg.lower():
+            detail = f"Erreur SSL — essayez avec http:// ou vérifiez le certificat."
+        else:
+            detail = f"Erreur : {msg}"
+        step("Serveur joignable", False, detail)
+        return {"steps": steps, "uid": None, "odoo_version": None,
+                "module_count": 0, "db_name_suggestion": _suggest_db_name(url)}
 
-    # Installed modules (non-blocking, best-effort)
+    # Step 2 — authenticate
+    uid = None
+    try:
+        client = OdooClient(url, body.db_name, body.login, body.api_key)
+        uid = await loop.run_in_executor(None, client.authenticate)
+        step("Authentification", True,
+             f"Connecté en tant que uid={uid} sur la base « {body.db_name} »",
+             {"uid": uid})
+    except Exception as exc:
+        msg = str(exc)
+        suggestion = _suggest_db_name(url)
+        if "access denied" in msg.lower() or "authentication" in msg.lower() or not uid:
+            detail = (
+                f"Connexion refusée sur la base « {body.db_name} ».\n"
+                f"• Vérifiez que le nom de base est exact (suggestion : « {suggestion} »)\n"
+                f"• Vérifiez votre login ({body.login}) et votre clé API."
+            )
+        else:
+            detail = f"Erreur d'authentification : {msg}"
+        step("Authentification", False, detail)
+        return {"steps": steps, "uid": None, "odoo_version": odoo_version,
+                "module_count": 0, "db_name_suggestion": suggestion}
+
+    # Step 3 — modules (best-effort)
     modules: list = []
     try:
-        def _get_modules():
-            return client.search_read(
+        modules = await loop.run_in_executor(
+            None,
+            lambda: client.search_read(
                 "ir.module.module",
                 [["state", "=", "installed"]],
-                ["name", "shortdesc", "installed_version"],
+                ["name", "shortdesc"],
                 limit=500,
             )
-        modules = await loop.run_in_executor(None, _get_modules)
+        )
+        step("Modules installés", True, f"{len(modules)} modules trouvés")
     except Exception as exc:
-        log.debug("detect /modules failed (non-fatal): %s", exc)
+        step("Modules installés", False, f"Non récupérés (non bloquant) : {exc}")
 
     return {
+        "steps": steps,
         "uid": uid,
         "odoo_version": odoo_version,
         "modules": modules,
         "module_count": len(modules),
+        "db_name_suggestion": _suggest_db_name(url),
     }
-
-
-def _raise_friendly(exc: Exception, url: str, db_name: str) -> None:
-    msg = str(exc).lower()
-    if "authentication failed" in msg or "access denied" in msg or "uid" in msg:
-        raise HTTPException(400, (
-            f"Identifiants incorrects pour la base « {db_name} » sur {url}. "
-            "Vérifiez le nom de base, le login et la clé API."
-        ))
-    if "connection refused" in msg or "nodename nor servname" in msg or "name or service not known" in msg:
-        raise HTTPException(400, (
-            f"Impossible de joindre {url}. "
-            "Vérifiez l'URL et votre connexion internet."
-        ))
-    if "timed out" in msg or "timeout" in msg:
-        raise HTTPException(400, f"Le serveur {url} ne répond pas (timeout). Réessayez.")
-    if "ssl" in msg or "certificate" in msg:
-        raise HTTPException(400, f"Erreur SSL sur {url}. Vérifiez que l'URL est correcte (https://).")
-    raise HTTPException(400, f"Connexion échouée : {exc}")
 
 
 @router.post("/")
@@ -177,7 +211,6 @@ async def delete_profile(profile_id: int, session: AsyncSession = Depends(get_se
 
 @router.post("/{profile_id}/test")
 async def test_connection(profile_id: int, session: AsyncSession = Depends(get_session)):
-    import asyncio
     profile = await session.get(Profile, profile_id)
     if not profile:
         raise HTTPException(404, "Projet introuvable")
@@ -186,8 +219,7 @@ async def test_connection(profile_id: int, session: AsyncSession = Depends(get_s
         raise HTTPException(400, "Aucune clé API enregistrée pour ce projet")
     client = OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
     try:
-        loop = asyncio.get_event_loop()
-        uid = await loop.run_in_executor(None, client.authenticate)
+        uid = await asyncio.get_event_loop().run_in_executor(None, client.authenticate)
         return {"ok": True, "uid": uid}
     except Exception as exc:
-        _raise_friendly(exc, profile.db_url, profile.db_name)
+        raise HTTPException(400, str(exc))
