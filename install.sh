@@ -82,6 +82,10 @@ fi
 source "$VENV_DIR/bin/activate"
 
 # ── 3. Install package ───────────────────────────────────────
+info "Mise à jour des outils de base (pip, setuptools)..."
+pip install --upgrade pip setuptools wheel --quiet
+success "Outils à jour"
+
 info "Installation du portail (peut prendre 1-2 minutes)..."
 pip install -e "$(dirname "$0")" --quiet
 success "Portail installé"
