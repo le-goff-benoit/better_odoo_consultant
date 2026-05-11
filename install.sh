@@ -24,16 +24,45 @@ echo ""
 
 # ── 1. Python ────────────────────────────────────────────────
 info "Vérification de Python..."
+
+install_python() {
+  warn "Python 3 non trouvé — tentative d'installation automatique..."
+  if command -v apt-get &>/dev/null; then
+    sudo apt-get update -qq && sudo apt-get install -y python3 python3-venv python3-pip
+  elif command -v brew &>/dev/null; then
+    brew install python@3.12
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y python3 python3-pip
+  elif command -v pacman &>/dev/null; then
+    sudo pacman -Sy --noconfirm python
+  else
+    echo ""
+    echo -e "${RED}Impossible d'installer Python automatiquement.${RESET}"
+    echo -e "Veuillez l'installer manuellement depuis : ${BOLD}https://www.python.org/downloads/${RESET}"
+    echo -e "Puis relancez : ${BOLD}bash install.sh${RESET}"
+    exit 1
+  fi
+}
+
 if ! command -v python3 &>/dev/null; then
-  error "Python 3 non trouvé. Installez Python 3.11+ depuis https://python.org"
+  install_python
+fi
+
+# Re-check after potential install
+if ! command -v python3 &>/dev/null; then
+  echo -e "${RED}Python introuvable après installation. Installez-le depuis https://python.org${RESET}"
+  exit 1
 fi
 
 PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
 PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
 
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 11 ]; }; then
-  error "Python $PY_VERSION détecté — version 3.11 ou supérieure requise."
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 9 ]; }; then
+  warn "Python $PY_VERSION est très ancien — certaines fonctionnalités pourraient ne pas fonctionner."
+  warn "Pour de meilleures performances, installez Python 3.11+ depuis https://python.org"
+elif { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 11 ]; }; then
+  warn "Python $PY_VERSION détecté (3.11+ recommandé) — l'installation continue."
 fi
 success "Python $PY_VERSION"
 
