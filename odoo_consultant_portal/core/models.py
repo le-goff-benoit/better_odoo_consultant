@@ -24,6 +24,8 @@ class Profile(SQLModel, table=True):
     github_repo: Optional[str] = None
     default_branch: Optional[str] = None
     odoo_version: Optional[str] = None
+    # JSON array: [{"name":"staging","db_name":"...","db_url":"...","branch":"..."}]
+    environments: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

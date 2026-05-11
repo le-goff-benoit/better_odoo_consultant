@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listProfiles, createProfile, deleteProfile, testProfile, diagnoseOdoo } from '../api/client'
 import { t } from '../theme'
 
+interface Env { name: string; db_url: string; branch: string }
 interface Profile {
   id: number; name: string; db_url: string; db_name: string
   login: string; odoo_version?: string; odoo_sh_url?: string; github_repo?: string
+  environments?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
 interface DiagResult {
@@ -41,6 +43,8 @@ export default function Profiles() {
   const [form,       setForm]       = useState<FormState>(EMPTY)
   const [diag,       setDiag]       = useState<DiagResult | null>(null)
   const [toast,      setToast]      = useState<{ msg: string; ok: boolean } | null>(null)
+  const [envs,       setEnvs]       = useState<Env[]>([])
+  const [newEnv,     setNewEnv]     = useState<Env | null>(null)
 
   const notify = (msg: string, ok = true) => {
     setToast({ msg, ok })
@@ -66,10 +70,10 @@ export default function Profiles() {
   })
 
   const create = useMutation({
-    mutationFn: () => createProfile(form),
+    mutationFn: () => createProfile({ ...form, environments: JSON.stringify(envs) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] })
-      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null)
+      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([])
       notify('Projet ajouté avec succès !')
     },
     onError: (e: ApiErr) =>
@@ -278,6 +282,58 @@ export default function Profiles() {
                     placeholder="main" />
                 </Field>
 
+                {/* Environments */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: t.text, marginBottom: 8 }}>
+                    Environnements de staging
+                    <span style={{ color: t.muted, fontWeight: 400 }}> (optionnel)</span>
+                  </div>
+                  {envs.map((env, i) => (
+                    <div key={i} style={{
+                      display: 'flex', gap: 8, alignItems: 'center',
+                      padding: '6px 10px', background: t.bg, borderRadius: t.radius, marginBottom: 6,
+                      border: `1px solid ${t.border}`,
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: t.brand, minWidth: 60 }}>{env.name}</span>
+                      <span style={{ fontSize: 11, color: t.muted, flex: 1 }}>{env.db_url}</span>
+                      {env.branch && <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{env.branch}</span>}
+                      <button onClick={() => setEnvs(p => p.filter((_, j) => j !== i))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.danger, fontSize: 14, padding: '0 4px' }}>×</button>
+                    </div>
+                  ))}
+                  {newEnv ? (
+                    <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '12px 14px', marginBottom: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 8, marginBottom: 10 }}>
+                        <input placeholder="Nom (ex: staging)" value={newEnv.name}
+                          onChange={e => setNewEnv(p => p && ({ ...p, name: e.target.value }))}
+                          style={{ ...styles.input, fontSize: 12, padding: '6px 8px' }} />
+                        <input placeholder="URL" value={newEnv.db_url}
+                          onChange={e => setNewEnv(p => p && ({ ...p, db_url: e.target.value }))}
+                          style={{ ...styles.input, fontSize: 12, padding: '6px 8px' }} />
+                        <input placeholder="Branche" value={newEnv.branch}
+                          onChange={e => setNewEnv(p => p && ({ ...p, branch: e.target.value }))}
+                          style={{ ...styles.input, fontSize: 12, padding: '6px 8px' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          disabled={!newEnv.name || !newEnv.db_url}
+                          onClick={() => { if (newEnv.name && newEnv.db_url) { setEnvs(p => [...p, newEnv]); setNewEnv(null) } }}
+                          style={{ ...styles.btnPrimary, fontSize: 12, padding: '5px 12px', opacity: (!newEnv.name || !newEnv.db_url) ? .5 : 1 }}>
+                          Ajouter
+                        </button>
+                        <button onClick={() => setNewEnv(null)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 10px' }}>
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setNewEnv({ name: '', db_url: '', branch: '' })}
+                      style={{ fontSize: 12, color: t.action, background: 'none', border: `1px dashed ${t.border}`, borderRadius: t.radius, padding: '6px 14px', cursor: 'pointer', width: '100%' }}>
+                      + Ajouter un environnement
+                    </button>
+                  )}
+                </div>
+
                 {/* Summary */}
                 <div style={{ background: t.bg, borderRadius: t.radiusLg, padding: '16px 18px', marginTop: 8 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: t.text }}>Récapitulatif</div>
@@ -359,6 +415,7 @@ function ProjectCard({ profile, onTest, onDelete }: {
   profile: Profile; onTest: () => void; onDelete: () => void
 }) {
   const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
+  const envs: Env[] = (() => { try { return JSON.parse(profile.environments ?? '[]') } catch { return [] } })()
 
   return (
     <div style={{
@@ -384,7 +441,29 @@ function ProjectCard({ profile, onTest, onDelete }: {
         </div>
 
         <div style={{ fontSize: 12, color: t.muted, marginBottom: 3 }}>🔗 {profile.db_url}</div>
-        <div style={{ fontSize: 12, color: t.muted, marginBottom: 14 }}>👤 {profile.login}</div>
+        <div style={{ fontSize: 12, color: t.muted, marginBottom: envs.length ? 10 : 14 }}>👤 {profile.login}</div>
+
+        {/* Environments */}
+        {envs.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: t.muted, marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Environnements
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {envs.map((env, i) => (
+                <a key={i} href={env.db_url} target="_blank" rel="noreferrer" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '3px 9px', borderRadius: 3,
+                  border: `1px solid ${t.border}`, background: t.bgMuted,
+                  color: t.textSub, fontSize: 11, fontWeight: 600, textDecoration: 'none',
+                }}>
+                  🌿 {env.name}
+                  {env.branch && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 10 }}>({env.branch})</span>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Quick links */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>

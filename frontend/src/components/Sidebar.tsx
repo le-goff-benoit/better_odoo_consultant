@@ -6,7 +6,6 @@ const links: { to: string; label: string; icon: IconName }[] = [
   { to: '/dashboard', label: 'Tableau de bord', icon: 'dashboard' },
   { to: '/sources',   label: 'Sources',          icon: 'download'  },
   { to: '/profiles',  label: 'Mes projets',      icon: 'building'  },
-  { to: '/projects',  label: 'Dépôts',           icon: 'folder'    },
   { to: '/query',     label: 'Requêtes',         icon: 'search'    },
   { to: '/history',   label: 'Historique',       icon: 'clock'     },
 ]

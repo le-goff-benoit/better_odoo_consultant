@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listSshKeys, testGithubSsh, generateSshKey } from '../api/client'
+import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates } from '../api/client'
 import { t } from '../theme'
 
 const VERSIONS = [
@@ -20,21 +20,42 @@ interface ProgressEvt {
 
 interface VersionState {
   status: CardState
-  pct: number           // 0-100
-  currentLabel: string  // e.g. "Receiving objects : 67%  (12345/18432) — 3.45 MiB/s"
+  pct: number
+  currentLabel: string
   logs: string[]
   showLogs: boolean
 }
 
+interface RecentCommit { sha: string; message: string; author: string; date: string }
+interface RepoInfo {
+  installed: boolean; path: string; head?: string; message?: string
+  date?: string; behind?: number; branch?: string
+  recent_commits?: RecentCommit[]; error?: string
+}
+
 const defaultPath = (v: string) => `~/odoo-sources/${v}`
+
+function relativeDate(iso?: string): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const days = Math.floor(diff / 86400000)
+  if (days === 0) return "aujourd'hui"
+  if (days === 1) return 'hier'
+  if (days < 30) return `il y a ${days} j`
+  if (days < 365) return `il y a ${Math.floor(days / 30)} mois`
+  return `il y a ${Math.floor(days / 365)} an(s)`
+}
 
 export default function Sources() {
   const qc = useQueryClient()
-  const [cards,       setCards]       = useState<Record<string, VersionState>>({})
-  const [customPaths, setCustomPaths] = useState<Record<string, string>>({})
-  const [enterprise,  setEnterprise]  = useState<Record<string, boolean>>({})
-  const [advanced,    setAdvanced]    = useState<string | null>(null)
-  const abortRefs                     = useRef<Record<string, AbortController>>({})
+  const [cards,          setCards]          = useState<Record<string, VersionState>>({})
+  const [customPaths,    setCustomPaths]    = useState<Record<string, string>>({})
+  const [enterprise,     setEnterprise]     = useState<Record<string, boolean>>({})
+  const [advanced,       setAdvanced]       = useState<string | null>(null)
+  const [showCommits,    setShowCommits]    = useState<Record<string, boolean>>({})
+  const [repoOverrides,  setRepoOverrides]  = useState<Record<string, RepoInfo>>({})
+  const [updatesLoading, setUpdatesLoading] = useState<Record<string, boolean>>({})
+  const abortRefs = useRef<Record<string, AbortController>>({})
 
   // SSH state
   const [sshStep,   setSshStep]   = useState<'idle' | 'generating' | 'done'>('idle')
@@ -43,6 +64,13 @@ export default function Sources() {
 
   const { data: sshData,  refetch: recheckSsh } = useQuery({ queryKey: ['github-ssh'], queryFn: testGithubSsh, retry: false })
   const { data: keysData }                       = useQuery({ queryKey: ['ssh-keys'],   queryFn: listSshKeys,   retry: false })
+  const { data: allStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ['sources-status'],
+    queryFn: checkAllSources,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  })
+
   const sshOk   = sshData?.data?.accessible === true
   const hasKeys = (keysData?.data?.keys?.length ?? 0) > 0
 
@@ -56,7 +84,7 @@ export default function Sources() {
   const setCard = (version: string, patch: Partial<VersionState>) =>
     setCards(prev => ({
       ...prev,
-      [version]: { ...{ status: 'idle', pct: 0, currentLabel: '', logs: [], showLogs: false }, ...prev[version], ...patch },
+      [version]: { ...{ status: 'idle' as CardState, pct: 0, currentLabel: '', logs: [], showLogs: false }, ...prev[version], ...patch },
     }))
 
   const toggleLogs = (version: string) =>
@@ -65,11 +93,27 @@ export default function Sources() {
       [version]: { ...prev[version], showLogs: !prev[version]?.showLogs },
     }))
 
+  const doCheckUpdates = async (version: string) => {
+    const path = customPaths[version] || defaultPath(version)
+    setUpdatesLoading(p => ({ ...p, [version]: true, [`${version}-enterprise`]: true }))
+    try {
+      const [commRes, entRes] = await Promise.allSettled([
+        checkSourceUpdates(version, path),
+        checkSourceUpdates(`${version}-enterprise`, path.replace(version, `${version}-enterprise`)),
+      ])
+      if (commRes.status === 'fulfilled')
+        setRepoOverrides(p => ({ ...p, [version]: commRes.value.data }))
+      if (entRes.status === 'fulfilled')
+        setRepoOverrides(p => ({ ...p, [`${version}-enterprise`]: entRes.value.data }))
+    } finally {
+      setUpdatesLoading(p => ({ ...p, [version]: false, [`${version}-enterprise`]: false }))
+    }
+  }
+
   const startSync = async (version: string) => {
     const path = customPaths[version] || defaultPath(version)
     const ent  = enterprise[version] ?? false
 
-    // Cancel previous run for this version
     abortRefs.current[version]?.abort()
     const ctrl = new AbortController()
     abortRefs.current[version] = ctrl
@@ -120,7 +164,7 @@ export default function Sources() {
             }))
           } else if (evt.type === 'done') {
             setCard(version, { status: 'done', pct: 100, currentLabel: evt.msg ?? 'Terminé' })
-            qc.invalidateQueries({ queryKey: ['github-ssh'] })
+            qc.invalidateQueries({ queryKey: ['sources-status'] })
           } else if (evt.type === 'error') {
             setCard(version, { status: 'error', currentLabel: evt.msg ?? 'Erreur' })
           }
@@ -131,6 +175,8 @@ export default function Sources() {
       setCard(version, { status: 'error', currentLabel: String(err) })
     }
   }
+
+  const statusData: Record<string, RepoInfo> = allStatus?.data ?? {}
 
   return (
     <div>
@@ -162,17 +208,20 @@ export default function Sources() {
       )}
 
       {/* Version cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
         {VERSIONS.map(({ version, label, badge, color }) => {
-          const card   = cards[version]
-          const status = card?.status ?? 'idle'
-          const pct    = card?.pct    ?? 0
-          const isOpen = advanced === version
+          const card      = cards[version]
+          const status    = card?.status ?? 'idle'
+          const pct       = card?.pct    ?? 0
+          const isOpen    = advanced === version
+          const repoInfo  = repoOverrides[version] ?? statusData[version]
+          const entInfo   = repoOverrides[`${version}-enterprise`] ?? statusData[`${version}-enterprise`]
+          const checking  = updatesLoading[version] ?? false
 
           return (
-            <div key={version} style={versionCard(status)}>
+            <div key={version} style={versionCard(status, repoInfo?.installed)}>
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div>
                   <div style={{ fontSize: 19, fontWeight: 700, color: t.text }}>{label}</div>
                   {badge && (
@@ -182,13 +231,26 @@ export default function Sources() {
                     }}>{badge}</span>
                   )}
                 </div>
-                <StatusBadge status={status} />
+                <StatusBadge status={status} isInstalled={repoInfo?.installed} loading={statusLoading} />
               </div>
 
-              {/* Progress bar — always reserve space */}
-              <div style={{ marginBottom: 12 }}>
+              {/* Installed info strip */}
+              {!statusLoading && repoInfo && (
+                <InstalledStrip
+                  info={repoInfo}
+                  entInfo={entInfo}
+                  version={version}
+                  showCommits={showCommits[version] ?? false}
+                  onToggleCommits={() => setShowCommits(p => ({ ...p, [version]: !p[version] }))}
+                  onCheckUpdates={() => doCheckUpdates(version)}
+                  checking={checking}
+                />
+              )}
+
+              {/* Progress bar */}
+              <div style={{ marginBottom: 10 }}>
                 <div style={{
-                  height: 6, background: t.borderLight, borderRadius: 3, overflow: 'hidden',
+                  height: 5, background: t.borderLight, borderRadius: 3, overflow: 'hidden',
                   opacity: status === 'idle' ? 0 : 1, transition: 'opacity .3s',
                 }}>
                   <div style={{
@@ -234,7 +296,7 @@ export default function Sources() {
                   <label style={{ display: 'block', fontSize: 11, color: t.muted, marginBottom: 4 }}>Dossier</label>
                   <input value={customPaths[version] ?? ''} placeholder={defaultPath(version)}
                     onChange={e => setCustomPaths(p => ({ ...p, [version]: e.target.value }))}
-                    style={{ width: '100%', padding: '6px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12 }} />
+                    style={{ width: '100%', padding: '6px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, boxSizing: 'border-box' }} />
                 </div>
               )}
 
@@ -246,17 +308,17 @@ export default function Sources() {
                 </button>
               )}
 
-              {card?.showLogs && (
-                <LogBox logs={card.logs} />
-              )}
+              {card?.showLogs && <LogBox logs={card.logs} />}
 
               {/* Action button */}
               <button
                 disabled={status === 'running'}
                 onClick={() => status === 'running' ? abortRefs.current[version]?.abort() : startSync(version)}
-                style={btnDownload(status)}
+                style={btnDownload(status, repoInfo?.installed)}
               >
-                {status === 'running' ? '⏹ Annuler' : status === 'done' ? '↺ Mettre à jour' : '⬇ Télécharger'}
+                {status === 'running' ? '⏹ Annuler'
+                  : repoInfo?.installed ? '↺ Mettre à jour'
+                  : '⬇ Télécharger'}
               </button>
             </div>
           )
@@ -268,7 +330,90 @@ export default function Sources() {
           0%   { transform: translateX(-100%); width: 40% }
           100% { transform: translateX(280%);  width: 40% }
         }
+        @keyframes spin { to { transform: rotate(360deg) } }
       `}</style>
+    </div>
+  )
+}
+
+// ── InstalledStrip ──────────────────────────────────────────────
+
+function InstalledStrip({ info, entInfo, version: _version, showCommits, onToggleCommits, onCheckUpdates, checking }: {
+  info: RepoInfo; entInfo?: RepoInfo
+  version: string; showCommits: boolean
+  onToggleCommits: () => void; onCheckUpdates: () => void; checking: boolean
+}) {
+  if (!info.installed && (!entInfo || !entInfo.installed)) {
+    return (
+      <div style={{ fontSize: 12, color: t.muted, marginBottom: 10, padding: '6px 0', borderBottom: `1px solid ${t.border}` }}>
+        Non installé
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${t.border}` }}>
+      {/* Community row */}
+      {info.installed && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: entInfo?.installed ? 4 : 0 }}>
+          <span style={{ fontSize: 11, color: t.success, fontWeight: 600 }}>✓ Community</span>
+          <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{info.head}</span>
+          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(info.date)}</span>
+          {(info.behind ?? 0) > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: t.warning, background: t.warningBg,
+              border: `1px solid ${t.warning}30`, borderRadius: 3, padding: '1px 6px',
+            }}>
+              {info.behind} en retard
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Enterprise row */}
+      {entInfo?.installed && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: t.brand, fontWeight: 600 }}>✓ Enterprise</span>
+          <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{entInfo.head}</span>
+          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(entInfo.date)}</span>
+          {(entInfo.behind ?? 0) > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: t.warning, background: t.warningBg,
+              border: `1px solid ${t.warning}30`, borderRadius: 3, padding: '1px 6px',
+            }}>
+              {entInfo.behind} en retard
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Actions row */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+        {(info.recent_commits?.length ?? 0) > 0 && (
+          <button onClick={onToggleCommits} style={btnGhost}>
+            {showCommits ? '▲ Masquer' : `▼ ${info.recent_commits!.length} commits`}
+          </button>
+        )}
+        <button onClick={onCheckUpdates} disabled={checking} style={{ ...btnGhost, marginLeft: 'auto' }}>
+          {checking ? '⟳ Vérification…' : '↻ Vérifier les mises à jour'}
+        </button>
+      </div>
+
+      {/* Recent commits panel */}
+      {showCommits && info.recent_commits && (
+        <div style={{
+          marginTop: 8, background: '#1e1e2e', borderRadius: t.radiusSm,
+          padding: '8px 10px', maxHeight: 180, overflowY: 'auto',
+        }}>
+          {info.recent_commits.map(c => (
+            <div key={c.sha} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#89b4fa', flexShrink: 0, marginTop: 1 }}>{c.sha}</span>
+              <span style={{ fontSize: 11, color: '#cdd6f4', flex: 1, lineHeight: 1.4 }}>{c.message}</span>
+              <span style={{ fontSize: 10, color: '#585b70', flexShrink: 0 }}>{relativeDate(c.date)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -296,9 +441,21 @@ function LogBox({ logs }: { logs: string[] }) {
   )
 }
 
-function StatusBadge({ status }: { status: CardState }) {
+function StatusBadge({ status, isInstalled, loading }: { status: CardState; isInstalled?: boolean; loading?: boolean }) {
+  if (loading) {
+    return (
+      <div style={{
+        width: 28, height: 28, borderRadius: '50%',
+        background: t.borderLight, color: t.muted,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
+        animation: 'spin .9s linear infinite',
+      }}>⟳</div>
+    )
+  }
   const cfg: Record<CardState, { icon: string; bg: string; color: string }> = {
-    idle:    { icon: '○',  bg: t.borderLight, color: t.muted },
+    idle:    isInstalled
+      ? { icon: '✓', bg: `${t.success}20`, color: t.success }
+      : { icon: '○', bg: t.borderLight, color: t.muted },
     running: { icon: '⟳',  bg: `${t.action}20`, color: t.action },
     done:    { icon: '✓',  bg: `${t.success}20`, color: t.success },
     error:   { icon: '✗',  bg: `${t.danger}20`,  color: t.danger },
@@ -356,6 +513,7 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
                 fontFamily: 'monospace', fontSize: 11,
                 padding: '8px 10px', background: '#f0f0f0',
                 border: `1px solid ${t.border}`, borderRadius: t.radiusSm, color: t.text,
+                boxSizing: 'border-box',
               }} />
               <button onClick={onCopy} style={{
                 position: 'absolute', top: 8, right: 8, padding: '3px 10px',
@@ -381,7 +539,7 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
           </SshStep>
 
           <button onClick={onRecheck} style={{ ...btnTeal, marginTop: 6 }}>
-            J'ai ajouté la clé — vérifier l'accès →
+            {"J'ai ajouté la clé — vérifier l'accès →"}
           </button>
         </div>
       )}
@@ -416,8 +574,11 @@ function banner(color: string): React.CSSProperties {
   }
 }
 
-function versionCard(status: CardState): React.CSSProperties {
-  const borderColor = status === 'done' ? t.success : status === 'error' ? t.danger : t.border
+function versionCard(status: CardState, installed?: boolean): React.CSSProperties {
+  const borderColor = status === 'done' ? t.success
+    : status === 'error' ? t.danger
+    : installed ? `${t.success}40`
+    : t.border
   return {
     background: t.white, border: `1px solid ${borderColor}`,
     borderRadius: t.radiusLg, padding: 20, boxShadow: t.shadow,
@@ -425,8 +586,8 @@ function versionCard(status: CardState): React.CSSProperties {
   }
 }
 
-function btnDownload(status: CardState): React.CSSProperties {
-  const bg = status === 'running' ? t.danger : t.action
+function btnDownload(status: CardState, installed?: boolean): React.CSSProperties {
+  const bg = status === 'running' ? t.danger : installed ? t.brand : t.action
   return {
     marginTop: 'auto', padding: '8px 0', width: '100%',
     background: bg, color: '#fff', border: 'none',
@@ -438,4 +599,9 @@ const btnTeal: React.CSSProperties = {
   padding: '7px 14px', background: t.action, color: '#fff',
   border: 'none', borderRadius: t.radius, fontSize: 12,
   fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+}
+
+const btnGhost: React.CSSProperties = {
+  background: 'none', border: `1px solid ${t.border}`, color: t.muted,
+  borderRadius: t.radiusSm, fontSize: 11, cursor: 'pointer', padding: '3px 8px',
 }
