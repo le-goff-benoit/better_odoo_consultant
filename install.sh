@@ -90,6 +90,12 @@ info "Installation du portail (peut prendre 1-2 minutes)..."
 pip install -e "$(dirname "$0")" --quiet
 success "Portail installé"
 
+# ── 3b. AI packages ──────────────────────────────────────────
+info "Installation des assistants IA (Claude, GPT-4o, Gemini)..."
+pip install anthropic openai "google-generativeai>=0.8" --quiet \
+  && success "Assistants IA prêts — Claude, GPT-4o et Gemini disponibles" \
+  || warn "Certains packages IA n'ont pas pu s'installer (non bloquant)."
+
 # ── 4. Node / frontend (optional) ───────────────────────────
 FRONTEND_DIR="$(dirname "$0")/frontend"
 DIST_DIR="$FRONTEND_DIR/dist"

@@ -27,10 +27,42 @@ interface Message {
   loading?: boolean
 }
 
-const PROVIDERS = [
-  { id: 'claude', label: 'Claude',  color: '#D97706', placeholder: 'sk-ant-api03-…' },
-  { id: 'openai', label: 'GPT-4o',  color: '#16A34A', placeholder: 'sk-…' },
-  { id: 'gemini', label: 'Gemini',  color: '#2563EB', placeholder: 'AIza…' },
+interface ModelDef { id: string; label: string; speed: number; desc: string; recommended?: boolean }
+
+const PROVIDERS: { id: string; label: string; color: string; placeholder: string; models: ModelDef[] }[] = [
+  {
+    id: 'claude', label: 'Claude', color: '#D97706', placeholder: 'sk-ant-api03-…',
+    models: [
+      { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',  speed: 2, recommended: true,
+        desc: 'Excellent rapport qualité/vitesse — idéal pour le quotidien' },
+      { id: 'claude-opus-4-7',           label: 'Opus 4.7',    speed: 1,
+        desc: 'Le plus puissant — analyses complexes, synthèses longues' },
+      { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',   speed: 3,
+        desc: 'Ultra-rapide et économique — questions simples, filtres rapides' },
+    ],
+  },
+  {
+    id: 'openai', label: 'GPT-4o', color: '#16A34A', placeholder: 'sk-…',
+    models: [
+      { id: 'gpt-4o',      label: 'GPT-4o',      speed: 2, recommended: true,
+        desc: 'Très capable et rapide — usage polyvalent' },
+      { id: 'gpt-4o-mini', label: 'GPT-4o mini', speed: 3,
+        desc: 'Rapide et économique — questions simples et filtres' },
+      { id: 'o1-mini',     label: 'o1 mini',     speed: 1,
+        desc: 'Raisonnement avancé — problèmes analytiques complexes' },
+    ],
+  },
+  {
+    id: 'gemini', label: 'Gemini', color: '#2563EB', placeholder: 'AIza…',
+    models: [
+      { id: 'gemini-2.0-flash',   label: 'Gemini 2.0 Flash', speed: 3, recommended: true,
+        desc: 'Dernier modèle Flash — rapide et très performant' },
+      { id: 'gemini-1.5-pro',     label: 'Gemini 1.5 Pro',   speed: 2,
+        desc: 'Long contexte — grandes quantités de données' },
+      { id: 'gemini-1.5-flash',   label: 'Gemini 1.5 Flash', speed: 3,
+        desc: 'Rapide et efficace — bon pour la majorité des requêtes' },
+    ],
+  },
 ]
 
 const SUGGESTIONS = [
@@ -51,6 +83,7 @@ export default function Assistant() {
   const providers: Record<string, boolean> = provData?.data ?? {}
 
   const [provider,   setProvider]   = useState('claude')
+  const [modelId,    setModelId]    = useState(PROVIDERS[0].models.find(m => m.recommended)!.id)
   const [profileId,  setProfileId]  = useState<number | null>(null)
   const [messages,   setMessages]   = useState<Message[]>([])
   const [input,      setInput]      = useState('')
@@ -102,7 +135,7 @@ export default function Assistant() {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, profile_id: profileId, messages: history }),
+        body: JSON.stringify({ provider, profile_id: profileId, messages: history, model: modelId }),
         signal: ctrl.signal,
       })
 
@@ -177,7 +210,10 @@ export default function Assistant() {
         {/* Provider tabs */}
         <div style={{ display: 'flex', gap: 4, background: t.bgMuted, borderRadius: t.radius, padding: 3 }}>
           {PROVIDERS.map(p => (
-            <button key={p.id} onClick={() => setProvider(p.id)} style={{
+            <button key={p.id} onClick={() => {
+              setProvider(p.id)
+              setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
+            }} style={{
               padding: '5px 14px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
               border: 'none',
               background: provider === p.id ? t.bgCard : 'transparent',
@@ -191,6 +227,13 @@ export default function Assistant() {
             </button>
           ))}
         </div>
+
+        {/* Model selector */}
+        <ModelSelector
+          provider={PROVIDERS.find(p => p.id === provider)!}
+          selected={modelId}
+          onChange={setModelId}
+        />
 
         {/* Profile selector */}
         <select
@@ -537,6 +580,46 @@ function inlineMarkdown(text: string): React.ReactNode {
       return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
     return part
   })
+}
+
+// ── Model selector ────────────────────────────────────────────
+
+function ModelSelector({ provider, selected, onChange }: {
+  provider: typeof PROVIDERS[0]; selected: string; onChange: (id: string) => void
+}) {
+  const current = provider.models.find(m => m.id === selected) ?? provider.models[0]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {provider.models.map(m => (
+          <button key={m.id} onClick={() => onChange(m.id)} style={{
+            padding: '4px 10px', borderRadius: t.radius, fontSize: 11, cursor: 'pointer',
+            border: `1px solid ${m.id === selected ? provider.color : t.border}`,
+            background: m.id === selected ? `${provider.color}12` : t.bgCard,
+            color: m.id === selected ? provider.color : t.muted,
+            fontWeight: m.id === selected ? 600 : 400,
+            transition: 'all .15s', position: 'relative',
+          }}>
+            {m.label}
+            {m.recommended && (
+              <span style={{
+                position: 'absolute', top: -6, right: -4,
+                fontSize: 8, background: t.success, color: '#fff',
+                borderRadius: 3, padding: '1px 4px', fontWeight: 700,
+              }}>★</span>
+            )}
+            {'⚡'.repeat(m.speed)}
+          </button>
+        ))}
+      </div>
+      {/* Recommendation text */}
+      <div style={{ fontSize: 11, color: t.muted, paddingLeft: 2 }}>
+        <span style={{ color: provider.color, fontWeight: 600 }}>{current.label}</span>
+        {' — '}{current.desc}
+      </div>
+    </div>
+  )
 }
 
 // ── Key panel ─────────────────────────────────────────────────
