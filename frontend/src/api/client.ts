@@ -40,3 +40,8 @@ export const getModules = (profileId: number) => api.get(`/queries/modules?profi
 // History
 export const listHistory = (limit = 50) => api.get(`/history/?limit=${limit}`)
 export const deleteHistory = (id: number) => api.delete(`/history/${id}`)
+
+// AI assistant
+export const getAiProviders = () => api.get('/ai/providers')
+export const saveAiKey = (provider: string, key: string) => api.post('/ai/key', { provider, key })
+export const deleteAiKey = (provider: string) => api.delete(`/ai/key/${provider}`)
