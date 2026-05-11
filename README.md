@@ -1,141 +1,121 @@
 # Odoo Consultant Portal
 
-A local web portal for Odoo consultants. Manage Odoo source repositories, connection profiles, project repositories, and run read-only queries — all from a browser on your laptop.
+Votre portail local pour travailler avec Odoo au quotidien — sans configuration technique complexe.
 
-## Features
+---
 
-- **Source management** — clone/pull Odoo Community & Enterprise for versions 15.0–19.0
-- **Profiles** — store Odoo.sh connection details; API keys secured in system keyring
-- **Project repositories** — clone, pull, browse branches and commits
-- **Read-only Odoo queries** — search/read models, inspect fields, export as Markdown/CSV/Excel
-- **Prompt history** — track every query with status, duration and export path
-- **MCP server** — skeleton for AI tool integration (read-only Odoo tools)
-- **CLI** — `odoo-portal init | serve | source sync`
+## Installation rapide
 
-## Installation
-
-### Requirements
-
-- Python 3.11+
-- Node.js 18+ (for building the frontend)
-
-### Install from source
+### Étape 1 — Téléchargez le portail
 
 ```bash
-git clone https://github.com/your-org/better_odoo_consultant.git
+git clone https://github.com/le-goff-benoit/better_odoo_consultant.git
 cd better_odoo_consultant
-pip install -e ".[dev]"
 ```
 
-### Build the frontend (optional — needed for the bundled UI)
+### Étape 2 — Lancez l'installation (une seule fois)
 
 ```bash
-cd frontend
-npm install
-npm run build
-cd ..
+bash install.sh
 ```
 
-Without building the frontend, the API is still fully functional and can be accessed at `http://localhost:8765/api/`.
+Le script installe tout automatiquement : Python, les dépendances, et l'interface web.
 
-## Usage
-
-### Initialize
+### Étape 3 — Démarrez le portail
 
 ```bash
-odoo-portal init
+bash start.sh
 ```
 
-Creates `~/.odoo-portal/` and initialises the SQLite database.
+Le portail s'ouvre automatiquement dans votre navigateur à l'adresse **http://localhost:8765**.
 
-### Start the portal
+---
+
+## Ce que vous pouvez faire
+
+### 📥 Télécharger les sources Odoo
+Allez dans **Sources** pour télécharger les versions 15 à 19 d'Odoo en un clic.  
+Si vous avez accès à GitHub Enterprise (SSH), le portail le détecte automatiquement.  
+Pas de clé SSH ? Le portail vous guide pas à pas pour en créer une et l'ajouter à GitHub.
+
+### 🏢 Gérer vos projets Odoo.sh
+Allez dans **Mes projets** pour ajouter une instance Odoo cliente.  
+Un assistant en 3 étapes vous guide :
+1. Donnez un nom au projet et collez l'URL Odoo
+2. Entrez vos identifiants — le portail **détecte automatiquement** la version et les modules installés
+3. Ajoutez optionnellement le dépôt GitHub du projet
+
+Depuis chaque projet, accédez directement à **Odoo**, **Odoo.sh** et **GitHub** en un clic.
+
+### 🔍 Requêter une base Odoo
+Allez dans **Requêtes** pour chercher et lire des données depuis n'importe quelle instance Odoo.  
+Exportez les résultats en Markdown, CSV ou Excel.
+
+### 📁 Gérer vos dépôts locaux
+Allez dans **Dépôts** pour cloner, mettre à jour et consulter vos modules personnalisés.
+
+---
+
+## Prérequis
+
+| Outil | Version minimum | Pour quoi |
+|---|---|---|
+| Python | 3.11+ | Obligatoire |
+| Node.js | 18+ | Interface web (optionnel, mais recommandé) |
+| Git | Toute version récente | Pour les sources et dépôts |
+
+**Python** : https://www.python.org/downloads/  
+**Node.js** : https://nodejs.org/
+
+---
+
+## Démarrage développeur
 
 ```bash
-odoo-portal serve
-```
-
-Opens the web UI at **http://localhost:8765** (or http://localhost:5173 when running the Vite dev server).
-
-For frontend development:
-
-```bash
-# Terminal 1 — API
+# Backend (API)
+source .venv/bin/activate
 odoo-portal serve --reload
 
-# Terminal 2 — Vite dev server
-cd frontend && npm run dev
+# Frontend (interface web en développement)
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173
 ```
 
-### Sync Odoo sources
+---
+
+## Variables d'environnement (optionnel)
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-portal` | Dossier de données |
+| `ODOO_PORTAL_API_PORT` | `8765` | Port de l'API |
+
+Créez un fichier `.env` à la racine du projet pour les personnaliser.
+
+---
+
+## Lancer les tests
 
 ```bash
-# Community only
-odoo-portal source sync --version 17.0 --path ~/odoo-sources/17.0
-
-# Community + Enterprise (requires SSH access to github.com)
-odoo-portal source sync --version 17.0 --path ~/odoo-sources/17.0 --enterprise
+source .venv/bin/activate
+pip install -e ".[dev]"
+pytest
 ```
 
-### List profiles (CLI)
+---
 
-```bash
-odoo-portal profile list
-```
-
-### Start the MCP server
+## Serveur MCP (pour Claude)
 
 ```bash
 odoo-portal mcp
 ```
 
-Exposes read-only Odoo tools via the MCP stdio transport for use with Claude Desktop or other MCP clients.
+Expose des outils de lecture Odoo pour les clients MCP (Claude Desktop, etc.).
 
-## Configuration
+---
 
-Environment variables (prefix `ODOO_PORTAL_`):
-
-| Variable | Default | Description |
-|---|---|---|
-| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-portal` | Data and database directory |
-| `ODOO_PORTAL_API_HOST` | `127.0.0.1` | API bind host |
-| `ODOO_PORTAL_API_PORT` | `8765` | API bind port |
-
-Or create a `.env` file in the working directory.
-
-## Architecture
-
-```
-odoo_consultant_portal/
-├── cli/          — Click CLI (init, serve, source sync, profile list, mcp)
-├── api/          — FastAPI application
-│   └── routes/   — REST endpoints (sources, profiles, projects, queries, history)
-├── core/         — SQLModel models, database session, settings
-├── services/     — Business logic (source manager, Odoo RPC client, keyring, …)
-└── mcp/          — MCP server skeleton (tools, resources, prompts)
-frontend/         — React + Vite single-page application
-tests/            — pytest test suite
-```
-
-### Write operations
-
-Write operations are intentionally excluded from the MVP. The architecture is prepared for them:
-- All mutating Odoo calls will go through a dedicated `OdooWriter` class in `services/odoo_writer.py`
-- Every write will return a preview diff before execution
-- A confirmation step (`confirmed=True` parameter) will be required
-- History entries will track write operations separately with `mode="write"`
-
-## Running tests
-
-```bash
-pytest
-```
-
-With coverage:
-
-```bash
-pytest --cov=odoo_consultant_portal --cov-report=term-missing
-```
-
-## License
+## Licence
 
 MIT

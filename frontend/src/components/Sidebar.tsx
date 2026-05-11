@@ -1,32 +1,85 @@
 import { NavLink } from 'react-router-dom'
+import { t } from '../theme'
 
 const links = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/sources', label: 'Sources' },
-  { to: '/profiles', label: 'Profiles' },
-  { to: '/projects', label: 'Projects' },
-  { to: '/query', label: 'Query' },
-  { to: '/history', label: 'History' },
+  { to: '/dashboard', label: 'Dashboard',  icon: '⊞' },
+  { to: '/sources',   label: 'Sources',    icon: '⬇' },
+  { to: '/profiles',  label: 'Mes projets', icon: '🏢' },
+  { to: '/projects',  label: 'Dépôts',     icon: '📁' },
+  { to: '/query',     label: 'Requêtes',   icon: '🔍' },
+  { to: '/history',   label: 'Historique', icon: '🕐' },
 ]
-
-const style: React.CSSProperties = {
-  width: 200, background: '#1a1a2e', color: '#eee', display: 'flex',
-  flexDirection: 'column', padding: '16px 0',
-}
-const linkStyle: React.CSSProperties = { display: 'block', padding: '10px 20px', color: '#ccc', textDecoration: 'none' }
-const activeStyle: React.CSSProperties = { ...linkStyle, background: '#16213e', color: '#fff', fontWeight: 600 }
 
 export default function Sidebar() {
   return (
-    <nav style={style}>
-      <div style={{ padding: '16px 20px 24px', fontWeight: 700, fontSize: 16, color: '#fff' }}>
-        Odoo Portal
+    <nav style={{
+      width: t.navWidth,
+      minHeight: '100vh',
+      background: t.brand,
+      display: 'flex',
+      flexDirection: 'column',
+      flexShrink: 0,
+      position: 'sticky',
+      top: 0,
+      overflowY: 'auto',
+    }}>
+      {/* Logo / Brand */}
+      <div style={{
+        padding: '18px 20px 20px',
+        borderBottom: `1px solid rgba(255,255,255,.12)`,
+        marginBottom: 8,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 32, height: 32,
+            background: t.action,
+            borderRadius: t.radius,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, fontWeight: 700, color: '#fff', flexShrink: 0,
+          }}>O</div>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, lineHeight: 1.2 }}>Odoo</div>
+            <div style={{ color: 'rgba(255,255,255,.6)', fontSize: 11 }}>Consultant Portal</div>
+          </div>
+        </div>
       </div>
-      {links.map(l => (
-        <NavLink key={l.to} to={l.to} style={({ isActive }) => isActive ? activeStyle : linkStyle}>
-          {l.label}
-        </NavLink>
-      ))}
+
+      {/* Navigation links */}
+      <div style={{ flex: 1, padding: '4px 8px' }}>
+        {links.map(l => (
+          <NavLink
+            key={l.to}
+            to={l.to}
+            style={({ isActive }) => ({
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '9px 12px',
+              borderRadius: t.radius,
+              color: isActive ? '#fff' : 'rgba(255,255,255,.72)',
+              textDecoration: 'none',
+              fontWeight: isActive ? 600 : 400,
+              fontSize: 13,
+              background: isActive ? 'rgba(255,255,255,.15)' : 'transparent',
+              marginBottom: 2,
+              transition: 'background .15s',
+            })}
+          >
+            <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{l.icon}</span>
+            {l.label}
+          </NavLink>
+        ))}
+      </div>
+
+      {/* Version footer */}
+      <div style={{
+        padding: '12px 20px',
+        borderTop: 'rgba(255,255,255,.1) 1px solid',
+        color: 'rgba(255,255,255,.4)',
+        fontSize: 11,
+      }}>
+        v0.1.0
+      </div>
     </nav>
   )
 }
