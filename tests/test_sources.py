@@ -16,13 +16,28 @@ def test_detect_ssh_keys_no_dir(tmp_path, monkeypatch):
 
 def test_github_ssh_failure():
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=1, stderr="Permission denied")
+        mock_run.return_value = MagicMock(stdout="", stderr="Permission denied (publickey).")
         result = test_github_ssh()
         assert result is False
 
 
-def test_github_ssh_success():
+def test_github_ssh_success_exit1():
+    # GitHub répond avec exit code 1 et stderr — c'est le comportement réel
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stderr="successfully authenticated")
+        mock_run.return_value = MagicMock(
+            stdout="",
+            stderr="Hi le-goff-benoit! You've successfully authenticated, but GitHub does not provide shell access.",
+        )
+        result = test_github_ssh()
+        assert result is True
+
+
+def test_github_ssh_success_stdout():
+    # Certaines configs SSH renvoient sur stdout
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            stdout="Hi user! You've successfully authenticated.",
+            stderr="",
+        )
         result = test_github_ssh()
         assert result is True

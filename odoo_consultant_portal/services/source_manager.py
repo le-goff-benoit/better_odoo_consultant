@@ -25,7 +25,9 @@ def test_github_ssh() -> bool:
             ["ssh", "-T", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5", "git@github.com"],
             capture_output=True, text=True, timeout=10,
         )
-        return "successfully authenticated" in result.stderr.lower()
+        # GitHub répond sur stderr avec exit code 1 (pas de shell) — c'est normal
+        combined = (result.stdout + result.stderr).lower()
+        return "successfully authenticated" in combined or "hi " in combined
     except Exception:
         return False
 
