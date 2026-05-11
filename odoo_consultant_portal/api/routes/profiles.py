@@ -101,7 +101,11 @@ async def diagnose(body: DiagnoseRequest):
         info = await loop.run_in_executor(None, common.version)
         server_version_raw = info.get("server_version", "")
         parts = server_version_raw.split(".")
-        odoo_version = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else server_version_raw
+        if len(parts) >= 2:
+            minor = parts[1].split("+")[0].split("-")[0]
+            odoo_version = f"{parts[0]}.{minor}"
+        else:
+            odoo_version = server_version_raw
         step("Serveur joignable", True,
              f"Odoo {odoo_version} détecté sur {url}",
              {"odoo_version": odoo_version, "server_version": server_version_raw})
