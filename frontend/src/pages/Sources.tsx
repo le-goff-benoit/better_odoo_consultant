@@ -56,7 +56,7 @@ export default function Sources() {
   const setCard = (version: string, patch: Partial<VersionState>) =>
     setCards(prev => ({
       ...prev,
-      [version]: { status: 'idle', pct: 0, currentLabel: '', logs: [], showLogs: false, ...prev[version], ...patch },
+      [version]: { ...{ status: 'idle', pct: 0, currentLabel: '', logs: [], showLogs: false }, ...prev[version], ...patch },
     }))
 
   const toggleLogs = (version: string) =>

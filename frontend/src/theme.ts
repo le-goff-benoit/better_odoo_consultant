@@ -41,6 +41,12 @@ export const t = {
   shadowMd:    '0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06)',
   shadowLg:    '0 20px 48px rgba(0,0,0,.18)',
 
+  // Aliases (backward compat with older pages)
+  action:      '#017e84',
+  actionHover: '#015f64',
+  white:       '#ffffff',
+  borderLight: '#f1f5f9',
+
   // Shape
   radius:      '6px',
   radiusSm:    '4px',
