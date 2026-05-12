@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates, checkSingleVersion } from '../api/client'
-import { t } from '../theme'
+import { t, btn } from '../theme'
 
 // ── Version definitions ─────────────────────────────────────────
 
@@ -695,23 +695,7 @@ function btnDownload(status: CardState, installed?: boolean): React.CSSPropertie
   }
 }
 
-const btnPrimary: React.CSSProperties = {
-  padding: '7px 16px', background: t.action, color: '#fff',
-  border: 'none', borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-}
-
-const btnSecondary: React.CSSProperties = {
-  padding: '7px 14px', background: 'transparent', color: t.muted,
-  border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, cursor: 'pointer',
-}
-
-const btnTeal: React.CSSProperties = {
-  padding: '7px 14px', background: t.action, color: '#fff',
-  border: 'none', borderRadius: t.radius, fontSize: 12,
-  fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-}
-
-const btnGhost: React.CSSProperties = {
-  background: 'none', border: `1px solid ${t.border}`, color: t.muted,
-  borderRadius: t.radiusSm, fontSize: 11, cursor: 'pointer', padding: '3px 8px',
-}
+const btnPrimary = btn.primary
+const btnSecondary = btn.secondary
+const btnTeal: React.CSSProperties = { ...btn.primary, whiteSpace: 'nowrap', flexShrink: 0 }
+const btnGhost: React.CSSProperties = { ...btn.ghost, fontSize: 11, padding: '3px 8px' }

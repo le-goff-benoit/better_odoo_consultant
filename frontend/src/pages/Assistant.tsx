@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getProfileApps } from '../api/client'
-import { t } from '../theme'
+import { t, btn } from '../theme'
 
 import { ODOO_APPS } from '../constants/odooApps'
 
@@ -572,10 +572,7 @@ export default function Assistant() {
           <h1 style={{ fontSize: 20, fontWeight: 700, color: t.text, marginBottom: 2 }}>Assistant IA</h1>
           <p style={{ fontSize: 13, color: t.muted }}>Posez des questions sur vos données Odoo en langage naturel.</p>
         </div>
-        <Link to="/settings" style={{
-          padding: '6px 14px', background: t.bgMuted, border: `1px solid ${t.border}`,
-          borderRadius: t.radius, fontSize: 12, color: t.textSub, textDecoration: 'none', fontWeight: 500,
-        }}>⚙ Paramètres</Link>
+        <Link to="/settings" style={{ ...btn.ghost, textDecoration: 'none' }}>⚙ Paramètres</Link>
       </div>
 
       {/* Project + General tabs */}

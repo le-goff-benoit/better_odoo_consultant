@@ -162,7 +162,7 @@ export default function About() {
         }}>B</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 2 }}>Benoît Le Goff</div>
-          <div style={{ fontSize: 13, color: t.muted, marginBottom: 8 }}>Consultant Odoo — Le Projet Sàrl · Genève, Suisse</div>
+          <div style={{ fontSize: 13, color: t.muted, marginBottom: 8 }}>Consultant Odoo</div>
           <div style={{ display: 'flex', gap: 12 }}>
             <a
               href="https://github.com/le-goff-benoit/better_odoo_consultant"

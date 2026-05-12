@@ -65,3 +65,29 @@ export const t = {
   fontSize: '14px',
   navWidth: '232px',
 } as const
+
+import type React from 'react'
+
+export const btn = {
+  primary: {
+    padding: '8px 18px', background: 'var(--brand, #017e84)', color: '#fff',
+    border: 'none', borderRadius: '6px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+  } as React.CSSProperties,
+  secondary: {
+    padding: '7px 16px', background: 'transparent', color: 'var(--th-text-sub, #334155)',
+    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: '6px', fontSize: 13, cursor: 'pointer',
+  } as React.CSSProperties,
+  ghost: {
+    padding: '6px 14px', background: 'var(--th-bg-muted, #f1f5f9)', color: 'var(--th-text-sub, #334155)',
+    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: '6px', fontSize: 12, cursor: 'pointer', fontWeight: 500,
+  } as React.CSSProperties,
+  danger: {
+    padding: '7px 16px', background: '#dc2626', color: '#fff',
+    border: 'none', borderRadius: '6px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+  } as React.CSSProperties,
+  outline: (color: string): React.CSSProperties => ({
+    padding: '6px 14px', background: 'transparent',
+    border: `1px solid ${color}`, color,
+    borderRadius: '6px', fontSize: 12, cursor: 'pointer', fontWeight: 600,
+  }),
+}

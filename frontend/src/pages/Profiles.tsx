@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps } from '../api/client'
-import { t } from '../theme'
+import { t, btn } from '../theme'
 import { ODOO_APPS } from '../constants/odooApps'
 
 function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string }[]; max?: number }) {
@@ -821,19 +821,9 @@ const styles = {
     fontSize: 13, color: t.text, background: t.white, outline: 'none',
     transition: 'border-color .15s',
   } as React.CSSProperties,
-  btnPrimary: {
-    padding: '9px 20px', background: t.action, color: '#fff',
-    border: 'none', borderRadius: t.radius, fontWeight: 600, fontSize: 13, cursor: 'pointer',
-  } as React.CSSProperties,
-  btnSecondary: {
-    padding: '8px 16px', background: 'transparent', color: t.textSub,
-    border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, cursor: 'pointer',
-  } as React.CSSProperties,
-  btnOutline: (color: string): React.CSSProperties => ({
-    padding: '5px 12px', background: 'transparent',
-    border: `1px solid ${color}`, color,
-    borderRadius: t.radius, fontSize: 12, cursor: 'pointer', fontWeight: 600,
-  }),
+  btnPrimary: btn.primary,
+  btnSecondary: btn.secondary,
+  btnOutline: btn.outline,
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
