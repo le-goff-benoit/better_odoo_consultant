@@ -51,6 +51,7 @@ class ProfileUpdate(BaseModel):
     company_logo: Optional[str] = None
     company_ids: Optional[str] = None
     api_key_expires: Optional[str] = None
+    selected_company_id: Optional[int] = None
 
 
 class DiagnoseRequest(BaseModel):
