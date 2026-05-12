@@ -96,11 +96,30 @@ pip install anthropic openai "google-generativeai>=0.8" --quiet \
   && success "Assistants IA prêts — Claude, GPT-4o et Gemini disponibles" \
   || warn "Certains packages IA n'ont pas pu s'installer (non bloquant)."
 
-# ── 4. Node / frontend (optional) ───────────────────────────
+# ── 4. Node / frontend ──────────────────────────────────────
 FRONTEND_DIR="$(dirname "$0")/frontend"
 DIST_DIR="$FRONTEND_DIR/dist"
 
+install_node() {
+  info "Node.js non trouvé — tentative d'installation automatique..."
+  if command -v apt-get &>/dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - 2>/dev/null
+    sudo apt-get install -y nodejs 2>/dev/null
+  elif command -v brew &>/dev/null; then
+    brew install node
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y nodejs npm
+  elif command -v pacman &>/dev/null; then
+    sudo pacman -Sy --noconfirm nodejs npm
+  else
+    error "Impossible d'installer Node.js automatiquement. Installez-le depuis https://nodejs.org puis relancez install.sh"
+  fi
+}
+
 if [ ! -d "$DIST_DIR" ]; then
+  if ! command -v npm &>/dev/null; then
+    install_node
+  fi
   if command -v npm &>/dev/null; then
     info "Construction de l'interface web..."
     cd "$FRONTEND_DIR"
@@ -109,8 +128,7 @@ if [ ! -d "$DIST_DIR" ]; then
     cd - > /dev/null
     success "Interface web construite"
   else
-    warn "npm non trouvé — l'interface web ne sera pas disponible."
-    warn "Installez Node.js 18+ depuis https://nodejs.org pour l'activer."
+    error "npm toujours introuvable après installation. Installez Node.js 18+ depuis https://nodejs.org puis relancez install.sh"
   fi
 else
   success "Interface web déjà construite"
