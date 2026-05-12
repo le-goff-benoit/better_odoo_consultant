@@ -40,7 +40,8 @@ interface Env { name: string; db_url: string; branch: string }
 interface Profile {
   id: number; name: string; db_url: string; db_name: string
   login: string; odoo_version?: string; odoo_sh_url?: string; github_repo?: string
-  environments?: string; company_name?: string; company_city?: string; company_logo?: string
+  default_branch?: string; environments?: string
+  company_name?: string; company_city?: string; company_logo?: string
   company_ids?: string; api_key_expires?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
@@ -76,6 +77,7 @@ export default function Profiles() {
   const profiles: Profile[] = data?.data ?? []
 
   const [showWizard, setShowWizard] = useState(false)
+  const [editingId,  setEditingId]  = useState<number | null>(null)
   const [step,       setStep]       = useState(1)
   const [form,       setForm]       = useState<FormState>(EMPTY)
   const [diag,       setDiag]       = useState<DiagResult | null>(null)
@@ -132,6 +134,43 @@ export default function Profiles() {
       notify(e.response?.data?.detail ?? e.message, false),
   })
 
+  const update = useMutation({
+    mutationFn: () => updateProfile(editingId!, {
+      ...form,
+      environments: JSON.stringify(envs),
+      company_name: companyInfo?.name,
+      company_city: companyInfo?.city,
+      company_logo: companyInfo?.logo,
+      company_ids: availableCompanies.length > 0 ? JSON.stringify(availableCompanies) : undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profiles'] })
+      setEditingId(null); setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([])
+      notify('Projet mis à jour !')
+    },
+    onError: (e: ApiErr) => notify(e.response?.data?.detail ?? e.message, false),
+  })
+
+  const openEdit = (p: Profile) => {
+    setEditingId(p.id)
+    setForm({
+      name: p.name,
+      odoo_sh_url: p.odoo_sh_url ?? '',
+      db_url: p.db_url,
+      db_name: p.db_name,
+      login: p.login,
+      api_key: '',          // never pre-filled for security
+      odoo_version: p.odoo_version ?? '17.0',
+      github_repo: p.github_repo ?? '',
+      default_branch: p.default_branch ?? 'main',
+    })
+    try { setEnvs(JSON.parse(p.environments ?? '[]')) } catch { setEnvs([]) }
+    setCompanyInfo(p.company_name ? { name: p.company_name, city: p.company_city ?? undefined, logo: p.company_logo ?? undefined } : null)
+    setDiag(null)
+    setStep(1)
+    setShowWizard(true)
+  }
+
   const del = useMutation({
     mutationFn: (id: number) => deleteProfile(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['profiles'] }); notify('Projet supprimé') },
@@ -143,10 +182,11 @@ export default function Profiles() {
     onError:   (e: ApiErr) => notify(e.response?.data?.detail ?? e.message, false),
   })
 
+  // In edit mode, api_key is optional (user may not want to change it)
   const canNext = step === 1
     ? form.name.trim() !== '' && form.db_url.trim() !== ''
     : step === 2
-    ? form.db_name.trim() !== '' && form.login.trim() !== '' && form.api_key.trim() !== ''
+    ? form.db_name.trim() !== '' && form.login.trim() !== '' && (editingId !== null || form.api_key.trim() !== '')
     : true
 
   const diagOk = diag !== null && diag.uid !== null
@@ -159,7 +199,7 @@ export default function Profiles() {
           <h1 style={styles.h1}>Mes projets Odoo.sh</h1>
           <p style={styles.sub}>Gérez vos connexions aux instances Odoo de vos clients.</p>
         </div>
-        <button onClick={() => { setShowWizard(true); setStep(1) }} style={styles.btnPrimary}>
+        <button onClick={() => { setEditingId(null); setForm(EMPTY); setShowWizard(true); setStep(1) }} style={styles.btnPrimary}>
           + Nouveau projet
         </button>
       </div>
@@ -181,6 +221,17 @@ export default function Profiles() {
       {showWizard && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
+
+            {/* Title */}
+            <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: t.text, margin: 0 }}>
+                {editingId !== null ? `Modifier — ${form.name || 'projet'}` : 'Nouveau projet'}
+              </h2>
+              <button onClick={() => { setShowWizard(false); setEditingId(null); setDiag(null) }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, lineHeight: 1, padding: '2px 6px' }}>
+                ×
+              </button>
+            </div>
 
             {/* Step bar */}
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 32 }}>
@@ -247,9 +298,9 @@ export default function Profiles() {
                   <input style={styles.input} value={form.login} onChange={set('login')}
                     placeholder="admin@monentreprise.com" />
                 </Field>
-                <Field label="Clé API" hint="">
+                <Field label="Clé API" hint={editingId !== null ? 'Laissez vide pour conserver la clé existante' : ''}>
                   <input style={styles.input} type="password" value={form.api_key}
-                    onChange={set('api_key')} placeholder="••••••••••••••••••••" />
+                    onChange={set('api_key')} placeholder={editingId !== null ? '(inchangée)' : '••••••••••••••••••••'} />
                   <a href="https://www.odoo.com/documentation/17.0/developer/reference/external_api.html#api-keys"
                     target="_blank" rel="noreferrer"
                     style={{ fontSize: 12, color: t.action, marginTop: 5, display: 'inline-block' }}>
@@ -432,7 +483,7 @@ export default function Profiles() {
             {/* Footer */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, paddingTop: 20, borderTop: `1px solid ${t.border}` }}>
               <button
-                onClick={() => step === 1 ? (setShowWizard(false), setDiag(null)) : setStep(s => s - 1)}
+                onClick={() => step === 1 ? (setShowWizard(false), setEditingId(null), setDiag(null)) : setStep(s => s - 1)}
                 style={styles.btnSecondary}
               >
                 {step === 1 ? 'Annuler' : '← Retour'}
@@ -443,9 +494,11 @@ export default function Profiles() {
                   Suivant →
                 </button>
               ) : (
-                <button disabled={create.isPending} onClick={() => create.mutate()}
+                <button
+                  disabled={editingId !== null ? update.isPending : create.isPending}
+                  onClick={() => editingId !== null ? update.mutate() : create.mutate()}
                   style={{ ...styles.btnPrimary, background: t.success }}>
-                  {create.isPending ? '⟳ Enregistrement…' : '✓ Enregistrer'}
+                  {(editingId !== null ? update.isPending : create.isPending) ? '⟳ Enregistrement…' : '✓ Enregistrer'}
                 </button>
               )}
             </div>
@@ -462,6 +515,7 @@ export default function Profiles() {
             <ProjectCard key={p.id} profile={p}
               onTest={() => testConn.mutate(p.id)}
               onDelete={() => del.mutate(p.id)}
+              onEdit={() => openEdit(p)}
               onUpdateEnvs={(envs) => updateProfile(p.id, { environments: JSON.stringify(envs) })
                 .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))} />
           ))}
@@ -496,8 +550,8 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ProjectCard({ profile, onTest, onDelete, onUpdateEnvs }: {
-  profile: Profile; onTest: () => void; onDelete: () => void
+function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs }: {
+  profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
   onUpdateEnvs: (envs: Env[]) => void
 }) {
   const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
@@ -668,6 +722,7 @@ function ProjectCard({ profile, onTest, onDelete, onUpdateEnvs }: {
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onEdit}   style={styles.btnOutline(t.brand)}>✏ Modifier</button>
           <button onClick={onTest}   style={styles.btnOutline(t.action)}>Tester</button>
           <button onClick={onDelete} style={styles.btnOutline(t.danger)}>Supprimer</button>
         </div>

@@ -34,8 +34,7 @@ def read_file(name: str) -> str:
     if not path.exists():
         content = _default_content(name)
         if content:
-            path.write_text(content, encoding="utf-8")
-            return content
+            return content  # return default without writing to disk
         raise FileNotFoundError(f"{name} introuvable")
     return path.read_text(encoding="utf-8")
 

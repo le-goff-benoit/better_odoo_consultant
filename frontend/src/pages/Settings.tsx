@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile } from '../api/client'
 import { t } from '../theme'
+import { applyBrandColor, applyThemeMode } from '../App'
 
 interface ProviderDef {
   id: string
@@ -708,10 +709,7 @@ interface UserProfile {
   team?: string
   avatar?: string   // emoji or data-URI
   primaryColor?: string
-}
-
-function applyPrimaryColor(color: string) {
-  document.documentElement.style.setProperty('--brand', color)
+  themeMode?: 'light' | 'dark' | 'sepia'
 }
 
 function UserProfileEditor() {
@@ -724,12 +722,14 @@ function UserProfileEditor() {
   useEffect(() => {
     const p: UserProfile = data?.data ?? {}
     setForm(p)
-    if (p.primaryColor) applyPrimaryColor(p.primaryColor)
+    if (p.primaryColor) applyBrandColor(p.primaryColor)
+    applyThemeMode(p.themeMode)
   }, [data])
 
   const set = (key: keyof UserProfile, val: string) => {
     setForm(f => ({ ...f, [key]: val }))
-    if (key === 'primaryColor') applyPrimaryColor(val)
+    if (key === 'primaryColor') applyBrandColor(val)
+    if (key === 'themeMode') applyThemeMode(val)
   }
 
   const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -743,7 +743,8 @@ function UserProfileEditor() {
   const handleSave = async () => {
     await saveUserProfile(form)
     qc.invalidateQueries({ queryKey: ['user-profile'] })
-    if (form.primaryColor) applyPrimaryColor(form.primaryColor)
+    if (form.primaryColor) applyBrandColor(form.primaryColor)
+    applyThemeMode(form.themeMode)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -818,11 +819,38 @@ function UserProfileEditor() {
                 }} />
               ))}
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.muted, cursor: 'pointer' }}>
-                <input type="color" value={form.primaryColor ?? t.brand}
+                <input type="color" value={form.primaryColor ?? '#017e84'}
                   onChange={e => set('primaryColor', e.target.value)}
                   style={{ width: 26, height: 26, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
                 Autre
               </label>
+            </div>
+          </div>
+
+          {/* Theme mode */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>Thème d'affichage</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {([
+                { id: 'light', label: 'Clair',  icon: '☀️' },
+                { id: 'dark',  label: 'Sombre', icon: '🌙' },
+                { id: 'sepia', label: 'Sépia',  icon: '📜' },
+              ] as const).map(m => {
+                const active = (form.themeMode ?? 'light') === m.id
+                return (
+                  <button key={m.id} onClick={() => set('themeMode', m.id)} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 14px', borderRadius: t.radius, cursor: 'pointer',
+                    border: `1px solid ${active ? 'var(--brand, #017e84)' : t.border}`,
+                    background: active ? 'var(--brand, #017e84)' : t.bgMuted,
+                    color: active ? '#fff' : t.muted,
+                    fontSize: 12, fontWeight: active ? 600 : 400,
+                    transition: 'all .15s',
+                  }}>
+                    <span>{m.icon}</span> {m.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

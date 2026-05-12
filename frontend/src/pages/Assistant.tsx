@@ -253,6 +253,7 @@ export default function Assistant() {
     if (!pending || streaming || !provider || profileId !== GENERAL_KEY) return
     pendingSendRef.current = null
     const { text, version: ver } = pending
+    setInput('')
     const timer = setTimeout(() => sendWithText(text, ver), 100)
     return () => clearTimeout(timer)
   }, [provider, profileId, streaming])

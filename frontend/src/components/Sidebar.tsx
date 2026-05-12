@@ -33,26 +33,37 @@ export default function Sidebar() {
       overflowY: 'auto',
       borderRight: '1px solid rgba(255,255,255,.06)',
     }}>
-      {/* Logo */}
+      {/* Profile header */}
       <div style={{
-        padding: '20px 16px 16px',
+        padding: '18px 16px 14px',
         display: 'flex',
         alignItems: 'center',
         gap: 10,
         borderBottom: '1px solid rgba(255,255,255,.07)',
         marginBottom: 8,
       }}>
+        {/* Avatar / O logo */}
         <div style={{
-          width: 34, height: 34, borderRadius: 8,
-          background: `var(--brand, ${t.brand})`,
+          width: 36, height: 36, borderRadius: 9,
+          background: `var(--brand, #017e84)`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, boxShadow: '0 2px 8px rgba(1,126,132,.4)',
+          flexShrink: 0, overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(0,0,0,.3)',
         }}>
-          <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.5px' }}>O</span>
+          {avatarIsImg
+            ? <img src={up.avatar as string} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="avatar" />
+            : up.avatar && up.avatar !== '👤'
+              ? <span style={{ fontSize: 18 }}>{up.avatar}</span>
+              : <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.5px' }}>O</span>
+          }
         </div>
-        <div>
-          <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>Odoo Portal</div>
-          <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 11, marginTop: 1 }}>Consultant</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {up.name || 'Odoo Portal'}
+          </div>
+          <div style={{ color: 'rgba(255,255,255,.45)', fontSize: 11, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {up.title || 'Consultant'}
+          </div>
         </div>
       </div>
 
@@ -76,7 +87,7 @@ export default function Sidebar() {
                 <Icon
                   name={l.icon}
                   size={15}
-                  color={isActive ? `var(--brand, ${t.brand})` : 'rgba(255,255,255,.5)'}
+                  color={isActive ? `var(--brand, #017e84)` : 'rgba(255,255,255,.5)'}
                 />
                 {l.label}
               </>
@@ -85,38 +96,14 @@ export default function Sidebar() {
         ))}
       </div>
 
-      {/* Footer / user identity */}
+      {/* Footer — version only */}
       <div style={{
-        padding: '10px 12px',
-        borderTop: '1px solid rgba(255,255,255,.07)',
+        padding: '8px 16px 12px',
+        borderTop: '1px solid rgba(255,255,255,.06)',
+        display: 'flex', justifyContent: 'space-between',
       }}>
-        {up.name ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-              background: `${up.primaryColor ?? t.brand}30`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-            }}>
-              {avatarIsImg
-                ? <img src={up.avatar as string} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : (up.avatar || '👤')}
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {up.name}
-              </div>
-              {up.title && (
-                <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {up.title}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
-        <div style={{ color: 'rgba(255,255,255,.2)', fontSize: 10, display: 'flex', justifyContent: 'space-between' }}>
-          <span>v0.8.0</span>
-          <span>© Benoît Le Goff</span>
-        </div>
+        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>v0.9.0</span>
+        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>© Benoît Le Goff</span>
       </div>
     </nav>
   )

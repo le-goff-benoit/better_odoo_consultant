@@ -11,11 +11,32 @@ import Settings from './pages/Settings'
 import About from './pages/About'
 import { getUserProfile } from './api/client'
 
+export function applyBrandColor(color: string) {
+  document.documentElement.style.setProperty('--brand', color)
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+    const mix = (brand: number, base: number) => Math.round(brand * 0.25 + base * 0.75)
+    document.documentElement.style.setProperty('--th-sidebar-bg',
+      `rgb(${mix(r, 0x1e)},${mix(g, 0x29)},${mix(b, 0x3b)})`)
+  }
+}
+
+export function applyThemeMode(mode?: string) {
+  if (mode === 'dark' || mode === 'sepia') {
+    document.documentElement.setAttribute('data-theme', mode)
+  } else {
+    document.documentElement.removeAttribute('data-theme')
+  }
+}
+
 export default function App() {
   useEffect(() => {
     getUserProfile().then(res => {
-      const color = res.data?.primaryColor
-      if (color) document.documentElement.style.setProperty('--brand', color)
+      const { primaryColor, themeMode } = res.data ?? {}
+      if (primaryColor) applyBrandColor(primaryColor)
+      applyThemeMode(themeMode)
     }).catch(() => {})
   }, [])
 

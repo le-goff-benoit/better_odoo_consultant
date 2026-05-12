@@ -1,0 +1,60 @@
+/* Theme CSS variables — default is light */
+:root {
+  --th-bg: #f8fafc;
+  --th-bg-card: #ffffff;
+  --th-bg-muted: #f1f5f9;
+  --th-text: #0f172a;
+  --th-text-sub: #334155;
+  --th-muted: #64748b;
+  --th-placeholder: #94a3b8;
+  --th-border: #e2e8f0;
+  --th-border-light: #f1f5f9;
+  --th-white: #ffffff;
+  --th-sidebar-bg: #1e293b;
+  --th-success-bg: #f0fdf4;
+  --th-danger-bg: #fef2f2;
+  --th-warning-bg: #fffbeb;
+}
+
+[data-theme="dark"] {
+  --th-bg: #0f172a;
+  --th-bg-card: #1e293b;
+  --th-bg-muted: #162032;
+  --th-text: #f1f5f9;
+  --th-text-sub: #cbd5e1;
+  --th-muted: #94a3b8;
+  --th-placeholder: #64748b;
+  --th-border: #2d3f55;
+  --th-border-light: #1e293b;
+  --th-white: #1e293b;
+  --th-sidebar-bg: #080f1d;
+  --th-success-bg: #022c11;
+  --th-danger-bg: #2d0404;
+  --th-warning-bg: #2d1f00;
+}
+
+[data-theme="sepia"] {
+  --th-bg: #f5f0e8;
+  --th-bg-card: #faf7f2;
+  --th-bg-muted: #ede8de;
+  --th-text: #2c1a0a;
+  --th-text-sub: #5c3d1e;
+  --th-muted: #8b6a45;
+  --th-placeholder: #b09070;
+  --th-border: #d4c4a8;
+  --th-border-light: #ede8de;
+  --th-white: #faf7f2;
+  --th-sidebar-bg: #2c1a0a;
+  --th-success-bg: #e8f5e2;
+  --th-danger-bg: #fbeae8;
+  --th-warning-bg: #fdf3e0;
+}
+
+/* Global base reset */
+* { box-sizing: border-box; }
+
+body {
+  background: var(--th-bg);
+  color: var(--th-text);
+  transition: background .2s, color .2s;
+}
