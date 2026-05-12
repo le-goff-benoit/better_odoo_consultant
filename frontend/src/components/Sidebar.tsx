@@ -5,14 +5,11 @@ import Icon, { IconName } from './Icon'
 import { getUserProfile } from '../api/client'
 
 const links: { to: string; label: string; icon: IconName }[] = [
-  { to: '/dashboard', label: 'Tableau de bord', icon: 'dashboard' },
-  { to: '/sources',   label: 'Sources',          icon: 'download'  },
-  { to: '/profiles',  label: 'Mes projets',      icon: 'building'  },
-  { to: '/assistant', label: 'Assistant IA',     icon: 'zap'       },
-  { to: '/query',     label: 'Requêtes',         icon: 'search'    },
-  { to: '/history',   label: 'Historique',       icon: 'clock'     },
-  { to: '/settings',  label: 'Paramètres',       icon: 'settings'  },
-  { to: '/about',     label: 'À propos',         icon: 'info'      },
+  { to: '/sources',   label: 'Sources',      icon: 'download'  },
+  { to: '/profiles',  label: 'Mes projets',  icon: 'building'  },
+  { to: '/assistant', label: 'Assistant IA', icon: 'zap'       },
+  { to: '/settings',  label: 'Paramètres',   icon: 'settings'  },
+  { to: '/about',     label: 'À propos',     icon: 'info'      },
 ]
 
 export default function Sidebar() {

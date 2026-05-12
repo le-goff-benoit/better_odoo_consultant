@@ -43,7 +43,7 @@ export default function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/sources" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/profiles" element={<Profiles />} />

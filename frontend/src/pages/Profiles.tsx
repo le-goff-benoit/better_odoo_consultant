@@ -586,6 +586,16 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
     onUpdateEnvs(updated)
   }
 
+  const keyExpiry = (() => {
+    if (!profile.api_key_expires) return null
+    const expDate = new Date(profile.api_key_expires)
+    const now = new Date()
+    const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return { label: '⚠ Clé expirée', color: t.danger }
+    if (diffDays <= 30) return { label: `⚠ Expire dans ${diffDays}j`, color: '#F59E0B' }
+    return null
+  })()
+
   return (
     <div style={{
       background: t.white, borderRadius: t.radiusLg,
@@ -595,78 +605,68 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
       {/* Coloured top bar */}
       <div style={{ height: 4, background: `linear-gradient(90deg, ${t.brand}, ${t.action})` }} />
 
-      <div style={{ padding: '18px 20px', flex: 1 }}>
-        {/* Header: name + logo */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+      <div style={{ padding: '16px 18px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+        {/* ── Identity row ── */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          {/* Logo / icon */}
+          <div style={{ flexShrink: 0 }}>
+            {profile.company_logo
+              ? <img src={profile.company_logo} alt="logo" style={{
+                  width: 48, height: 48, objectFit: 'contain', borderRadius: 8,
+                  background: t.bgMuted, border: `1px solid ${t.border}`, padding: 4,
+                }} />
+              : <div style={{
+                  width: 48, height: 48, borderRadius: 8,
+                  background: t.brand20, border: `1px solid ${t.brand40}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                }}>🏢</div>
+            }
+          </div>
+
+          {/* Name + badges */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: t.text, marginBottom: 4 }}>{profile.name}</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: t.text, marginBottom: 3, lineHeight: 1.2 }}>{profile.name}</div>
+            {profile.company_name && (
+              <div style={{ fontSize: 12, color: t.textSub, marginBottom: 5 }}>
+                {profile.company_name}{profile.company_city ? `, ${profile.company_city}` : ''}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
               {profile.odoo_version && (
-                <span style={{
-                  fontSize: 11, fontWeight: 600, color: '#fff',
-                  background: t.brand, borderRadius: 3, padding: '2px 8px',
-                }}>Odoo {profile.odoo_version}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: t.brand, borderRadius: 4, padding: '2px 8px' }}>
+                  Odoo {profile.odoo_version}
+                </span>
               )}
-              {(() => {
-                if (!profile.api_key_expires) return null
-                const expDate = new Date(profile.api_key_expires)
-                const now = new Date()
-                const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                if (diffDays <= 0) {
-                  return (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: t.danger, borderRadius: 3, padding: '2px 8px' }}
-                      title={`Clé expirée le ${profile.api_key_expires}`}>
-                      ⚠ Clé expirée
-                    </span>
-                  )
-                }
-                if (diffDays <= 30) {
-                  return (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: '#F59E0B', borderRadius: 3, padding: '2px 8px' }}
-                      title={`Clé expire le ${profile.api_key_expires}`}>
-                      ⚠ Expire dans {diffDays}j
-                    </span>
-                  )
-                }
-                return null
-              })()}
+              {keyExpiry && (
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: keyExpiry.color, borderRadius: 4, padding: '2px 8px' }}
+                  title={profile.api_key_expires}>{keyExpiry.label}</span>
+              )}
             </div>
           </div>
-          {profile.company_logo ? (
-            <img src={profile.company_logo} alt="logo" style={{
-              width: 44, height: 44, objectFit: 'contain', borderRadius: 6,
-              background: t.bgMuted, border: `1px solid ${t.border}`, padding: 4, flexShrink: 0,
-            }} />
-          ) : (
-            <div style={{ fontSize: 24, flexShrink: 0 }}>🏢</div>
-          )}
         </div>
 
-        {/* Company name/city */}
-        {profile.company_name && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: t.textSub, marginBottom: 2 }}>
-            {profile.company_name}{profile.company_city ? ` — ${profile.company_city}` : ''}
-          </div>
-        )}
+        {/* ── App badges ── */}
+        {apps.length > 0 && <AppBadges apps={apps} max={6} />}
 
-        {/* Company selector (multi-company) */}
+        {/* ── Multi-company selector ── */}
         {companies.length > 1 && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: t.muted, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div>
+            <div style={{ fontSize: 10, color: t.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
               Société active
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {companies.map(c => {
                 const isActive = (profile.selected_company_id ?? companies[0]?.id) === c.id
                 return (
                   <button key={c.id} onClick={() => onSelectCompany(c.id)} style={{
-                    fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 4,
+                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 4,
                     border: `1px solid ${isActive ? t.brand : t.border}`,
                     background: isActive ? t.brand : t.bgMuted,
                     color: isActive ? '#fff' : t.textSub,
                     cursor: 'pointer', transition: 'all .15s',
                   }}>
-                    🏢 {c.name}
+                    {isActive ? '✓ ' : ''}{c.name}
                   </button>
                 )
               })}
@@ -674,24 +674,39 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
           </div>
         )}
 
-        <AppBadges apps={apps} />
+        {/* ── Connection info ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <a href={profile.db_url} target="_blank" rel="noreferrer" style={{
+            display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+            background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius,
+            fontSize: 11, color: t.action, textDecoration: 'none', fontWeight: 600,
+            overflow: 'hidden',
+          }}>
+            <span>🌐</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {profile.db_url.replace(/^https?:\/\//, '')}
+            </span>
+          </a>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+            background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius,
+            fontSize: 11, color: t.textSub, overflow: 'hidden',
+          }}>
+            <span>👤</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.login}</span>
+          </div>
+        </div>
 
-        <div style={{ fontSize: 12, color: t.muted, marginBottom: 3 }}>🔗 {profile.db_url}</div>
-        <div style={{ fontSize: 12, color: t.muted, marginBottom: 12 }}>👤 {profile.login}</div>
-
-        {/* Environments */}
-        <div style={{ marginBottom: 12 }}>
-          {envs.length > 0 && (
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 11, color: t.muted, marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Environnements
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+        {/* ── Environments ── */}
+        {(envs.length > 0 || addingEnv) && (
+          <div>
+            {envs.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: addingEnv ? 8 : 0 }}>
                 {envs.map((env, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                     <a href={env.db_url} target="_blank" rel="noreferrer" style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '3px 9px', borderRadius: '3px 0 0 3px',
+                      padding: '3px 8px', borderRadius: '4px 0 0 4px',
                       border: `1px solid ${t.border}`, background: t.bgMuted,
                       color: t.textSub, fontSize: 11, fontWeight: 600, textDecoration: 'none',
                     }}>
@@ -699,62 +714,62 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
                       {env.branch && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 10 }}>({env.branch})</span>}
                     </a>
                     <button onClick={() => removeEnv(i)} style={{
-                      padding: '3px 6px', fontSize: 11, background: t.bgMuted,
+                      padding: '3px 6px', fontSize: 12, background: t.bgMuted,
                       border: `1px solid ${t.border}`, borderLeft: 'none',
-                      borderRadius: '0 3px 3px 0', cursor: 'pointer', color: t.muted, lineHeight: 1,
+                      borderRadius: '0 4px 4px 0', cursor: 'pointer', color: t.muted, lineHeight: 1,
                     }}>×</button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {addingEnv ? (
-            <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '10px 12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 6, marginBottom: 8 }}>
-                <input placeholder="Nom" value={newEnv.name}
-                  onChange={e => setNewEnv(p => ({ ...p, name: e.target.value }))}
-                  style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
-                <input placeholder="URL" value={newEnv.db_url}
-                  onChange={e => setNewEnv(p => ({ ...p, db_url: e.target.value }))}
-                  style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
-                <input placeholder="Branche" value={newEnv.branch}
-                  onChange={e => setNewEnv(p => ({ ...p, branch: e.target.value }))}
-                  style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
+            )}
+            {addingEnv && (
+              <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '10px 12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 6, marginBottom: 8 }}>
+                  <input placeholder="Nom" value={newEnv.name}
+                    onChange={e => setNewEnv(p => ({ ...p, name: e.target.value }))}
+                    style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
+                  <input placeholder="URL" value={newEnv.db_url}
+                    onChange={e => setNewEnv(p => ({ ...p, db_url: e.target.value }))}
+                    style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
+                  <input placeholder="Branche" value={newEnv.branch}
+                    onChange={e => setNewEnv(p => ({ ...p, branch: e.target.value }))}
+                    style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={saveEnv} disabled={!newEnv.name || !newEnv.db_url}
+                    style={{ ...styles.btnPrimary, fontSize: 11, padding: '4px 12px', opacity: (!newEnv.name || !newEnv.db_url) ? .5 : 1 }}>
+                    Ajouter
+                  </button>
+                  <button onClick={() => setAddingEnv(false)} style={{ ...styles.btnSecondary, fontSize: 11, padding: '4px 10px' }}>
+                    Annuler
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={saveEnv} disabled={!newEnv.name || !newEnv.db_url}
-                  style={{ ...styles.btnPrimary, fontSize: 11, padding: '4px 12px', opacity: (!newEnv.name || !newEnv.db_url) ? .5 : 1 }}>
-                  Ajouter
-                </button>
-                <button onClick={() => setAddingEnv(false)} style={{ ...styles.btnSecondary, fontSize: 11, padding: '4px 10px' }}>
-                  Annuler
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setAddingEnv(true)} style={{
-              fontSize: 11, color: t.action, background: 'none',
-              border: `1px dashed ${t.border}`, borderRadius: t.radius,
-              padding: '4px 12px', cursor: 'pointer', width: '100%',
-            }}>
-              + Environnement de test
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* Quick links */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          <QuickLink href={profile.db_url} label="Ouvrir Odoo" icon="🌐" color={t.action} />
+        {/* ── Footer actions ── */}
+        <div style={{
+          marginTop: 'auto', paddingTop: 10, borderTop: `1px solid ${t.borderLight}`,
+          display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+        }}>
+          {/* Quick links */}
           {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
           {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="🐙" color="#24292f" />}
+          <button onClick={() => setAddingEnv(a => !a)} style={{
+            fontSize: 11, color: t.muted, background: 'none',
+            border: `1px dashed ${t.border}`, borderRadius: t.radius,
+            padding: '3px 9px', cursor: 'pointer',
+          }}>+ env</button>
+
+          <div style={{ flex: 1 }} />
+
+          <button onClick={onEdit}   style={{ ...styles.btnOutline(t.brand),  padding: '4px 10px', fontSize: 11 }}>✏ Modifier</button>
+          <button onClick={onTest}   style={{ ...styles.btnOutline(t.action), padding: '4px 10px', fontSize: 11 }}>Tester</button>
+          <button onClick={onDelete} style={{ ...styles.btnOutline(t.danger), padding: '4px 10px', fontSize: 11 }}>×</button>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={onEdit}   style={styles.btnOutline(t.brand)}>✏ Modifier</button>
-          <button onClick={onTest}   style={styles.btnOutline(t.action)}>Tester</button>
-          <button onClick={onDelete} style={styles.btnOutline(t.danger)}>Supprimer</button>
-        </div>
       </div>
     </div>
   )

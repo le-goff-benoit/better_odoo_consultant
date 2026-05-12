@@ -78,7 +78,46 @@ interface Message {
   loading?: boolean
 }
 
+interface SavedConv {
+  id: string
+  title: string
+  messages: Message[]
+  version?: string   // Odoo version at time of save
+  createdAt: number
+  updatedAt: number
+}
+
 interface ModelDef { id: string; label: string; speed: number; desc: string; recommended?: boolean }
+
+// ── Conversation history helpers ───────────────────────────────
+const LS_HISTORY = 'odoo-conv-history'
+const LS_ACTIVE  = 'odoo-active-convs'
+
+function loadHistory(): Record<string, SavedConv[]> {
+  try { return JSON.parse(localStorage.getItem(LS_HISTORY) ?? '{}') } catch { return {} }
+}
+function persistHistory(h: Record<string, SavedConv[]>) {
+  try { localStorage.setItem(LS_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
+}
+function loadActiveConvs(): Record<string, Message[]> {
+  try { return JSON.parse(localStorage.getItem(LS_ACTIVE) ?? '{}') } catch { return {} }
+}
+function persistActiveConvs(c: Record<string, Message[]>) {
+  try { localStorage.setItem(LS_ACTIVE, JSON.stringify(c)) } catch { /* quota */ }
+}
+function autoTitle(msgs: Message[]): string {
+  const text = msgs.find(m => m.role === 'user')?.text ?? 'Conversation'
+  return text.length > 60 ? text.slice(0, 60) + '…' : text
+}
+function fmtDate(ts: number): string {
+  const d = new Date(ts)
+  const now = new Date()
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000)
+  if (diffDays === 0) return d.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' })
+  if (diffDays === 1) return 'Hier'
+  if (diffDays < 7) return d.toLocaleDateString('fr', { weekday: 'short' })
+  return d.toLocaleDateString('fr', { day: 'numeric', month: 'short' })
+}
 
 const PROVIDERS: { id: string; label: string; color: string; models: ModelDef[] }[] = [
   {
@@ -236,9 +275,16 @@ export default function Assistant() {
   const [generalVersion, setGeneralVersion] = useState('19.0')
 
   // Conversations keyed by string (profile id as string, or 'general')
-  const [conversations, setConversations] = useState<Record<string, Message[]>>({})
+  // Initialized from localStorage so they survive page refresh
+  const [conversations, setConversations] = useState<Record<string, Message[]>>(() => loadActiveConvs())
+  const [savedConvs,    setSavedConvs]    = useState<Record<string, SavedConv[]>>(() => loadHistory())
+  const [showHistory,   setShowHistory]   = useState(false)
+
   const convKey = profileId !== null ? String(profileId) : null
   const messages = convKey ? (conversations[convKey] ?? []) : []
+
+  // Auto-persist active conversations to localStorage
+  useEffect(() => { persistActiveConvs(conversations) }, [conversations])
 
   const [input,     setInput]    = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -465,10 +511,50 @@ export default function Assistant() {
     ))
   }
 
+  const saveToHistory = (key: string, msgs: Message[], version?: string) => {
+    if (msgs.filter(m => !m.loading).length === 0) return
+    const conv: SavedConv = {
+      id: Date.now().toString(),
+      title: autoTitle(msgs),
+      messages: msgs.filter(m => !m.loading),
+      version,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    setSavedConvs(prev => {
+      const updated = { ...prev, [key]: [conv, ...(prev[key] ?? [])].slice(0, 50) }
+      persistHistory(updated)
+      return updated
+    })
+  }
+
   const resetCurrentConversation = () => {
     abortRef.current?.abort()
+    if (convKey && messages.length > 0) {
+      saveToHistory(convKey, messages, isGeneralMode ? generalVersion : selectedProfile?.odoo_version)
+    }
     if (convKey) setConversations(prev => ({ ...prev, [convKey]: [] }))
     setStreaming(false)
+  }
+
+  const resumeConv = (conv: SavedConv) => {
+    if (!convKey) return
+    // Save current if it has content
+    if (messages.length > 0) {
+      saveToHistory(convKey, messages, isGeneralMode ? generalVersion : selectedProfile?.odoo_version)
+    }
+    setConversations(prev => ({ ...prev, [convKey]: conv.messages }))
+    if (conv.version && isGeneralMode) setGeneralVersion(conv.version)
+    setShowHistory(false)
+    setStreaming(false)
+  }
+
+  const deleteConv = (key: string, id: string) => {
+    setSavedConvs(prev => {
+      const updated = { ...prev, [key]: (prev[key] ?? []).filter(c => c.id !== id) }
+      persistHistory(updated)
+      return updated
+    })
   }
 
   const switchProvider = (id: string) => {
@@ -559,33 +645,45 @@ export default function Assistant() {
         })}
       </div>
 
-      {/* Version selector for general mode */}
-      {isGeneralMode && (
+      {/* Version row — selector (general mode) or read-only badge (project mode) */}
+      {(isGeneralMode || activeVersion) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: t.muted, fontWeight: 500 }}>Version Odoo :</span>
-          {[...new Set([
-            ...ODOO_VERSIONS_BASE,
-            ...((): string[] => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })(),
-          ])].sort((a, b) => {
-            const [aMaj, aMin = 0] = a.split('.').map(Number)
-            const [bMaj, bMin = 0] = b.split('.').map(Number)
-            return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
-          }).map(v => (
-            <button key={v} onClick={() => setGeneralVersion(v)} style={{
-              padding: '3px 12px',
-              background: generalVersion === v ? '#6366f110' : 'transparent',
-              border: `1px solid ${generalVersion === v ? '#6366f1' : t.border}`,
-              borderRadius: t.radiusFull,
-              fontSize: 12, fontWeight: generalVersion === v ? 700 : 400,
-              color: generalVersion === v ? '#6366f1' : t.muted,
-              cursor: 'pointer', transition: 'all .15s',
-            }}>
-              {v}
-              {!ODOO_VERSIONS_BASE.includes(v) && (
-                <span style={{ marginLeft: 3, fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px', verticalAlign: 'middle' }}>saas</span>
-              )}
-            </button>
-          ))}
+          {isGeneralMode
+            ? [...new Set([
+                ...ODOO_VERSIONS_BASE,
+                ...((): string[] => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })(),
+              ])].sort((a, b) => {
+                const [aMaj, aMin = 0] = a.split('.').map(Number)
+                const [bMaj, bMin = 0] = b.split('.').map(Number)
+                return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
+              }).map(v => (
+                <button key={v} onClick={() => setGeneralVersion(v)} style={{
+                  padding: '3px 12px',
+                  background: generalVersion === v ? '#6366f110' : 'transparent',
+                  border: `1px solid ${generalVersion === v ? '#6366f1' : t.border}`,
+                  borderRadius: t.radiusFull,
+                  fontSize: 12, fontWeight: generalVersion === v ? 700 : 400,
+                  color: generalVersion === v ? '#6366f1' : t.muted,
+                  cursor: 'pointer', transition: 'all .15s',
+                }}>
+                  {v}
+                  {!ODOO_VERSIONS_BASE.includes(v) && (
+                    <span style={{ marginLeft: 3, fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px', verticalAlign: 'middle' }}>saas</span>
+                  )}
+                </button>
+              ))
+            : activeVersion && (
+              <span style={{
+                padding: '3px 14px', borderRadius: t.radiusFull, fontSize: 12, fontWeight: 700,
+                background: t.brand20, border: `1px solid ${t.brand40}`, color: t.brand,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}>
+                {activeVersion}
+                <span style={{ fontSize: 9, color: t.muted, fontWeight: 400 }}>projet</span>
+              </span>
+            )
+          }
         </div>
       )}
 
@@ -654,6 +752,16 @@ export default function Assistant() {
                 </button>
               </>
             )}
+            {convKey && (savedConvs[convKey] ?? []).length > 0 && (
+              <button onClick={() => setShowHistory(h => !h)} style={{
+                padding: '5px 12px', background: showHistory ? t.brand20 : 'none',
+                border: `1px solid ${showHistory ? t.brand40 : t.border}`,
+                borderRadius: t.radius, fontSize: 12, cursor: 'pointer',
+                color: showHistory ? t.brand : t.muted, fontWeight: showHistory ? 600 : 400,
+              }}>
+                📂 Historique ({(savedConvs[convKey] ?? []).length})
+              </button>
+            )}
           </>
         )}
       </div>
@@ -672,6 +780,9 @@ export default function Assistant() {
           </div>
         </div>
       )}
+
+      {/* Main content row: chat + optional history panel */}
+      <div style={{ flex: 1, display: 'flex', gap: 12, overflow: 'hidden' }}>
 
       {/* Chat history */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -763,6 +874,57 @@ export default function Assistant() {
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {/* History panel */}
+      {showHistory && convKey && (
+        <div style={{
+          width: 280, flexShrink: 0, overflowY: 'auto',
+          background: t.bgCard, border: `1px solid ${t.border}`,
+          borderRadius: t.radiusLg, padding: '12px 0',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ padding: '0 14px 10px', borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>Historique</span>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
+          </div>
+          {(savedConvs[convKey] ?? []).length === 0
+            ? <div style={{ padding: '20px 14px', fontSize: 12, color: t.muted, textAlign: 'center' }}>Aucune conversation sauvegardée</div>
+            : (savedConvs[convKey] ?? []).map(conv => (
+              <div key={conv.id} style={{
+                padding: '10px 14px', borderBottom: `1px solid ${t.borderLight}`,
+                display: 'flex', flexDirection: 'column', gap: 4,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: t.text, lineHeight: 1.4, flex: 1 }}
+                    title={conv.title}>{conv.title}</span>
+                  <button onClick={() => deleteConv(convKey, conv.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 13, flexShrink: 0, lineHeight: 1, padding: '1px 2px' }}>×</button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10, color: t.muted }}>{fmtDate(conv.updatedAt)}</span>
+                  {conv.version && (
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.brand20, color: t.brand }}>
+                      v{conv.version}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto' }}>
+                    {conv.messages.filter(m => m.role === 'user').length} msg
+                  </span>
+                </div>
+                <button onClick={() => resumeConv(conv)} style={{
+                  marginTop: 2, padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                  background: t.brand, color: '#fff', border: 'none',
+                  borderRadius: t.radius, cursor: 'pointer', textAlign: 'left',
+                }}>
+                  ↩ Reprendre
+                </button>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      </div>{/* end content row */}
 
       {/* Company selector bar (shown when profile has multiple companies) */}
       {selectedProfile && !isGeneralMode && (() => {
