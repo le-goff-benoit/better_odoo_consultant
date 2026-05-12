@@ -6,6 +6,7 @@ import Profiles from './pages/Profiles'
 import Assistant from './pages/Assistant'
 import Query from './pages/Query'
 import History from './pages/History'
+import Settings from './pages/Settings'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/assistant" element={<Assistant />} />
         <Route path="/query" element={<Query />} />
         <Route path="/history" element={<History />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>
   )

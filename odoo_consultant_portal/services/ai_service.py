@@ -80,10 +80,13 @@ TOOLS_GEMINI = [
 ]
 
 DEFAULT_MODELS = {
-    "claude": "claude-sonnet-4-6",
-    "openai": "gpt-4o",
-    "gemini": "gemini-1.5-pro",
+    "claude":  "claude-sonnet-4-6",
+    "openai":  "gpt-4o",
+    "gemini":  "gemini-2.0-flash",
+    "github":  "gpt-4o",
 }
+
+GITHUB_MODELS_BASE_URL = "https://models.inference.ai.azure.com"
 
 
 # ── System prompt ────────────────────────────────────────────────
@@ -198,7 +201,32 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
 
 
-# ── OpenAI ───────────────────────────────────────────────────────
+# ── OpenAI (shared logic for OpenAI + GitHub Models) ─────────────
+
+async def _chat_openai_client(client, model_id: str, system: str, messages: list, odoo) -> AsyncIterator[dict]:
+    oai_msgs = [{"role": "system", "content": system}] + messages
+    for _ in range(8):
+        response = await client.chat.completions.create(
+            model=model_id, messages=oai_msgs, tools=TOOLS_OPENAI,
+        )
+        choice = response.choices[0]
+        if choice.finish_reason == "tool_calls":
+            oai_msgs.append(choice.message)
+            for tc in choice.message.tool_calls:
+                args = json.loads(tc.function.arguments)
+                yield {"type": "tool_call", "name": tc.function.name, "args": args}
+                result = await _run_tool(tc.function.name, args, odoo)
+                yield {"type": "tool_result", "name": tc.function.name, **result}
+                oai_msgs.append({
+                    "role": "tool", "tool_call_id": tc.id,
+                    "content": json.dumps(result, ensure_ascii=False, default=str),
+                })
+        else:
+            yield {"type": "text", "content": choice.message.content or ""}
+            yield {"type": "done", "model": model_id}
+            return
+    yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
+
 
 async def _chat_openai(api_key: str, model_id: str, system: str, messages: list, odoo) -> AsyncIterator[dict]:
     try:
@@ -208,34 +236,21 @@ async def _chat_openai(api_key: str, model_id: str, system: str, messages: list,
         return
 
     client = openai.AsyncOpenAI(api_key=api_key)
-    oai_msgs = [{"role": "system", "content": system}] + messages
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo):
+        yield evt
 
-    for _ in range(8):
-        response = await client.chat.completions.create(
-            model=model_id,
-            messages=oai_msgs,
-            tools=TOOLS_OPENAI,
-        )
-        choice = response.choices[0]
 
-        if choice.finish_reason == "tool_calls":
-            oai_msgs.append(choice.message)
-            for tc in choice.message.tool_calls:
-                args = json.loads(tc.function.arguments)
-                yield {"type": "tool_call", "name": tc.function.name, "args": args}
-                result = await _run_tool(tc.function.name, args, odoo)
-                yield {"type": "tool_result", "name": tc.function.name, **result}
-                oai_msgs.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": json.dumps(result, ensure_ascii=False, default=str),
-                })
-        else:
-            yield {"type": "text", "content": choice.message.content or ""}
-            yield {"type": "done", "model": model_id}
-            return
+# ── GitHub Models ────────────────────────────────────────────────
 
-    yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
+async def _chat_github(api_key: str, model_id: str, system: str, messages: list, odoo) -> AsyncIterator[dict]:
+    try:
+        import openai
+    except ImportError:
+        yield {"type": "error", "msg": "Package 'openai' non installé."}
+        return
+    client = openai.AsyncOpenAI(api_key=api_key, base_url=GITHUB_MODELS_BASE_URL)
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo):
+        yield evt
 
 
 # ── Gemini ───────────────────────────────────────────────────────
@@ -310,6 +325,9 @@ async def stream_chat(
             yield evt
     elif provider == "gemini":
         async for evt in _chat_gemini(api_key, model, system, messages, odoo):
+            yield evt
+    elif provider == "github":
+        async for evt in _chat_github(api_key, model, system, messages, odoo):
             yield evt
     else:
         yield {"type": "error", "msg": f"Fournisseur inconnu : {provider}"}

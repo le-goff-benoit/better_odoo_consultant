@@ -9,6 +9,7 @@ const links: { to: string; label: string; icon: IconName }[] = [
   { to: '/assistant', label: 'Assistant IA',     icon: 'zap'       },
   { to: '/query',     label: 'Requêtes',         icon: 'search'    },
   { to: '/history',   label: 'Historique',       icon: 'clock'     },
+  { to: '/settings',  label: 'Paramètres',       icon: 'settings'  },
 ]
 
 export default function Sidebar() {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { listProfiles, getAiProviders, saveAiKey, deleteAiKey } from '../api/client'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { listProfiles, getAiProviders } from '../api/client'
 import { t } from '../theme'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -63,6 +64,19 @@ const PROVIDERS: { id: string; label: string; color: string; placeholder: string
         desc: 'Rapide et efficace — bon pour la majorité des requêtes' },
     ],
   },
+  {
+    id: 'github', label: 'GitHub', color: '#24292f', placeholder: 'ghp_…',
+    models: [
+      { id: 'gpt-4o',                      label: 'GPT-4o',        speed: 2, recommended: true,
+        desc: 'Inclus GitHub — GPT-4o via GitHub Models (gratuit avec votre compte)' },
+      { id: 'gpt-4o-mini',                 label: 'GPT-4o mini',   speed: 3,
+        desc: 'Ultra-rapide et économique via GitHub Models' },
+      { id: 'claude-3-5-sonnet-20241022',  label: 'Claude 3.5',    speed: 2,
+        desc: 'Claude via GitHub Models — bon équilibre qualité/vitesse' },
+      { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2',  speed: 2,
+        desc: 'Open source Meta — alternative gratuite via GitHub Models' },
+    ],
+  },
 ]
 
 const SUGGESTIONS = [
@@ -77,7 +91,7 @@ const SUGGESTIONS = [
 
 export default function Assistant() {
   const { data: profData }  = useQuery({ queryKey: ['profiles'],     queryFn: listProfiles })
-  const { data: provData, refetch: refetchProviders } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
+  const { data: provData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
 
   const profiles: Profile[] = profData?.data ?? []
   const providers: Record<string, boolean> = provData?.data ?? {}
@@ -88,7 +102,6 @@ export default function Assistant() {
   const [messages,   setMessages]   = useState<Message[]>([])
   const [input,      setInput]      = useState('')
   const [streaming,  setStreaming]  = useState(false)
-  const [showKeys,   setShowKeys]   = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
 
@@ -194,16 +207,13 @@ export default function Assistant() {
           <h1 style={{ fontSize: 20, fontWeight: 700, color: t.text, marginBottom: 2 }}>Assistant IA</h1>
           <p style={{ fontSize: 13, color: t.muted }}>Posez des questions sur vos données Odoo en langage naturel.</p>
         </div>
-        <button onClick={() => setShowKeys(p => !p)}
-          style={{ padding: '6px 14px', background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.textSub }}>
+        <Link to="/settings" style={{
+          padding: '6px 14px', background: t.bgMuted, border: `1px solid ${t.border}`,
+          borderRadius: t.radius, fontSize: 12, color: t.textSub, textDecoration: 'none', fontWeight: 500,
+        }}>
           ⚙ Clés API
-        </button>
+        </Link>
       </div>
-
-      {/* API key panel */}
-      {showKeys && (
-        <KeyPanel providers={providers} onSaved={() => { refetchProviders(); setShowKeys(false) }} />
-      )}
 
       {/* Selectors */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexShrink: 0, flexWrap: 'wrap' }}>
@@ -622,63 +632,3 @@ function ModelSelector({ provider, selected, onChange }: {
   )
 }
 
-// ── Key panel ─────────────────────────────────────────────────
-
-function KeyPanel({ providers, onSaved }: { providers: Record<string, boolean>; onSaved: () => void }) {
-  const [keys, setKeys] = useState<Record<string, string>>({})
-
-  const save = useMutation({
-    mutationFn: ({ provider, key }: { provider: string; key: string }) => saveAiKey(provider, key),
-    onSuccess: onSaved,
-  })
-  const del = useMutation({
-    mutationFn: (provider: string) => deleteAiKey(provider),
-    onSuccess: onSaved,
-  })
-
-  return (
-    <div style={{
-      background: t.bgCard, border: `1px solid ${t.border}`,
-      borderRadius: t.radiusLg, padding: '18px 20px', marginBottom: 16,
-    }}>
-      <div style={{ fontWeight: 700, fontSize: 13, color: t.text, marginBottom: 14 }}>
-        Clés API — stockées localement (keyring système)
-      </div>
-      {PROVIDERS.map(p => (
-        <div key={p.id} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: p.color, minWidth: 56 }}>{p.label}</span>
-          {providers[p.id] ? (
-            <>
-              <span style={{ fontSize: 12, color: t.success }}>✓ Configurée</span>
-              <button onClick={() => del.mutate(p.id)}
-                style={{ fontSize: 11, color: t.danger, background: 'none', border: `1px solid ${t.danger}40`, borderRadius: t.radiusSm, padding: '2px 8px', cursor: 'pointer' }}>
-                Supprimer
-              </button>
-            </>
-          ) : (
-            <>
-              <input
-                type="password"
-                placeholder={p.placeholder}
-                value={keys[p.id] ?? ''}
-                onChange={e => setKeys(k => ({ ...k, [p.id]: e.target.value }))}
-                style={{ flex: 1, padding: '6px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12 }}
-              />
-              <button
-                disabled={!keys[p.id]?.trim() || save.isPending}
-                onClick={() => save.mutate({ provider: p.id, key: keys[p.id] })}
-                style={{
-                  padding: '6px 14px', background: t.brand, color: '#fff',
-                  border: 'none', borderRadius: t.radius, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  opacity: keys[p.id]?.trim() ? 1 : .4,
-                }}
-              >
-                Sauver
-              </button>
-            </>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}

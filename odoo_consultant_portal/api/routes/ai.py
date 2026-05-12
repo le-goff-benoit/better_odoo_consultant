@@ -13,7 +13,7 @@ from ...services.ai_service import stream_chat, DEFAULT_MODELS
 
 router = APIRouter()
 
-_PROVIDERS = ("claude", "openai", "gemini")
+_PROVIDERS = ("claude", "openai", "gemini", "github")
 _KEY_PREFIX = "ai_key:"
 
 
