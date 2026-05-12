@@ -361,19 +361,27 @@ export default function Assistant() {
 
   const sourcesStatus: Record<string, { installed: boolean }> = srcData?.data ?? {}
   const activeVersion = isGeneralMode ? generalVersion : (selectedProfile?.odoo_version ?? null)
-  const sourcesInstalled = activeVersion ? sourcesStatus[activeVersion]?.installed === true : false
+  // Sources installed = community OR enterprise variant found on disk
+  const sourcesInstalled = activeVersion
+    ? (sourcesStatus[activeVersion]?.installed === true || sourcesStatus[`${activeVersion}-enterprise`]?.installed === true)
+    : false
+  const enterpriseInstalled = activeVersion ? sourcesStatus[`${activeVersion}-enterprise`]?.installed === true : false
+  const communityInstalled  = activeVersion ? sourcesStatus[activeVersion]?.installed === true : false
 
-  // All installed versions sorted: base versions (x.0) first descending, then saas (x.y) descending within same major
+  // Deduplicate versions: strip -enterprise suffix, keep one entry per base version
+  // Show community + enterprise availability indicators in the dropdown
   const installedVersions: string[] = [...new Set([
     ...ODOO_VERSIONS_BASE,
-    ...Object.keys(sourcesStatus).filter(v => sourcesStatus[v]?.installed),
+    ...Object.keys(sourcesStatus)
+      .filter(v => sourcesStatus[v]?.installed)
+      .map(v => v.replace(/-enterprise$/, '')),
   ])].sort((a, b) => {
     const [aMaj, aMin = 0] = a.split('.').map(Number)
     const [bMaj, bMin = 0] = b.split('.').map(Number)
-    if (aMaj !== bMaj) return bMaj - aMaj          // higher major first
-    if (aMin === 0 && bMin !== 0) return -1         // x.0 before x.y
+    if (aMaj !== bMaj) return bMaj - aMaj
+    if (aMin === 0 && bMin !== 0) return -1   // x.0 before x.y within same major
     if (bMin === 0 && aMin !== 0) return 1
-    return bMin - aMin                              // higher minor first
+    return bMin - aMin
   })
 
   // Company access guard — block send if selected company is not accessible for the Odoo user
@@ -591,7 +599,7 @@ export default function Assistant() {
       <PageHeader
         title="Assistant IA"
         description="Posez des questions sur vos données Odoo en langage naturel."
-        action={<Link to="/settings" className="btn btn-ghost" style={{ textDecoration: 'none' }}>⚙ Paramètres</Link>}
+        action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}>⚙ Paramètres</Link>}
       />
 
       {/* ── Unified context bar ── */}
@@ -666,6 +674,7 @@ export default function Assistant() {
               value={generalVersion}
               onChange={setGeneralVersion}
               versions={installedVersions}
+              sourcesStatus={sourcesStatus}
             />
           ) : activeVersion ? (
             <span style={{
@@ -713,27 +722,41 @@ export default function Assistant() {
 
               {/* Sources badge (project mode) */}
               {selectedProfile && !isGeneralMode && activeVersion && (
-                <span style={{
-                  fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: t.radiusFull,
-                  background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
-                  color: sourcesInstalled ? t.success : '#b45309',
-                  border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
-                }}>
-                  {sourcesInstalled ? `📁 v${activeVersion} ✓` : `⚠ v${activeVersion}`}
+                <span
+                  title={sourcesInstalled
+                    ? `Code source Odoo ${activeVersion} installé${communityInstalled && enterpriseInstalled ? ' (Community + Enterprise)' : communityInstalled ? ' (Community)' : ' (Enterprise)'}`
+                    : `Code source Odoo ${activeVersion} non installé — les questions sur le code source ne fonctionneront pas`}
+                  style={{
+                    fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: t.radiusFull,
+                    background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
+                    color: sourcesInstalled ? t.success : '#b45309',
+                    border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
+                    cursor: 'help',
+                  }}>
+                  {sourcesInstalled
+                    ? `Sources v${activeVersion} ✓${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' C' : ' E'}`
+                    : `⚠ Sources v${activeVersion} manquantes`}
                 </span>
               )}
 
               {/* Action buttons */}
               {messages.length > 0 && (
                 <>
-                  <button className="btn btn-ghost btn-sm" onClick={makeMeetingMinute} disabled={streaming}>📋 CR réunion</button>
-                  <button className="btn btn-ghost btn-sm" onClick={resetCurrentConversation}>↺ Nouvelle</button>
+                  <button className="btn btn-ghost btn-sm" onClick={makeMeetingMinute} disabled={streaming}
+                    title="Générer un compte-rendu structuré de cette conversation">
+                    📝 Compte-rendu
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={resetCurrentConversation}
+                    title="Démarrer une nouvelle conversation (sauvegarde automatique de l'actuelle)">
+                    🗒️ Nouvelle conv.
+                  </button>
                 </>
               )}
               {convKey && (savedConvs[convKey] ?? []).length > 0 && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowHistory(h => !h)}
+                  title={`${(savedConvs[convKey] ?? []).length} conversation(s) sauvegardée(s)`}
                   style={showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}}>
-                  📂 {(savedConvs[convKey] ?? []).length}
+                  🕐 Historique ({(savedConvs[convKey] ?? []).length})
                 </button>
               )}
             </>
@@ -1079,8 +1102,9 @@ function ModelDropdown({ provider, selected, onChange }: {
 
 // ── Version dropdown ───────────────────────────────────────────
 
-function VersionDropdown({ value, onChange, versions }: {
+function VersionDropdown({ value, onChange, versions, sourcesStatus = {} }: {
   value: string; onChange: (v: string) => void; versions: string[]
+  sourcesStatus?: Record<string, { installed: boolean }>
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -1091,7 +1115,14 @@ function VersionDropdown({ value, onChange, versions }: {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
-  const isSaas = !ODOO_VERSIONS_BASE.includes(value)
+
+  const hasCommunity  = (v: string) => sourcesStatus[v]?.installed === true
+  const hasEnterprise = (v: string) => sourcesStatus[`${v}-enterprise`]?.installed === true
+  const isIntermediate = (v: string) => { const [, min = '0'] = v.split('.'); return parseInt(min) > 0 }
+
+  const currentC = hasCommunity(value)
+  const currentE = hasEnterprise(value)
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button onClick={() => setOpen(o => !o)} style={{
@@ -1101,31 +1132,54 @@ function VersionDropdown({ value, onChange, versions }: {
         fontSize: 12, fontWeight: 700, color: '#6366f1', cursor: 'pointer',
       }}>
         Odoo {value}
-        {isSaas && <span style={{ fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px' }}>saas</span>}
+        {(currentC || currentE) && (
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', opacity: 0.7 }}>
+            {currentC && currentE ? 'C+E' : currentC ? 'C' : 'E'}
+          </span>
+        )}
         <span style={{ fontSize: 9, opacity: .6 }}>▼</span>
       </button>
       {open && (
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 100,
           background: t.bgCard, border: `1px solid ${t.border}`,
-          borderRadius: t.radiusLg, boxShadow: t.shadowMd, minWidth: 120, overflow: 'hidden',
+          borderRadius: t.radiusLg, boxShadow: t.shadowMd, minWidth: 160, overflow: 'hidden',
         }}>
           {versions.map(v => {
-            const isSaasV = !ODOO_VERSIONS_BASE.includes(v)
+            const hasC = hasCommunity(v)
+            const hasE = hasEnterprise(v)
+            const isInter = isIntermediate(v)
+            const isActive = v === value
             return (
               <button key={v} onClick={() => { onChange(v); setOpen(false) }} style={{
                 width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
                 padding: '8px 12px', border: 'none', cursor: 'pointer',
-                background: v === value ? '#6366f110' : 'transparent',
-                borderLeft: v === value ? '3px solid #6366f1' : '3px solid transparent',
-                fontSize: 12, fontWeight: v === value ? 700 : 400,
-                color: v === value ? '#6366f1' : t.text,
+                background: isActive ? '#6366f110' : 'transparent',
+                borderLeft: isActive ? '3px solid #6366f1' : '3px solid transparent',
+                fontSize: 12, fontWeight: isActive ? 700 : 400,
+                color: isActive ? '#6366f1' : t.text,
               }}
-                onMouseEnter={e => { if (v !== value) e.currentTarget.style.background = t.bgMuted }}
-                onMouseLeave={e => { if (v !== value) e.currentTarget.style.background = 'transparent' }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = t.bgMuted }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
               >
-                {v}
-                {isSaasV && <span style={{ fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px' }}>saas</span>}
+                <span style={{ flex: 1 }}>
+                  {isInter ? <span style={{ fontSize: 11, color: t.muted }}>↳ </span> : null}
+                  {v}
+                </span>
+                <span style={{ display: 'flex', gap: 3 }}>
+                  {hasC && (
+                    <span title="Community installé" style={{
+                      fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
+                      background: '#dbeafe', color: '#1d4ed8',
+                    }}>C</span>
+                  )}
+                  {hasE && (
+                    <span title="Enterprise installé" style={{
+                      fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
+                      background: '#fef3c7', color: '#92400e',
+                    }}>E</span>
+                  )}
+                </span>
               </button>
             )
           })}
