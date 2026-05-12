@@ -283,52 +283,66 @@ async def delete_profile(profile_id: int, session: AsyncSession = Depends(get_se
 
 async def _check_user_access(client: OdooClient, loop) -> dict:
     """
-    Returns access info for the authenticated Odoo user:
-      is_system     — member of base.group_system (technical admin)
-      is_admin      — member of base.group_erp_manager
-      user_name     — display name
-      accessible_company_ids — list of int (companies the user can switch to)
+    Returns access info for the authenticated Odoo user.
+    Uses has_group() (public XML-RPC method) for group checks — avoids res.users
+    field-level access restrictions on groups_id.
     """
     uid = await loop.run_in_executor(None, client.authenticate)
-    # Fetch user record: groups_id, company_ids, name
-    users = await loop.run_in_executor(
-        None,
-        lambda: client.search_read(
-            "res.users", [["id", "=", uid]],
-            ["name", "groups_id", "company_ids"],
-            limit=1
-        )
-    )
-    user = users[0] if users else {}
-    groups: list = user.get("groups_id") or []
+    log.info("check_user_access: authenticated uid=%s db=%s", uid, client.db)
 
-    # Resolve group xml_ids for the groups this user has
-    is_system = False
-    is_admin = False
-    if groups:
-        group_records = await loop.run_in_executor(
+    # ── User name + company_ids via direct read ──────────────────
+    user_name = ""
+    accessible: list[int] = []
+    try:
+        records = await loop.run_in_executor(
             None,
-            lambda: client.search_read(
-                "res.groups",
-                [["id", "in", groups]],
-                ["id", "full_name"],
-                limit=200,
+            lambda: client._models.execute_kw(
+                client.db, uid, client.api_key,
+                "res.users", "read", [[uid]],
+                {"fields": ["name", "company_ids"]}
             )
         )
-        full_names = [g.get("full_name", "") for g in group_records]
-        is_system = any("Technical" in n or "Administration / Settings" in n for n in full_names)
-        is_admin  = any("Administration" in n for n in full_names)
+        if records:
+            r = records[0]
+            user_name = r.get("name") or ""
+            raw = r.get("company_ids") or []
+            # XML-RPC returns a list of ints for Many2many
+            accessible = [c if isinstance(c, int) else int(c[0]) for c in raw]
+        log.info("check_user_access: user=%s companies=%s", user_name, accessible)
+    except Exception as exc:
+        log.warning("check_user_access: failed to read res.users: %s", exc)
 
-    # company_ids on res.users is a list of ints in Odoo 16+
-    accessible = []
-    raw_companies = user.get("company_ids")
-    if isinstance(raw_companies, list):
-        accessible = [c if isinstance(c, int) else c[0] for c in raw_companies]
+    # ── Group membership via has_group (more reliable than groups_id) ──
+    is_system = False
+    is_admin = False
+    try:
+        is_system = bool(await loop.run_in_executor(
+            None,
+            lambda: client._models.execute_kw(
+                client.db, uid, client.api_key,
+                "res.users", "has_group", ["base.group_system"]
+            )
+        ))
+    except Exception as exc:
+        log.warning("check_user_access: has_group base.group_system failed: %s", exc)
 
+    if not is_system:
+        try:
+            is_admin = bool(await loop.run_in_executor(
+                None,
+                lambda: client._models.execute_kw(
+                    client.db, uid, client.api_key,
+                    "res.users", "has_group", ["base.group_erp_manager"]
+                )
+            ))
+        except Exception as exc:
+            log.warning("check_user_access: has_group base.group_erp_manager failed: %s", exc)
+
+    log.info("check_user_access: is_system=%s is_admin=%s", is_system, is_admin)
     return {
         "is_system": is_system,
         "is_admin": is_admin,
-        "user_name": user.get("name") or "",
+        "user_name": user_name,
         "accessible_company_ids": accessible,
         "checked_at": datetime.utcnow().isoformat(),
     }
@@ -381,7 +395,8 @@ async def check_access(profile_id: int, session: AsyncSession = Depends(get_sess
     api_key = get_profile_api_key(profile.name)
     if not api_key:
         raise HTTPException(400, "Aucune clé API enregistrée pour ce projet")
-    client = OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
+    url = _normalise_url(profile.db_url)
+    client = OdooClient(url, profile.db_name, profile.login, api_key)
     loop = asyncio.get_event_loop()
     try:
         info = await _check_user_access(client, loop)
@@ -392,6 +407,7 @@ async def check_access(profile_id: int, session: AsyncSession = Depends(get_sess
         await session.refresh(profile)
         return info
     except Exception as exc:
+        log.exception("check_access failed for profile %s", profile_id)
         raise HTTPException(400, str(exc))
 
 
