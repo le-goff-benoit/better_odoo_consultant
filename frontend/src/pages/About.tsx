@@ -1,13 +1,46 @@
 import { t } from '../theme'
 
-const VERSION = '0.8.0'
+const VERSION = '0.10.0'
 
 const CHANGELOG = [
   {
-    version: '0.8.0',
+    version: '0.10.0',
     date: '2026-05-12',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Sélecteur de société active sur les projets et dans l\'assistant IA (scope requêtes Odoo)',
+      'Requêtes Odoo filtrées par allowed_company_ids — données restreintes à la société choisie',
+      'Nouveaux modèles Copilot : Claude 4.x (Sonnet/Opus/Haiku), GPT-5.x, Gemini 2.5/3.x, Grok Code Fast',
+      'Sélecteur de modèle dans l\'assistant filtre selon les préférences des Paramètres',
+      'Versions intermédiaires (saas) visibles dans le sélecteur Odoo et les fichiers contexte',
+      'Correction visibilité boutons en thème sombre/sépia (variables CSS transparentes via color-mix)',
+      'Onglets projets affichent le nom du projet (non le nom de la société)',
+      'Badge sources v{x} ✓ dans l\'assistant (vert = installé, orange = manquant)',
+    ],
+  },
+  {
+    version: '0.9.0',
+    date: '2026-05-12',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Thèmes clair / sombre / sépia avec sélecteur dans le profil consultant',
+      'Couleur primaire du profil appliquée à la sidebar (teinte dynamique)',
+      'Profil consultant affiché en haut de la sidebar (avatar, nom, titre)',
+      'Modification de projets existants depuis la page Projets',
+      'Correctif : le texte reste dans le champ après un envoi automatique',
+      'Correctif : reset fichier contexte ne marquait plus les autres comme Personnalisé',
+      'Correctif : champs texte invisibles en thème sombre (bg blanc sur blanc)',
+      'Page Sources : cartes unifiées avec barre de progression, tri par version, badge saas, bouton + version intermédiaire',
+      'Fournisseur Copilot Business (OAuth device flow)',
+    ],
+  },
+  {
+    version: '0.8.0',
+    date: '2026-05-12',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Page À propos avec historique des versions',
       'Modèle de compte-rendu de réunion dans les Paramètres',

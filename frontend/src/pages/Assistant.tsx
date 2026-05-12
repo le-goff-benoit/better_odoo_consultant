@@ -200,7 +200,7 @@ const SUGGESTIONS_GENERAL = [
   'Montre la structure du modèle stock.move',
 ]
 
-const ODOO_VERSIONS = ['19.0', '18.0', '17.0', '16.0', '15.0']
+const ODOO_VERSIONS_BASE = ['19.0', '18.0', '17.0', '16.0', '15.0']
 
 const GENERAL_KEY = 'general'
 
@@ -561,9 +561,16 @@ export default function Assistant() {
 
       {/* Version selector for general mode */}
       {isGeneralMode && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: t.muted, fontWeight: 500 }}>Version Odoo :</span>
-          {ODOO_VERSIONS.map(v => (
+          {[...new Set([
+            ...ODOO_VERSIONS_BASE,
+            ...((): string[] => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })(),
+          ])].sort((a, b) => {
+            const [aMaj, aMin = 0] = a.split('.').map(Number)
+            const [bMaj, bMin = 0] = b.split('.').map(Number)
+            return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
+          }).map(v => (
             <button key={v} onClick={() => setGeneralVersion(v)} style={{
               padding: '3px 12px',
               background: generalVersion === v ? '#6366f110' : 'transparent',
@@ -572,7 +579,12 @@ export default function Assistant() {
               fontSize: 12, fontWeight: generalVersion === v ? 700 : 400,
               color: generalVersion === v ? '#6366f1' : t.muted,
               cursor: 'pointer', transition: 'all .15s',
-            }}>{v}</button>
+            }}>
+              {v}
+              {!ODOO_VERSIONS_BASE.includes(v) && (
+                <span style={{ marginLeft: 3, fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px', verticalAlign: 'middle' }}>saas</span>
+              )}
+            </button>
           ))}
         </div>
       )}
