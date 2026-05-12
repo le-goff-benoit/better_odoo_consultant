@@ -644,9 +644,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
         {/* ── Default company (multi-company) ── */}
         {companies.length > 1 && (
           <div style={{ background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '8px 10px' }}>
-            <div style={{ fontSize: 10, color: t.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            <p className="label-section" style={{ marginBottom: 6 }}>
               Société par défaut dans l'Assistant IA
-            </div>
+            </p>
             <div style={{ fontSize: 11, color: t.muted, marginBottom: 6 }}>
               Les requêtes seront filtrées sur cette société.
             </div>
@@ -808,9 +808,6 @@ const styles = {
     fontSize: 13, color: t.text, background: t.white, outline: 'none',
     transition: 'border-color .15s',
   } as React.CSSProperties,
-  btnPrimary: btn.primary,
-  btnSecondary: btn.secondary,
-  btnOutline: btn.outline,
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',

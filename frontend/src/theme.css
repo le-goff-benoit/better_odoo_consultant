@@ -119,6 +119,17 @@
 }
 .btn-outline-muted:hover:not(:disabled) { border-color: var(--th-text-sub, #334155); color: var(--th-text-sub, #334155); }
 
+/* ── Size modifiers (compose with .btn-*) ── */
+.btn-sm { padding: 4px 10px !important; font-size: 11px !important; }
+.btn-xs { padding: 2px 7px !important; font-size: 10px !important; }
+
+/* ── Section label utility ── */
+.label-section {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--th-muted, #64748b);
+  margin: 0;
+}
+
 /* ── Tab nav buttons ── */
 .btn-tab {
   display: inline-flex; align-items: center; gap: 6px;

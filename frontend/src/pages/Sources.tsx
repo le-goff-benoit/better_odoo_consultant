@@ -542,19 +542,16 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
       )}
       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
         {(info.recent_commits?.length ?? 0) > 0 && (
-          <button onClick={onToggleCommits} style={btnGhost}>
+          <button className="btn btn-ghost btn-sm" onClick={onToggleCommits}>
             {showCommits ? '▲ Masquer' : `▼ ${info.recent_commits!.length} commits`}
           </button>
         )}
         {hasAiData && (
-          <button onClick={() => onAiSummary(buildPrefill())} style={{
-            ...btnGhost, color: 'var(--brand, #017e84)', borderColor: 'var(--brand, #017e84)',
-            background: 'transparent', fontWeight: 600,
-          }}>
+          <button className="btn btn-outline btn-sm" onClick={() => onAiSummary(buildPrefill())}>
             ✦ IA — Résumé 30 j
           </button>
         )}
-        <button onClick={onCheckUpdates} disabled={checking} style={{ ...btnGhost, marginLeft: 'auto' }}>
+        <button className="btn btn-ghost btn-sm" onClick={onCheckUpdates} disabled={checking} style={{ marginLeft: 'auto' }}>
           {checking ? '⟳ Vérif…' : '↻ Vérifier'}
         </button>
       </div>
@@ -630,7 +627,7 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
           </div>
         </div>
         {sshStep === 'idle' && (
-          <button onClick={onGenerate} style={btnTeal}>{hasKeys ? 'Voir ma clé' : '+ Créer une clé SSH'}</button>
+          <button className="btn btn-primary" onClick={onGenerate}>{hasKeys ? 'Voir ma clé' : '+ Créer une clé SSH'}</button>
         )}
       </div>
       {sshStep === 'generating' && <div style={{ marginTop: 14, fontSize: 13, color: t.muted }}>⟳ Génération en cours…</div>}
@@ -640,7 +637,8 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
           <SshStep n={1} title="Copiez votre clé publique">
             <div style={{ position: 'relative', marginTop: 8 }}>
               <textarea readOnly value={publicKey} style={{ width: '100%', height: 70, resize: 'none', fontFamily: 'monospace', fontSize: 11, padding: '8px 10px', background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radiusSm, color: t.text, boxSizing: 'border-box' }} />
-              <button onClick={onCopy} style={{ position: 'absolute', top: 8, right: 8, padding: '3px 10px', fontSize: 11, background: copied ? t.success : t.brand, color: '#fff', border: 'none', borderRadius: t.radiusSm, cursor: 'pointer', fontWeight: 600 }}>
+              <button className="btn btn-primary btn-sm" onClick={onCopy}
+                style={{ position: 'absolute', top: 8, right: 8, background: copied ? t.success : undefined }}>
                 {copied ? '✓ Copié !' : 'Copier'}
               </button>
             </div>
@@ -651,7 +649,7 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
           <SshStep n={3} title={`Collez la clé et cliquez "Add SSH key"`}>
             <div style={{ fontSize: 12, color: t.muted, marginTop: 5 }}>Champ <strong>Title</strong> : <em>"Odoo Portal"</em> — champ <strong>Key</strong> : collez la clé copiée.</div>
           </SshStep>
-          <button onClick={onRecheck} style={{ ...btnTeal, marginTop: 6 }}>{"J'ai ajouté la clé — vérifier l'accès →"}</button>
+          <button className="btn btn-primary" onClick={onRecheck} style={{ marginTop: 6 }}>{"J'ai ajouté la clé — vérifier l'accès →"}</button>
         </div>
       )}
     </div>
@@ -689,7 +687,3 @@ function btnDownload(status: CardState, installed?: boolean): React.CSSPropertie
   }
 }
 
-const btnPrimary = btn.primary
-const btnSecondary = btn.secondary
-const btnTeal: React.CSSProperties = { ...btn.primary, whiteSpace: 'nowrap', flexShrink: 0 }
-const btnGhost: React.CSSProperties = { ...btn.ghost, fontSize: 11, padding: '3px 8px' }

@@ -565,7 +565,7 @@ export default function Assistant() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', maxWidth: 900 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxWidth: 900 }}>
 
       <PageHeader
         title="Assistant IA"
