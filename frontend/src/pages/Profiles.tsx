@@ -649,11 +649,14 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
         {/* ── App badges ── */}
         {apps.length > 0 && <AppBadges apps={apps} max={6} />}
 
-        {/* ── Multi-company selector ── */}
+        {/* ── Default company (multi-company) ── */}
         {companies.length > 1 && (
-          <div>
-            <div style={{ fontSize: 10, color: t.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
-              Société active
+          <div style={{ background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '8px 10px' }}>
+            <div style={{ fontSize: 10, color: t.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              Société par défaut dans l'Assistant IA
+            </div>
+            <div style={{ fontSize: 11, color: t.muted, marginBottom: 6 }}>
+              Les requêtes seront filtrées sur cette société.
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {companies.map(c => {
@@ -662,7 +665,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
                   <button key={c.id} onClick={() => onSelectCompany(c.id)} style={{
                     fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 4,
                     border: `1px solid ${isActive ? t.brand : t.border}`,
-                    background: isActive ? t.brand : t.bgMuted,
+                    background: isActive ? t.brand : t.bgCard,
                     color: isActive ? '#fff' : t.textSub,
                     cursor: 'pointer', transition: 'all .15s',
                   }}>
