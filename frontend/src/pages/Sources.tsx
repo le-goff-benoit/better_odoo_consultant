@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates, checkSingleVersion } from '../api/client'
 import { t, btn } from '../theme'
+import PageHeader from '../components/PageHeader'
 
 // ── Version definitions ─────────────────────────────────────────
 
@@ -260,38 +261,31 @@ export default function Sources() {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 4 }}>Sources Odoo</h1>
-          <p style={{ fontSize: 14, color: t.muted }}>
-            Téléchargez et maintenez les sources Odoo localement pour consultation et analyse.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-          {showAddForm ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input
-                value={customInput}
-                onChange={e => setCustomInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addCustomVersion()}
-                placeholder="ex: 19.1 ou 18.2"
-                autoFocus
-                style={{
-                  padding: '7px 12px', border: `1px solid ${t.border}`, borderRadius: t.radius,
-                  fontSize: 13, color: t.text, background: t.bgCard, width: 130, outline: 'none',
-                }}
-              />
-              <button onClick={addCustomVersion} style={btnPrimary}>Ajouter</button>
-              <button onClick={() => { setShowAddForm(false); setCustomInput('') }} style={btnSecondary}>✕</button>
-            </div>
-          ) : (
-            <button onClick={() => setShowAddForm(true)} style={btnSecondary}>
-              + Version intermédiaire
-            </button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Sources Odoo"
+        description="Téléchargez et maintenez les sources Odoo localement pour consultation et analyse."
+        action={showAddForm ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              value={customInput}
+              onChange={e => setCustomInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addCustomVersion()}
+              placeholder="ex: 19.1 ou 18.2"
+              autoFocus
+              style={{
+                padding: '7px 12px', border: `1px solid ${t.border}`, borderRadius: t.radius,
+                fontSize: 13, color: t.text, background: t.bgCard, width: 130, outline: 'none',
+              }}
+            />
+            <button className="btn btn-primary" onClick={addCustomVersion}>Ajouter</button>
+            <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setCustomInput('') }}>Annuler</button>
+          </div>
+        ) : (
+          <button className="btn btn-secondary" onClick={() => setShowAddForm(true)}>
+            + Version intermédiaire
+          </button>
+        )}
+      />
 
       {/* SSH banner */}
       {sshOk ? (

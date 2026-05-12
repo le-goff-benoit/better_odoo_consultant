@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps } from '../api/client'
 import { t, btn } from '../theme'
+import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
 
 function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string }[]; max?: number }) {
@@ -193,16 +194,15 @@ export default function Profiles() {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div>
-          <h1 style={styles.h1}>Mes projets Odoo.sh</h1>
-          <p style={styles.sub}>Gérez vos connexions aux instances Odoo de vos clients.</p>
-        </div>
-        <button onClick={() => { setEditingId(null); setForm(EMPTY); setShowWizard(true); setStep(1) }} style={styles.btnPrimary}>
-          + Nouveau projet
-        </button>
-      </div>
+      <PageHeader
+        title="Mes projets Odoo.sh"
+        description="Gérez vos connexions aux instances Odoo de vos clients."
+        action={
+          <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(EMPTY); setShowWizard(true); setStep(1) }}>
+            + Nouveau projet
+          </button>
+        }
+      />
 
       {/* Toast */}
       {toast && (
@@ -449,15 +449,11 @@ export default function Profiles() {
                           style={{ ...styles.input, fontSize: 12, padding: '6px 8px' }} />
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          disabled={!newEnv.name || !newEnv.db_url}
-                          onClick={() => { if (newEnv.name && newEnv.db_url) { setEnvs(p => [...p, newEnv]); setNewEnv(null) } }}
-                          style={{ ...styles.btnPrimary, fontSize: 12, padding: '5px 12px', opacity: (!newEnv.name || !newEnv.db_url) ? .5 : 1 }}>
+                        <button className="btn btn-primary" disabled={!newEnv.name || !newEnv.db_url}
+                          onClick={() => { if (newEnv.name && newEnv.db_url) { setEnvs(p => [...p, newEnv]); setNewEnv(null) } }}>
                           Ajouter
                         </button>
-                        <button onClick={() => setNewEnv(null)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 10px' }}>
-                          Annuler
-                        </button>
+                        <button className="btn btn-secondary" onClick={() => setNewEnv(null)}>Annuler</button>
                       </div>
                     </div>
                   ) : (
@@ -482,22 +478,18 @@ export default function Profiles() {
 
             {/* Footer */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, paddingTop: 20, borderTop: `1px solid ${t.border}` }}>
-              <button
-                onClick={() => step === 1 ? (setShowWizard(false), setEditingId(null), setDiag(null)) : setStep(s => s - 1)}
-                style={styles.btnSecondary}
-              >
+              <button className="btn btn-secondary"
+                onClick={() => step === 1 ? (setShowWizard(false), setEditingId(null), setDiag(null)) : setStep(s => s - 1)}>
                 {step === 1 ? 'Annuler' : '← Retour'}
               </button>
               {step < 3 ? (
-                <button disabled={!canNext} onClick={() => setStep(s => s + 1)}
-                  style={{ ...styles.btnPrimary, opacity: canNext ? 1 : .5, cursor: canNext ? 'pointer' : 'not-allowed' }}>
+                <button className="btn btn-primary" disabled={!canNext} onClick={() => setStep(s => s + 1)}>
                   Suivant →
                 </button>
               ) : (
-                <button
+                <button className="btn btn-primary" style={{ background: t.success }}
                   disabled={editingId !== null ? update.isPending : create.isPending}
-                  onClick={() => editingId !== null ? update.mutate() : create.mutate()}
-                  style={{ ...styles.btnPrimary, background: t.success }}>
+                  onClick={() => editingId !== null ? update.mutate() : create.mutate()}>
                   {(editingId !== null ? update.isPending : create.isPending) ? '⟳ Enregistrement…' : '✓ Enregistrer'}
                 </button>
               )}
@@ -739,13 +731,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
                     style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={saveEnv} disabled={!newEnv.name || !newEnv.db_url}
-                    style={{ ...styles.btnPrimary, fontSize: 11, padding: '4px 12px', opacity: (!newEnv.name || !newEnv.db_url) ? .5 : 1 }}>
-                    Ajouter
-                  </button>
-                  <button onClick={() => setAddingEnv(false)} style={{ ...styles.btnSecondary, fontSize: 11, padding: '4px 10px' }}>
-                    Annuler
-                  </button>
+                  <button className="btn btn-primary" onClick={saveEnv} disabled={!newEnv.name || !newEnv.db_url}>Ajouter</button>
+                  <button className="btn btn-secondary" onClick={() => setAddingEnv(false)}>Annuler</button>
                 </div>
               </div>
             )}
@@ -768,9 +755,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
 
           <div style={{ flex: 1 }} />
 
-          <button onClick={onEdit}   style={{ ...styles.btnOutline(t.brand),  padding: '4px 10px', fontSize: 11 }}>✏ Modifier</button>
-          <button onClick={onTest}   style={{ ...styles.btnOutline(t.action), padding: '4px 10px', fontSize: 11 }}>Tester</button>
-          <button onClick={onDelete} style={{ ...styles.btnOutline(t.danger), padding: '4px 10px', fontSize: 11 }}>×</button>
+          <button className="btn btn-outline" onClick={onEdit}>✏ Modifier</button>
+          <button className="btn btn-outline" onClick={onTest}>Tester</button>
+          <button className="btn btn-outline-danger" onClick={onDelete}>Supprimer</button>
         </div>
 
       </div>
@@ -802,7 +789,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <div style={{ fontSize: 14, color: t.muted, marginBottom: 24 }}>
         Ajoutez votre premier projet Odoo.sh pour commencer.
       </div>
-      <button onClick={onAdd} style={styles.btnPrimary}>+ Nouveau projet</button>
+      <button className="btn btn-primary" onClick={onAdd}>+ Nouveau projet</button>
     </div>
   )
 }

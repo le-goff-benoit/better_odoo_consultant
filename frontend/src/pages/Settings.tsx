@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile } from '../api/client'
 import { t } from '../theme'
+import PageHeader from '../components/PageHeader'
 import { applyBrandColor, applyThemeMode } from '../App'
 
 interface ProviderDef {
@@ -95,9 +96,7 @@ export default function Settings() {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 4 }}>Paramètres</h1>
-      </div>
+      <PageHeader title="Paramètres" />
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 28, borderBottom: `2px solid ${t.border}` }}>

@@ -1,4 +1,5 @@
 import { t } from '../theme'
+import PageHeader from '../components/PageHeader'
 
 const VERSION = '0.10.0'
 
@@ -142,10 +143,7 @@ const CHANGELOG = [
 export default function About() {
   return (
     <div style={{ maxWidth: 900 }}>
-      <div style={{ marginBottom: 36 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 6 }}>À propos</h1>
-        <p style={{ fontSize: 14, color: t.muted }}>Odoo Consultant Portal — outil de productivité pour consultants Odoo.</p>
-      </div>
+      <PageHeader title="À propos" description="Odoo Consultant Portal — outil de productivité pour consultants Odoo." />
 
       {/* Author card */}
       <div style={{

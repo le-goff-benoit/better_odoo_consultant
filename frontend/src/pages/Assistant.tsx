@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getProfileApps } from '../api/client'
 import { t, btn } from '../theme'
+import PageHeader from '../components/PageHeader'
 
 import { ODOO_APPS } from '../constants/odooApps'
 
@@ -566,14 +567,11 @@ export default function Assistant() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', maxWidth: 900 }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexShrink: 0 }}>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: t.text, marginBottom: 2 }}>Assistant IA</h1>
-          <p style={{ fontSize: 13, color: t.muted }}>Posez des questions sur vos données Odoo en langage naturel.</p>
-        </div>
-        <Link to="/settings" style={{ ...btn.ghost, textDecoration: 'none' }}>⚙ Paramètres</Link>
-      </div>
+      <PageHeader
+        title="Assistant IA"
+        description="Posez des questions sur vos données Odoo en langage naturel."
+        action={<Link to="/settings" className="btn btn-ghost" style={{ textDecoration: 'none' }}>⚙ Paramètres</Link>}
+      />
 
       {/* Project + General tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -739,23 +737,17 @@ export default function Assistant() {
 
             {messages.length > 0 && (
               <>
-                <button onClick={makeMeetingMinute} disabled={streaming}
-                  style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.brand60}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.brand, fontWeight: 600 }}>
-                  📋 Meeting Minute
+                <button className="btn btn-outline" onClick={makeMeetingMinute} disabled={streaming}>
+                  📋 CR réunion
                 </button>
-                <button onClick={resetCurrentConversation}
-                  style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.muted }}>
-                  ✕ Nouvelle conversation
+                <button className="btn btn-outline-muted" onClick={resetCurrentConversation}>
+                  ↺ Nouvelle conv.
                 </button>
               </>
             )}
             {convKey && (savedConvs[convKey] ?? []).length > 0 && (
-              <button onClick={() => setShowHistory(h => !h)} style={{
-                padding: '5px 12px', background: showHistory ? t.brand20 : 'none',
-                border: `1px solid ${showHistory ? t.brand40 : t.border}`,
-                borderRadius: t.radius, fontSize: 12, cursor: 'pointer',
-                color: showHistory ? t.brand : t.muted, fontWeight: showHistory ? 600 : 400,
-              }}>
+              <button className="btn btn-ghost" onClick={() => setShowHistory(h => !h)}
+                style={showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}}>
                 📂 Historique ({(savedConvs[convKey] ?? []).length})
               </button>
             )}
@@ -908,11 +900,8 @@ export default function Assistant() {
                     {conv.messages.filter(m => m.role === 'user').length} msg
                   </span>
                 </div>
-                <button onClick={() => resumeConv(conv)} style={{
-                  marginTop: 2, padding: '4px 10px', fontSize: 11, fontWeight: 600,
-                  background: t.brand, color: '#fff', border: 'none',
-                  borderRadius: t.radius, cursor: 'pointer', textAlign: 'left',
-                }}>
+                <button className="btn btn-primary" onClick={() => resumeConv(conv)}
+                  style={{ marginTop: 2, fontSize: 11, padding: '4px 10px' }}>
                   ↩ Reprendre
                 </button>
               </div>
@@ -962,30 +951,42 @@ export default function Assistant() {
               ? 'Sélectionnez un onglet ci-dessus'
               : isGeneralMode
               ? `Question générale sur Odoo ${generalVersion}… (Entrée pour envoyer)`
-              : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour sauter une ligne)'
+              : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour nouvelle ligne)'
           }
           disabled={configuredProviders.length === 0 || profileId === null}
-          rows={2}
+          rows={3}
           style={{
-            flex: 1, padding: '10px 14px', border: `1px solid ${t.border}`,
+            flex: 1, padding: '12px 16px', border: `1px solid ${t.border}`,
             borderRadius: t.radiusLg, fontSize: 14, resize: 'none',
             color: t.text, background: t.bgCard, outline: 'none',
-            fontFamily: t.font, lineHeight: 1.5,
+            fontFamily: t.font, lineHeight: 1.6,
+            transition: 'border-color .15s',
           }}
+          onFocus={e => (e.currentTarget.style.borderColor = t.brand)}
+          onBlur={e => (e.currentTarget.style.borderColor = t.border)}
         />
-        <button
-          onClick={streaming ? () => abortRef.current?.abort() : send}
-          disabled={configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())}
-          style={{
-            padding: '10px 20px', background: streaming ? t.danger : t.brand,
-            color: '#fff', border: 'none', borderRadius: t.radiusLg,
-            fontWeight: 600, fontSize: 13, cursor: 'pointer',
-            opacity: (configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())) ? .5 : 1,
-            transition: 'background .15s',
-          }}
-        >
-          {streaming ? '⏹' : '↑'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            onClick={streaming ? () => abortRef.current?.abort() : send}
+            disabled={configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())}
+            style={{
+              padding: '10px 18px', minWidth: 90,
+              background: streaming ? t.danger : t.brand,
+              color: '#fff', border: 'none', borderRadius: t.radiusLg,
+              fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              opacity: (configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())) ? .45 : 1,
+              transition: 'background .15s, filter .15s',
+            }}
+            onMouseEnter={e => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.1)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.filter = '' }}
+          >
+            {streaming
+              ? <><span style={{ fontSize: 16 }}>⏹</span> Arrêter</>
+              : <><span style={{ fontSize: 16 }}>↑</span> Envoyer</>
+            }
+          </button>
+        </div>
       </div>
     </div>
   )
