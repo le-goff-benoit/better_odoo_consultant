@@ -94,7 +94,7 @@ export default function Settings() {
   ]
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ maxWidth: 900 }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 4 }}>Paramètres</h1>
       </div>

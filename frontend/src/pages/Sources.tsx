@@ -259,7 +259,7 @@ export default function Sources() {
   }
 
   return (
-    <div>
+    <div style={{ maxWidth: 900 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>

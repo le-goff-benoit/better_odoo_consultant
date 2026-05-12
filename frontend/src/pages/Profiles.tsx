@@ -192,7 +192,7 @@ export default function Profiles() {
   const diagOk = diag !== null && diag.uid !== null
 
   return (
-    <div>
+    <div style={{ maxWidth: 900 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
         <div>
