@@ -207,7 +207,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     provider: str
-    profile_id: int
+    profile_id: Optional[int] = None   # None → general mode
+    version: Optional[str] = None      # Odoo version for general mode
     messages: list[ChatMessage]
     model: Optional[str] = None
 
@@ -228,6 +229,33 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         except Exception as exc:
             raise HTTPException(400, f"Impossible d'obtenir le token Copilot : {exc}")
 
+    import os as _os
+    messages = [{"role": m.role, "content": m.content} for m in req.messages]
+
+    # ── General mode (no profile) ──────────────────────────────────
+    if req.profile_id is None:
+        version = req.version or "?"
+        source_path: Optional[str] = None
+        candidate = _os.path.expanduser(f"~/odoo-sources/{version}")
+        if _os.path.isdir(candidate):
+            source_path = candidate
+        context_md = load_context_for_prompt(version)
+
+        async def generate_general():
+            try:
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version):
+                    yield _sse(evt)
+            except Exception as exc:
+                yield _sse({"type": "error", "msg": str(exc)})
+            yield _sse({"type": "end"})
+
+        return StreamingResponse(
+            generate_general(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # ── Project mode (with profile) ────────────────────────────────
     profile = await session.get(Profile, req.profile_id)
     if not profile:
         raise HTTPException(404, "Projet introuvable")
@@ -237,12 +265,9 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         raise HTTPException(400, "Clé API Odoo introuvable pour ce projet")
 
     odoo = OdooClient(profile.db_url, profile.db_name, profile.login, odoo_key)
-    messages = [{"role": m.role, "content": m.content} for m in req.messages]
 
-    # Resolve local Odoo source path for the profile's version
-    source_path: Optional[str] = None
+    source_path = None
     if profile.odoo_version:
-        import os as _os
         candidate = _os.path.expanduser(f"~/odoo-sources/{profile.odoo_version}")
         if _os.path.isdir(candidate):
             source_path = candidate

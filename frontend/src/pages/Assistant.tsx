@@ -98,6 +98,18 @@ const SUGGESTIONS = [
   'Liste les opportunités CRM ouvertes',
 ]
 
+const SUGGESTIONS_GENERAL = [
+  'Quels sont les modèles de la comptabilité ?',
+  'Comment fonctionne le workflow des ventes ?',
+  'Quelles sont les nouveautés de cette version ?',
+  'Comment migrer depuis la version précédente ?',
+  'Montre la structure du modèle stock.move',
+]
+
+const ODOO_VERSIONS = ['19.0', '18.0', '17.0', '16.0', '15.0']
+
+const GENERAL_KEY = 'general'
+
 // ── Main page ─────────────────────────────────────────────────
 
 export default function Assistant() {
@@ -113,11 +125,14 @@ export default function Assistant() {
 
   const [provider,  setProvider]  = useState('')
   const [modelId,   setModelId]   = useState('')
-  const [profileId, setProfileId] = useState<number | null>(null)
+  // profileId: number = project tab, GENERAL_KEY = general tab, null = not yet selected
+  const [profileId, setProfileId] = useState<number | typeof GENERAL_KEY | null>(null)
+  const [generalVersion, setGeneralVersion] = useState('17.0')
 
-  // Conversations keyed by profileId
-  const [conversations, setConversations] = useState<Record<number, Message[]>>({})
-  const messages = profileId ? (conversations[profileId] ?? []) : []
+  // Conversations keyed by string (profile id as string, or 'general')
+  const [conversations, setConversations] = useState<Record<string, Message[]>>({})
+  const convKey = profileId !== null ? String(profileId) : null
+  const messages = convKey ? (conversations[convKey] ?? []) : []
 
   const [input,     setInput]    = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -133,9 +148,12 @@ export default function Assistant() {
     }
   }, [allProviders])
 
-  // Auto-select first profile
+  // Auto-select first profile (or general if no profiles)
   useEffect(() => {
-    if (profiles.length && !profileId) setProfileId(profiles[0].id)
+    if (profileId === null) {
+      if (profiles.length) setProfileId(profiles[0].id)
+      else setProfileId(GENERAL_KEY)
+    }
   }, [profiles])
 
   // Pre-fill input from navigation state (e.g. from Sources "IA" button)
@@ -153,19 +171,20 @@ export default function Assistant() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const isGeneralMode = profileId === GENERAL_KEY
   const selectedProfile = profiles.find(p => p.id === profileId)
   const currentProv = PROVIDERS.find(p => p.id === provider)
 
   const setMessages = (fn: (prev: Message[]) => Message[]) => {
-    if (!profileId) return
+    if (!convKey) return
     setConversations(prev => ({
       ...prev,
-      [profileId]: fn(prev[profileId] ?? []),
+      [convKey]: fn(prev[convKey] ?? []),
     }))
   }
 
   const send = async () => {
-    if (!input.trim() || streaming || !profileId || !provider) return
+    if (!input.trim() || streaming || profileId === null || !provider) return
     const text = input.trim()
     setInput('')
 
@@ -191,10 +210,14 @@ export default function Assistant() {
     abortRef.current = ctrl
 
     try {
+      const body = isGeneralMode
+        ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId }
+        : { provider, profile_id: profileId, messages: history, model: modelId }
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, profile_id: profileId, messages: history, model: modelId }),
+        body: JSON.stringify(body),
         signal: ctrl.signal,
       })
 
@@ -240,7 +263,7 @@ export default function Assistant() {
 
   const resetCurrentConversation = () => {
     abortRef.current?.abort()
-    if (profileId) setConversations(prev => ({ ...prev, [profileId]: [] }))
+    if (convKey) setConversations(prev => ({ ...prev, [convKey]: [] }))
     setStreaming(false)
   }
 
@@ -265,41 +288,88 @@ export default function Assistant() {
         }}>⚙ Paramètres</Link>
       </div>
 
-      {/* Project tabs */}
-      {profiles.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap' }}>
-          {profiles.map(p => {
-            const msgs = conversations[p.id] ?? []
-            const msgCount = msgs.filter(m => m.role === 'user').length
-            const isActive = p.id === profileId
-            return (
-              <button key={p.id} onClick={() => setProfileId(p.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 12px',
-                background: isActive ? t.bgCard : 'transparent',
-                border: `1px solid ${isActive ? t.brand : t.border}`,
-                borderRadius: t.radiusFull,
-                fontSize: 12, fontWeight: isActive ? 600 : 400,
-                color: isActive ? t.brand : t.muted,
-                cursor: 'pointer',
-                boxShadow: isActive ? t.shadow : 'none',
-                transition: 'all .15s',
-              }}>
-                {p.company_logo && (
-                  <img src={p.company_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }} />
-                )}
-                {p.company_name || p.name}
-                {msgCount > 0 && (
-                  <span style={{
-                    background: isActive ? t.brand : t.borderLight,
-                    color: isActive ? '#fff' : t.muted,
-                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700,
-                    padding: '1px 6px', minWidth: 18, textAlign: 'center',
-                  }}>{msgCount}</span>
-                )}
-              </button>
-            )
-          })}
+      {/* Project + General tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* General mode tab */}
+        {(() => {
+          const isActive = isGeneralMode
+          const msgCount = (conversations[GENERAL_KEY] ?? []).filter(m => m.role === 'user').length
+          return (
+            <button onClick={() => setProfileId(GENERAL_KEY)} style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px',
+              background: isActive ? t.bgCard : 'transparent',
+              border: `1px solid ${isActive ? '#6366f1' : t.border}`,
+              borderRadius: t.radiusFull,
+              fontSize: 12, fontWeight: isActive ? 600 : 400,
+              color: isActive ? '#6366f1' : t.muted,
+              cursor: 'pointer',
+              boxShadow: isActive ? t.shadow : 'none',
+              transition: 'all .15s',
+            }}>
+              🌐 Odoo Général
+              {msgCount > 0 && (
+                <span style={{
+                  background: isActive ? '#6366f1' : t.borderLight,
+                  color: isActive ? '#fff' : t.muted,
+                  borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700,
+                  padding: '1px 6px', minWidth: 18, textAlign: 'center',
+                }}>{msgCount}</span>
+              )}
+            </button>
+          )
+        })()}
+
+        {/* Project tabs */}
+        {profiles.map(p => {
+          const msgs = conversations[String(p.id)] ?? []
+          const msgCount = msgs.filter(m => m.role === 'user').length
+          const isActive = p.id === profileId
+          return (
+            <button key={p.id} onClick={() => setProfileId(p.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px',
+              background: isActive ? t.bgCard : 'transparent',
+              border: `1px solid ${isActive ? t.brand : t.border}`,
+              borderRadius: t.radiusFull,
+              fontSize: 12, fontWeight: isActive ? 600 : 400,
+              color: isActive ? t.brand : t.muted,
+              cursor: 'pointer',
+              boxShadow: isActive ? t.shadow : 'none',
+              transition: 'all .15s',
+            }}>
+              {p.company_logo && (
+                <img src={p.company_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }} />
+              )}
+              {p.company_name || p.name}
+              {msgCount > 0 && (
+                <span style={{
+                  background: isActive ? t.brand : t.borderLight,
+                  color: isActive ? '#fff' : t.muted,
+                  borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700,
+                  padding: '1px 6px', minWidth: 18, textAlign: 'center',
+                }}>{msgCount}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Version selector for general mode */}
+      {isGeneralMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: t.muted, fontWeight: 500 }}>Version Odoo :</span>
+          {ODOO_VERSIONS.map(v => (
+            <button key={v} onClick={() => setGeneralVersion(v)} style={{
+              padding: '3px 12px',
+              background: generalVersion === v ? '#6366f110' : 'transparent',
+              border: `1px solid ${generalVersion === v ? '#6366f1' : t.border}`,
+              borderRadius: t.radiusFull,
+              fontSize: 12, fontWeight: generalVersion === v ? 700 : 400,
+              color: generalVersion === v ? '#6366f1' : t.muted,
+              cursor: 'pointer', transition: 'all .15s',
+            }}>{v}</button>
+          ))}
         </div>
       )}
 
@@ -352,7 +422,36 @@ export default function Assistant() {
       {/* Chat history */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {messages.length === 0 && selectedProfile && (
+        {messages.length === 0 && isGeneralMode && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '10px 14px', background: t.bgCard, border: '1px solid #6366f130', borderRadius: t.radiusLg }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#6366f115', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🌐</div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Mode général — Odoo {generalVersion}</div>
+                {currentProv && (
+                  <div style={{ fontSize: 11, color: t.muted, marginTop: 1 }}>
+                    {currentProv.label} · {currentProv.models.find(m => m.id === modelId)?.label} · Questions générales sans connexion client
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: t.muted, marginBottom: 10 }}>Suggestions :</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {SUGGESTIONS_GENERAL.map(s => (
+                <button key={s} onClick={() => setInput(s)} style={{
+                  padding: '7px 14px', background: t.bgCard,
+                  border: `1px solid ${t.border}`, borderRadius: t.radiusFull,
+                  fontSize: 13, cursor: 'pointer', color: t.textSub, transition: 'border-color .15s',
+                }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = '#6366f1')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = t.border)}
+                >{s}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.length === 0 && selectedProfile && !isGeneralMode && (
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '10px 14px', background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg }}>
               {selectedProfile.company_logo && (
@@ -400,11 +499,13 @@ export default function Assistant() {
           placeholder={
             configuredProviders.length === 0
               ? 'Configurez un fournisseur IA dans les Paramètres'
-              : !profileId
-              ? 'Sélectionnez un projet ci-dessus'
+              : profileId === null
+              ? 'Sélectionnez un onglet ci-dessus'
+              : isGeneralMode
+              ? `Question générale sur Odoo ${generalVersion}… (Entrée pour envoyer)`
               : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour sauter une ligne)'
           }
-          disabled={configuredProviders.length === 0 || !profileId}
+          disabled={configuredProviders.length === 0 || profileId === null}
           rows={2}
           style={{
             flex: 1, padding: '10px 14px', border: `1px solid ${t.border}`,
@@ -415,12 +516,12 @@ export default function Assistant() {
         />
         <button
           onClick={streaming ? () => abortRef.current?.abort() : send}
-          disabled={configuredProviders.length === 0 || !profileId || (!streaming && !input.trim())}
+          disabled={configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())}
           style={{
             padding: '10px 20px', background: streaming ? t.danger : t.brand,
             color: '#fff', border: 'none', borderRadius: t.radiusLg,
             fontWeight: 600, fontSize: 13, cursor: 'pointer',
-            opacity: (configuredProviders.length === 0 || !profileId || (!streaming && !input.trim())) ? .5 : 1,
+            opacity: (configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())) ? .5 : 1,
             transition: 'background .15s',
           }}
         >

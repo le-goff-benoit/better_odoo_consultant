@@ -1,6 +1,5 @@
 """Manage editable markdown context files used to enrich AI prompts."""
 
-import os
 import re
 from pathlib import Path
 from typing import Optional
@@ -26,18 +25,13 @@ def list_files() -> list[dict]:
     result = []
     for f in sorted(d.glob("*.md")):
         stat = f.stat()
-        result.append({
-            "name":     f.name,
-            "size":     stat.st_size,
-            "modified": stat.st_mtime,
-        })
+        result.append({"name": f.name, "size": stat.st_size, "modified": stat.st_mtime})
     return result
 
 
 def read_file(name: str) -> str:
     path = _safe(name)
     if not path.exists():
-        # Return default content and save it
         content = _default_content(name)
         if content:
             path.write_text(content, encoding="utf-8")
@@ -47,8 +41,7 @@ def read_file(name: str) -> str:
 
 
 def write_file(name: str, content: str) -> None:
-    path = _safe(name)
-    path.write_text(content, encoding="utf-8")
+    _safe(name).write_text(content, encoding="utf-8")
 
 
 def delete_file(name: str) -> None:
@@ -60,28 +53,18 @@ def delete_file(name: str) -> None:
 def load_context_for_prompt(odoo_version: Optional[str] = None) -> str:
     """Return combined context string to inject into AI system prompt."""
     sections = []
-
-    # Always include skills
     try:
         sections.append(("Compétences consultant", read_file("skills.md")))
     except FileNotFoundError:
         pass
-
-    # Include version-specific release notes
     if odoo_version:
-        fname = f"odoo-{odoo_version}.md"
         try:
-            sections.append((f"Notes de version Odoo {odoo_version}", read_file(fname)))
+            sections.append((f"Notes de version Odoo {odoo_version}", read_file(f"odoo-{odoo_version}.md")))
         except FileNotFoundError:
             pass
-
     if not sections:
         return ""
-
-    parts = []
-    for title, content in sections:
-        parts.append(f"## {title}\n\n{content.strip()}")
-    return "\n\n---\n\n".join(parts)
+    return "\n\n---\n\n".join(f"## {title}\n\n{content.strip()}" for title, content in sections)
 
 
 # ── Default content ───────────────────────────────────────────────
@@ -116,24 +99,28 @@ diagnostiquer des problèmes et préparer des recommandations. Sois précis, fac
 - Paiements : `account.payment`
 - Rapprochement bancaire : `account.bank.statement.line`
 - Plans comptables : `account.account`
+- Journaux : `account.journal`
 
 ### Ventes & CRM
 - Commandes : `sale.order`, lignes : `sale.order.line`
-- Opportunités : `crm.lead` (lead et opportunity dans le même modèle)
+- Opportunités/Leads : `crm.lead` (lead et opportunity dans le même modèle, champ `type`)
 - Équipes commerciales : `crm.team`
 - Listes de prix : `product.pricelist`
+- Programmes fidélité (v16+) : `loyalty.program`, `loyalty.reward`, `loyalty.rule`
 
 ### Achats
 - Commandes achat : `purchase.order`, lignes : `purchase.order.line`
-- Appels d'offres : même modèle avec `state='sent'`
+- Appels d'offres : même modèle avec `state='draft'` ou `'sent'`
 
 ### Stock & Logistique
-- Mouvements : `stock.move`, opérations détail : `stock.move.line`
+- Mouvements : `stock.move`, détail opérations : `stock.move.line`
 - Transferts : `stock.picking`
 - Emplacements : `stock.location`
-- Routes : `stock.route` (avant v16 : `stock.location.route`)
+- Routes : `stock.route` (avant v17 : `stock.location.route`)
 - Règles réappro : `stock.warehouse.orderpoint`
 - Lots/numéros de série : `stock.lot`
+- Quants (stock physique) : `stock.quant`
+- Packages : `stock.quant.package`
 
 ### Ressources Humaines
 - Employés : `hr.employee`
@@ -141,11 +128,12 @@ diagnostiquer des problèmes et préparer des recommandations. Sois précis, fac
 - Congés (demandes) : `hr.leave`, allocations : `hr.leave.allocation`
 - Présences : `hr.attendance`
 - Fiches de paie : `hr.payslip`
+- Candidatures (recrutement) : `hr.applicant`
 
-### Projets
+### Projets & Timesheets
 - Projets : `project.project`
 - Tâches : `project.task`
-- Feuilles de temps : `account.analytic.line` (domain `[["project_id","!=",false]]`)
+- Feuilles de temps : `account.analytic.line` domain `[["project_id","!=",false]]`
 
 ### Fabrication
 - Ordres de fabrication : `mrp.production`
@@ -154,10 +142,11 @@ diagnostiquer des problèmes et préparer des recommandations. Sois précis, fac
 - Postes de charge : `mrp.workcenter`
 
 ## Conseils de diagnostic courants
-- Client avec double-paiement : chercher `account.payment` doublons sur même `partner_id` + période
+- Double-paiement : `account.payment` doublons sur même `partner_id` + période
 - Stock négatif : `stock.quant` avec `quantity < 0`
-- Factures bloquées : `account.move` avec `payment_state='not_paid'` et `invoice_date_due < today`
-- Utilisateurs sans accès : `res.users` avec `active=False` ou `share=True`
+- Factures impayées en retard : `account.move` avec `payment_state='not_paid'` et `invoice_date_due < today`
+- Utilisateurs inactifs : `res.users` avec `active=False` ou `share=True`
+- Produits sans stock min : `product.template` sans règle `stock.warehouse.orderpoint`
 """
 
 _VERSION_NOTES: dict = {
@@ -165,223 +154,468 @@ _VERSION_NOTES: dict = {
 "19.0": """\
 # Odoo 19.0
 
-**Date de sortie :** Octobre 2025
+**Date de sortie :** Septembre 2025 (Odoo Experience 2025)
 
-## Nouveautés majeures
+## Prérequis techniques
+- **Python :** 3.10 minimum, **3.11 recommandé**
+- **PostgreSQL : 13.0 minimum** (rupture — PG 12 non supporté)
+- PostgreSQL 14+ recommandé pour les performances
 
-### Intelligence Artificielle
-- Odoo AI intégré nativement dans tous les modules
-- Génération automatique de descriptions produits, emails, rapports
-- Prédiction de churn client dans le CRM
-- Assistant IA dans la comptabilité pour la catégorisation automatique
+## Nouveaux modules
+- **Equity** — suivi des parts, actionnaires et bénéficiaires (cabinets comptables et fiduciaires)
+- **ESG (Environmental, Social, Governance)** — empreinte carbone intégrée RH/Paie, reporting Scope 3 automatique depuis les données factures, conformité CSRD
+- **Partnership** — remplace le module Membership ; gestion des grades, listes de prix et programmes partenaires
+- **Module AI** — framework d'agents IA pour requêtes en langage naturel et actions sur la base de données
+- **40+ packs industrie** (modules données sans code Python) : cabinet comptable, boulangerie, charpentier, traiteur, salle de concert, construction, cosmétiques, coworking, électricien, escape rooms, food truck, galerie, hôtel, HVAC, bibliothèque, location machines, thérapie, boîte de nuit, coach sportif, immobilier, spa, tatouage, théâtre, vétérinaire, cave à vin, yoga, etc.
 
-### Comptabilité
-- Nouveau moteur de rapports financiers entièrement reécrit
-- Clôture fiscale améliorée avec checklist automatique
-- Support étendu des normes IFRS 16 (leasing)
-- Rapprochement bancaire IA : suggestion automatique à 95%+
+## Suppressions / remplacements
+- Module **Membership** → remplacé par **Partnership**
 
-### Ventes & CRM
-- Pipeline CRM repensé avec vue Kanban enrichie
-- Scoring de leads amélioré avec IA
-- Nouveau configurateur de produits intégré
-- Gestion des abonnements (subscriptions) améliorée
+## Comptabilité
+- Rapprochement bancaire : réconciliation sur écritures brouillon
+- États financiers annuels : rapport composite bilan + P&L
+- Déclaration fiscale avec validation automatique
+- Catégories fiscales déplacées des catégories vers les comptes
+- Escomptes de caisse : option "Toujours (à la facturation)"
+- Paiements ISO20022 avec identifiant End-to-End
+- Relances clients via WhatsApp
 
-### Stock & Fabrication
-- Planification MRP améliorée avec contraintes multiples
-- Traçabilité lot/série enrichie
-- Nouveau module Quality Control intégré
-- Barcode app entièrement reécrite
+## Ventes & CRM
+- Prédiction probabilité de leads par IA
+- Scan de cartes de visite pour création de leads
+- Produits optionnels éditables dans le portail client
+- Paiements partiels dans le portail utilisateur
+- Intégrations marketplaces : Amazon Ireland, Shopee, Gelato
 
-### Ressources Humaines
-- Nouveau module Learning Management System (LMS)
-- Organigramme dynamique amélioré
-- Gestion des compétences et formations
+## Stock & Logistique
+- Plusieurs routes par ligne de commande (ex: MTO + Buy simultanément)
+- Packages dans packages (emballages imbriqués)
+- Règles de réappro : paramètre horizon avec champ date limite
+- Notifications d'expédition WhatsApp
+- Améliorations prévision de la demande MPS
 
-### Technique
-- Framework OWL 3.0
-- Performance : chargement 40% plus rapide
-- API JSON-RPC v2 améliorée
-- Support Python 3.12
+## Fabrication
+- **Vue Gantt pour les ordres de fabrication** (planification visuelle)
+- Taille de lot par défaut sur les nomenclatures
+- Plusieurs numéros de série/lot par ordre de fabrication
+- Coût employé par poste de charge impacte la valorisation
+- Statut des opérations de travail éditable
 
-## Modèles renommés / déplacés
-- Aucun renommage majeur de modèles en 19.0
+## Ressources Humaines
+- Contrats fusionnés avec mécanisme de versioning (historique en un seul enregistrement)
+- **Pay Runs** remplace les lots de fiches de paie (interface guidée)
+- Plusieurs comptes bancaires par employé avec split du net salarial
+- Module LMS de base (Learning Management System)
+- Réserve de talents remplace le système de candidats
+- Travail à distance activé par défaut
+
+## Projets
+- Templates de projets avec tâches pré-remplies
+- Vue Gantt pour tâches du portail
+- Niveaux de priorité multiples
+- Planification auto sur planning flexible
+
+## eCommerce / Site Web
+- Synchronisation produits Google Merchant Center
+- Widget stock Click & Collect
+- Pagination SEO améliorée
+- Génération de pages web depuis prompts IA
+
+## Technique / ORM
+- **PostgreSQL 13 est le minimum strict** — bases PG 12 doivent migrer avant upgrade v19
+- Python 3.11 requis pour certains modules
+- Modification de masse incrémentale : opérateurs `+=`, `-=`, `*=`, `/=` sur les champs
+- Données en cache et traductions pour navigation plus rapide
+- Autocomplétion partenaires via Dun & Bradstreet
+
+## Points de vigilance migration v18 → v19
+- **Blocker : PostgreSQL doit être ≥ 13** avant migration
+- Module Membership → Partnership : toute personnalisation doit être portée
+- Vérifier compatibilité Python 3.11 pour les modules custom
 """,
 
 "18.0": """\
 # Odoo 18.0
 
-**Date de sortie :** Octobre 2024
+**Date de sortie :** 2–4 Octobre 2024 (Odoo Experience 2024, Brussels Expo)
 
-## Nouveautés majeures
+## Prérequis techniques
+- **Python :** 3.10 minimum (3.12 recommandé pour +10–60% de performance)
+- **PostgreSQL :** 12.0 minimum (15 recommandé)
+- Note : Python 3.12 déprécié `datetime.utcnow()` → utiliser `datetime.now(timezone.utc)` ; module `distutils` supprimé
 
-### Intelligence Artificielle (Odoo AI)
-- Module `mail.ai` : suggestions de réponses dans le chatter
-- Résumé automatique de conversations
-- Traduction instantanée dans l'interface
-- Extraction automatique de données depuis pièces jointes
+## Nouveaux modules
+- **Sales Commissions** — gestion complète des commissions : cibles, règles par produit/catégorie/période, calcul sur marge/montant/quantité, dashboards prévision vs cible
+- **Dispatch Management** — organisation des tournées de livraison avec flotte propre ou 3PL, vue carte, lots de prélèvements par véhicule, optimisation cross-docking
+- Packs industrie étendus : Boulangerie, Food Truck, Nettoyage, Électricien, Agence Marketing, Activités outdoor
 
-### Comptabilité & Finance
-- Nouveau tableau de bord financier temps réel
-- Amélioration du module SEPA (virements et prélèvements)
-- Rapports personnalisables avec formules Excel-like
-- Gestion améliorée des devises et taux de change
+## Suppressions
+- Providers paiement : Alipay, PayU Latam, PayUmoney supprimés
+- Ogone et SIPS → remplacés par connecteur Worldline
+- Connecteur eBay supprimé
 
-### Ventes
-- Nouveau module `sale.subscription` unifié
-- Devis interactifs avec signature électronique améliorée
-- Portail client enrichi
+## Comptabilité
+- **Alertes factures anormales** (statistiques — détecte automatiquement montants/dates aberrants)
+- Rapprochement bancaire : correspondance lots de paiements simplifiée
+- Budgets analytiques redessinés : sans restriction de dates, affectation de plan flexible
+- **Gestion des prêts** : calendrier d'amortissement automatique
+- Intégration Peppol : envoi/réception de factures sur le réseau Peppol
+- Matching PO/facture : écran avancé pour correspondance manuelle
 
-### Stock
-- Putaway rules améliorées avec stratégies multiples
-- Nouvelle interface barcode entièrement refaite
-- Coût de revient AVCO amélioré
+## Ventes & CRM
+- **Produits combo** : pack avec sélection par le client (style menu restaurant)
+- EDI commandes : import PO par glisser-déposer avec pré-remplissage XML
+- Intégration Gelato (impression à la demande)
+- Templates de devis dynamiques : descriptions produits intégrées depuis template
+- Export tarifs : PDF, CSV, XLSX
+- CRM : CA attendu recalculé automatiquement à la confirmation du devis
 
-### Fabrication
-- Planning visuel des OF sur le Gantt
-- Gestion des sous-traitants améliorée
-- Qualité : nouveaux points de contrôle automatiques
+## Stock
+- Traçabilité lot/série inter-sociétés
+- Règles pull-to-push : routes flexibles avec approvisionnement à la demande
+- Valorisation par lot/série (coût séparé par unité de traçabilité)
+- Putaway amélioré : dirige les produits vers emplacements déjà utilisés pour ce produit
+- Système Dispatch Management (voir nouveaux modules)
 
-### Ressources Humaines
-- Module Payroll reécrit (nouveau moteur de règles)
-- Appraisal (évaluation) avec objectifs OKR
-- Fleet : gestion des contrats de leasing
+## Fabrication
+- MPS (Plan Directeur de Production) : planification annuelle, réapprovisionnement automatique, dimensionnement des lots
+- Écritures de travaux en cours (WIP) : enregistrement consommation matières et main d'œuvre au bilan
+- Assistant numéros de série pour production en masse revu
 
-### Technique
-- OWL 2.x stable, migration progressive vers OWL 3
-- Support Python 3.11/3.12
-- PostgreSQL 16 supporté
-- Nouveau système de translations (po → json)
+## Ressources Humaines
+- Installation localisations automatique (modules paie pays auto-installés selon pays)
+- Rôles de signature flexibles dans les contrats
+- Suivi des effectifs par contrat à tout instant dans le temps
+- Calcul année en cours avec date fin d'année personnalisable
+- Feedback 360° : renvoi en lot
 
-## Modèles renommés / déplacés
-- `sale.subscription` : refonte complète (fusion avec `sale.order` recurring)
-- `hr.payslip.run` : améliorations sans renommage
+## Projets
+- Plans analytiques directement sur les projets
+- Graphique burn-up
+- Utilisateurs portail : édition toutes tâches ou tâches suivies seulement
+- Échéances tâches visibles dans le Gantt
+- Historique des révisions de description de tâche (suivi + retour arrière)
+
+## eCommerce / Site Web
+- **Click & Collect** : vérification stock magasin avec sélection lieu de retrait
+- Méga menus : navigation basée sur les catégories
+- Pages de catégories personnalisables avec blocs de construction
+- Contrôle d'accès boutique : restreindre `/shop` aux utilisateurs connectés
+- 60+ nouveaux snippets site web
+- 27+ thèmes redessinés
+- Upload de polices personnalisées
+- Authentification par **Passkeys** (WebAuthn)
+
+## Point de vente
+- Refonte complète interface POS
+- Intégration AvaTax
+- Paiements QR code (application bancaire)
+- Création et édition produits depuis le POS
+- Écran client sur n'importe quel appareil sans IoT box
+
+## Technique / ORM
+- **Nouvelles méthodes de contrôle d'accès** : `check_access()`, `has_access()`, `_filtered_access()` — unifie droits + règles
+- `_search_display_name()` : recherche du display name via méthode dédiée
+- `name_get()` **officiellement dépréciée** (dépréciée en v17, maintenant officielle)
+- `_flush_search()` dépréciée — flush géré par `execute_query()` via SQL object
+- Content Security Policy renforcée : pas de scripts inline, pas de CDN externe sans liste blanche
+- URLs lisibles introduites : `/odoo/project/5/tasks` (affecte le routing des contrôleurs custom)
+- Applications PWA mobiles : Barcode, POS, Présences, Kiosk, Desk d'accueil, Atelier
+
+## Points de vigilance migration v17 → v18
+- `name_get()` officiellement dépréciée : migrer vers `display_name`
+- Nouvelles méthodes contrôle d'accès peuvent changer le comportement des custom modules
+- URLs lisibles : vérifier les redirections et liens hardcodés dans les vues custom
+- Python 3.12 : corriger `datetime.utcnow()` et supprimer références à `distutils`
 """,
 
 "17.0": """\
 # Odoo 17.0
 
-**Date de sortie :** Octobre 2023
+**Date de sortie :** Octobre–Novembre 2023 (Odoo Experience 2023)
 
-## Nouveautés majeures
+## Prérequis techniques
+- **Python :** 3.10 minimum (3.10, 3.11 supportés)
+- **PostgreSQL :** 12.0 minimum
+- **Framework JS :** OWL — gains de performance majeurs sur le rendu
 
-### Interface & UX
-- Nouveau design système (tons plus clairs, topbar redessinée)
-- Mode sombre disponible
-- Raccourcis clavier étendus
-- Recherche globale améliorée
+## Nouveaux modules
+- **Frontdesk** — gestion des visiteurs (borne de pointage, impression badges, notifications hôte)
+- **Industries** — packs de données pré-configurés (Avocat, Bar, Coiffeur, etc.) ; pas de code Python
+- **Check Management** — gestion des chèques propres et de tiers (Comptabilité)
+- Module **To-Do** remplace l'ancien module Notes
+- Export SD Worx pour la paie
 
-### Comptabilité
-- Lock dates améliorées (par utilisateur / par période)
-- Rapprochement bancaire : correspondance partielle
-- Nouveau widget de saisie des écritures
-- Localisation fiscale améliorée (multi-pays)
+## Comptabilité
+- Rapports redessinés : sections drag-and-drop
+- Assistant d'auto-réconciliation bancaire
+- Facture : design épuré, montant total en lettres
+- OCR synchrone : traitement 5× plus rapide
+- **Intégration Peppol** : envoi/réception factures réseau Peppol
+- **Comptes bancaires fournisseurs : validation obligatoire** (anti-fraude) avant paiement
+- Gestion des chèques : traitement des chèques reçus et émis
 
-### Ventes & CRM
-- Nouveau configurateur de variantes produits
-- Devis en ligne redessinés
-- CRM : merge de leads/opportunités amélioré
-- WhatsApp Business intégré (envoi de devis, factures)
+## Ventes
+- Remises globales sur toute la commande
+- PDF Quote Builder : pages entête/pied personnalisées par devis
+- Documents produits auto-partagés à l'envoi du devis
+- Paiements partiels avec confirmation automatique
+- Restrictions programmes fidélité par liste de prix
+- Templates de devis incluent les tickets d'événements
 
-### Stock
-- Routes : modèle renommé `stock.location.route` → `stock.route`
-- Nouvelle interface réceptions/expéditions
-- Lots et numéros de série : suivi de coût amélioré
-- Inventaire cyclique simplifié
+## CRM
+- Dates de réunions visibles sur les cartes de leads
+- Propagation des tags leads vers rapports d'activités
 
-### Fabrication
-- MRP III : planification à capacité finie
-- Ordres de travail : timer réel sur l'atelier
-- BoM version control
+## Stock
+- **Rapport d'ancienneté du stock** : monitoring des stocks dormants
+- Coût FIFO : calcul prix moyen pour quantités restantes
+- Réservations flexibles : édition des quantités et quants spécifiques
+- Stratégie "Least Packages" : évite de fragmenter sur plusieurs colis
+- Replenishment : filtres par fournisseur, sélection de listes de produits
+- **Modèle renommé : `stock.location.route` → `stock.route`** (breaking change v17)
 
-### Technique & Développement
-- OWL 2.0 obligatoire (suppression de l'ancien framework web)
-- Studio : nouveaux types de vues personnalisées
-- Spreadsheet : pivot multi-sources, graphiques
-- Nouveau système de hooks Python
+## Fabrication
+- MAJ nomenclature : appliquer changements aux OF en cours
+- Propagation des composants : demandes transmises aux prélèvements de pré-production
+- Rapport de synthèse OF : vue unique sur tous les aspects
+- Filtre composants en retard
 
-## Modèles renommés / déplacés (v17)
-- `stock.location.route` → `stock.route`
-- `mail.message.subtype` → supprimé (intégré dans `mail.message`)
+## Ressources Humaines
+- Lieux de télétravail par jour de semaine
+- Vue organigramme employés et départements
+- Génération CV employé en PDF
+- Rapport de suivi des certifications
+- Heures supplémentaires avec génération automatique d'entrées de travail
+- Pauses configurables sur les horaires
+
+## Projets
+- Statuts de tâches supplémentaires : Terminé, Annulé, En cours, Modifications demandées, Approuvé
+- Génération de projets depuis les commandes de vente
+- Tâches récurrentes : auto-génération à la complétion
+- Raccourcis tâches : tags, assignés, heures via notation textuelle
+- Acomptes inclus dans les calculs de rentabilité
+
+## eCommerce
+- Redesign du checkout
+- Attributs multi-checkbox pour les variantes produits
+- Attributs image (images au lieu de pastilles couleur)
+- Codes promo automatiquement affichés au checkout
+- Méthodes d'expédition sans besoin du module stock
+
+## Site Web
+- Templates de pages à la création
+- Polices dynamiques responsive
+- Support format d'image WebP
+- Intégration ChatGPT pour génération de texte IA
+- Bloc Instagram feed
+- Couleurs personnalisées de menus
+
+## Technique / ORM — MIGRATIONS MAJEURES (version la plus breaking de la série 15–19)
+
+| Avant (≤16) | Après (17+) |
+|---|---|
+| `attrs="{'invisible': [('state','=','draft')]}"` | `invisible="state == 'draft'"` |
+| `states="draft"` | `invisible="state != 'draft'"` |
+| Override `name_get()` → `[(id, name)]` | Override `_compute_display_name()` → `record.display_name` |
+| `(0,0,{...})`, `(1,id,{...})`, etc. | `Command.create({})`, `Command.update(id,{})`, etc. |
+| `read_group()` retourne liste de dicts | `_read_group()` retourne liste de tuples avec objets |
+| `invalidate_cache()`, `flush()` | `invalidate_model()`, `invalidate_recordset()`, `flush_model()`, `flush_recordset()` |
+| `<tree>` | **`<list>`** |
+| `kanban-card` avec divs manuels | `<card>` avec `<header>`, `<main>`, `<footer>` |
+| `t-raw` | `t-out` (avec `markupsafe.Markup`) |
+| `t-esc` | `t-out` (`t-esc` dépréciée) |
+| `type="json"` sur contrôleur | `type="jsonrpc"` |
+| Champ `license` optionnel | **`license` obligatoire** dans manifest (manquant = erreur) |
+| `post_init_hook(cr, registry)` | `post_init_hook(env)` |
+| `SavepointCase` | `TransactionCase` |
+| `_render_qweb_pdf(res_ids)` | `_render(res_ids)` |
+| Boilerplate chatter 3 champs | `<chatter/>` balise courte |
+| SCSS `@import` | `@use` / `@forward` (migration Dart Sass) |
+| Concaténation SQL string | Objet `SQL` pour composition sans injection |
+
+## Points de vigilance migration v16 → v17
+- `attrs=` syntaxe **complètement supprimée** : réécriture de toutes les vues custom obligatoire
+- `read_group()` retourne une structure de données entièrement différente
+- `name_get()` → `_compute_display_name()` : refactoring nécessaire
+- `(0,0,{})` → `Command.*` : réécriture des manipulations O2M/M2M
+- `<tree>` → `<list>` dans toutes les vues liste
+- SCSS `@import` → `@use` : migration assets
+- **`stock.location.route` → `stock.route`** : corriger tous les domaines et références
 """,
 
 "16.0": """\
 # Odoo 16.0
 
-**Date de sortie :** Octobre 2022
+**Date de sortie :** 12 Octobre 2022 (Odoo Experience 2022, Bruxelles)
 
-## Nouveautés majeures
+## Prérequis techniques
+- **Python :** 3.10 minimum
+- **PostgreSQL :** 12.0 minimum
+- **Performance :** backend 3,7× plus rapide qu'en v15 ; eCommerce/web 2,7× plus rapide
 
-### Spreadsheet & Reporting
-- Module Spreadsheet : tableaux croisés dynamiques natifs
-- Dashboards partageables depuis Spreadsheet
-- Rapports financiers dans Spreadsheet
+## Nouveaux modules
+- **Knowledge** — wiki interne avec articles imbriqués, vues embarquées, édition collaborative (app majeure)
+- **Live Chat Chatbot** — scripting de chatbot natif dans le Live Chat (arbre de décision, choix multiples)
+- **GDPR / Data Cleaning** — recherche de données personnelles, archivage/suppression de fiches, règles de nettoyage
+- **Sendcloud Connector** — agrégateur d'expédition pour l'Europe occidentale
+- Bibliothèque Spreadsheet open-sourcée sous LGPL
 
-### Site Web & eCommerce
-- Nouveau constructeur de site (Website Builder v3)
-- Performance eCommerce : chargement 60% plus rapide
-- Nouveau checkout simplifié
+## Suppressions
+- Modules **Google Drive** et **Google Spreadsheet** supprimés entièrement
 
-### Comptabilité
-- Déclarations fiscales : nouveau moteur de rapport
-- Suivi analytique : multi-plans analytiques
-- Lettrages automatiques améliorés
+## Comptabilité
+- **Nouveau widget distribution analytique** avec édition en masse et modèles de distribution
+- Rapprochement bancaire redessiné
+- Gestion des actifs : annulation, actifs négatifs, amortissements affinés
+- **Escomptes de caisse redessinés** : définitions séparées supportant différentes législations fiscales
+- **Limites de crédit** : configuration par société et par partenaire
+- Conditions de paiement : nouvel écran avec logique de calcul d'échéance
+- OCR : validation en arrière-plan, meilleur mappage des champs
+- Comptabilité Storno (débits/crédits négatifs pour les contrepassations)
+- SEPA étendu aux caractères européens non-Latin
 
-### Ventes & CRM
-- Vue liste améliorée dans CRM
-- Nouveau module Rental (location de matériel)
+## Ventes & CRM
+- **Framework fidélité/coupons multi-canal** : unifié POS, Ventes, eCommerce
+  - Anciens modèles `sale.coupon.program` → **nouveaux `loyalty.program`, `loyalty.reward`, `loyalty.rule`** (breaking change majeur)
+- Connecteur Amazon : onboarding simplifié, multi-marketplace
+- Statut livraison visible sur les commandes (livré/partiellement livré/non livré)
+- Avertissement liste de prix partenaire sur commandes ouvertes
+- Détection de leads similaires par numéro de téléphone
 
-### Stock
-- Méthode d'évaluation AVCO : améliorée
-- Réceptions multi-étapes simplifiées
-- Emballages : gestion avancée
+## Stock
+- Transferts par lot : automatisation par contact, transporteur ou destination
+- Code-barres GS1-128 pour lots/séries avec données d'expiration
+- Réapprovisionnement : automatisation par emplacement ; visibilité niveau entrepôt
+- Interface barcode : optimisation mobile ; filtrage par colis
+- Transferts : vue kanban, chatter intégré, édition quantités
 
-### Technique
-- OWL 2 (version beta) introduit
-- Performance : lazy loading des vues
-- Support Python 3.10
+## Fabrication
+- **Tablette opérations de travail entièrement redessinée** (MES)
+- Login employé par poste de charge
+- Production continue : consommation auto des produits tracés lot/série
+- Valorisation des kits : partage du coût entre composants de la nomenclature
+- Vue d'ensemble OF/nomenclature avec délais et dates de disponibilité
+- Scission/fusion des ordres de fabrication
+- Portail sous-traitance : enregistrement production pour sous-traitants
 
-## Modèles importants
-- Nouveau : `spreadsheet.dashboard`
-- Analytique : `account.analytic.plan` (multi-plans)
+## Ressources Humaines
+- **Numérisation CV** pour le recrutement (extraction nom/email/téléphone)
+- Détection de doublons de candidats
+- Congés : transfert de plan d'acquisition ; annulation auto jours fériés ; jours de stress par département
+- Évaluations : date par défaut depuis la date de contrat
+- Dashboard paie ; localisation Kenya/Luxembourg
+
+## Projets
+- Gantt : barres de progression d'allocation ressources ; création de dépendances
+- Jalons : lien avec les tâches ; marquage auto à la complétion
+- Tâches récurrentes avec calcul automatique de date planifiée
+- Planification intelligente : résolution de conflits en lot
+- Facturation basée sur les jalons sur les projets de services
+
+## eCommerce / Site Web
+- Rappels paniers abandonnés
+- Notifications de retour en stock
+- Autocomplétion adresses Google Places
+- Intégration fidélité/coupon multi-canal
+- Édition mobile complète dans le constructeur de site
+- Gestion du consentement cookies
+- Intégration Plausible.io pour analytics
+
+## Technique / ORM
+- **Traductions** : champs traduits stockés en **JSONB dans PostgreSQL** (changement de schéma majeur)
+- `search_count()` respecte désormais l'argument `limit`
+- Stack HTTP refactorisée pour meilleure extensibilité
+- Etherpads natifs remplacés par éditeur HTML collaboratif
+- Dashboards standards convertis en rapports Spreadsheet (changement architectural)
+
+## Points de vigilance migration v15 → v16
+- **Loyalty/promotion** : tout code custom sur `sale.coupon.program` doit être réécrit vers `loyalty.program`, `loyalty.reward`, `loyalty.rule`
+- **Traductions stockées en JSONB** : les requêtes SQL directes sur les tables de traductions sont cassées
+- Suppression Google Drive/Spreadsheet : prévoir alternative si utilisé
 """,
 
 "15.0": """\
 # Odoo 15.0
 
-**Date de sortie :** Octobre 2021
+**Date de sortie :** 6–7 Octobre 2021 (Odoo Experience 2021)
 
-## Nouveautés majeures
+## Prérequis techniques
+- **Python :** 3.8 minimum (3.8–3.10 supportés)
+- **PostgreSQL :** 12.0 ou supérieur
+- **Framework JS :** OWL (Odoo Web Library) — première version de production complète
 
-### Interface
-- Nouveau client web (refonte complète)
-- Navigation par fil d'Ariane améliorée
-- Panneaux de recherche contextuels
+## Nouveaux modules
+- **Approvals** — gestionnaire de workflow d'approbation dédié
+- **Discuss** — appels vidéo/voix (extension majeure des capacités)
 
-### Comptabilité
-- Rapports financiers : nouveau moteur (python-based)
-- Chèques : gestion améliorée
-- Écritures d'abonnement (recurring entries)
+## Comptabilité
+- Formulaire de compte avec suivi de l'historique des modifications
+- Rapports d'ancienneté améliorés avec colonnes par devise
+- Outil de rapprochement reconstruit : rapprochement partiel par défaut
+- Génération d'écritures de régularisation depuis les commandes de vente/achat
+- Mécanisme de tolérance de paiement pour les sous-paiements
+- Support TVA pour les sociétés étrangères
+- Connecteurs Gmail et Outlook pour la journalisation email
 
-### Ventes
-- Devis : nouveau portail client
-- Ventes en ligne : catalogue amélioré
+## Ventes & CRM
+- **Lead Scoring Prédictif** remplace le scoring manuel
+- Règles d'assignation de leads avec opt-out possible
+- Détection de doublons de leads via boutons de stat
+- Prévision des ventes avec glisser-déposer entre les mois
+- Recherche de contact par numéro de téléphone
 
-### Stock
-- Opérations de réception/expédition enrichies
-- Coût de revient : améliorations FIFO
+## Stock
+- Refonte complète de l'interface des ajustements d'inventaire
+- Inventaire cyclique par emplacement avec résolution de conflits
+- Stratégie de déstockage "Closest Location"
+- Réservation de stock : automatique, manuelle ou planifiée
+- **Catégories de stockage** : suivi poids, nombre produits, capacité colis (pour règles putaway)
+- Emballages liés aux types de colis pour l'automatisation putaway
+- Infos fournisseur visibles dans la vue de réapprovisionnement
 
-### Ressources Humaines
-- Congés : nouveau calendrier global
-- Fiche de paie : améliorations règles salariales
+## Fabrication
+- Comptabilité analytique sur les ordres de fabrication
+- Copie d'opérations de nomenclature ; sous-produits spécifiques aux variantes
+- Prévision des composants pour les OF en brouillon
+- Production en masse de numéros de série avec confirmation en lot
+- Nouveau statut ordre de travail pour vérification disponibilité matières
+- MPS : options d'historique de la demande
+- Dashboard d'analyse de production pour le suivi des coûts
 
-### Technique
-- Introduction OWL 1.x (framework JS)
-- Chatter redessiné
-- Support Python 3.9/3.10
+## Ressources Humaines
+- Compétences intégrées dans les évaluations
+- Gestion des questionnaires d'évaluation avec suivi des réponses
+- Assistant temps partiel pour changements d'horaire
+- Création de fiches de paie en lot optimisée
+- Gestion des commissions (structure de base)
+- Standardisation des saisies sur salaires
 
-## Notes de migration v14 → v15
-- `res.config.settings` : certains champs déplacés
-- `mail.activity.mixin` : changements d'API
+## Projets
+- Assignation de plusieurs utilisateurs par tâche
+- Contrôles de visibilité des tâches privées
+- Gantt avec suivi des jalons et dépendances inter-tâches
+- Replanification automatique des tâches dépendantes
+- Graphique burndown
+- Analyse de rentabilité vs budget/coûts/revenus
+
+## eCommerce / Site Web
+- Nouveau design page produit/boutique avec affichage des remises
+- Section "Produits récemment consultés"
+- Achat de cartes cadeaux dans la boutique
+- Notification de disponibilité pour produits en rupture
+- Animations et effets texte/image dans le constructeur web
+- Intégration Google Analytics GA4
+
+## Technique / ORM
+- Attribut `_sequence` supprimé de `Model` (gestion native PostgreSQL)
+- `column_format` et `deprecated` supprimés de `Field`
+- Attribut `limit` supprimé des `One2many` et `Many2many`
+- `browse()` n'accepte plus de valeurs string pour les `ids`
+- `filtered_domain()` préserve désormais l'ordre du recordset
+- `fields_get_keys()` et `get_xml_id()` dépréciés
+- `search()`, `search_count()`, `_search()` : paramètre `args` renommé en `domain`
+- Nouveau flush/cache API sur `Model` et `Environment`
+- Possibilité de spécifier le type d'index PostgreSQL sur les champs
 """,
 }
