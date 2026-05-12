@@ -312,31 +312,45 @@ async def _check_user_access(client: OdooClient, loop) -> dict:
     except Exception as exc:
         log.warning("check_user_access: failed to read res.users: %s", exc)
 
-    # ── Group membership via has_group (more reliable than groups_id) ──
+    # ── Group membership — resolve via ir.model.data then check groups_id ──
     is_system = False
     is_admin = False
     try:
-        is_system = bool(await loop.run_in_executor(
+        # Fetch numeric IDs for the two groups we care about
+        group_data = await loop.run_in_executor(
             None,
             lambda: client._models.execute_kw(
                 client.db, uid, client.api_key,
-                "res.users", "has_group", ["base.group_system"]
+                "ir.model.data", "search_read",
+                [[["module", "=", "base"],
+                  ["name", "in", ["group_system", "group_erp_manager"]],
+                  ["model", "=", "res.groups"]]],
+                {"fields": ["name", "res_id"], "limit": 10},
             )
-        ))
-    except Exception as exc:
-        log.warning("check_user_access: has_group base.group_system failed: %s", exc)
+        )
+        name_to_id = {g["name"]: g["res_id"] for g in group_data}
+        system_id  = name_to_id.get("group_system")
+        admin_id   = name_to_id.get("group_erp_manager")
 
-    if not is_system:
-        try:
-            is_admin = bool(await loop.run_in_executor(
-                None,
-                lambda: client._models.execute_kw(
-                    client.db, uid, client.api_key,
-                    "res.users", "has_group", ["base.group_erp_manager"]
-                )
-            ))
-        except Exception as exc:
-            log.warning("check_user_access: has_group base.group_erp_manager failed: %s", exc)
+        # Read current user's groups_id using direct read (bypasses search ACL)
+        user_rec = await loop.run_in_executor(
+            None,
+            lambda: client._models.execute_kw(
+                client.db, uid, client.api_key,
+                "res.users", "read", [[uid]],
+                {"fields": ["groups_id"]},
+            )
+        )
+        user_groups: list[int] = user_rec[0].get("groups_id", []) if user_rec else []
+
+        if system_id:
+            is_system = system_id in user_groups
+        if admin_id and not is_system:
+            is_admin = admin_id in user_groups
+
+        log.info("check_user_access: groups_id read ok — is_system=%s is_admin=%s", is_system, is_admin)
+    except Exception as exc:
+        log.warning("check_user_access: group check failed (non-blocking): %s", exc)
 
     log.info("check_user_access: is_system=%s is_admin=%s", is_system, is_admin)
     return {

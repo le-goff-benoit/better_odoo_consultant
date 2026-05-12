@@ -363,6 +363,19 @@ export default function Assistant() {
   const activeVersion = isGeneralMode ? generalVersion : (selectedProfile?.odoo_version ?? null)
   const sourcesInstalled = activeVersion ? sourcesStatus[activeVersion]?.installed === true : false
 
+  // All installed versions sorted: base versions (x.0) first descending, then saas (x.y) descending within same major
+  const installedVersions: string[] = [...new Set([
+    ...ODOO_VERSIONS_BASE,
+    ...Object.keys(sourcesStatus).filter(v => sourcesStatus[v]?.installed),
+  ])].sort((a, b) => {
+    const [aMaj, aMin = 0] = a.split('.').map(Number)
+    const [bMaj, bMin = 0] = b.split('.').map(Number)
+    if (aMaj !== bMaj) return bMaj - aMaj          // higher major first
+    if (aMin === 0 && bMin !== 0) return -1         // x.0 before x.y
+    if (bMin === 0 && aMin !== 0) return 1
+    return bMin - aMin                              // higher minor first
+  })
+
   // Company access guard — block send if selected company is not accessible for the Odoo user
   const companyAccessBlocked = (() => {
     if (isGeneralMode || !selectedProfile || !selectedCompanyId) return false
@@ -584,7 +597,7 @@ export default function Assistant() {
       {/* ── Unified context bar ── */}
       <div style={{
         background: t.bgCard, border: `1px solid ${t.border}`,
-        borderRadius: t.radiusLg, marginBottom: 12, flexShrink: 0, overflow: 'hidden',
+        borderRadius: t.radiusLg, marginBottom: 12, flexShrink: 0,
       }}>
 
         {/* Row 1 — Project tabs + Version */}
@@ -652,14 +665,7 @@ export default function Assistant() {
             <VersionDropdown
               value={generalVersion}
               onChange={setGeneralVersion}
-              versions={[...new Set([
-                ...ODOO_VERSIONS_BASE,
-                ...((): string[] => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })(),
-              ])].sort((a, b) => {
-                const [aMaj, aMin = 0] = a.split('.').map(Number)
-                const [bMaj, bMin = 0] = b.split('.').map(Number)
-                return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
-              })}
+              versions={installedVersions}
             />
           ) : activeVersion ? (
             <span style={{
