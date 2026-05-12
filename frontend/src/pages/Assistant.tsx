@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { listProfiles, getAiProviders } from '../api/client'
 import { t } from '../theme'
 
@@ -23,16 +23,16 @@ interface AiEvent {
 interface Message {
   id: string
   role: 'user' | 'assistant'
-  text?: string          // user message
-  events?: AiEvent[]    // assistant events
+  text?: string
+  events?: AiEvent[]
   loading?: boolean
 }
 
 interface ModelDef { id: string; label: string; speed: number; desc: string; recommended?: boolean }
 
-const PROVIDERS: { id: string; label: string; color: string; placeholder: string; models: ModelDef[] }[] = [
+const PROVIDERS: { id: string; label: string; color: string; models: ModelDef[] }[] = [
   {
-    id: 'claude', label: 'Claude', color: '#D97706', placeholder: 'sk-ant-api03-…',
+    id: 'claude', label: 'Claude', color: '#D97706',
     models: [
       { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',  speed: 2, recommended: true,
         desc: 'Excellent rapport qualité/vitesse — idéal pour le quotidien' },
@@ -43,48 +43,46 @@ const PROVIDERS: { id: string; label: string; color: string; placeholder: string
     ],
   },
   {
-    id: 'openai', label: 'GPT-4o', color: '#16A34A', placeholder: 'sk-…',
+    id: 'openai', label: 'GPT-4o', color: '#16A34A',
     models: [
       { id: 'gpt-4o',      label: 'GPT-4o',      speed: 2, recommended: true,
         desc: 'Très capable et rapide — usage polyvalent' },
       { id: 'gpt-4o-mini', label: 'GPT-4o mini', speed: 3,
         desc: 'Rapide et économique — questions simples et filtres' },
-      { id: 'o1-mini',     label: 'o1 mini',     speed: 1,
+      { id: 'o1-mini',     label: 'o1 mini',      speed: 1,
         desc: 'Raisonnement avancé — problèmes analytiques complexes' },
     ],
   },
   {
-    id: 'gemini', label: 'Gemini', color: '#2563EB', placeholder: 'AIza…',
+    id: 'gemini', label: 'Gemini', color: '#2563EB',
     models: [
-      { id: 'gemini-2.0-flash',   label: 'Gemini 2.0 Flash', speed: 3, recommended: true,
+      { id: 'gemini-2.0-flash', label: '2.0 Flash', speed: 3, recommended: true,
         desc: 'Dernier modèle Flash — rapide et très performant' },
-      { id: 'gemini-1.5-pro',     label: 'Gemini 1.5 Pro',   speed: 2,
+      { id: 'gemini-1.5-pro',   label: '1.5 Pro',   speed: 2,
         desc: 'Long contexte — grandes quantités de données' },
-      { id: 'gemini-1.5-flash',   label: 'Gemini 1.5 Flash', speed: 3,
+      { id: 'gemini-1.5-flash', label: '1.5 Flash', speed: 3,
         desc: 'Rapide et efficace — bon pour la majorité des requêtes' },
     ],
   },
   {
-    id: 'copilot', label: 'Copilot', color: '#6e40c9', placeholder: 'ghp_…',
+    id: 'copilot', label: 'Copilot', color: '#6e40c9',
     models: [
-      { id: 'gpt-4o',                     label: 'GPT-4o',      speed: 2, recommended: true,
-        desc: 'Copilot Business — GPT-4o via votre abonnement GitHub Copilot' },
-      { id: 'gpt-4o-mini',                label: 'GPT-4o mini', speed: 3,
+      { id: 'gpt-4o',           label: 'GPT-4o',      speed: 2, recommended: true,
+        desc: 'Copilot Business — GPT-4o via votre abonnement GitHub' },
+      { id: 'gpt-4o-mini',      label: 'GPT-4o mini', speed: 3,
         desc: 'Version rapide et économique via Copilot' },
-      { id: 'claude-3.5-sonnet',          label: 'Claude 3.5',  speed: 2,
+      { id: 'claude-3.5-sonnet', label: 'Claude 3.5', speed: 2,
         desc: 'Claude via Copilot Business (si activé dans votre plan)' },
-      { id: 'o1-mini',                    label: 'o1 mini',     speed: 1,
-        desc: 'Raisonnement avancé via Copilot' },
     ],
   },
   {
-    id: 'github', label: 'GitHub', color: '#24292f', placeholder: 'ghp_…',
+    id: 'github', label: 'GitHub', color: '#24292f',
     models: [
-      { id: 'gpt-4o',                      label: 'GPT-4o',        speed: 2, recommended: true,
-        desc: 'Inclus GitHub — GPT-4o via GitHub Models (gratuit avec votre compte)' },
-      { id: 'gpt-4o-mini',                 label: 'GPT-4o mini',   speed: 3,
+      { id: 'gpt-4o',                        label: 'GPT-4o',      speed: 2, recommended: true,
+        desc: 'GPT-4o via GitHub Models (inclus GitHub Free/Pro)' },
+      { id: 'gpt-4o-mini',                   label: 'GPT-4o mini', speed: 3,
         desc: 'Ultra-rapide et économique via GitHub Models' },
-      { id: 'claude-3-5-sonnet-20241022',  label: 'Claude 3.5',    speed: 2,
+      { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5',  speed: 2,
         desc: 'Claude via GitHub Models — bon équilibre qualité/vitesse' },
       { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2',  speed: 2,
         desc: 'Open source Meta — alternative gratuite via GitHub Models' },
@@ -103,25 +101,52 @@ const SUGGESTIONS = [
 // ── Main page ─────────────────────────────────────────────────
 
 export default function Assistant() {
+  const location = useLocation()
   const { data: profData }  = useQuery({ queryKey: ['profiles'],     queryFn: listProfiles })
-  const { data: provData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
+  const { data: provData }  = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
 
   const profiles: Profile[] = profData?.data ?? []
-  const providers: Record<string, boolean> = provData?.data ?? {}
+  const allProviders: Record<string, boolean> = provData?.data ?? {}
 
-  const [provider,   setProvider]   = useState('claude')
-  const [modelId,    setModelId]    = useState(PROVIDERS[0].models.find(m => m.recommended)!.id)
-  const [profileId,  setProfileId]  = useState<number | null>(null)
-  const [messages,   setMessages]   = useState<Message[]>([])
-  const [input,      setInput]      = useState('')
-  const [streaming,  setStreaming]  = useState(false)
+  // Only show configured providers
+  const configuredProviders = PROVIDERS.filter(p => allProviders[p.id])
+
+  const [provider,  setProvider]  = useState('')
+  const [modelId,   setModelId]   = useState('')
+  const [profileId, setProfileId] = useState<number | null>(null)
+
+  // Conversations keyed by profileId
+  const [conversations, setConversations] = useState<Record<number, Message[]>>({})
+  const messages = profileId ? (conversations[profileId] ?? []) : []
+
+  const [input,     setInput]    = useState('')
+  const [streaming, setStreaming] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
+
+  // Init provider when providers load
+  useEffect(() => {
+    if (configuredProviders.length && !provider) {
+      const p = configuredProviders[0]
+      setProvider(p.id)
+      setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
+    }
+  }, [allProviders])
 
   // Auto-select first profile
   useEffect(() => {
     if (profiles.length && !profileId) setProfileId(profiles[0].id)
   }, [profiles])
+
+  // Pre-fill input from navigation state (e.g. from Sources "IA" button)
+  useEffect(() => {
+    const prefill = (location.state as { prefill?: string } | null)?.prefill
+    if (prefill) {
+      setInput(prefill)
+      // Clear the state so refreshing doesn't re-fill
+      window.history.replaceState({}, '')
+    }
+  }, [location.state])
 
   // Auto-scroll
   useEffect(() => {
@@ -129,19 +154,27 @@ export default function Assistant() {
   }, [messages])
 
   const selectedProfile = profiles.find(p => p.id === profileId)
+  const currentProv = PROVIDERS.find(p => p.id === provider)
+
+  const setMessages = (fn: (prev: Message[]) => Message[]) => {
+    if (!profileId) return
+    setConversations(prev => ({
+      ...prev,
+      [profileId]: fn(prev[profileId] ?? []),
+    }))
+  }
 
   const send = async () => {
-    if (!input.trim() || streaming || !profileId) return
+    if (!input.trim() || streaming || !profileId || !provider) return
     const text = input.trim()
     setInput('')
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', text }
+    const userMsg: Message    = { id: Date.now().toString(), role: 'user', text }
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', events: [], loading: true }
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
 
-    // Build history for the API
     const history = messages
       .filter(m => !m.loading)
       .map(m => ({
@@ -205,17 +238,23 @@ export default function Assistant() {
     ))
   }
 
-  const reset = () => {
+  const resetCurrentConversation = () => {
     abortRef.current?.abort()
-    setMessages([])
+    if (profileId) setConversations(prev => ({ ...prev, [profileId]: [] }))
     setStreaming(false)
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', maxWidth: 860 }}>
+  const switchProvider = (id: string) => {
+    const p = PROVIDERS.find(pv => pv.id === id)!
+    setProvider(id)
+    setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
+  }
 
-      {/* Header bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexShrink: 0 }}>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', maxWidth: 900 }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexShrink: 0 }}>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: t.text, marginBottom: 2 }}>Assistant IA</h1>
           <p style={{ fontSize: 13, color: t.muted }}>Posez des questions sur vos données Odoo en langage naturel.</p>
@@ -223,96 +262,122 @@ export default function Assistant() {
         <Link to="/settings" style={{
           padding: '6px 14px', background: t.bgMuted, border: `1px solid ${t.border}`,
           borderRadius: t.radius, fontSize: 12, color: t.textSub, textDecoration: 'none', fontWeight: 500,
-        }}>
-          ⚙ Clés API
-        </Link>
+        }}>⚙ Paramètres</Link>
       </div>
 
-      {/* Selectors */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexShrink: 0, flexWrap: 'wrap' }}>
-        {/* Provider tabs */}
-        <div style={{ display: 'flex', gap: 4, background: t.bgMuted, borderRadius: t.radius, padding: 3 }}>
-          {PROVIDERS.map(p => (
-            <button key={p.id} onClick={() => {
-              setProvider(p.id)
-              setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
-            }} style={{
-              padding: '5px 14px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              border: 'none',
-              background: provider === p.id ? t.bgCard : 'transparent',
-              color: provider === p.id ? p.color : t.muted,
-              boxShadow: provider === p.id ? t.shadow : 'none',
-              transition: 'all .15s',
-              opacity: providers[p.id] ? 1 : 0.5,
-            }}>
-              {p.label}
-              {!providers[p.id] && <span style={{ marginLeft: 4, fontSize: 10 }}>🔒</span>}
-            </button>
-          ))}
+      {/* Project tabs */}
+      {profiles.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+          {profiles.map(p => {
+            const msgs = conversations[p.id] ?? []
+            const msgCount = msgs.filter(m => m.role === 'user').length
+            const isActive = p.id === profileId
+            return (
+              <button key={p.id} onClick={() => setProfileId(p.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px',
+                background: isActive ? t.bgCard : 'transparent',
+                border: `1px solid ${isActive ? t.brand : t.border}`,
+                borderRadius: t.radiusFull,
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                color: isActive ? t.brand : t.muted,
+                cursor: 'pointer',
+                boxShadow: isActive ? t.shadow : 'none',
+                transition: 'all .15s',
+              }}>
+                {p.company_logo && (
+                  <img src={p.company_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }} />
+                )}
+                {p.company_name || p.name}
+                {msgCount > 0 && (
+                  <span style={{
+                    background: isActive ? t.brand : t.borderLight,
+                    color: isActive ? '#fff' : t.muted,
+                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700,
+                    padding: '1px 6px', minWidth: 18, textAlign: 'center',
+                  }}>{msgCount}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
+      )}
 
-        {/* Model selector */}
-        <ModelSelector
-          provider={PROVIDERS.find(p => p.id === provider)!}
-          selected={modelId}
-          onChange={setModelId}
-        />
+      {/* Provider + model toolbar */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
+        {configuredProviders.length === 0 ? (
+          <div style={{ fontSize: 13, color: t.muted }}>
+            Aucun fournisseur IA configuré —{' '}
+            <Link to="/settings" style={{ color: t.brand, fontWeight: 600 }}>ajouter une clé API →</Link>
+          </div>
+        ) : (
+          <>
+            {/* Provider tabs */}
+            <div style={{ display: 'flex', gap: 3, background: t.bgMuted, borderRadius: t.radius, padding: 3 }}>
+              {configuredProviders.map(p => (
+                <button key={p.id} onClick={() => switchProvider(p.id)} style={{
+                  padding: '4px 12px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  border: 'none',
+                  background: provider === p.id ? t.bgCard : 'transparent',
+                  color: provider === p.id ? p.color : t.muted,
+                  boxShadow: provider === p.id ? t.shadow : 'none',
+                  transition: 'all .15s',
+                }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
 
-        {/* Profile selector */}
-        <select
-          value={profileId ?? ''}
-          onChange={e => setProfileId(Number(e.target.value))}
-          style={{
-            padding: '5px 12px', border: `1px solid ${t.border}`,
-            borderRadius: t.radius, fontSize: 12, color: t.text, background: t.bgCard, cursor: 'pointer',
-          }}
-        >
-          {profiles.map(p => (
-            <option key={p.id} value={p.id}>{p.company_name || p.name}</option>
-          ))}
-        </select>
+            {/* Model dropdown */}
+            {currentProv && (
+              <ModelDropdown
+                provider={currentProv}
+                selected={modelId}
+                onChange={setModelId}
+              />
+            )}
 
-        {messages.length > 0 && (
-          <button onClick={reset}
-            style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.muted }}>
-            ✕ Nouvelle conversation
-          </button>
+            <div style={{ flex: 1 }} />
+
+            {messages.length > 0 && (
+              <button onClick={resetCurrentConversation}
+                style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.muted }}>
+                ✕ Nouvelle conversation
+              </button>
+            )}
+          </>
         )}
       </div>
 
       {/* Chat history */}
-      <div style={{
-        flex: 1, overflowY: 'auto', padding: '4px 0',
-        display: 'flex', flexDirection: 'column', gap: 16,
-      }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {messages.length === 0 && (
-          <div style={{ marginTop: 24 }}>
-            {selectedProfile && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-                {selectedProfile.company_logo && (
-                  <img src={selectedProfile.company_logo} alt="" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 6, background: t.bgMuted, padding: 3, border: `1px solid ${t.border}` }} />
+        {messages.length === 0 && selectedProfile && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '10px 14px', background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg }}>
+              {selectedProfile.company_logo && (
+                <img src={selectedProfile.company_logo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6, background: t.bgMuted, padding: 3, border: `1px solid ${t.border}` }} />
+              )}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{selectedProfile.company_name || selectedProfile.name}</div>
+                {currentProv && (
+                  <div style={{ fontSize: 11, color: t.muted, marginTop: 1 }}>
+                    {currentProv.label} · {PROVIDERS.find(p => p.id === provider)?.models.find(m => m.id === modelId)?.label}
+                  </div>
                 )}
-                <div style={{ fontSize: 14, color: t.muted }}>
-                  Connecté à <strong style={{ color: t.text }}>{selectedProfile.company_name || selectedProfile.name}</strong>
-                </div>
               </div>
-            )}
-            <div style={{ fontSize: 13, color: t.muted, marginBottom: 12 }}>Suggestions :</div>
+            </div>
+            <div style={{ fontSize: 13, color: t.muted, marginBottom: 10 }}>Suggestions :</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {SUGGESTIONS.map(s => (
-                <button key={s} onClick={() => { setInput(s) }}
-                  style={{
-                    padding: '7px 14px', background: t.bgCard,
-                    border: `1px solid ${t.border}`, borderRadius: t.radiusFull,
-                    fontSize: 13, cursor: 'pointer', color: t.textSub,
-                    transition: 'border-color .15s',
-                  }}
+                <button key={s} onClick={() => setInput(s)} style={{
+                  padding: '7px 14px', background: t.bgCard,
+                  border: `1px solid ${t.border}`, borderRadius: t.radiusFull,
+                  fontSize: 13, cursor: 'pointer', color: t.textSub, transition: 'border-color .15s',
+                }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = t.brand)}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = t.border)}
-                >
-                  {s}
-                </button>
+                >{s}</button>
               ))}
             </div>
           </div>
@@ -327,18 +392,19 @@ export default function Assistant() {
       </div>
 
       {/* Input area */}
-      <div style={{
-        flexShrink: 0, paddingTop: 12, borderTop: `1px solid ${t.border}`,
-        display: 'flex', gap: 10, alignItems: 'flex-end',
-      }}>
+      <div style={{ flexShrink: 0, paddingTop: 12, borderTop: `1px solid ${t.border}`, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
         <textarea
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          placeholder={!providers[provider]
-            ? `Configurez votre clé ${PROVIDERS.find(p => p.id === provider)?.label} ci-dessus`
-            : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour sauter une ligne)'}
-          disabled={!providers[provider] || !profileId}
+          placeholder={
+            configuredProviders.length === 0
+              ? 'Configurez un fournisseur IA dans les Paramètres'
+              : !profileId
+              ? 'Sélectionnez un projet ci-dessus'
+              : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour sauter une ligne)'
+          }
+          disabled={configuredProviders.length === 0 || !profileId}
           rows={2}
           style={{
             flex: 1, padding: '10px 14px', border: `1px solid ${t.border}`,
@@ -349,18 +415,88 @@ export default function Assistant() {
         />
         <button
           onClick={streaming ? () => abortRef.current?.abort() : send}
-          disabled={!providers[provider] || !profileId || (!streaming && !input.trim())}
+          disabled={configuredProviders.length === 0 || !profileId || (!streaming && !input.trim())}
           style={{
             padding: '10px 20px', background: streaming ? t.danger : t.brand,
             color: '#fff', border: 'none', borderRadius: t.radiusLg,
             fontWeight: 600, fontSize: 13, cursor: 'pointer',
-            opacity: (!providers[provider] || !profileId || (!streaming && !input.trim())) ? .5 : 1,
+            opacity: (configuredProviders.length === 0 || !profileId || (!streaming && !input.trim())) ? .5 : 1,
             transition: 'background .15s',
           }}
         >
-          {streaming ? '⏹' : '↑ Envoyer'}
+          {streaming ? '⏹' : '↑'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Model dropdown ─────────────────────────────────────────────
+
+function ModelDropdown({ provider, selected, onChange }: {
+  provider: typeof PROVIDERS[0]; selected: string; onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = provider.models.find(m => m.id === selected) ?? provider.models[0]
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '5px 12px', background: t.bgCard,
+        border: `1px solid ${provider.color}50`,
+        borderRadius: t.radius, fontSize: 12, cursor: 'pointer',
+        color: provider.color, fontWeight: 600,
+      }}>
+        <span>{current.label}</span>
+        <span style={{ opacity: .6 }}>{'⚡'.repeat(current.speed)}</span>
+        {current.recommended && <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>}
+        <span style={{ fontSize: 9, color: t.muted, marginLeft: 2 }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 100,
+          background: t.bgCard, border: `1px solid ${t.border}`,
+          borderRadius: t.radiusLg, boxShadow: '0 8px 24px rgba(0,0,0,.12)',
+          minWidth: 280, overflow: 'hidden',
+        }}>
+          {provider.models.map(m => (
+            <button key={m.id} onClick={() => { onChange(m.id); setOpen(false) }} style={{
+              width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2,
+              padding: '10px 14px', border: 'none', cursor: 'pointer',
+              background: m.id === selected ? `${provider.color}10` : 'transparent',
+              borderLeft: m.id === selected ? `3px solid ${provider.color}` : '3px solid transparent',
+              transition: 'background .1s',
+            }}
+              onMouseEnter={e => { if (m.id !== selected) e.currentTarget.style.background = t.bgMuted }}
+              onMouseLeave={e => { if (m.id !== selected) e.currentTarget.style.background = 'transparent' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontWeight: 600, fontSize: 13, color: m.id === selected ? provider.color : t.text }}>
+                  {m.label}
+                </span>
+                <span style={{ fontSize: 11, opacity: .7 }}>{'⚡'.repeat(m.speed)}</span>
+                {m.recommended && (
+                  <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700, marginLeft: 2 }}>
+                    Recommandé
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: t.muted }}>{m.desc}</div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -384,9 +520,9 @@ function UserBubble({ text }: { text: string }) {
 
 function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loading?: boolean; provider: string }) {
   const prov = PROVIDERS.find(p => p.id === provider)
-  const textEvt = events.find(e => e.type === 'text')
+  const textEvt   = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
-  const errorEvt = events.find(e => e.type === 'error')
+  const errorEvt  = events.find(e => e.type === 'error')
 
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -401,12 +537,8 @@ function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loa
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Tool events */}
-        {toolEvents.length > 0 && (
-          <ToolCallGroup events={toolEvents} />
-        )}
+        {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} />}
 
-        {/* Text response */}
         {textEvt?.content && (
           <div style={{
             background: t.bgCard, border: `1px solid ${t.border}`,
@@ -417,7 +549,6 @@ function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loa
           </div>
         )}
 
-        {/* Error */}
         {errorEvt && (
           <div style={{
             background: t.dangerBg, border: `1px solid ${t.danger}40`,
@@ -427,7 +558,6 @@ function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loa
           </div>
         )}
 
-        {/* Loading */}
         {loading && !textEvt && !errorEvt && toolEvents.length === 0 && (
           <div style={{ color: t.muted, fontSize: 13, padding: '8px 0' }}>
             <span style={{ animation: 'pulse 1s infinite' }}>⟳</span> Réflexion en cours…
@@ -440,7 +570,7 @@ function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loa
 
 function ToolCallGroup({ events }: { events: AiEvent[] }) {
   const [open, setOpen] = useState(false)
-  const calls = events.filter(e => e.type === 'tool_call')
+  const calls   = events.filter(e => e.type === 'tool_call')
   const results = events.filter(e => e.type === 'tool_result')
 
   return (
@@ -509,15 +639,10 @@ function Markdown({ text }: { text: string }) {
   while (i < lines.length) {
     const line = lines[i]
 
-    // Fenced code block
     if (line.startsWith('```')) {
-      const langMatch = line.slice(3).trim()
       const codeLines: string[] = []
       i++
-      while (i < lines.length && !lines[i].startsWith('```')) {
-        codeLines.push(lines[i])
-        i++
-      }
+      while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++ }
       result.push(
         <pre key={i} style={{ background: '#1e1e2e', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
           <code style={{ fontFamily: 'monospace', fontSize: 12, color: '#cdd6f4' }}>{codeLines.join('\n')}</code>
@@ -526,17 +651,12 @@ function Markdown({ text }: { text: string }) {
       i++; continue
     }
 
-    // Table row
     if (line.startsWith('|')) {
       const tableLines: string[] = []
-      while (i < lines.length && lines[i].startsWith('|')) {
-        tableLines.push(lines[i])
-        i++
-      }
+      while (i < lines.length && lines[i].startsWith('|')) { tableLines.push(lines[i]); i++ }
       const rows = tableLines.filter(l => !l.match(/^\|[-| :]+\|$/))
       if (rows.length) {
         const headers = rows[0].split('|').filter(Boolean).map(s => s.trim())
-        const dataRows = rows.slice(1)
         result.push(
           <div key={i} style={{ overflowX: 'auto', margin: '8px 0' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
@@ -544,7 +664,7 @@ function Markdown({ text }: { text: string }) {
                 <tr>{headers.map((h, j) => <th key={j} style={{ padding: '6px 12px', textAlign: 'left', background: t.bgMuted, borderBottom: `2px solid ${t.border}`, fontWeight: 600, color: t.textSub }}>{h}</th>)}</tr>
               </thead>
               <tbody>
-                {dataRows.map((row, ri) => (
+                {rows.slice(1).map((row, ri) => (
                   <tr key={ri} style={{ background: ri % 2 === 0 ? t.bgCard : t.bgMuted }}>
                     {row.split('|').filter(Boolean).map((cell, ci) => (
                       <td key={ci} style={{ padding: '5px 12px', borderBottom: `1px solid ${t.border}`, fontSize: 13 }}>{cell.trim()}</td>
@@ -559,16 +679,13 @@ function Markdown({ text }: { text: string }) {
       continue
     }
 
-    // Heading
     const hMatch = line.match(/^(#{1,3})\s+(.+)/)
     if (hMatch) {
-      const level = hMatch[1].length
       const sizes = [18, 16, 14]
-      result.push(<div key={i} style={{ fontSize: sizes[level-1], fontWeight: 700, color: t.text, margin: '12px 0 4px' }}>{hMatch[2]}</div>)
+      result.push(<div key={i} style={{ fontSize: sizes[hMatch[1].length - 1], fontWeight: 700, color: t.text, margin: '12px 0 4px' }}>{hMatch[2]}</div>)
       i++; continue
     }
 
-    // List item
     const listMatch = line.match(/^[-*]\s+(.+)/)
     if (listMatch) {
       result.push(
@@ -580,13 +697,8 @@ function Markdown({ text }: { text: string }) {
       i++; continue
     }
 
-    // Empty line
-    if (!line.trim()) {
-      result.push(<div key={i} style={{ height: 8 }} />)
-      i++; continue
-    }
+    if (!line.trim()) { result.push(<div key={i} style={{ height: 8 }} />); i++; continue }
 
-    // Paragraph
     result.push(<p key={i} style={{ margin: '0 0 4px' }}>{inlineMarkdown(line)}</p>)
     i++
   }
@@ -595,53 +707,9 @@ function Markdown({ text }: { text: string }) {
 }
 
 function inlineMarkdown(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**'))
-      return <strong key={i}>{part.slice(2, -2)}</strong>
-    if (part.startsWith('`') && part.endsWith('`'))
-      return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
     return part
   })
 }
-
-// ── Model selector ────────────────────────────────────────────
-
-function ModelSelector({ provider, selected, onChange }: {
-  provider: typeof PROVIDERS[0]; selected: string; onChange: (id: string) => void
-}) {
-  const current = provider.models.find(m => m.id === selected) ?? provider.models[0]
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {provider.models.map(m => (
-          <button key={m.id} onClick={() => onChange(m.id)} style={{
-            padding: '4px 10px', borderRadius: t.radius, fontSize: 11, cursor: 'pointer',
-            border: `1px solid ${m.id === selected ? provider.color : t.border}`,
-            background: m.id === selected ? `${provider.color}12` : t.bgCard,
-            color: m.id === selected ? provider.color : t.muted,
-            fontWeight: m.id === selected ? 600 : 400,
-            transition: 'all .15s', position: 'relative',
-          }}>
-            {m.label}
-            {m.recommended && (
-              <span style={{
-                position: 'absolute', top: -6, right: -4,
-                fontSize: 8, background: t.success, color: '#fff',
-                borderRadius: 3, padding: '1px 4px', fontWeight: 700,
-              }}>★</span>
-            )}
-            {'⚡'.repeat(m.speed)}
-          </button>
-        ))}
-      </div>
-      {/* Recommendation text */}
-      <div style={{ fontSize: 11, color: t.muted, paddingLeft: 2 }}>
-        <span style={{ color: provider.color, fontWeight: 600 }}>{current.label}</span>
-        {' — '}{current.desc}
-      </div>
-    </div>
-  )
-}
-

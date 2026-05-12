@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates } from '../api/client'
 import { t } from '../theme'
@@ -47,7 +48,8 @@ function relativeDate(iso?: string): string {
 }
 
 export default function Sources() {
-  const qc = useQueryClient()
+  const qc       = useQueryClient()
+  const navigate = useNavigate()
   const [cards,          setCards]          = useState<Record<string, VersionState>>({})
   const [customPaths,    setCustomPaths]    = useState<Record<string, string>>({})
   const [enterprise,     setEnterprise]     = useState<Record<string, boolean>>({})
@@ -240,10 +242,12 @@ export default function Sources() {
                   info={repoInfo}
                   entInfo={entInfo}
                   version={version}
+                  label={label}
                   showCommits={showCommits[version] ?? false}
                   onToggleCommits={() => setShowCommits(p => ({ ...p, [version]: !p[version] }))}
                   onCheckUpdates={() => doCheckUpdates(version)}
                   checking={checking}
+                  onAiSummary={(prefill) => navigate('/assistant', { state: { prefill } })}
                 />
               )}
 
@@ -338,10 +342,11 @@ export default function Sources() {
 
 // ── InstalledStrip ──────────────────────────────────────────────
 
-function InstalledStrip({ info, entInfo, version: _version, showCommits, onToggleCommits, onCheckUpdates, checking }: {
+function InstalledStrip({ info, entInfo, version: _version, label, showCommits, onToggleCommits, onCheckUpdates, checking, onAiSummary }: {
   info: RepoInfo; entInfo?: RepoInfo
-  version: string; showCommits: boolean
+  version: string; label: string; showCommits: boolean
   onToggleCommits: () => void; onCheckUpdates: () => void; checking: boolean
+  onAiSummary: (prefill: string) => void
 }) {
   if (!info.installed && (!entInfo || !entInfo.installed)) {
     return (
@@ -349,6 +354,17 @@ function InstalledStrip({ info, entInfo, version: _version, showCommits, onToggl
         Non installé
       </div>
     )
+  }
+
+  const thirtyDaysAgo = Date.now() - 30 * 86400000
+  const recentCommits = (info.recent_commits ?? []).filter(c => new Date(c.date).getTime() >= thirtyDaysAgo)
+  const hasAiData = recentCommits.length > 0
+
+  const buildPrefill = () => {
+    const lines = recentCommits.map(c =>
+      `- \`${c.sha}\` ${c.message} (${relativeDate(c.date)}, ${c.author})`
+    )
+    return `Voici les ${recentCommits.length} commits de **${label}** des 30 derniers jours :\n\n${lines.join('\n')}\n\nFais-moi un résumé clair des changements importants et leur impact potentiel pour un consultant Odoo.`
   }
 
   return (
@@ -392,6 +408,18 @@ function InstalledStrip({ info, entInfo, version: _version, showCommits, onToggl
         {(info.recent_commits?.length ?? 0) > 0 && (
           <button onClick={onToggleCommits} style={btnGhost}>
             {showCommits ? '▲ Masquer' : `▼ ${info.recent_commits!.length} commits`}
+          </button>
+        )}
+        {hasAiData && (
+          <button
+            onClick={() => onAiSummary(buildPrefill())}
+            style={{
+              ...btnGhost,
+              color: t.brand, borderColor: `${t.brand}50`,
+              background: `${t.brand}08`, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+            ✦ IA — Résumé 30 j
           </button>
         )}
         <button onClick={onCheckUpdates} disabled={checking} style={{ ...btnGhost, marginLeft: 'auto' }}>

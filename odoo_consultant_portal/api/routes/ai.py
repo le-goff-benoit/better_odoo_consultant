@@ -1,4 +1,6 @@
+import asyncio
 import json
+import httpx
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
@@ -13,11 +15,24 @@ from ...services.ai_service import (
     stream_chat, DEFAULT_MODELS,
     GITHUB_MODELS_BASE_URL, COPILOT_BASE_URL, COPILOT_HEADERS,
 )
+from ...services.context_service import load_context_for_prompt
 
 router = APIRouter()
 
 _PROVIDERS = ("claude", "openai", "gemini", "github", "copilot")
 _KEY_PREFIX = "ai_key:"
+
+# GitHub Device Flow — VS Code Copilot client_id (public)
+_COPILOT_CLIENT_ID  = "Iv1.b507a08c87ecfe98"
+_GH_DEVICE_URL      = "https://github.com/login/device/code"
+_GH_TOKEN_URL       = "https://github.com/login/oauth/access_token"
+_COPILOT_TOKEN_URL  = "https://api.github.com/copilot_internal/v2/token"
+_COPILOT_TOKEN_HDRS = {
+    "editor-version":         "vscode/1.95.0",
+    "editor-plugin-version":  "copilot-chat/0.22.4",
+    "user-agent":             "GithubCopilot/1.155.0",
+    "copilot-integration-id": "vscode-chat",
+}
 
 
 def _ai_key(provider: str) -> Optional[str]:
@@ -26,6 +41,17 @@ def _ai_key(provider: str) -> Optional[str]:
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+async def _exchange_copilot_token(oauth_token: str) -> str:
+    """Exchange a stored GitHub OAuth token for a short-lived Copilot bearer token."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            _COPILOT_TOKEN_URL,
+            headers={**_COPILOT_TOKEN_HDRS, "Authorization": f"token {oauth_token}"},
+        )
+        resp.raise_for_status()
+        return resp.json()["token"]
 
 
 # ── Settings ─────────────────────────────────────────────────────
@@ -79,18 +105,27 @@ async def test_key(body: TestKeyBody):
                 messages=[{"role": "user", "content": "Hi"}],
             ))
 
-        elif body.provider in ("openai", "github", "copilot"):
+        elif body.provider in ("openai", "github"):
             import openai as _oai
             kwargs: dict = {"api_key": api_key}
             if body.provider == "github":
                 kwargs["base_url"] = GITHUB_MODELS_BASE_URL
-            elif body.provider == "copilot":
-                kwargs["base_url"]         = COPILOT_BASE_URL
-                kwargs["default_headers"]  = COPILOT_HEADERS
-            model = "gpt-4o-mini" if body.provider != "copilot" else "gpt-4o"
             client = _oai.OpenAI(**kwargs)
             await loop.run_in_executor(None, lambda: client.chat.completions.create(
-                model=model, max_tokens=5,
+                model="gpt-4o-mini", max_tokens=5,
+                messages=[{"role": "user", "content": "Hi"}],
+            ))
+
+        elif body.provider == "copilot":
+            import openai as _oai
+            copilot_token = await _exchange_copilot_token(api_key)
+            client = _oai.OpenAI(
+                api_key=copilot_token,
+                base_url=COPILOT_BASE_URL,
+                default_headers=COPILOT_HEADERS,
+            )
+            await loop.run_in_executor(None, lambda: client.chat.completions.create(
+                model="gpt-4o", max_tokens=5,
                 messages=[{"role": "user", "content": "Hi"}],
             ))
 
@@ -103,14 +138,64 @@ async def test_key(body: TestKeyBody):
         return {"ok": True, "msg": "Connexion réussie ✓"}
     except Exception as exc:
         msg = str(exc)
-        # Simplify common error messages
         if "401" in msg or "authentication" in msg.lower() or "unauthorized" in msg.lower():
-            msg = "Clé invalide ou expirée (401 Unauthorized)"
+            msg = "Clé invalide ou expirée (401)"
         elif "403" in msg or "forbidden" in msg.lower():
-            msg = "Accès refusé — vérifiez les permissions du token (403 Forbidden)"
+            msg = "Accès refusé — abonnement Copilot requis (403)"
         elif "429" in msg:
             msg = "Quota dépassé — réessayez dans quelques secondes (429)"
         return {"ok": False, "msg": msg}
+
+
+# ── GitHub Copilot OAuth Device Flow ─────────────────────────────
+
+@router.post("/copilot/login")
+async def copilot_login():
+    """Start GitHub Device Flow — returns user_code to show to the user."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            _GH_DEVICE_URL,
+            headers={"Accept": "application/json"},
+            data={"client_id": _COPILOT_CLIENT_ID, "scope": "read:user"},
+        )
+        data = resp.json()
+    if "error" in data:
+        raise HTTPException(400, data.get("error_description", data["error"]))
+    return {
+        "device_code":      data["device_code"],
+        "user_code":        data["user_code"],
+        "verification_uri": data["verification_uri"],
+        "interval":         data.get("interval", 5),
+        "expires_in":       data.get("expires_in", 900),
+    }
+
+
+class PollBody(BaseModel):
+    device_code: str
+
+
+@router.post("/copilot/poll")
+async def copilot_poll(body: PollBody):
+    """Poll GitHub to check if the user has authorized. Returns status."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            _GH_TOKEN_URL,
+            headers={"Accept": "application/json"},
+            data={
+                "client_id":  _COPILOT_CLIENT_ID,
+                "device_code": body.device_code,
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            },
+        )
+        data = resp.json()
+
+    if "error" in data:
+        # "authorization_pending" | "slow_down" | "expired_token" | "access_denied"
+        return {"status": data["error"]}
+
+    oauth_token = data["access_token"]
+    store_secret(f"{_KEY_PREFIX}copilot", oauth_token)
+    return {"status": "ok"}
 
 
 # ── Chat ─────────────────────────────────────────────────────────
@@ -134,7 +219,14 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     api_key = _ai_key(req.provider)
     if not api_key:
-        raise HTTPException(400, f"Clé API '{req.provider}' non configurée — ajoutez-la dans l'assistant.")
+        raise HTTPException(400, f"Clé API '{req.provider}' non configurée — ajoutez-la dans les Paramètres.")
+
+    # For Copilot, exchange the stored OAuth token for a short-lived bearer token
+    if req.provider == "copilot":
+        try:
+            api_key = await _exchange_copilot_token(api_key)
+        except Exception as exc:
+            raise HTTPException(400, f"Impossible d'obtenir le token Copilot : {exc}")
 
     profile = await session.get(Profile, req.profile_id)
     if not profile:
@@ -147,9 +239,19 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     odoo = OdooClient(profile.db_url, profile.db_name, profile.login, odoo_key)
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
 
+    # Resolve local Odoo source path for the profile's version
+    source_path: Optional[str] = None
+    if profile.odoo_version:
+        import os as _os
+        candidate = _os.path.expanduser(f"~/odoo-sources/{profile.odoo_version}")
+        if _os.path.isdir(candidate):
+            source_path = candidate
+
+    context_md = load_context_for_prompt(profile.odoo_version)
+
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

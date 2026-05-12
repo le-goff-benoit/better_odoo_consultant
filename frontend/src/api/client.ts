@@ -46,3 +46,11 @@ export const getAiProviders = () => api.get('/ai/providers')
 export const saveAiKey = (provider: string, key: string) => api.post('/ai/key', { provider, key })
 export const deleteAiKey = (provider: string) => api.delete(`/ai/key/${provider}`)
 export const testAiKey = (provider: string) => api.post('/ai/test-key', { provider })
+export const copilotLogin = () => api.post('/ai/copilot/login')
+export const copilotPoll = (device_code: string) => api.post('/ai/copilot/poll', { device_code })
+
+// Context files
+export const listContextFiles = () => api.get('/context/')
+export const getContextFile = (name: string) => api.get(`/context/file/${name}`)
+export const saveContextFile = (name: string, content: string) => api.put(`/context/file/${name}`, { content })
+export const deleteContextFile = (name: string) => api.delete(`/context/file/${name}`)

@@ -1,25 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile } from '../api/client'
 import { t } from '../theme'
 
 interface ProviderDef {
   id: string
   label: string
   color: string
+  logoUrl: string
   placeholder: string
   docsUrl: string
   docsLabel: string
   description: string
   note?: string
-  available: boolean  // is the package installed?
+  oauthFlow?: boolean
 }
 
-const PROVIDERS: Omit<ProviderDef, 'available'>[] = [
+const PROVIDERS: ProviderDef[] = [
   {
     id: 'claude',
     label: 'Claude (Anthropic)',
     color: '#D97706',
+    logoUrl: 'https://www.anthropic.com/favicon.ico',
     placeholder: 'sk-ant-api03-…',
     docsUrl: 'https://console.anthropic.com/settings/keys',
     docsLabel: 'console.anthropic.com',
@@ -29,6 +31,7 @@ const PROVIDERS: Omit<ProviderDef, 'available'>[] = [
     id: 'openai',
     label: 'OpenAI (GPT-4o)',
     color: '#16A34A',
+    logoUrl: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64',
     placeholder: 'sk-…',
     docsUrl: 'https://platform.openai.com/api-keys',
     docsLabel: 'platform.openai.com',
@@ -38,6 +41,7 @@ const PROVIDERS: Omit<ProviderDef, 'available'>[] = [
     id: 'gemini',
     label: 'Gemini (Google)',
     color: '#2563EB',
+    logoUrl: 'https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg',
     placeholder: 'AIzaSy…',
     docsUrl: 'https://aistudio.google.com/apikey',
     docsLabel: 'aistudio.google.com',
@@ -47,6 +51,7 @@ const PROVIDERS: Omit<ProviderDef, 'available'>[] = [
     id: 'github',
     label: 'GitHub Models',
     color: '#24292f',
+    logoUrl: 'https://github.githubassets.com/favicons/favicon.svg',
     placeholder: 'ghp_… ou github_pat_…',
     docsUrl: 'https://github.com/settings/tokens',
     docsLabel: 'github.com/settings/tokens',
@@ -57,24 +62,76 @@ const PROVIDERS: Omit<ProviderDef, 'available'>[] = [
     id: 'copilot',
     label: 'GitHub Copilot Business',
     color: '#6e40c9',
-    placeholder: 'ghp_… ou github_pat_…',
+    logoUrl: 'https://github.githubassets.com/favicons/favicon.svg',
+    placeholder: '',
     docsUrl: 'https://github.com/settings/tokens',
     docsLabel: 'github.com/settings/tokens',
     description: 'Accès via votre abonnement Copilot Business/Enterprise. Modèles GPT-4o, Claude, o1 selon votre plan.',
-    note: 'Expérimental — API non officielle. Utilisez votre token GitHub avec accès Copilot. Peut ne pas fonctionner sans compte Business actif.',
+    note: 'Expérimental — API non officielle. Requiert un abonnement Copilot Business/Enterprise actif.',
+    oauthFlow: true,
   },
 ]
+
+interface CopilotFlowState {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  interval: number
+  status: 'waiting' | 'error'
+  error?: string
+}
 
 export default function Settings() {
   const qc = useQueryClient()
   const { data: provData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
   const configured: Record<string, boolean> = provData?.data ?? {}
 
-  const [keys,        setKeys]        = useState<Record<string, string>>({})
-  const [editing,     setEditing]     = useState<Record<string, boolean>>({})
-  const [showKey,     setShowKey]     = useState<Record<string, boolean>>({})
-  const [testResult,  setTestResult]  = useState<Record<string, { ok: boolean; msg: string } | null>>({})
-  const [testing,     setTesting]     = useState<Record<string, boolean>>({})
+  const [keys,       setKeys]       = useState<Record<string, string>>({})
+  const [editing,    setEditing]    = useState<Record<string, boolean>>({})
+  const [showKey,    setShowKey]    = useState<Record<string, boolean>>({})
+  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string } | null>>({})
+  const [testing,    setTesting]    = useState<Record<string, boolean>>({})
+  const [copilotFlow, setCopilotFlow] = useState<CopilotFlowState | null>(null)
+  const [copilotLoading, setCopilotLoading] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Clean up poll timer on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  const startCopilotLogin = async () => {
+    setCopilotLoading(true)
+    if (pollRef.current) clearInterval(pollRef.current)
+    try {
+      const res = await copilotLogin()
+      const flow = res.data as { device_code: string; user_code: string; verification_uri: string; interval: number }
+      setCopilotFlow({ ...flow, status: 'waiting' })
+      // Open GitHub device activation in new tab
+      window.open(flow.verification_uri, '_blank', 'noopener')
+      // Start polling
+      pollRef.current = setInterval(async () => {
+        try {
+          const poll = await copilotPoll(flow.device_code)
+          const st = poll.data.status as string
+          if (st === 'ok') {
+            clearInterval(pollRef.current!)
+            setCopilotFlow(null)
+            qc.invalidateQueries({ queryKey: ['ai-providers'] })
+          } else if (st === 'expired_token') {
+            clearInterval(pollRef.current!)
+            setCopilotFlow(f => f ? { ...f, status: 'error', error: 'Code expiré. Recommencez.' } : null)
+          } else if (st === 'access_denied') {
+            clearInterval(pollRef.current!)
+            setCopilotFlow(f => f ? { ...f, status: 'error', error: 'Accès refusé sur GitHub.' } : null)
+          }
+          // 'authorization_pending' | 'slow_down' → keep polling
+        } catch { /* network hiccup — keep polling */ }
+      }, (flow.interval + 1) * 1000)
+    } catch (e: any) {
+      setCopilotFlow({ device_code: '', user_code: '', verification_uri: '', interval: 5, status: 'error', error: e.response?.data?.detail ?? e.message })
+    } finally {
+      setCopilotLoading(false)
+    }
+  }
 
   const runTest = async (provider: string) => {
     setTesting(p => ({ ...p, [provider]: true }))
@@ -110,7 +167,6 @@ export default function Settings() {
         <p style={{ fontSize: 14, color: t.muted }}>Gérez vos clés API et préférences.</p>
       </div>
 
-      {/* AI Keys section */}
       <section>
         <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
           Clés API — Assistants IA
@@ -130,24 +186,26 @@ export default function Settings() {
                 background: t.bgCard, border: `1px solid ${isConfigured ? `${t.success}50` : t.border}`,
                 borderRadius: t.radiusLg, overflow: 'hidden',
               }}>
-                {/* Color bar */}
                 <div style={{ height: 3, background: p.color }} />
 
                 <div style={{ padding: '16px 20px' }}>
                   {/* Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: t.text }}>{p.label}</div>
-                      <div style={{ fontSize: 12, color: t.muted, marginTop: 3, lineHeight: 1.5 }}>{p.description}</div>
-                      {p.note && (
-                        <div style={{
-                          marginTop: 6, fontSize: 11, color: t.warning,
-                          background: t.warningBg, border: `1px solid ${t.warning}30`,
-                          borderRadius: t.radiusSm, padding: '3px 8px', display: 'inline-block',
-                        }}>
-                          ℹ {p.note}
-                        </div>
-                      )}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flex: 1 }}>
+                      <ProviderLogo logoUrl={p.logoUrl} label={p.label} color={p.color} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: t.text }}>{p.label}</div>
+                        <div style={{ fontSize: 12, color: t.muted, marginTop: 3, lineHeight: 1.5 }}>{p.description}</div>
+                        {p.note && (
+                          <div style={{
+                            marginTop: 6, fontSize: 11, color: t.warning,
+                            background: t.warningBg, border: `1px solid ${t.warning}30`,
+                            borderRadius: t.radiusSm, padding: '3px 8px', display: 'inline-block',
+                          }}>
+                            ℹ {p.note}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <StatusBadge configured={isConfigured} />
                   </div>
@@ -159,22 +217,25 @@ export default function Settings() {
                         <button
                           onClick={() => runTest(p.id)}
                           disabled={testing[p.id]}
-                          style={{
-                            ...btnOutline(p.color),
-                            background: testing[p.id] ? `${p.color}10` : 'transparent',
-                          }}>
+                          style={{ ...btnOutline(p.color), background: testing[p.id] ? `${p.color}10` : 'transparent' }}>
                           {testing[p.id] ? '⟳ Test en cours…' : '▶ Tester la connexion'}
                         </button>
-                        <button onClick={() => setEditing(e => ({ ...e, [p.id]: true }))}
-                          style={btnOutline(t.brand)}>
-                          ↺ Remplacer
-                        </button>
+                        {p.oauthFlow ? (
+                          <button onClick={() => { startCopilotLogin(); setEditing(e => ({ ...e, [p.id]: true })) }}
+                            style={btnOutline(t.brand)}>
+                            ↺ Reconnecter
+                          </button>
+                        ) : (
+                          <button onClick={() => setEditing(e => ({ ...e, [p.id]: true }))}
+                            style={btnOutline(t.brand)}>
+                            ↺ Remplacer
+                          </button>
+                        )}
                         <button onClick={() => { del.mutate(p.id); setTestResult(r => ({ ...r, [p.id]: null })) }}
                           style={btnOutline(t.danger)}>
                           Supprimer
                         </button>
                       </div>
-                      {/* Test result */}
                       {testResult[p.id] && (
                         <div style={{
                           marginTop: 8, padding: '7px 12px', borderRadius: t.radius, fontSize: 12,
@@ -187,7 +248,66 @@ export default function Settings() {
                         </div>
                       )}
                     </div>
+
+                  ) : p.oauthFlow ? (
+                    /* ── Copilot OAuth flow ── */
+                    <div style={{ marginTop: 12 }}>
+                      {!copilotFlow ? (
+                        <button
+                          onClick={startCopilotLogin}
+                          disabled={copilotLoading}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '9px 18px', background: p.color, color: '#fff',
+                            border: 'none', borderRadius: t.radius, fontWeight: 600, fontSize: 13,
+                            cursor: copilotLoading ? 'default' : 'pointer', opacity: copilotLoading ? 0.7 : 1,
+                          }}>
+                          <GitHubIcon />
+                          {copilotLoading ? 'Initialisation…' : 'Se connecter avec GitHub'}
+                        </button>
+                      ) : copilotFlow.status === 'error' ? (
+                        <div>
+                          <div style={{ padding: '8px 12px', borderRadius: t.radius, fontSize: 12, background: `${t.danger}10`, border: `1px solid ${t.danger}30`, color: t.danger, marginBottom: 8 }}>
+                            ✗ {copilotFlow.error}
+                          </div>
+                          <button onClick={() => { setCopilotFlow(null); setEditing(e => ({ ...e, [p.id]: false })) }}
+                            style={btnOutline(t.muted)}>
+                            Annuler
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p style={{ fontSize: 12, color: t.muted, marginBottom: 10 }}>
+                            Entrez ce code sur GitHub — la page s'est ouverte dans un nouvel onglet :
+                          </p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                            <div style={{
+                              fontFamily: 'monospace', fontSize: 22, fontWeight: 700,
+                              letterSpacing: '0.15em', color: p.color,
+                              background: `${p.color}12`, border: `2px solid ${p.color}40`,
+                              borderRadius: t.radius, padding: '8px 18px',
+                            }}>
+                              {copilotFlow.user_code}
+                            </div>
+                            <a href={copilotFlow.verification_uri} target="_blank" rel="noreferrer"
+                              style={{ fontSize: 12, color: t.brand, fontWeight: 500 }}>
+                              Ouvrir github.com/login/device →
+                            </a>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: t.muted }}>
+                            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: p.color, animation: 'pulse 1.5s infinite' }} />
+                            En attente de votre validation…
+                            <button onClick={() => { if (pollRef.current) clearInterval(pollRef.current); setCopilotFlow(null); setEditing(e => ({ ...e, [p.id]: false })) }}
+                              style={{ marginLeft: 'auto', ...btnOutline(t.muted), padding: '3px 10px' }}>
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                   ) : (
+                    /* ── Standard API key input ── */
                     <div style={{ marginTop: 12 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <div style={{ flex: 1, position: 'relative' }}>
@@ -228,8 +348,7 @@ export default function Settings() {
                       </div>
                       <div style={{ marginTop: 6, fontSize: 12, color: t.muted }}>
                         Obtenez votre clé sur{' '}
-                        <a href={p.docsUrl} target="_blank" rel="noreferrer"
-                          style={{ color: t.brand, fontWeight: 500 }}>
+                        <a href={p.docsUrl} target="_blank" rel="noreferrer" style={{ color: t.brand, fontWeight: 500 }}>
                           {p.docsLabel} →
                         </a>
                       </div>
@@ -241,6 +360,172 @@ export default function Settings() {
           })}
         </div>
       </section>
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
+
+      {/* Context files section */}
+      <section style={{ marginTop: 40 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+          Contexte IA — Fichiers de connaissances
+        </h2>
+        <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+          Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier, ajouter des conventions propres à votre cabinet, ou enrichir les notes de version.
+        </p>
+        <ContextEditor />
+      </section>
+    </div>
+  )
+}
+
+// ── Context files editor ─────────────────────────────────────────
+
+const KNOWN_FILES = [
+  { name: 'skills.md',      label: 'Compétences consultant', icon: '🧠', desc: 'Connaissances métier, patterns courants, approche de diagnostic' },
+  { name: 'odoo-19.0.md',   label: 'Odoo 19.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-18.0.md',   label: 'Odoo 18.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-17.0.md',   label: 'Odoo 17.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-16.0.md',   label: 'Odoo 16.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-15.0.md',   label: 'Odoo 15.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+]
+
+function ContextEditor() {
+  const qc = useQueryClient()
+  const [selected, setSelected] = useState('skills.md')
+  const [content, setContent] = useState('')
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const { data: filesData } = useQuery({ queryKey: ['context-files'], queryFn: listContextFiles })
+  const existingNames: string[] = (filesData?.data ?? []).map((f: { name: string }) => f.name)
+
+  useEffect(() => {
+    setDirty(false)
+    setSaved(false)
+    getContextFile(selected)
+      .then(res => setContent(res.data.content))
+      .catch(() => setContent(''))
+  }, [selected])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await saveContextFile(selected, content)
+      setDirty(false)
+      setSaved(true)
+      qc.invalidateQueries({ queryKey: ['context-files'] })
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const currentFile = KNOWN_FILES.find(f => f.name === selected)
+
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      {/* File list */}
+      <div style={{ width: 200, flexShrink: 0 }}>
+        {KNOWN_FILES.map(f => {
+          const exists = existingNames.includes(f.name)
+          const isActive = f.name === selected
+          return (
+            <button key={f.name} onClick={() => { if (dirty && !confirm('Modifications non sauvegardées. Continuer ?')) return; setSelected(f.name) }} style={{
+              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 12px', marginBottom: 4,
+              background: isActive ? `${t.brand}10` : 'transparent',
+              border: `1px solid ${isActive ? `${t.brand}40` : t.border}`,
+              borderRadius: t.radius, cursor: 'pointer',
+              transition: 'all .15s',
+            }}>
+              <span style={{ fontSize: 14 }}>{f.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? t.brand : t.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {f.label}
+                </div>
+                <div style={{ fontSize: 10, color: t.muted }}>
+                  {exists ? '✓ Personnalisé' : '○ Par défaut'}
+                </div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Editor */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{currentFile?.label ?? selected}</div>
+            <div style={{ fontSize: 12, color: t.muted }}>{currentFile?.desc}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {dirty && <span style={{ fontSize: 11, color: t.warning, alignSelf: 'center' }}>● Non sauvegardé</span>}
+            <button
+              onClick={handleSave}
+              disabled={saving || !dirty}
+              style={{
+                padding: '6px 16px', background: dirty ? t.brand : t.borderLight,
+                color: dirty ? '#fff' : t.muted,
+                border: 'none', borderRadius: t.radius, fontSize: 12, fontWeight: 600,
+                cursor: dirty ? 'pointer' : 'default',
+              }}>
+              {saving ? '…' : saved ? '✓ Sauvegardé' : 'Sauvegarder'}
+            </button>
+          </div>
+        </div>
+
+        <textarea
+          value={content}
+          onChange={e => { setContent(e.target.value); setDirty(true) }}
+          spellCheck={false}
+          style={{
+            width: '100%', height: 480, padding: '12px 14px',
+            border: `1px solid ${dirty ? t.brand + '60' : t.border}`,
+            borderRadius: t.radiusLg, fontSize: 12,
+            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            lineHeight: 1.6, resize: 'vertical', color: t.text,
+            background: t.bgCard, boxSizing: 'border-box',
+            outline: 'none',
+          }}
+        />
+        <div style={{ fontSize: 11, color: t.muted }}>
+          Fichier Markdown · {content.split('\n').length} lignes · {content.length} caractères
+          · Chemin : <code style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px' }}>~/.odoo-consultant/context/{selected}</code>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GitHubIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+  )
+}
+
+function ProviderLogo({ logoUrl, label, color }: { logoUrl: string; label: string; color: string }) {
+  const initial = label.charAt(0).toUpperCase()
+  return (
+    <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${color}20`, border: `1px solid ${color}30` }}>
+      <img
+        src={logoUrl}
+        alt={label}
+        width={20}
+        height={20}
+        style={{ objectFit: 'contain' }}
+        onError={e => {
+          const img = e.currentTarget
+          img.style.display = 'none'
+          const fallback = img.nextElementSibling as HTMLElement | null
+          if (fallback) fallback.style.display = 'flex'
+        }}
+      />
+      <span style={{ display: 'none', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, fontWeight: 700, fontSize: 13, color }}>
+        {initial}
+      </span>
     </div>
   )
 }

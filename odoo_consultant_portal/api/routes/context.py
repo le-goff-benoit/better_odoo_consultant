@@ -1,0 +1,43 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from ...services.context_service import list_files, read_file, write_file, delete_file, _ALLOWED_NAME
+
+router = APIRouter()
+
+
+@router.get("/")
+async def get_files():
+    return list_files()
+
+
+@router.get("/file/{name}")
+async def get_file(name: str):
+    if not _ALLOWED_NAME.match(name):
+        raise HTTPException(400, "Nom de fichier invalide")
+    try:
+        content = read_file(name)
+        return {"name": name, "content": content}
+    except FileNotFoundError:
+        raise HTTPException(404, f"{name} introuvable")
+
+
+class SaveBody(BaseModel):
+    content: str
+
+
+@router.put("/file/{name}")
+async def put_file(name: str, body: SaveBody):
+    if not _ALLOWED_NAME.match(name):
+        raise HTTPException(400, "Nom de fichier invalide")
+    if len(body.content) > 200_000:
+        raise HTTPException(400, "Fichier trop volumineux (max 200 ko)")
+    write_file(name, body.content)
+    return {"ok": True}
+
+
+@router.delete("/file/{name}")
+async def del_file(name: str):
+    if not _ALLOWED_NAME.match(name):
+        raise HTTPException(400, "Nom de fichier invalide")
+    delete_file(name)
+    return {"ok": True}
