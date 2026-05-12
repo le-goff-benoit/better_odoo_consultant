@@ -89,11 +89,18 @@ def _repo_status(path: Path) -> dict:
 
 @router.get("/check-all")
 async def check_all():
-    """Check installation status for all versions at default paths (no network)."""
+    """Check installation status for all versions at default paths (no network).
+    Includes SUPPORTED_VERSIONS plus any additional version directories found on disk."""
     loop = asyncio.get_event_loop()
     base = Path.home() / "odoo-sources"
+    # Collect all versions to check: base list + any extra dirs found on disk
+    versions_to_check = list(SUPPORTED_VERSIONS)
+    if base.exists():
+        for entry in base.iterdir():
+            if entry.is_dir() and VERSION_RE.match(entry.name) and entry.name not in versions_to_check:
+                versions_to_check.append(entry.name)
     results: dict[str, dict] = {}
-    for version in SUPPORTED_VERSIONS:
+    for version in versions_to_check:
         comm = await loop.run_in_executor(None, _repo_status, base / version)
         ent  = await loop.run_in_executor(None, _repo_status, base / f"{version}-enterprise")
         results[version]              = comm
