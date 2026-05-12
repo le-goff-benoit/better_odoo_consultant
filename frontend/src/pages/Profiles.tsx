@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps } from '../api/client'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile } from '../api/client'
 import { t, btn } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
@@ -38,19 +38,25 @@ function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string 
 }
 
 interface Env { name: string; db_url: string; branch: string }
+interface AccessInfo {
+  is_system: boolean; is_admin: boolean
+  user_name: string; accessible_company_ids: number[]
+  checked_at: string
+}
 interface Profile {
   id: number; name: string; db_url: string; db_name: string
   login: string; odoo_version?: string; odoo_sh_url?: string; github_repo?: string
   default_branch?: string; environments?: string
   company_name?: string; company_city?: string; company_logo?: string
   company_ids?: string; selected_company_id?: number; api_key_expires?: string
+  user_access_info?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
 interface DiagResult {
   steps: DiagStep[]; uid: number | null; odoo_version: string | null
   module_count: number; db_name_suggestion: string
   company_name?: string; company_city?: string; company_logo?: string
-  company_ids?: string
+  company_ids?: string; access_info?: AccessInfo
 }
 interface CompanyOption { id: number; name: string }
 
@@ -97,6 +103,8 @@ export default function Profiles() {
 
   const [companyInfo, setCompanyInfo] = useState<{ name?: string; city?: string; logo?: string } | null>(null)
   const [availableCompanies, setAvailableCompanies] = useState<CompanyOption[]>([])
+  const [accessInfo, setAccessInfo] = useState<AccessInfo | null>(null)
+  const [showAccessWarning, setShowAccessWarning] = useState(false)
 
   const diagnose = useMutation({
     mutationFn: () => diagnoseOdoo({
@@ -114,6 +122,10 @@ export default function Profiles() {
       if (d.company_ids) {
         try { setAvailableCompanies(JSON.parse(d.company_ids)) } catch { /* ignore */ }
       }
+      if (d.access_info) {
+        setAccessInfo(d.access_info)
+        if (d.access_info.is_admin) setShowAccessWarning(true)
+      }
     },
   })
 
@@ -128,7 +140,7 @@ export default function Profiles() {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] })
-      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([])
+      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([]); setAccessInfo(null); setShowAccessWarning(false)
       notify('Projet ajouté avec succès !')
     },
     onError: (e: ApiErr) =>
@@ -146,7 +158,7 @@ export default function Profiles() {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] })
-      setEditingId(null); setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([])
+      setEditingId(null); setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([]); setAccessInfo(null); setShowAccessWarning(false)
       notify('Projet mis à jour !')
     },
     onError: (e: ApiErr) => notify(e.response?.data?.detail ?? e.message, false),
@@ -182,6 +194,27 @@ export default function Profiles() {
     onSuccess: () => notify('Connexion réussie ✓'),
     onError:   (e: ApiErr) => notify(e.response?.data?.detail ?? e.message, false),
   })
+
+  const [checkingAccessId, setCheckingAccessId] = useState<number | null>(null)
+  const checkAccess = async (profileId: number) => {
+    setCheckingAccessId(profileId)
+    try {
+      const res = await checkAccessProfile(profileId)
+      const info: AccessInfo = res.data
+      qc.invalidateQueries({ queryKey: ['profiles'] })
+      if (info.is_system) {
+        notify(`⚠ Utilisateur administrateur système détecté (${info.user_name}). Préférez un utilisateur dédié.`, false)
+      } else if (info.is_admin) {
+        notify(`⚠ Utilisateur avec droits d'administration (${info.user_name}). Pensez à limiter les droits.`, false)
+      } else {
+        notify(`Accès vérifié pour ${info.user_name} — ${info.accessible_company_ids.length} société(s) accessible(s) ✓`)
+      }
+    } catch {
+      notify('Impossible de vérifier les accès', false)
+    } finally {
+      setCheckingAccessId(null)
+    }
+  }
 
   // In edit mode, api_key is optional (user may not want to change it)
   const canNext = step === 1
@@ -390,6 +423,34 @@ export default function Profiles() {
                       )}
                     </div>
                   )}
+
+                  {/* Admin warning — shown after diagnose if user has admin rights */}
+                  {showAccessWarning && accessInfo && (
+                    <div style={{
+                      marginTop: 10, padding: '12px 14px',
+                      background: accessInfo.is_system ? '#fef2f2' : '#fffbeb',
+                      border: `1px solid ${accessInfo.is_system ? '#fca5a5' : '#fcd34d'}`,
+                      borderRadius: t.radius,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <span style={{ fontSize: 20, flexShrink: 0 }}>{accessInfo.is_system ? '🔴' : '🟡'}</span>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: accessInfo.is_system ? '#b91c1c' : '#92400e', marginBottom: 4 }}>
+                              {accessInfo.is_system ? 'Administrateur système détecté' : 'Utilisateur avec droits d\'administration'}
+                            </div>
+                            <div style={{ fontSize: 12, color: accessInfo.is_system ? '#991b1b' : '#78350f', lineHeight: 1.5 }}>
+                              {accessInfo.is_system
+                                ? <>L'utilisateur <strong>{accessInfo.user_name}</strong> a les droits d'administration technique (Paramètres complets). Pour une utilisation en production, préférez un utilisateur dédié avec des droits limités aux modèles nécessaires.</>
+                                : <>L'utilisateur <strong>{accessInfo.user_name}</strong> a des droits d'administration. Il est recommandé d'utiliser un compte avec des droits limités pour l'accès API.</>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => setShowAccessWarning(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16, padding: '0 0 0 8px', flexShrink: 0 }}>✕</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Field label="Version Odoo" hint="Mise à jour automatiquement si le test réussit">
@@ -511,7 +572,9 @@ export default function Profiles() {
               onUpdateEnvs={(envs) => updateProfile(p.id, { environments: JSON.stringify(envs) })
                 .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
               onSelectCompany={(companyId) => updateProfile(p.id, { selected_company_id: companyId })
-                .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))} />
+                .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
+              onCheckAccess={() => checkAccess(p.id)}
+              checkingAccess={checkingAccessId === p.id} />
           ))}
         </div>
       )}
@@ -544,14 +607,16 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelectCompany }: {
+function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelectCompany, onCheckAccess, checkingAccess }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
   onUpdateEnvs: (envs: Env[]) => void
   onSelectCompany: (companyId: number) => void
+  onCheckAccess: () => void; checkingAccess: boolean
 }) {
   const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
   const [envs, setEnvs] = useState<Env[]>(() => { try { return JSON.parse(profile.environments ?? '[]') } catch { return [] } })
   const companies: CompanyOption[] = (() => { try { return JSON.parse(profile.company_ids ?? '[]') } catch { return [] } })()
+  const accessInfo: AccessInfo | null = (() => { try { return profile.user_access_info ? JSON.parse(profile.user_access_info) : null } catch { return null } })()
   const [addingEnv, setAddingEnv] = useState(false)
   const [newEnv, setNewEnv] = useState<Env>({ name: '', db_url: '', branch: '' })
 
@@ -634,6 +699,18 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: keyExpiry.color, borderRadius: 4, padding: '2px 8px' }}
                   title={profile.api_key_expires}>{keyExpiry.label}</span>
               )}
+              {accessInfo?.is_system && (
+                <span title="Utilisateur administrateur système — droits élevés" style={{
+                  fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626',
+                  borderRadius: 4, padding: '2px 8px', cursor: 'help',
+                }}>⚠ Admin système</span>
+              )}
+              {!accessInfo?.is_system && accessInfo?.is_admin && (
+                <span title="Utilisateur avec droits d'administration" style={{
+                  fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7',
+                  border: '1px solid #fcd34d', borderRadius: 4, padding: '2px 8px', cursor: 'help',
+                }}>⚠ Admin</span>
+              )}
             </div>
           </div>
         </div>
@@ -653,15 +730,23 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {companies.map(c => {
                 const isActive = (profile.selected_company_id ?? companies[0]?.id) === c.id
+                const isAccessible = !accessInfo || accessInfo.accessible_company_ids.includes(c.id)
                 return (
-                  <button key={c.id} onClick={() => onSelectCompany(c.id)} style={{
-                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 4,
-                    border: `1px solid ${isActive ? t.brand : t.border}`,
-                    background: isActive ? t.brand : t.bgCard,
-                    color: isActive ? '#fff' : t.textSub,
-                    cursor: 'pointer', transition: 'all .15s',
-                  }}>
-                    {isActive ? '✓ ' : ''}{c.name}
+                  <button
+                    key={c.id}
+                    onClick={() => isAccessible && onSelectCompany(c.id)}
+                    disabled={!isAccessible}
+                    title={!isAccessible ? `L'utilisateur ${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
+                    style={{
+                      fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 4,
+                      border: `1px solid ${!isAccessible ? t.border : isActive ? t.brand : t.border}`,
+                      background: !isAccessible ? t.bgMuted : isActive ? t.brand : t.bgCard,
+                      color: !isAccessible ? t.muted : isActive ? '#fff' : t.textSub,
+                      cursor: !isAccessible ? 'not-allowed' : 'pointer',
+                      opacity: !isAccessible ? 0.5 : 1,
+                      transition: 'all .15s',
+                    }}>
+                    {!isAccessible ? '🔒 ' : isActive ? '✓ ' : ''}{c.name}
                   </button>
                 )
               })}
@@ -757,6 +842,10 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
 
           <button className="btn btn-outline" onClick={onEdit}>✏ Modifier</button>
           <button className="btn btn-outline" onClick={onTest}>Tester</button>
+          <button className="btn btn-outline" onClick={onCheckAccess} disabled={checkingAccess}
+            title="Vérifier les droits d'accès de l'utilisateur Odoo">
+            {checkingAccess ? '⟳' : '🔍'} Accès
+          </button>
           <button className="btn btn-outline-danger" onClick={onDelete}>Supprimer</button>
         </div>
 

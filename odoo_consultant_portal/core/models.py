@@ -32,6 +32,7 @@ class Profile(SQLModel, table=True):
     company_ids: Optional[str] = Field(default=None)        # JSON: [{"id":1,"name":"..."}]
     selected_company_id: Optional[int] = Field(default=None)
     api_key_expires: Optional[str] = None                    # format ISO date: "2026-12-31"
+    user_access_info: Optional[str] = Field(default=None)    # JSON: {is_system,is_admin,user_name,accessible_company_ids,checked_at}
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

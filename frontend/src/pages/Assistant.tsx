@@ -56,7 +56,7 @@ function AppBadgesAsst({ apps, max = 6 }: { apps: { name: string; shortdesc: str
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number }
+interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string }
 interface CompanyOption { id: number; name: string }
 
 interface AiEvent {
@@ -362,6 +362,14 @@ export default function Assistant() {
   const sourcesStatus: Record<string, { installed: boolean }> = srcData?.data ?? {}
   const activeVersion = isGeneralMode ? generalVersion : (selectedProfile?.odoo_version ?? null)
   const sourcesInstalled = activeVersion ? sourcesStatus[activeVersion]?.installed === true : false
+
+  // Company access guard — block send if selected company is not accessible for the Odoo user
+  const companyAccessBlocked = (() => {
+    if (isGeneralMode || !selectedProfile || !selectedCompanyId) return false
+    const accessInfo = (() => { try { return selectedProfile.user_access_info ? JSON.parse(selectedProfile.user_access_info) : null } catch { return null } })()
+    if (!accessInfo) return false
+    return !accessInfo.accessible_company_ids.includes(selectedCompanyId)
+  })()
 
   const setMessages = (fn: (prev: Message[]) => Message[]) => {
     if (!convKey) return
@@ -889,24 +897,52 @@ export default function Assistant() {
         const companies: CompanyOption[] = (() => { try { return JSON.parse(selectedProfile.company_ids ?? '[]') } catch { return [] } })()
         if (companies.length <= 1) return null
         const activeId = selectedCompanyId ?? companies[0]?.id ?? null
+        const accessInfo = (() => { try { return selectedProfile.user_access_info ? JSON.parse(selectedProfile.user_access_info) : null } catch { return null } })()
+        const activeCompanyAccessible = !accessInfo || !activeId || accessInfo.accessible_company_ids.includes(activeId)
         return (
-          <div style={{ flexShrink: 0, paddingTop: 8, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: t.muted, fontWeight: 600 }}>Société :</span>
-            {companies.map(c => {
-              const isActive = activeId === c.id
-              return (
-                <button key={c.id} onClick={() => setSelectedCompanyId(c.id)} style={{
-                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 4,
-                  border: `1px solid ${isActive ? t.brand : t.border}`,
-                  background: isActive ? t.brand : t.bgMuted,
-                  color: isActive ? '#fff' : t.textSub,
-                  cursor: 'pointer',
-                }}>
-                  {c.name}
-                </button>
-              )
-            })}
-          </div>
+          <>
+            <div style={{ flexShrink: 0, paddingTop: 8, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: t.muted, fontWeight: 600 }}>Société :</span>
+              {companies.map(c => {
+                const isActive = activeId === c.id
+                const isAccessible = !accessInfo || accessInfo.accessible_company_ids.includes(c.id)
+                return (
+                  <button key={c.id}
+                    onClick={() => isAccessible && setSelectedCompanyId(c.id)}
+                    disabled={!isAccessible}
+                    title={!isAccessible ? `L'utilisateur ${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
+                    style={{
+                      fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 4,
+                      border: `1px solid ${!isAccessible ? t.border : isActive ? t.brand : t.border}`,
+                      background: !isAccessible ? t.bgMuted : isActive ? t.brand : t.bgMuted,
+                      color: !isAccessible ? t.muted : isActive ? '#fff' : t.textSub,
+                      cursor: !isAccessible ? 'not-allowed' : 'pointer',
+                      opacity: !isAccessible ? 0.5 : 1,
+                    }}>
+                    {!isAccessible ? '🔒 ' : ''}{c.name}
+                  </button>
+                )
+              })}
+            </div>
+            {!activeCompanyAccessible && (
+              <div style={{
+                flexShrink: 0, padding: '10px 14px', marginBottom: 4,
+                background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: t.radius,
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontSize: 18 }}>🔒</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>
+                    Société inaccessible pour cet utilisateur
+                  </div>
+                  <div style={{ fontSize: 12, color: '#991b1b' }}>
+                    L'utilisateur <strong>{accessInfo?.user_name}</strong> n'a pas accès à la société sélectionnée.
+                    Sélectionnez une société accessible ou modifiez les droits de l'utilisateur dans Odoo.
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )
       })()}
 
@@ -940,14 +976,15 @@ export default function Assistant() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
-            disabled={configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())}
+            disabled={configuredProviders.length === 0 || profileId === null || (!streaming && (!input.trim() || companyAccessBlocked))}
+            title={companyAccessBlocked ? 'Société inaccessible — changez de société' : undefined}
             style={{
               padding: '10px 18px', minWidth: 90,
               background: streaming ? t.danger : t.brand,
               color: '#fff', border: 'none', borderRadius: t.radiusLg,
               fontWeight: 700, fontSize: 13, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              opacity: (configuredProviders.length === 0 || profileId === null || (!streaming && !input.trim())) ? .45 : 1,
+              opacity: (configuredProviders.length === 0 || profileId === null || (!streaming && (!input.trim() || companyAccessBlocked))) ? .45 : 1,
               transition: 'background .15s, filter .15s',
             }}
             onMouseEnter={e => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.1)' }}

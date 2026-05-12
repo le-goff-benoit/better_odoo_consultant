@@ -25,6 +25,8 @@ export const deleteProfile = (id: number) => api.delete(`/profiles/${id}`)
 export const testProfile = (id: number) => api.post(`/profiles/${id}/test`)
 export const getProfileApps = (id: number) => api.get(`/profiles/${id}/apps`)
 export const diagnoseOdoo = (data: object) => api.post('/profiles/diagnose', data)
+export const checkAccessRaw = (data: object) => api.post('/profiles/check-access-raw', data)
+export const checkAccessProfile = (id: number) => api.post(`/profiles/${id}/check-access`)
 
 // Projects
 export const listProjects = () => api.get('/projects/')

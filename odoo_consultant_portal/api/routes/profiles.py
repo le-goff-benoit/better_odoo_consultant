@@ -52,6 +52,14 @@ class ProfileUpdate(BaseModel):
     company_ids: Optional[str] = None
     api_key_expires: Optional[str] = None
     selected_company_id: Optional[int] = None
+    user_access_info: Optional[str] = None
+
+
+class AccessCheckRequest(BaseModel):
+    db_url: str
+    db_name: str
+    login: str
+    api_key: str
 
 
 class DiagnoseRequest(BaseModel):
@@ -202,6 +210,13 @@ async def diagnose(body: DiagnoseRequest):
     except Exception:
         pass
 
+    # Step 6 — user access / admin check (best-effort)
+    access_info = None
+    try:
+        access_info = await _check_user_access(client, loop)
+    except Exception:
+        pass
+
     return {
         "steps": steps,
         "uid": uid,
@@ -213,6 +228,7 @@ async def diagnose(body: DiagnoseRequest):
         "company_city": company_city,
         "company_logo": company_logo,
         "company_ids": company_ids_json,
+        "access_info": access_info,
     }
 
 
@@ -265,6 +281,59 @@ async def delete_profile(profile_id: int, session: AsyncSession = Depends(get_se
     return {"ok": True}
 
 
+async def _check_user_access(client: OdooClient, loop) -> dict:
+    """
+    Returns access info for the authenticated Odoo user:
+      is_system     — member of base.group_system (technical admin)
+      is_admin      — member of base.group_erp_manager
+      user_name     — display name
+      accessible_company_ids — list of int (companies the user can switch to)
+    """
+    uid = await loop.run_in_executor(None, client.authenticate)
+    # Fetch user record: groups_id, company_ids, name
+    users = await loop.run_in_executor(
+        None,
+        lambda: client.search_read(
+            "res.users", [["id", "=", uid]],
+            ["name", "groups_id", "company_ids"],
+            limit=1
+        )
+    )
+    user = users[0] if users else {}
+    groups: list = user.get("groups_id") or []
+
+    # Resolve group xml_ids for the groups this user has
+    is_system = False
+    is_admin = False
+    if groups:
+        group_records = await loop.run_in_executor(
+            None,
+            lambda: client.search_read(
+                "res.groups",
+                [["id", "in", groups]],
+                ["id", "full_name"],
+                limit=200,
+            )
+        )
+        full_names = [g.get("full_name", "") for g in group_records]
+        is_system = any("Technical" in n or "Administration / Settings" in n for n in full_names)
+        is_admin  = any("Administration" in n for n in full_names)
+
+    # company_ids on res.users is a list of ints in Odoo 16+
+    accessible = []
+    raw_companies = user.get("company_ids")
+    if isinstance(raw_companies, list):
+        accessible = [c if isinstance(c, int) else c[0] for c in raw_companies]
+
+    return {
+        "is_system": is_system,
+        "is_admin": is_admin,
+        "user_name": user.get("name") or "",
+        "accessible_company_ids": accessible,
+        "checked_at": datetime.utcnow().isoformat(),
+    }
+
+
 def _get_client_from_profile(profile: Profile) -> OdooClient:
     from ...services.profile_manager import get_profile_api_key
     api_key = get_profile_api_key(profile.name)
@@ -299,5 +368,41 @@ async def test_connection(profile_id: int, session: AsyncSession = Depends(get_s
     try:
         uid = await asyncio.get_event_loop().run_in_executor(None, client.authenticate)
         return {"ok": True, "uid": uid}
+    except Exception as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.post("/{profile_id}/check-access")
+async def check_access(profile_id: int, session: AsyncSession = Depends(get_session)):
+    """Check Odoo user access rights and persist the result on the profile."""
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    api_key = get_profile_api_key(profile.name)
+    if not api_key:
+        raise HTTPException(400, "Aucune clé API enregistrée pour ce projet")
+    client = OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
+    loop = asyncio.get_event_loop()
+    try:
+        info = await _check_user_access(client, loop)
+        profile.user_access_info = json.dumps(info)
+        profile.updated_at = datetime.utcnow()
+        session.add(profile)
+        await session.commit()
+        await session.refresh(profile)
+        return info
+    except Exception as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.post("/check-access-raw")
+async def check_access_raw(body: AccessCheckRequest):
+    """Check access using raw credentials (used from wizard before profile is saved)."""
+    url = _normalise_url(body.db_url)
+    client = OdooClient(url, body.db_name, body.login, body.api_key)
+    loop = asyncio.get_event_loop()
+    try:
+        info = await _check_user_access(client, loop)
+        return info
     except Exception as exc:
         raise HTTPException(400, str(exc))
