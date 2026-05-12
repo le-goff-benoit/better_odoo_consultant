@@ -103,8 +103,13 @@ DIST_DIR="$FRONTEND_DIR/dist"
 install_node() {
   info "Node.js non trouvé — tentative d'installation automatique..."
   if command -v apt-get &>/dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - 2>/dev/null
-    sudo apt-get install -y nodejs 2>/dev/null
+    if command -v curl &>/dev/null; then
+      curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+    else
+      sudo apt-get install -y curl
+      curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+    fi
+    sudo apt-get install -y nodejs
   elif command -v brew &>/dev/null; then
     brew install node
   elif command -v dnf &>/dev/null; then
@@ -114,6 +119,7 @@ install_node() {
   else
     error "Impossible d'installer Node.js automatiquement. Installez-le depuis https://nodejs.org puis relancez install.sh"
   fi
+  hash -r 2>/dev/null || true
 }
 
 if [ ! -d "$DIST_DIR" ]; then
