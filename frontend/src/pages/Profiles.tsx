@@ -2,49 +2,26 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps } from '../api/client'
 import { t } from '../theme'
-
-const APP_ICONS: Record<string, { icon: string; label: string; color: string }> = {
-  account:         { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
-  sale:            { icon: '🛒', label: 'Ventes',       color: '#2563EB' },
-  purchase:        { icon: '🛍️', label: 'Achats',       color: '#7C3AED' },
-  stock:           { icon: '📦', label: 'Inventaire',   color: '#D97706' },
-  mrp:             { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
-  project:         { icon: '📋', label: 'Projets',      color: '#0891B2' },
-  hr:              { icon: '👥', label: 'RH',           color: '#059669' },
-  hr_payroll:      { icon: '💶', label: 'Paie',         color: '#10B981' },
-  crm:             { icon: '🎯', label: 'CRM',          color: '#F59E0B' },
-  website:         { icon: '🌐', label: 'Site Web',     color: '#3B82F6' },
-  point_of_sale:   { icon: '🖥️', label: 'POS',          color: '#8B5CF6' },
-  helpdesk:        { icon: '🎧', label: 'Support',      color: '#06B6D4' },
-  hr_timesheet:    { icon: '⏱️', label: 'Timesheets',   color: '#6366F1' },
-  hr_expense:      { icon: '💳', label: 'Notes de frais', color: '#EC4899' },
-  sign:            { icon: '✍️', label: 'Signature',    color: '#84CC16' },
-  fleet:           { icon: '🚗', label: 'Flotte',       color: '#14B8A6' },
-  maintenance:     { icon: '⚙️', label: 'Maintenance',  color: '#6B7280' },
-  quality_control: { icon: '✅', label: 'Qualité',      color: '#22C55E' },
-  email_marketing: { icon: '📧', label: 'Marketing',    color: '#F97316' },
-  accounting:      { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
-  inventory:       { icon: '📦', label: 'Inventaire',   color: '#D97706' },
-  manufacturing:   { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
-}
+import { ODOO_APPS } from '../constants/odooApps'
 
 function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string }[]; max?: number }) {
-  const known = apps.filter(a => APP_ICONS[a.name])
+  const known = apps.filter(a => ODOO_APPS[a.name])
   const shown = known.slice(0, max)
   const rest  = known.length - max
   if (shown.length === 0) return null
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8, marginBottom: 4 }}>
       {shown.map(a => {
-        const def = APP_ICONS[a.name]
+        const def = ODOO_APPS[a.name]
         return (
           <span key={a.name} title={a.shortdesc} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
+            display: 'inline-flex', alignItems: 'center', gap: 5,
             padding: '3px 8px', borderRadius: 4,
             background: `${def.color}15`, border: `1px solid ${def.color}40`,
             fontSize: 11, fontWeight: 600, color: def.color,
           }}>
-            {def.icon} {def.label}
+            <img src={def.iconUrl} alt={def.label} width={14} height={14} style={{ objectFit: 'contain' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+            {def.label}
           </span>
         )
       })}

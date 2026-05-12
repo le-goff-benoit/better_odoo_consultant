@@ -272,7 +272,7 @@ export default function Sources() {
                   onToggleCommits={() => setShowCommits(p => ({ ...p, [version]: !p[version] }))}
                   onCheckUpdates={() => doCheckUpdates(version)}
                   checking={checking}
-                  onAiSummary={(prefill) => navigate('/assistant', { state: { prefill } })}
+                  onAiSummary={(prefill) => navigate('/assistant', { state: { prefill, version, autoSend: true } })}
                 />
               )}
 

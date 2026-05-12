@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile } from '../api/client'
 import { t } from '../theme'
 
 interface ProviderDef {
@@ -601,6 +601,16 @@ function ContextEditor() {
     }
   }
 
+  const handleReset = async () => {
+    if (!confirm(`Réinitialiser "${selected}" au contenu par défaut ? Vos modifications seront perdues.`)) return
+    await deleteContextFile(selected)
+    qc.invalidateQueries({ queryKey: ['context-files'] })
+    const res = await getContextFile(selected)
+    setContent(res.data.content)
+    setDirty(false)
+  }
+
+  const isCustomized = existingNames.includes(selected)
   const currentFile = KNOWN_FILES.find(f => f.name === selected)
 
   return (
@@ -640,8 +650,17 @@ function ContextEditor() {
             <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{currentFile?.label ?? selected}</div>
             <div style={{ fontSize: 12, color: t.muted }}>{currentFile?.desc}</div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {dirty && <span style={{ fontSize: 11, color: t.warning, alignSelf: 'center' }}>● Non sauvegardé</span>}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {dirty && <span style={{ fontSize: 11, color: t.warning }}>● Non sauvegardé</span>}
+            {isCustomized && !dirty && (
+              <button onClick={handleReset} style={{
+                padding: '5px 10px', background: 'transparent',
+                border: `1px solid ${t.border}`, borderRadius: t.radius,
+                fontSize: 11, color: t.muted, cursor: 'pointer',
+              }} title="Revenir au contenu par défaut">
+                ↺ Réinitialiser
+              </button>
+            )}
             <button
               onClick={handleSave}
               disabled={saving || !dirty}

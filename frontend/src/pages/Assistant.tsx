@@ -4,48 +4,41 @@ import { Link, useLocation } from 'react-router-dom'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getProfileApps } from '../api/client'
 import { t } from '../theme'
 
-const APP_ICONS_ASST: Record<string, { icon: string; label: string; color: string }> = {
-  account:         { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
-  sale:            { icon: '🛒', label: 'Ventes',       color: '#2563EB' },
-  purchase:        { icon: '🛍️', label: 'Achats',       color: '#7C3AED' },
-  stock:           { icon: '📦', label: 'Inventaire',   color: '#D97706' },
-  mrp:             { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
-  project:         { icon: '📋', label: 'Projets',      color: '#0891B2' },
-  hr:              { icon: '👥', label: 'RH',           color: '#059669' },
-  hr_payroll:      { icon: '💶', label: 'Paie',         color: '#10B981' },
-  crm:             { icon: '🎯', label: 'CRM',          color: '#F59E0B' },
-  website:         { icon: '🌐', label: 'Site Web',     color: '#3B82F6' },
-  point_of_sale:   { icon: '🖥️', label: 'POS',          color: '#8B5CF6' },
-  helpdesk:        { icon: '🎧', label: 'Support',      color: '#06B6D4' },
-  hr_timesheet:    { icon: '⏱️', label: 'Timesheets',   color: '#6366F1' },
-  hr_expense:      { icon: '💳', label: 'Notes de frais', color: '#EC4899' },
-  sign:            { icon: '✍️', label: 'Signature',    color: '#84CC16' },
-  fleet:           { icon: '🚗', label: 'Flotte',       color: '#14B8A6' },
-  maintenance:     { icon: '⚙️', label: 'Maintenance',  color: '#6B7280' },
-  quality_control: { icon: '✅', label: 'Qualité',      color: '#22C55E' },
-  email_marketing: { icon: '📧', label: 'Marketing',    color: '#F97316' },
-  accounting:      { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
-  inventory:       { icon: '📦', label: 'Inventaire',   color: '#D97706' },
-  manufacturing:   { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
+import { ODOO_APPS } from '../constants/odooApps'
+
+function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
+  const def = ODOO_APPS[name]
+  if (!def) return null
+  return (
+    <img
+      src={def.iconUrl}
+      alt={def.label}
+      width={size}
+      height={size}
+      style={{ objectFit: 'contain', flexShrink: 0 }}
+      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+    />
+  )
 }
 
 function AppBadgesAsst({ apps, max = 6 }: { apps: { name: string; shortdesc: string }[]; max?: number }) {
-  const known = apps.filter(a => APP_ICONS_ASST[a.name])
+  const known = apps.filter(a => ODOO_APPS[a.name])
   const shown = known.slice(0, max)
   const rest  = known.length - max
   if (shown.length === 0) return null
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
       {shown.map(a => {
-        const def = APP_ICONS_ASST[a.name]
+        const def = ODOO_APPS[a.name]
         return (
           <span key={a.name} title={a.shortdesc} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 3,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
             padding: '2px 7px', borderRadius: 4,
             background: `${def.color}15`, border: `1px solid ${def.color}40`,
             fontSize: 10, fontWeight: 600, color: def.color,
           }}>
-            {def.icon} {def.label}
+            <OdooAppIcon name={a.name} size={12} />
+            {def.label}
           </span>
         )
       })}
@@ -239,15 +232,30 @@ export default function Assistant() {
     }
   }, [profiles])
 
+  // Pending auto-send: text to send once provider/mode are ready
+  const pendingSendRef = useRef<{ text: string; version: string } | null>(null)
+
   // Pre-fill input from navigation state (e.g. from Sources "IA" button)
   useEffect(() => {
-    const prefill = (location.state as { prefill?: string } | null)?.prefill
-    if (prefill) {
-      setInput(prefill)
-      // Clear the state so refreshing doesn't re-fill
-      window.history.replaceState({}, '')
-    }
+    const state = location.state as { prefill?: string; version?: string; autoSend?: boolean } | null
+    if (!state?.prefill) return
+    const { prefill, version: navVersion, autoSend } = state
+    window.history.replaceState({}, '')
+    if (navVersion) setGeneralVersion(navVersion)
+    setProfileId(GENERAL_KEY)
+    setInput(prefill)
+    if (autoSend && navVersion) pendingSendRef.current = { text: prefill, version: navVersion }
   }, [location.state])
+
+  // Fire pending auto-send once provider is available and we're in general mode
+  useEffect(() => {
+    const pending = pendingSendRef.current
+    if (!pending || streaming || !provider || profileId !== GENERAL_KEY) return
+    pendingSendRef.current = null
+    const { text, version: ver } = pending
+    const timer = setTimeout(() => sendWithText(text, ver), 100)
+    return () => clearTimeout(timer)
+  }, [provider, profileId, streaming])
 
   // Auto-scroll
   useEffect(() => {
@@ -334,12 +342,10 @@ export default function Assistant() {
     } finally { setStreaming(false) }
   }
 
-  const send = async () => {
-    if (!input.trim() || streaming || profileId === null || !provider) return
-    const text = input.trim()
-    setInput('')
+  const sendWithText = async (text: string, overrideVersion?: string) => {
+    if (!text.trim() || streaming || profileId === null || !provider) return
 
-    const userMsg: Message    = { id: Date.now().toString(), role: 'user', text }
+    const userMsg: Message      = { id: Date.now().toString(), role: 'user', text }
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', events: [], loading: true }
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
@@ -360,9 +366,12 @@ export default function Assistant() {
     const ctrl = new AbortController()
     abortRef.current = ctrl
 
+    const useVersion = overrideVersion ?? generalVersion
+    const useGeneral = overrideVersion != null ? true : isGeneralMode
+
     try {
-      const body = isGeneralMode
-        ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId }
+      const body = useGeneral
+        ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId }
         : { provider, profile_id: profileId, messages: history, model: modelId }
 
       const res = await fetch('/api/ai/chat', {
@@ -404,6 +413,13 @@ export default function Assistant() {
         m.id === assistantMsg.id ? { ...m, loading: false } : m
       ))
     }
+  }
+
+  const send = async () => {
+    if (!input.trim()) return
+    const text = input.trim()
+    setInput('')
+    await sendWithText(text)
   }
 
   const appendEvent = (msgId: string, evt: AiEvent) => {
@@ -846,24 +862,24 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
   if (name === 'query_odoo') {
     const model = (args?.model as string) ?? ''
     const prefix = model.split('.')[0]
-    const app = APP_ICONS_ASST[prefix]
+    const app = ODOO_APPS[prefix]
     return {
       icon: app ? app.icon : '🗄️',
+      appName: app ? prefix : null,
       color: app ? app.color : '#64748b',
       label: model || 'query_odoo',
-      category: 'Odoo',
     }
   }
   if (name === 'search_odoo_source') {
     const ver = args?.version as string
-    return { icon: '🔎', color: '#2563EB', label: ver ? `Sources v${ver}` : 'Sources Odoo', category: 'Code source' }
+    return { icon: '🔎', appName: null, color: '#2563EB', label: ver ? `Sources v${ver}` : 'Sources Odoo' }
   }
   if (name === 'read_odoo_file') {
     const path = args?.path as string ?? ''
     const file = path.split('/').pop() ?? 'fichier'
-    return { icon: '📄', color: '#7C3AED', label: file, category: 'Lecture fichier' }
+    return { icon: '📄', appName: null, color: '#7C3AED', label: file }
   }
-  return { icon: '🔧', color: '#64748b', label: name, category: 'Outil' }
+  return { icon: '🔧', appName: null, color: '#64748b', label: name }
 }
 
 function ToolCallGroup({ events }: { events: AiEvent[] }) {
@@ -905,8 +921,11 @@ function ToolCallGroup({ events }: { events: AiEvent[] }) {
                 {c.name === 'query_odoo' ? 'O' : c.name === 'search_odoo_source' ? '⌕' : '◈'}
               </span>
 
-              {/* App icon if query_odoo */}
-              <span style={{ fontSize: 13 }}>{meta.icon}</span>
+              {/* App icon */}
+              {meta.appName
+                ? <OdooAppIcon name={meta.appName} size={14} />
+                : <span style={{ fontSize: 12 }}>{meta.icon}</span>
+              }
 
               <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {meta.label}
