@@ -130,22 +130,18 @@ install_node() {
   hash -r 2>/dev/null || true
 }
 
-if [ ! -d "$DIST_DIR" ]; then
-  if ! command -v npm &>/dev/null; then
-    install_node
-  fi
-  if command -v npm &>/dev/null; then
-    info "Construction de l'interface web..."
-    cd "$FRONTEND_DIR"
-    npm install --silent
-    npm run build --silent
-    cd - > /dev/null
-    success "Interface web construite"
-  else
-    error "npm toujours introuvable après installation. Installez Node.js 18+ depuis https://nodejs.org puis relancez install.sh"
-  fi
+if ! command -v npm &>/dev/null; then
+  install_node
+fi
+if command -v npm &>/dev/null; then
+  info "Construction de l'interface web..."
+  cd "$FRONTEND_DIR"
+  npm install --silent
+  npm run build --silent
+  cd - > /dev/null
+  success "Interface web construite"
 else
-  success "Interface web déjà construite"
+  error "npm toujours introuvable après installation. Installez Node.js 18+ depuis https://nodejs.org puis relancez install.sh"
 fi
 
 # ── 5. Init database ─────────────────────────────────────────
