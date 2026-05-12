@@ -102,7 +102,7 @@ export default function Sidebar() {
         borderTop: '1px solid rgba(255,255,255,.06)',
         display: 'flex', justifyContent: 'space-between',
       }}>
-        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>v0.9.0</span>
+        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>v0.10.0</span>
         <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>© Benoît Le Goff</span>
       </div>
     </nav>

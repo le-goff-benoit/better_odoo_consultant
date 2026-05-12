@@ -58,3 +58,12 @@ body {
   color: var(--th-text);
   transition: background .2s, color .2s;
 }
+
+/* Inputs inherit theme colors — critical for dark/sepia mode */
+input, textarea, select {
+  background-color: var(--th-bg-card, #ffffff);
+  color: var(--th-text, #0f172a);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--th-placeholder, #94a3b8);
+}

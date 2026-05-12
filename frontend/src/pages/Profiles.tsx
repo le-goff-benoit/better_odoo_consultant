@@ -42,7 +42,7 @@ interface Profile {
   login: string; odoo_version?: string; odoo_sh_url?: string; github_repo?: string
   default_branch?: string; environments?: string
   company_name?: string; company_city?: string; company_logo?: string
-  company_ids?: string; api_key_expires?: string
+  company_ids?: string; selected_company_id?: number; api_key_expires?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
 interface DiagResult {
@@ -517,6 +517,8 @@ export default function Profiles() {
               onDelete={() => del.mutate(p.id)}
               onEdit={() => openEdit(p)}
               onUpdateEnvs={(envs) => updateProfile(p.id, { environments: JSON.stringify(envs) })
+                .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
+              onSelectCompany={(companyId) => updateProfile(p.id, { selected_company_id: companyId })
                 .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))} />
           ))}
         </div>
@@ -550,12 +552,14 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs }: {
+function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelectCompany }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
   onUpdateEnvs: (envs: Env[]) => void
+  onSelectCompany: (companyId: number) => void
 }) {
   const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
   const [envs, setEnvs] = useState<Env[]>(() => { try { return JSON.parse(profile.environments ?? '[]') } catch { return [] } })
+  const companies: CompanyOption[] = (() => { try { return JSON.parse(profile.company_ids ?? '[]') } catch { return [] } })()
   const [addingEnv, setAddingEnv] = useState(false)
   const [newEnv, setNewEnv] = useState<Env>({ name: '', db_url: '', branch: '' })
 
@@ -642,6 +646,31 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs }: {
         {profile.company_name && (
           <div style={{ fontSize: 13, fontWeight: 600, color: t.textSub, marginBottom: 2 }}>
             {profile.company_name}{profile.company_city ? ` — ${profile.company_city}` : ''}
+          </div>
+        )}
+
+        {/* Company selector (multi-company) */}
+        {companies.length > 1 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: t.muted, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Société active
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {companies.map(c => {
+                const isActive = (profile.selected_company_id ?? companies[0]?.id) === c.id
+                return (
+                  <button key={c.id} onClick={() => onSelectCompany(c.id)} style={{
+                    fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 4,
+                    border: `1px solid ${isActive ? t.brand : t.border}`,
+                    background: isActive ? t.brand : t.bgMuted,
+                    color: isActive ? '#fff' : t.textSub,
+                    cursor: 'pointer', transition: 'all .15s',
+                  }}>
+                    🏢 {c.name}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 

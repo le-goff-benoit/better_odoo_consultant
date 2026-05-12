@@ -14,7 +14,8 @@ _MIGRATIONS = [
     ("profile", "company_city",    "TEXT"),
     ("profile", "company_logo",    "TEXT"),
     ("profile", "company_ids",     "TEXT"),
-    ("profile", "api_key_expires", "TEXT"),
+    ("profile", "api_key_expires",     "TEXT"),
+    ("profile", "selected_company_id", "INTEGER"),
 ]
 
 

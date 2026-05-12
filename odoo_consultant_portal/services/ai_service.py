@@ -595,6 +595,7 @@ async def stream_chat(
     context_md: str = "",
     version: Optional[str] = None,  # used when profile is None
     user_profile: Optional[dict] = None,
+    active_company_name: Optional[str] = None,
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
 
@@ -612,6 +613,11 @@ async def stream_chat(
 
     if profile is not None:
         system   = build_system(profile, source_path, context_md)
+        if active_company_name:
+            system = system.replace(
+                f"- Société : {profile.company_name or 'inconnue'}",
+                f"- Société : {profile.company_name or 'inconnue'}\n- Société active (filtre) : {active_company_name}"
+            )
         if user_ctx:
             system = user_ctx + system
         tools_c  = TOOLS_CLAUDE

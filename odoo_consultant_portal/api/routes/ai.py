@@ -237,6 +237,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     provider: str
     profile_id: Optional[int] = None   # None → general mode
+    company_id: Optional[int] = None   # restrict queries to this company
     version: Optional[str] = None      # Odoo version for general mode
     messages: list[ChatMessage]
     model: Optional[str] = None
@@ -303,7 +304,21 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     if not odoo_key:
         raise HTTPException(400, "Clé API Odoo introuvable pour ce projet")
 
-    odoo = OdooClient(profile.db_url, profile.db_name, profile.login, odoo_key)
+    active_company_id = req.company_id or profile.selected_company_id or None
+
+    # Resolve company name for the system prompt
+    _active_company_name: Optional[str] = None
+    if active_company_id and profile.company_ids:
+        import json as _json2
+        try:
+            for c in _json2.loads(profile.company_ids):
+                if c.get("id") == active_company_id:
+                    _active_company_name = c.get("name")
+                    break
+        except Exception:
+            pass
+
+    odoo = OdooClient(profile.db_url, profile.db_name, profile.login, odoo_key, company_id=active_company_id)
 
     source_path = None
     _version_to_use = profile.odoo_version
@@ -329,7 +344,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

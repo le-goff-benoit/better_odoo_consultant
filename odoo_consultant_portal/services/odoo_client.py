@@ -12,14 +12,20 @@ except ImportError:
 
 
 class OdooClient:
-    def __init__(self, url: str, db: str, login: str, api_key: str):
+    def __init__(self, url: str, db: str, login: str, api_key: str, company_id: Optional[int] = None):
         self.url = url.rstrip("/")
         self.db = db
         self.login = login
         self.api_key = api_key
+        self.company_id = company_id
         self._uid: Optional[int] = None
         self._common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common")
         self._models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
+
+    def _ctx(self) -> dict:
+        if self.company_id:
+            return {"allowed_company_ids": [self.company_id]}
+        return {}
 
     def authenticate(self) -> int:
         self._uid = self._common.authenticate(self.db, self.login, self.api_key, {})
@@ -43,7 +49,7 @@ class OdooClient:
         order: str = "",
     ) -> list[dict]:
         domain = domain or []
-        kwargs: dict[str, Any] = {"limit": limit, "offset": offset}
+        kwargs: dict[str, Any] = {"limit": limit, "offset": offset, "context": self._ctx()}
         if fields:
             kwargs["fields"] = fields
         if order:
@@ -55,12 +61,12 @@ class OdooClient:
     def fields_get(self, model: str, attributes: list[str] = None) -> dict:
         attrs = attributes or ["string", "type", "help", "required", "readonly"]
         return self._models.execute_kw(
-            self.db, self.uid, self.api_key, model, "fields_get", [], {"attributes": attrs}
+            self.db, self.uid, self.api_key, model, "fields_get", [], {"attributes": attrs, "context": self._ctx()}
         )
 
     def search_count(self, model: str, domain: list = None) -> int:
         return self._models.execute_kw(
-            self.db, self.uid, self.api_key, model, "search_count", [domain or []]
+            self.db, self.uid, self.api_key, model, "search_count", [domain or []], {"context": self._ctx()}
         )
 
     def get_installed_modules(self) -> list[dict]:

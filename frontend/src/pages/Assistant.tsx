@@ -55,7 +55,8 @@ function AppBadgesAsst({ apps, max = 6 }: { apps: { name: string; shortdesc: str
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string }
+interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number }
+interface CompanyOption { id: number; name: string }
 
 interface AiEvent {
   type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'done' | 'end'
@@ -116,20 +117,48 @@ const PROVIDERS: { id: string; label: string; color: string; models: ModelDef[] 
   {
     id: 'copilot', label: 'Copilot', color: '#6e40c9',
     models: [
-      { id: 'gpt-4o',                     label: 'GPT-4o',         speed: 2, recommended: true,
+      { id: 'gpt-4o',                     label: 'GPT-4o',           speed: 2, recommended: true,
         desc: 'Copilot — GPT-4o via votre abonnement GitHub' },
-      { id: 'gpt-4o-mini',                label: 'GPT-4o mini',    speed: 3,
+      { id: 'gpt-4o-mini',                label: 'GPT-4o mini',      speed: 3,
         desc: 'Rapide et économique via Copilot' },
-      { id: 'claude-3.5-sonnet',          label: 'Claude 3.5',     speed: 2,
-        desc: 'Claude Sonnet via Copilot Business' },
-      { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 (2410)', speed: 2,
-        desc: 'Claude 3.5 Sonnet (octobre 2024) via Copilot' },
-      { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7',     speed: 2,
-        desc: 'Claude 3.7 Sonnet via Copilot Business (si disponible)' },
-      { id: 'o1-mini',                    label: 'o1 mini',         speed: 1,
+      { id: 'gpt-5-mini',                 label: 'GPT-5 mini',       speed: 3,
+        desc: 'GPT-5 mini — rapide et efficace' },
+      { id: 'gpt-5.2',                    label: 'GPT-5.2',          speed: 2,
+        desc: 'GPT-5.2 via Copilot' },
+      { id: 'gpt-5.4',                    label: 'GPT-5.4',          speed: 2,
+        desc: 'GPT-5.4 via Copilot' },
+      { id: 'gpt-5.2-codex',              label: 'GPT-5.2 Codex',    speed: 2,
+        desc: 'GPT-5.2 Codex — optimisé pour le code' },
+      { id: 'gpt-5.3-codex',              label: 'GPT-5.3 Codex',    speed: 2,
+        desc: 'GPT-5.3 Codex — optimisé pour le code' },
+      { id: 'o1-mini',                    label: 'o1 mini',           speed: 1,
         desc: 'Raisonnement avancé — analyses complexes via Copilot' },
-      { id: 'o3-mini',                    label: 'o3 mini',         speed: 1,
+      { id: 'o3-mini',                    label: 'o3 mini',           speed: 1,
         desc: 'Dernier modèle de raisonnement OpenAI via Copilot' },
+      { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', speed: 2,
+        desc: 'Claude 3.5 Sonnet (octobre 2024) via Copilot' },
+      { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', speed: 2,
+        desc: 'Claude 3.7 Sonnet via Copilot Business' },
+      { id: 'claude-sonnet-4-5',          label: 'Claude Sonnet 4.5', speed: 2,
+        desc: 'Claude Sonnet 4.5 via Copilot Business' },
+      { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6', speed: 2,
+        desc: 'Claude Sonnet 4.6 via Copilot Business' },
+      { id: 'claude-opus-4-5',            label: 'Claude Opus 4.5',   speed: 1,
+        desc: 'Claude Opus 4.5 — très puissant via Copilot' },
+      { id: 'claude-opus-4-6',            label: 'Claude Opus 4.6',   speed: 1,
+        desc: 'Claude Opus 4.6 — très puissant via Copilot' },
+      { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7',   speed: 1,
+        desc: 'Claude Opus 4.7 — le plus puissant via Copilot' },
+      { id: 'claude-haiku-4-5',           label: 'Claude Haiku 4.5',  speed: 3,
+        desc: 'Claude Haiku 4.5 — ultra-rapide via Copilot' },
+      { id: 'gemini-2.5-pro',             label: 'Gemini 2.5 Pro',    speed: 2,
+        desc: 'Gemini 2.5 Pro via Copilot' },
+      { id: 'gemini-3.1-pro',             label: 'Gemini 3.1 Pro',    speed: 2,
+        desc: 'Gemini 3.1 Pro via Copilot' },
+      { id: 'gemini-3-flash',             label: 'Gemini 3 Flash',     speed: 3,
+        desc: 'Gemini 3 Flash — rapide via Copilot' },
+      { id: 'grok-code-fast-1',           label: 'Grok Code Fast',     speed: 3,
+        desc: 'xAI Grok Code — optimisé pour le code via Copilot' },
     ],
   },
   {
@@ -203,6 +232,7 @@ export default function Assistant() {
   const [modelId,   setModelId]   = useState('')
   // profileId: number = project tab, GENERAL_KEY = general tab, null = not yet selected
   const [profileId, setProfileId] = useState<number | typeof GENERAL_KEY | null>(null)
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
   const [generalVersion, setGeneralVersion] = useState('19.0')
 
   // Conversations keyed by string (profile id as string, or 'general')
@@ -231,6 +261,12 @@ export default function Assistant() {
       else setProfileId(GENERAL_KEY)
     }
   }, [profiles])
+
+  // Sync selectedCompanyId when active profile changes
+  useEffect(() => {
+    const p = profiles.find(p => p.id === profileId)
+    setSelectedCompanyId(p?.selected_company_id ?? null)
+  }, [profileId, profiles])
 
   // Pending auto-send: text to send once provider/mode are ready
   const pendingSendRef = useRef<{ text: string; version: string } | null>(null)
@@ -311,7 +347,7 @@ export default function Assistant() {
     try {
       const body = isGeneralMode
         ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId }
-        : { provider, profile_id: profileId, messages: history, model: modelId }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, messages: history, model: modelId }
       const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal })
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
@@ -373,7 +409,7 @@ export default function Assistant() {
     try {
       const body = useGeneral
         ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId }
-        : { provider, profile_id: profileId, messages: history, model: modelId }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, messages: history, model: modelId }
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
@@ -642,20 +678,49 @@ export default function Assistant() {
 
         {messages.length === 0 && selectedProfile && !isGeneralMode && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '10px 14px', background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg }}>
-              {selectedProfile.company_logo && (
-                <img src={selectedProfile.company_logo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6, background: t.bgMuted, padding: 3, border: `1px solid ${t.border}` }} />
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{selectedProfile.company_name || selectedProfile.name}</div>
-                {currentProv && (
-                  <div style={{ fontSize: 11, color: t.muted, marginTop: 1 }}>
-                    {currentProv.label} · {PROVIDERS.find(p => p.id === provider)?.models.find(m => m.id === modelId)?.label}
+            {(() => {
+              const companies: CompanyOption[] = (() => { try { return JSON.parse(selectedProfile.company_ids ?? '[]') } catch { return [] } })()
+              const activeCompanyId = selectedCompanyId ?? companies[0]?.id ?? null
+              return (
+                <div style={{ marginBottom: 20, padding: '10px 14px', background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {selectedProfile.company_logo && (
+                      <img src={selectedProfile.company_logo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6, background: t.bgMuted, padding: 3, border: `1px solid ${t.border}` }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{selectedProfile.company_name || selectedProfile.name}</div>
+                      {currentProv && (
+                        <div style={{ fontSize: 11, color: t.muted, marginTop: 1 }}>
+                          {currentProv.label} · {PROVIDERS.find(p => p.id === provider)?.models.find(m => m.id === modelId)?.label}
+                        </div>
+                      )}
+                      <AppBadgesAsst apps={profileApps} />
+                    </div>
                   </div>
-                )}
-                <AppBadgesAsst apps={profileApps} />
-              </div>
-            </div>
+                  {companies.length > 1 && (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 11, color: t.muted, marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Société active</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                        {companies.map(c => {
+                          const isActive = activeCompanyId === c.id
+                          return (
+                            <button key={c.id} onClick={() => setSelectedCompanyId(c.id)} style={{
+                              fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 4,
+                              border: `1px solid ${isActive ? t.brand : t.border}`,
+                              background: isActive ? t.brand : t.bgMuted,
+                              color: isActive ? '#fff' : t.textSub,
+                              cursor: 'pointer',
+                            }}>
+                              🏢 {c.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             <div style={{ fontSize: 13, color: t.muted, marginBottom: 10 }}>Suggestions :</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {SUGGESTIONS.map(s => (
@@ -679,6 +744,32 @@ export default function Assistant() {
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {/* Company selector bar (shown when profile has multiple companies) */}
+      {selectedProfile && !isGeneralMode && (() => {
+        const companies: CompanyOption[] = (() => { try { return JSON.parse(selectedProfile.company_ids ?? '[]') } catch { return [] } })()
+        if (companies.length <= 1) return null
+        const activeId = selectedCompanyId ?? companies[0]?.id ?? null
+        return (
+          <div style={{ flexShrink: 0, paddingTop: 8, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: t.muted, fontWeight: 600 }}>Société :</span>
+            {companies.map(c => {
+              const isActive = activeId === c.id
+              return (
+                <button key={c.id} onClick={() => setSelectedCompanyId(c.id)} style={{
+                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 4,
+                  border: `1px solid ${isActive ? t.brand : t.border}`,
+                  background: isActive ? t.brand : t.bgMuted,
+                  color: isActive ? '#fff' : t.textSub,
+                  cursor: 'pointer',
+                }}>
+                  {c.name}
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Input area */}
       <div style={{ flexShrink: 0, paddingTop: 12, borderTop: `1px solid ${t.border}`, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
