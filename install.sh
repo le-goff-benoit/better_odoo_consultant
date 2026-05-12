@@ -23,11 +23,15 @@ echo -e "╚══════════════════════�
 echo ""
 
 # ── 0. Mise à jour du code ───────────────────────────────────
-if git -C "$(dirname "$0")" rev-parse --git-dir &>/dev/null; then
+if [ -z "${_AFTER_PULL:-}" ] && git -C "$(dirname "$0")" rev-parse --git-dir &>/dev/null; then
   info "Mise à jour du code depuis GitHub..."
-  git -C "$(dirname "$0")" pull --ff-only \
-    && success "Code à jour" \
-    || warn "Impossible de mettre à jour automatiquement (modifications locales ?)."
+  if git -C "$(dirname "$0")" pull --ff-only 2>/dev/null; then
+    success "Code à jour — relance du script..."
+    export _AFTER_PULL=1
+    exec bash "$(realpath "$0")" "$@"
+  else
+    warn "Impossible de mettre à jour automatiquement (modifications locales ?)."
+  fi
 fi
 
 # ── 1. Python ────────────────────────────────────────────────
