@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { listProfiles, getAiProviders } from '../api/client'
+import { listProfiles, getAiProviders, checkAllSources } from '../api/client'
 import { t } from '../theme'
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface Profile { id: number; name: string; company_name?: string; company_logo?: string }
+interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string }
 
 interface AiEvent {
   type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'done' | 'end'
@@ -67,25 +67,41 @@ const PROVIDERS: { id: string; label: string; color: string; models: ModelDef[] 
   {
     id: 'copilot', label: 'Copilot', color: '#6e40c9',
     models: [
-      { id: 'gpt-4o',           label: 'GPT-4o',      speed: 2, recommended: true,
-        desc: 'Copilot Business — GPT-4o via votre abonnement GitHub' },
-      { id: 'gpt-4o-mini',      label: 'GPT-4o mini', speed: 3,
-        desc: 'Version rapide et économique via Copilot' },
-      { id: 'claude-3.5-sonnet', label: 'Claude 3.5', speed: 2,
-        desc: 'Claude via Copilot Business (si activé dans votre plan)' },
+      { id: 'gpt-4o',                     label: 'GPT-4o',         speed: 2, recommended: true,
+        desc: 'Copilot — GPT-4o via votre abonnement GitHub' },
+      { id: 'gpt-4o-mini',                label: 'GPT-4o mini',    speed: 3,
+        desc: 'Rapide et économique via Copilot' },
+      { id: 'claude-3.5-sonnet',          label: 'Claude 3.5',     speed: 2,
+        desc: 'Claude Sonnet via Copilot Business' },
+      { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 (2410)', speed: 2,
+        desc: 'Claude 3.5 Sonnet (octobre 2024) via Copilot' },
+      { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7',     speed: 2,
+        desc: 'Claude 3.7 Sonnet via Copilot Business (si disponible)' },
+      { id: 'o1-mini',                    label: 'o1 mini',         speed: 1,
+        desc: 'Raisonnement avancé — analyses complexes via Copilot' },
+      { id: 'o3-mini',                    label: 'o3 mini',         speed: 1,
+        desc: 'Dernier modèle de raisonnement OpenAI via Copilot' },
     ],
   },
   {
     id: 'github', label: 'GitHub', color: '#24292f',
     models: [
-      { id: 'gpt-4o',                        label: 'GPT-4o',      speed: 2, recommended: true,
+      { id: 'gpt-4o',                        label: 'GPT-4o',           speed: 2, recommended: true,
         desc: 'GPT-4o via GitHub Models (inclus GitHub Free/Pro)' },
-      { id: 'gpt-4o-mini',                   label: 'GPT-4o mini', speed: 3,
+      { id: 'gpt-4o-mini',                   label: 'GPT-4o mini',      speed: 3,
         desc: 'Ultra-rapide et économique via GitHub Models' },
-      { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5',  speed: 2,
+      { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5',       speed: 2,
         desc: 'Claude via GitHub Models — bon équilibre qualité/vitesse' },
-      { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2',  speed: 2,
+      { id: 'claude-3-7-sonnet-20250219',    label: 'Claude 3.7',       speed: 2,
+        desc: 'Claude 3.7 Sonnet via GitHub Models' },
+      { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2 90B',   speed: 2,
         desc: 'Open source Meta — alternative gratuite via GitHub Models' },
+      { id: 'Llama-3.1-405B-Instruct',       label: 'Llama 3.1 405B',  speed: 1,
+        desc: 'Le plus grand Llama open source — très capable' },
+      { id: 'mistral-large-2407',             label: 'Mistral Large',    speed: 2,
+        desc: 'Mistral Large via GitHub Models' },
+      { id: 'Phi-3.5-mini-instruct',          label: 'Phi-3.5 mini',    speed: 3,
+        desc: 'Modèle compact Microsoft — ultra-rapide pour les tâches simples' },
     ],
   },
 ]
@@ -116,6 +132,7 @@ export default function Assistant() {
   const location = useLocation()
   const { data: profData }  = useQuery({ queryKey: ['profiles'],     queryFn: listProfiles })
   const { data: provData }  = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
+  const { data: srcData }   = useQuery({ queryKey: ['sources-all'],  queryFn: checkAllSources, staleTime: 30_000 })
 
   const profiles: Profile[] = profData?.data ?? []
   const allProviders: Record<string, boolean> = provData?.data ?? {}
@@ -174,6 +191,10 @@ export default function Assistant() {
   const isGeneralMode = profileId === GENERAL_KEY
   const selectedProfile = profiles.find(p => p.id === profileId)
   const currentProv = PROVIDERS.find(p => p.id === provider)
+
+  const sourcesStatus: Record<string, { installed: boolean }> = srcData?.data ?? {}
+  const activeVersion = isGeneralMode ? generalVersion : (selectedProfile?.odoo_version ?? null)
+  const sourcesInstalled = activeVersion ? sourcesStatus[activeVersion]?.installed === true : false
 
   const setMessages = (fn: (prev: Message[]) => Message[]) => {
     if (!convKey) return
@@ -418,6 +439,21 @@ export default function Assistant() {
           </>
         )}
       </div>
+
+      {/* Sources warning banner */}
+      {activeVersion && !sourcesInstalled && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+          background: '#fef3c7', border: '1px solid #f59e0b',
+          borderRadius: t.radius, marginBottom: 8, flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 16 }}>⚠️</span>
+          <div style={{ fontSize: 12, color: '#92400e', flex: 1 }}>
+            <strong>Code source Odoo {activeVersion} non installé</strong> — les questions sur le code source ne fonctionneront pas.{' '}
+            <Link to="/sources" style={{ color: '#b45309', fontWeight: 600 }}>Installer les sources →</Link>
+          </div>
+        </div>
+      )}
 
       {/* Chat history */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
