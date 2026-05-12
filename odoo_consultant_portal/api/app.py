@@ -45,4 +45,4 @@ if _dist.exists():
 
     @app.get("/{full_path:path}")
     async def spa(full_path: str):
-        return FileResponse(_dist / "index.html")
+        return FileResponse(_dist / "index.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
