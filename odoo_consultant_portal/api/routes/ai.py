@@ -1,6 +1,7 @@
 import asyncio
 import json
 import httpx
+from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
@@ -55,6 +56,34 @@ async def _exchange_copilot_token(oauth_token: str) -> str:
 
 
 # ── Settings ─────────────────────────────────────────────────────
+
+_MODEL_CONFIG_PATH = Path.home() / ".odoo-consultant" / "model-config.json"
+
+
+def _read_model_config() -> dict:
+    if _MODEL_CONFIG_PATH.exists():
+        try:
+            return json.loads(_MODEL_CONFIG_PATH.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _write_model_config(config: dict) -> None:
+    _MODEL_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _MODEL_CONFIG_PATH.write_text(json.dumps(config, indent=2))
+
+
+@router.get("/model-config")
+async def get_model_config():
+    return _read_model_config()
+
+
+@router.post("/model-config")
+async def save_model_config(config: dict):
+    _write_model_config(config)
+    return {"ok": True}
+
 
 @router.get("/providers")
 async def list_providers():

@@ -82,71 +82,408 @@ _SKILLS_MD = """\
 # Compétences et contexte — Consultant Odoo
 
 ## Rôle de l'assistant
-Tu aides un consultant Odoo à analyser les données d'instances client, comprendre le code source,
-diagnostiquer des problèmes et préparer des recommandations. Sois précis, factuel, orienté résultats.
+Tu es le co-pilote d'un consultant Odoo expérimenté. Tu analyses des instances client en production,
+tu lis le code source Odoo, tu diagnostiques des anomalies et tu proposes des solutions concrètes.
+Sois toujours factuel : interroge les vraies données avant de conclure. Ne devine jamais un chiffre.
 
-## Approche recommandée
-- Interroger la base de données réelle avant de répondre (ne jamais inventer de chiffres)
-- Croiser données live + code source quand disponible
-- Signaler les incohérences ou anomalies trouvées
-- Proposer des actions concrètes (domain Odoo, module concerné, champ exact)
+## Règles d'or du consultant
+1. Toujours croiser données live + code source quand disponible
+2. Citer le modèle, le champ exact et le domain utilisé dans chaque réponse
+3. Signaler proactivement les anomalies trouvées (doublons, incohérences, données corrompues)
+4. Distinguer ce qui est standard Odoo de ce qui est une customisation (module custom)
+5. Proposer des actions concrètes : domain Odoo, module concerné, vue à vérifier, champ exact
 
-## Domaines métier fréquents
+---
 
-### Comptabilité
-- Factures clients : `account.move` domain `[["move_type","in",["out_invoice","out_refund"]]]`
-- Factures fournisseurs : `account.move` domain `[["move_type","in",["in_invoice","in_refund"]]]`
-- Paiements : `account.payment`
-- Rapprochement bancaire : `account.bank.statement.line`
-- Plans comptables : `account.account`
-- Journaux : `account.journal`
+## Référence complète des modèles par domaine
+
+### Comptabilité & Finance
+
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Factures clients | `account.move` | `[["move_type","in",["out_invoice","out_refund"]]]` |
+| Factures fournisseurs | `account.move` | `[["move_type","in",["in_invoice","in_refund"]]]` |
+| Avoirs clients | `account.move` | `[["move_type","=","out_refund"]]` |
+| Brouillons de factures | `account.move` | `[["state","=","draft"],["move_type","in",["out_invoice","in_invoice"]]]` |
+| Factures impayées | `account.move` | `[["payment_state","in",["not_paid","partial"]],["state","=","posted"]]` |
+| Factures en retard | `account.move` | `[["payment_state","not in",["paid","in_payment"]],["invoice_date_due","<","2025-01-01"],["state","=","posted"]]` |
+| Paiements | `account.payment` | `[["state","=","posted"]]` |
+| Écritures comptables | `account.move.line` | `[["move_id.state","=","posted"]]` |
+| Lignes de rapprochement | `account.bank.statement.line` | — |
+| Comptes (plan comptable) | `account.account` | `[["deprecated","=",false]]` |
+| Journaux | `account.journal` | `[["type","in",["bank","cash","general","sale","purchase"]]]` |
+| Taxes | `account.tax` | `[["active","=",true]]` |
+| Conditions de paiement | `account.payment.term` | — |
+| Lettrage partiel | `account.partial.reconcile` | — |
+| Budgets analytiques | `account.budget.post` (≤v15), `budget.line` (v16+) | — |
+| Comptes analytiques | `account.analytic.account` | — |
+| Plans analytiques (v16+) | `account.analytic.plan` | — |
+| Lignes analytiques | `account.analytic.line` | `[["project_id","=",false]]` pour hors-projet |
+| Actifs immobilisés | `account.asset` (enterprise) | — |
+| Abonnements comptables | `account.recurring.template` | — |
+
+**Champs clés `account.move` :**
+- `state` : draft / posted / cancel
+- `move_type` : out_invoice / in_invoice / out_refund / in_refund / entry
+- `payment_state` : not_paid / partial / in_payment / paid / reversed / blocked
+- `invoice_date_due` : date d'échéance
+- `amount_residual` : montant restant dû
+- `invoice_origin` : référence source (commande, etc.)
 
 ### Ventes & CRM
-- Commandes : `sale.order`, lignes : `sale.order.line`
-- Opportunités/Leads : `crm.lead` (lead et opportunity dans le même modèle, champ `type`)
-- Équipes commerciales : `crm.team`
-- Listes de prix : `product.pricelist`
-- Programmes fidélité (v16+) : `loyalty.program`, `loyalty.reward`, `loyalty.rule`
+
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Commandes de vente | `sale.order` | `[["state","in",["sale","done"]]]` |
+| Devis | `sale.order` | `[["state","in",["draft","sent"]]]` |
+| Lignes de commande | `sale.order.line` | — |
+| Leads/opportunités | `crm.lead` | `[["type","=","opportunity"]]` pour opps, `[["type","=","lead"]]` pour leads |
+| Équipes commerciales | `crm.team` | — |
+| Activités (suivi) | `mail.activity` | `[["res_model","=","crm.lead"]]` |
+| Listes de prix | `product.pricelist` | — |
+| Règles de prix | `product.pricelist.item` | — |
+| Programmes fidélité (v16+) | `loyalty.program` | `[["program_type","=","loyalty"]]` |
+| Cartes fidélité | `loyalty.card` | — |
+| Coupons | `loyalty.program` | `[["program_type","=","coupons"]]` |
+| Abonnements | `sale.order` | `[["is_subscription","=",true]]` (v16+ avec module subscription) |
+| Commandes récurrentes | `sale.temporal.recurrence` | — |
+
+**Champs clés `sale.order` :**
+- `state` : draft / sent / sale / done / cancel
+- `amount_total` / `amount_untaxed` / `amount_tax`
+- `invoice_status` : nothing / to invoice / invoiced
+- `delivery_status` : nothing / waiting / partial / full (si stock installé)
+- `commitment_date` : date de livraison promise
+- `date_order` : date de confirmation
+
+**Champs clés `crm.lead` :**
+- `type` : lead / opportunity
+- `stage_id` : étape du pipeline
+- `probability` : probabilité de conversion (0–100)
+- `expected_revenue` : montant prévu
+- `date_deadline` : date limite
+- `user_id` : commercial assigné
+- `partner_id` : client (peut être null pour un lead)
 
 ### Achats
-- Commandes achat : `purchase.order`, lignes : `purchase.order.line`
-- Appels d'offres : même modèle avec `state='draft'` ou `'sent'`
+
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Bons de commande | `purchase.order` | `[["state","in",["purchase","done"]]]` |
+| Appels d'offres | `purchase.order` | `[["state","in",["draft","sent","to approve"]]]` |
+| Lignes de commande achat | `purchase.order.line` | — |
+| Fournisseurs produit | `product.supplierinfo` | `[["partner_id","=",X]]` |
+| Incoterms | `account.incoterms` | — |
+
+**Champs clés `purchase.order` :**
+- `state` : draft / sent / to approve / purchase / done / cancel
+- `invoice_status` : nothing / to invoice / invoiced
+- `date_approve` : date de confirmation fournisseur
 
 ### Stock & Logistique
-- Mouvements : `stock.move`, détail opérations : `stock.move.line`
-- Transferts : `stock.picking`
-- Emplacements : `stock.location`
-- Routes : `stock.route` (avant v17 : `stock.location.route`)
-- Règles réappro : `stock.warehouse.orderpoint`
-- Lots/numéros de série : `stock.lot`
-- Quants (stock physique) : `stock.quant`
-- Packages : `stock.quant.package`
 
-### Ressources Humaines
-- Employés : `hr.employee`
-- Contrats : `hr.contract`
-- Congés (demandes) : `hr.leave`, allocations : `hr.leave.allocation`
-- Présences : `hr.attendance`
-- Fiches de paie : `hr.payslip`
-- Candidatures (recrutement) : `hr.applicant`
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Mouvements de stock | `stock.move` | `[["state","=","done"]]` pour réalisés |
+| Détail mouvements | `stock.move.line` | `[["state","=","done"]]` |
+| Transferts | `stock.picking` | `[["state","in",["ready","assigned","waiting"]]]` |
+| Stock physique | `stock.quant` | `[["location_id.usage","=","internal"]]` |
+| Emplacements | `stock.location` | `[["usage","=","internal"],["active","=",true]]` |
+| Entrepôts | `stock.warehouse` | — |
+| Routes | `stock.route` | — (v17+), `stock.location.route` (≤v16) |
+| Règles de réappro | `stock.warehouse.orderpoint` | — |
+| Lots / Numéros de série | `stock.lot` | `[["product_id","=",X]]` |
+| Packages | `stock.quant.package` | — |
+| Catégories de stock | `product.category` | — |
+| Types d'opération | `stock.picking.type` | `[["code","in",["incoming","outgoing","internal"]]]` |
+| Inventaires ajustements | `stock.inventory` (≤v16), `stock.quant` (v17+) | — |
+
+**Champs clés `stock.move` :**
+- `state` : draft / waiting / confirmed / partially_available / assigned / done / cancel
+- `product_id`, `product_uom_qty` (quantité demandée), `quantity_done` (réalisée)
+- `location_id` (source), `location_dest_id` (destination)
+- `origin` : référence source (commande, OF, etc.)
+
+**Diagnostics stock courants :**
+- Stock négatif : `stock.quant` avec `quantity < 0`
+- Transferts bloqués : `stock.picking` avec `state = 'assigned'` et `scheduled_date < now`
+- Mouvements orphelins : `stock.move` avec `state = 'confirmed'` sans `picking_id`
+- Lots sans traçabilité : `stock.lot` sans `stock.move.line` associés
+
+### Ressources Humaines & Paie
+
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Employés actifs | `hr.employee` | `[["active","=",true]]` |
+| Contrats | `hr.contract` | `[["state","=","open"]]` pour actifs |
+| Congés (demandes) | `hr.leave` | `[["holiday_status_id","=",X],["state","=","validate"]]` |
+| Allocations congés | `hr.leave.allocation` | `[["state","=","validate"]]` |
+| Soldes congés | `hr.leave.report` | — |
+| Présences | `hr.attendance` | `[["employee_id","=",X],["check_out","=",false]]` pour présences ouvertes |
+| Fiches de paie | `hr.payslip` | `[["state","=","done"]]` |
+| Lots de paie | `hr.payslip.run` | — |
+| Candidatures | `hr.applicant` | `[["stage_id.name","=","New"]]` |
+| Postes | `hr.job` | — |
+| Départements | `hr.department` | — |
+| Certifications/Compétences | `hr.employee.skill` | — |
+
+**Diagnostics RH courants :**
+- Présences non clôturées : `hr.attendance` avec `check_out = False`
+- Soldes congés négatifs : `hr.leave.allocation` avec `number_of_days < 0`
+- Contrats expirés sans successeur : `hr.contract` avec `state='open'` et `date_end < today`
+- Employés sans contrat actif : `hr.employee` sans `hr.contract` en state=open
 
 ### Projets & Timesheets
-- Projets : `project.project`
-- Tâches : `project.task`
-- Feuilles de temps : `account.analytic.line` domain `[["project_id","!=",false]]`
 
-### Fabrication
-- Ordres de fabrication : `mrp.production`
-- Nomenclatures : `mrp.bom`, composants : `mrp.bom.line`
-- Ordres de travail : `mrp.workorder`
-- Postes de charge : `mrp.workcenter`
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Projets | `project.project` | `[["active","=",true]]` |
+| Tâches | `project.task` | `[["stage_id.fold","=",false]]` pour non-archivées |
+| Timesheets | `account.analytic.line` | `[["project_id","!=",false],["employee_id","!=",false]]` |
+| Jalons | `project.milestone` | — |
+| Sous-tâches | `project.task` | `[["parent_id","!=",false]]` |
 
-## Conseils de diagnostic courants
-- Double-paiement : `account.payment` doublons sur même `partner_id` + période
-- Stock négatif : `stock.quant` avec `quantity < 0`
-- Factures impayées en retard : `account.move` avec `payment_state='not_paid'` et `invoice_date_due < today`
-- Utilisateurs inactifs : `res.users` avec `active=False` ou `share=True`
-- Produits sans stock min : `product.template` sans règle `stock.warehouse.orderpoint`
+**Champs clés `project.task` :**
+- `stage_id` : étape (kanban)
+- `date_deadline` : échéance
+- `user_ids` (v17+) ou `user_id` (≤v16) : assigné(s)
+- `planned_hours` : heures planifiées
+- `effective_hours` : timesheets réalisées
+- `remaining_hours` : restant
+- `state` : normal / done / cancelled (v17+)
+
+### Fabrication (MRP)
+
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Ordres de fabrication | `mrp.production` | `[["state","in",["confirmed","progress","to_close"]]]` |
+| Nomenclatures | `mrp.bom` | `[["active","=",true]]` |
+| Composants BOM | `mrp.bom.line` | — |
+| Ordres de travail | `mrp.workorder` | `[["state","in",["ready","progress"]]]` |
+| Postes de charge | `mrp.workcenter` | — |
+| Plan directeur | `mrp.production.schedule` | — |
+| Sous-produits | `mrp.bom.byproduct` | — |
+
+**Champs clés `mrp.production` :**
+- `state` : draft / confirmed / progress / to_close / done / cancel
+- `product_id`, `product_qty`, `qty_producing`
+- `date_planned_start`, `date_planned_finished`
+- `bom_id` : nomenclature utilisée
+
+### eCommerce & Site Web
+
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Produits publiés | `product.template` | `[["is_published","=",true]]` |
+| Commandes web | `sale.order` | `[["website_id","!=",false]]` |
+| Sessions panier | `website.visitor` | — |
+| Paniers abandonnés | `sale.order` | `[["state","=","draft"],["website_id","!=",false],["cart_recovery_email_sent","=",false]]` |
+| Pages web | `website.page` | — |
+| Menus | `website.menu` | — |
+
+### Point de Vente (POS)
+
+| Besoin | Modèle | Domain clé |
+|--------|--------|-----------|
+| Sessions POS | `pos.session` | `[["state","=","opened"]]` pour sessions actives |
+| Commandes POS | `pos.order` | `[["state","in",["paid","done","invoiced"]]]` |
+| Lignes POS | `pos.order.line` | — |
+| Configurations POS | `pos.config` | `[["active","=",true]]` |
+| Paiements POS | `pos.payment` | — |
+
+---
+
+## Modèles transversaux essentiels
+
+| Modèle | Usage |
+|--------|-------|
+| `res.partner` | Clients (`customer_rank > 0`), fournisseurs (`supplier_rank > 0`), contacts |
+| `res.users` | Utilisateurs internes (`share=False`), portail (`share=True`) |
+| `res.company` | Sociétés (multi-company) |
+| `res.currency` | Devises |
+| `product.template` | Fiche produit (côté commercial) |
+| `product.product` | Variante produit (côté stock/technique) |
+| `product.category` | Catégories produits |
+| `product.attribute` | Attributs (couleur, taille...) |
+| `uom.uom` | Unités de mesure |
+| `mail.message` | Messages, notes, logs des chatter |
+| `mail.activity` | Activités planifiées |
+| `mail.followers` | Abonnés aux documents |
+| `ir.attachment` | Pièces jointes |
+| `ir.rule` | Règles d'accès par enregistrement |
+| `ir.model.access` | Droits d'accès par groupe |
+| `res.groups` | Groupes de sécurité |
+
+---
+
+## Patterns de diagnostic avancés
+
+### Comptabilité
+```
+# Factures impayées depuis > 90 jours
+account.move | [["payment_state","not in",["paid","in_payment"]], ["invoice_date_due","<","<date_90j>"], ["state","=","posted"], ["move_type","in",["out_invoice"]]]
+champs: name, partner_id, invoice_date_due, amount_residual, currency_id
+
+# Doublons de paiement suspects (même partenaire, même montant, même période)
+account.payment | [["state","=","posted"]] | grouper par partner_id + amount + date_tronquée
+
+# Écritures sans lettrage sur comptes de tiers
+account.move.line | [["account_id.reconcile","=",true], ["reconciled","=",false], ["balance","!=",0]]
+
+# Journaux avec solde non nul en espèces
+account.journal | [["type","=","cash"]] → vérifier balance via account.move.line
+```
+
+### Stock
+```
+# Produits sous le seuil de réapprovisionnement
+stock.warehouse.orderpoint | [["qty_on_hand","<=","product_min_qty"]]
+champs: product_id, product_min_qty, product_max_qty, qty_on_hand, qty_to_order
+
+# Transferts non traités depuis > 7 jours
+stock.picking | [["state","in",["confirmed","assigned"]], ["scheduled_date","<","<date_7j>"]]
+champs: name, picking_type_id, partner_id, scheduled_date, state
+
+# Valorisation du stock par catégorie
+stock.quant | [["location_id.usage","=","internal"]]
+champs: product_id, product_id.categ_id, quantity, product_id.standard_price
+→ calculer quantity * standard_price côté client
+```
+
+### Ventes & CRM
+```
+# Commandes livrées non facturées
+sale.order | [["invoice_status","=","to invoice"], ["state","=","sale"]]
+champs: name, partner_id, date_order, amount_total, user_id
+
+# Opportunités sans activité depuis > 30 jours
+crm.lead | [["type","=","opportunity"], ["active","=",true]]
+→ vérifier mail.activity ou date de dernière mise à jour (write_date)
+
+# CA par commercial sur les 3 derniers mois
+sale.order | [["state","in",["sale","done"]], ["date_order",">=","<date_3m>"]]
+champs: user_id, amount_untaxed → grouper/agréger côté client
+
+# Pipeline CRM : valeur pondérée
+crm.lead | [["type","=","opportunity"], ["active","=",true]]
+champs: name, partner_id, expected_revenue, probability, stage_id, user_id
+→ valeur_pondérée = expected_revenue * probability / 100
+```
+
+### RH
+```
+# Présences non clôturées (employés "pointés" sans sortie)
+hr.attendance | [["check_out","=",false]]
+champs: employee_id, check_in, check_out
+
+# Soldes de congés par type
+hr.leave.allocation | [["state","=","validate"], ["holiday_status_id","=",X]]
+champs: employee_id, number_of_days, date_from, date_to
+
+# Fiches de paie brouillon du mois en cours
+hr.payslip | [["state","in",["draft","verify"]], ["date_from",">=","<début_mois>"]]
+champs: employee_id, date_from, date_to, struct_id
+```
+
+---
+
+## Règles de sécurité et droits d'accès
+
+### Groupes standards importants
+- `base.group_user` : utilisateur interne (base)
+- `base.group_portal` : utilisateur portail
+- `account.group_account_user` : comptable
+- `account.group_account_manager` : responsable comptabilité
+- `sale.group_sale_salesman` : commercial
+- `sale.group_sale_manager` : responsable ventes
+- `purchase.group_purchase_user` : acheteur
+- `stock.group_stock_user` : opérateur stock
+- `stock.group_stock_manager` : responsable stock
+- `mrp.group_mrp_user` : opérateur fabrication
+- `hr.group_hr_user` : responsable RH
+- `project.group_project_user` : utilisateur projet
+
+### Vérification droits
+```python
+# Modèles pour auditer les droits
+ir.model.access | [["model_id.model","=","account.move"]]  # droits CRUD sur factures
+ir.rule         | [["model_id.model","=","sale.order"]]    # règles d'accès par enregistrement
+res.groups.users_rel                                        # appartenance groupes/utilisateurs
+```
+
+---
+
+## Customisations : comment les repérer
+
+### Signaux d'un module custom
+- Modèles avec préfixe non-standard (ex: `x_`, `custom_`, nom_societe_)
+- Champs `x_*` sur les modèles standards (ajoutés via Studio ou code)
+- Modules dans `ir.module.module` avec `author != 'Odoo S.A.'` et `state = 'installed'`
+- Vues dans `ir.ui.view` avec `type = 'custom'` ou `inherit_id` non-nul + module custom
+
+```
+# Lister les modules tiers installés
+ir.module.module | [["state","=","installed"], ["author","!=","Odoo S.A."], ["author","!=","Odoo"]]
+champs: name, summary, author, installed_version
+
+# Champs ajoutés via Studio
+ir.model.fields | [["name","like","x_studio"], ["state","=","manual"]]
+```
+
+---
+
+## Performance & Optimisation
+
+### Diagnostics lenteur fréquents
+- Trop d'enregistrements dans `mail.message` : vérifier les modèles avec `subtype_ids` actifs
+- Indices manquants : `stock.move.line` sans index sur `lot_id` ou `package_id`
+- `res.partner` avec `parent_id` : éviter les domaines sans `["is_company","=",true]` sur de grosses bases
+- `account.move.line` : toujours filtrer sur `move_id.state = 'posted'` pour les rapports
+
+### Requêtes à éviter
+- Ne jamais chercher dans `ir.attachment` sans filtrer sur `res_model` (table énorme)
+- `mail.message` sans filtre `res_id` ou `res_model` = requête catastrophique
+- `stock.move` sans filtre `state` = renvoie des milliers d'entrées inutiles
+
+---
+
+## Workflow des statuts — Référence rapide
+
+| Document | États (dans l'ordre) |
+|----------|---------------------|
+| Devis → Commande | draft → sent → sale → done / cancel |
+| Facture | draft → posted → (cancel) |
+| Paiement facture | not_paid → partial → in_payment → paid |
+| Transfert stock | draft → waiting → confirmed → assigned → done / cancel |
+| OF fabrication | draft → confirmed → progress → to_close → done / cancel |
+| Congé RH | draft → confirm → validate1 → validate / refuse |
+| Fiche de paie | draft → verify → done / cancel |
+| Bon de commande | draft → sent → to approve → purchase → done / cancel |
+| Opportunité CRM | (stage libre) + `active=True` → `active=False` (archivé/perdu) |
+
+---
+
+## Bonnes pratiques d'analyse client
+
+### Avant un audit
+1. Vérifier la version exacte : `ir.module.module` où `name='base'` → champ `installed_version`
+2. Lister les modules tiers : potentiel de customisation
+3. Identifier la taille de la base : compter `account.move`, `sale.order`, `stock.move`
+4. Vérifier les multi-sociétés : `res.company` count > 1 → comportements différents
+
+### Lors du diagnostic
+1. Toujours partir des données réelles (ne pas supposer)
+2. Vérifier les `active=False` : beaucoup de modèles Odoo ont des enregistrements archivés invisibles
+3. Multi-currency : vérifier `currency_id` sur les montants — `amount_residual_currency` ≠ `amount_residual`
+4. Sociétés multiples : les `ir.rule` filtrent souvent par `company_id` — penser à vérifier
+
+### Anomalies à chercher systématiquement
+- Factures en état `draft` depuis > 30 jours (oubliées de valider)
+- `sale.order` en état `sale` non facturées depuis > 15 jours
+- `stock.picking` bloqués depuis > 7 jours
+- Utilisateurs avec droits `base.group_system` non justifiés
+- `res.partner` doublons : même `email` ou même `vat` sur plusieurs enregistrements
+- Produits avec `standard_price = 0` dans une valorisation au coût réel
 """
 
 _VERSION_NOTES: dict = {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, getModelConfig, saveModelConfig } from '../api/client'
 import { t } from '../theme'
 
 interface ProviderDef {
@@ -363,6 +363,17 @@ export default function Settings() {
 
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
 
+      {/* Model config section */}
+      <section style={{ marginTop: 40 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+          Modèles disponibles
+        </h2>
+        <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+          Choisissez quels modèles apparaissent dans l'assistant IA. Utile pour masquer les modèles non disponibles sur votre abonnement.
+        </p>
+        <ModelConfigEditor />
+      </section>
+
       {/* Context files section */}
       <section style={{ marginTop: 40 }}>
         <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
@@ -373,6 +384,116 @@ export default function Settings() {
         </p>
         <ContextEditor />
       </section>
+    </div>
+  )
+}
+
+// ── Model config editor ──────────────────────────────────────────
+
+const ALL_MODELS: { provider: string; label: string; color: string; models: { id: string; label: string }[] }[] = [
+  { provider: 'claude', label: 'Claude (Anthropic)', color: '#D97706', models: [
+    { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6' },
+    { id: 'claude-opus-4-7',           label: 'Opus 4.7' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+  ]},
+  { provider: 'openai', label: 'GPT-4o (OpenAI)', color: '#16A34A', models: [
+    { id: 'gpt-4o',      label: 'GPT-4o' },
+    { id: 'gpt-4o-mini', label: 'GPT-4o mini' },
+    { id: 'o1-mini',     label: 'o1 mini' },
+  ]},
+  { provider: 'gemini', label: 'Gemini (Google)', color: '#2563EB', models: [
+    { id: 'gemini-2.0-flash', label: '2.0 Flash' },
+    { id: 'gemini-1.5-pro',   label: '1.5 Pro' },
+    { id: 'gemini-1.5-flash', label: '1.5 Flash' },
+  ]},
+  { provider: 'copilot', label: 'Copilot (GitHub)', color: '#6e40c9', models: [
+    { id: 'gpt-4o',                     label: 'GPT-4o' },
+    { id: 'gpt-4o-mini',                label: 'GPT-4o mini' },
+    { id: 'claude-3.5-sonnet',          label: 'Claude 3.5' },
+    { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 (2410)' },
+    { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7' },
+    { id: 'o1-mini',                    label: 'o1 mini' },
+    { id: 'o3-mini',                    label: 'o3 mini' },
+  ]},
+  { provider: 'github', label: 'GitHub Models', color: '#24292f', models: [
+    { id: 'gpt-4o',                        label: 'GPT-4o' },
+    { id: 'gpt-4o-mini',                   label: 'GPT-4o mini' },
+    { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5' },
+    { id: 'claude-3-7-sonnet-20250219',    label: 'Claude 3.7' },
+    { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2 90B' },
+    { id: 'Llama-3.1-405B-Instruct',       label: 'Llama 3.1 405B' },
+    { id: 'mistral-large-2407',            label: 'Mistral Large' },
+    { id: 'Phi-3.5-mini-instruct',         label: 'Phi-3.5 mini' },
+  ]},
+]
+
+function ModelConfigEditor() {
+  const qc = useQueryClient()
+  const { data } = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
+  const config: Record<string, string[]> = data?.data ?? {}
+  const [local, setLocal] = useState<Record<string, string[]>>({})
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => { setLocal(data?.data ?? {}) }, [data])
+
+  const toggle = (provider: string, modelId: string) => {
+    setLocal(prev => {
+      const providerModels = ALL_MODELS.find(p => p.provider === provider)!.models.map(m => m.id)
+      const current: string[] = prev[provider] ?? providerModels
+      const next = current.includes(modelId) ? current.filter(id => id !== modelId) : [...current, modelId]
+      return { ...prev, [provider]: next }
+    })
+    setSaved(false)
+  }
+
+  const isEnabled = (provider: string, modelId: string) => {
+    const providerModels = ALL_MODELS.find(p => p.provider === provider)!.models.map(m => m.id)
+    const current: string[] = local[provider] ?? providerModels
+    return current.includes(modelId)
+  }
+
+  const handleSave = async () => {
+    await saveModelConfig(local)
+    qc.invalidateQueries({ queryKey: ['model-config'] })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {ALL_MODELS.map(prov => (
+        <div key={prov.provider} style={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, padding: '14px 18px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: prov.color, marginBottom: 10 }}>{prov.label}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {prov.models.map(m => {
+              const on = isEnabled(prov.provider, m.id)
+              return (
+                <button key={m.id} onClick={() => toggle(prov.provider, m.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px',
+                  background: on ? `${prov.color}15` : t.bgMuted,
+                  border: `1px solid ${on ? prov.color : t.border}`,
+                  borderRadius: t.radiusFull,
+                  fontSize: 12, fontWeight: on ? 600 : 400,
+                  color: on ? prov.color : t.muted,
+                  cursor: 'pointer', transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 11 }}>{on ? '✓' : '○'}</span>
+                  {m.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      <div>
+        <button onClick={handleSave} style={{
+          padding: '8px 20px', background: t.brand, color: '#fff', border: 'none',
+          borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+        }}>
+          {saved ? '✓ Enregistré' : 'Enregistrer'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { listProfiles, getAiProviders, checkAllSources } from '../api/client'
+import { listProfiles, getAiProviders, checkAllSources, getModelConfig } from '../api/client'
 import { t } from '../theme'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -130,15 +130,25 @@ const GENERAL_KEY = 'general'
 
 export default function Assistant() {
   const location = useLocation()
-  const { data: profData }  = useQuery({ queryKey: ['profiles'],     queryFn: listProfiles })
-  const { data: provData }  = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
-  const { data: srcData }   = useQuery({ queryKey: ['sources-all'],  queryFn: checkAllSources, staleTime: 30_000 })
+  const { data: profData }  = useQuery({ queryKey: ['profiles'],      queryFn: listProfiles })
+  const { data: provData }  = useQuery({ queryKey: ['ai-providers'],  queryFn: getAiProviders })
+  const { data: srcData }   = useQuery({ queryKey: ['sources-all'],   queryFn: checkAllSources, staleTime: 30_000 })
+  const { data: modelCfg }  = useQuery({ queryKey: ['model-config'],  queryFn: getModelConfig })
 
   const profiles: Profile[] = profData?.data ?? []
   const allProviders: Record<string, boolean> = provData?.data ?? {}
 
-  // Only show configured providers
-  const configuredProviders = PROVIDERS.filter(p => allProviders[p.id])
+  const modelConfig: Record<string, string[]> = modelCfg?.data ?? {}
+
+  // Only show configured providers, with models filtered by user preferences
+  const configuredProviders = PROVIDERS
+    .filter(p => allProviders[p.id])
+    .map(p => {
+      const enabled = modelConfig[p.id]
+      if (!enabled || enabled.length === 0) return p
+      return { ...p, models: p.models.filter(m => enabled.includes(m.id)) }
+    })
+    .filter(p => p.models.length > 0)
 
   const [provider,  setProvider]  = useState('')
   const [modelId,   setModelId]   = useState('')

@@ -48,6 +48,8 @@ export const deleteAiKey = (provider: string) => api.delete(`/ai/key/${provider}
 export const testAiKey = (provider: string) => api.post('/ai/test-key', { provider })
 export const copilotLogin = () => api.post('/ai/copilot/login')
 export const copilotPoll = (device_code: string) => api.post('/ai/copilot/poll', { device_code })
+export const getModelConfig = () => api.get('/ai/model-config')
+export const saveModelConfig = (config: Record<string, string[]>) => api.post('/ai/model-config', config)
 
 // Context files
 export const listContextFiles = () => api.get('/context/')
