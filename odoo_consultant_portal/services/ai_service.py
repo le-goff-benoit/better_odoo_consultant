@@ -199,6 +199,15 @@ COPILOT_HEADERS         = {
 
 # ── System prompt ────────────────────────────────────────────────
 
+_MAX_CONTEXT_CHARS = 40_000  # ~10k tokens — prevents hitting model limits
+
+
+def _trim_context(ctx: str) -> str:
+    if len(ctx) <= _MAX_CONTEXT_CHARS:
+        return ctx
+    return ctx[:_MAX_CONTEXT_CHARS] + "\n\n[...contexte tronqué — trop long pour le modèle...]"
+
+
 def build_system(profile, source_path: Optional[str] = None, context_md: str = "") -> str:
     source_section = ""
     if source_path:
@@ -246,7 +255,7 @@ Modèles Odoo fréquents (noms peuvent varier selon la version) :
 - Routes stock         : stock.route (anciennement stock.location.route avant v16)
 - Règles de réapprovisionnement : stock.warehouse.orderpoint
 - Mouvements de stock  : stock.move
-{chr(10) + "---" + chr(10) + chr(10) + context_md.strip() if context_md.strip() else ""}
+{chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
 """
 
 
@@ -271,7 +280,7 @@ Instructions :
 - Réponds dans la langue de l'utilisateur (français si l'utilisateur écrit en français)
 - Sois précis, pédagogique, orienté consultant
 - Tu n'as pas accès aux données d'une instance Odoo (mode général sans connexion client)
-{chr(10) + "---" + chr(10) + chr(10) + context_md.strip() if context_md.strip() else ""}
+{chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
 """
 
 
@@ -585,16 +594,33 @@ async def stream_chat(
     source_path: Optional[str] = None,
     context_md: str = "",
     version: Optional[str] = None,  # used when profile is None
+    user_profile: Optional[dict] = None,
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
 
+    user_ctx = ""
+    if user_profile:
+        parts = []
+        if user_profile.get("name"):
+            parts.append(f"Consultant : {user_profile['name']}")
+        if user_profile.get("title"):
+            parts.append(f"Poste : {user_profile['title']}")
+        if user_profile.get("team"):
+            parts.append(f"Équipe : {user_profile['team']}")
+        if parts:
+            user_ctx = "\n".join(parts) + "\n"
+
     if profile is not None:
         system   = build_system(profile, source_path, context_md)
+        if user_ctx:
+            system = user_ctx + system
         tools_c  = TOOLS_CLAUDE
         tools_o  = TOOLS_OPENAI
         tools_g  = TOOLS_GEMINI
     else:
         system   = build_system_general(version or "?", source_path, context_md)
+        if user_ctx:
+            system = user_ctx + system
         tools_c  = TOOLS_CLAUDE_SRC
         tools_o  = TOOLS_OPENAI_SRC
         tools_g  = TOOLS_GEMINI_SRC

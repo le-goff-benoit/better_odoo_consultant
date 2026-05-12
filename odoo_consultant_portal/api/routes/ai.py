@@ -261,6 +261,16 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     import os as _os
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
 
+    # Load user profile for personalisation
+    from ..routes.settings import USER_PROFILE_FILE
+    _user_profile: dict = {}
+    try:
+        if USER_PROFILE_FILE.exists():
+            import json as _json
+            _user_profile = _json.loads(USER_PROFILE_FILE.read_text())
+    except Exception:
+        pass
+
     # ── General mode (no profile) ──────────────────────────────────
     if req.profile_id is None:
         version = req.version or "?"
@@ -272,7 +282,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
         async def generate_general():
             try:
-                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version):
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile):
                     yield _sse(evt)
             except Exception as exc:
                 yield _sse({"type": "error", "msg": str(exc)})
@@ -319,7 +329,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

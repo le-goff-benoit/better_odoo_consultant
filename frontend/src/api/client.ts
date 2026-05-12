@@ -58,3 +58,7 @@ export const listContextFiles = () => api.get('/context/')
 export const getContextFile = (name: string) => api.get(`/context/file/${name}`)
 export const saveContextFile = (name: string, content: string) => api.put(`/context/file/${name}`, { content })
 export const deleteContextFile = (name: string) => api.delete(`/context/file/${name}`)
+
+// User profile / settings
+export const getUserProfile = () => api.get('/settings/user-profile')
+export const saveUserProfile = (data: object) => api.post('/settings/user-profile', data)

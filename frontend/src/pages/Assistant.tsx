@@ -842,40 +842,111 @@ function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loa
   )
 }
 
+function getToolMeta(name: string, args?: Record<string, unknown>) {
+  if (name === 'query_odoo') {
+    const model = (args?.model as string) ?? ''
+    const prefix = model.split('.')[0]
+    const app = APP_ICONS_ASST[prefix]
+    return {
+      icon: app ? app.icon : '🗄️',
+      color: app ? app.color : '#64748b',
+      label: model || 'query_odoo',
+      category: 'Odoo',
+    }
+  }
+  if (name === 'search_odoo_source') {
+    const ver = args?.version as string
+    return { icon: '🔎', color: '#2563EB', label: ver ? `Sources v${ver}` : 'Sources Odoo', category: 'Code source' }
+  }
+  if (name === 'read_odoo_file') {
+    const path = args?.path as string ?? ''
+    const file = path.split('/').pop() ?? 'fichier'
+    return { icon: '📄', color: '#7C3AED', label: file, category: 'Lecture fichier' }
+  }
+  return { icon: '🔧', color: '#64748b', label: name, category: 'Outil' }
+}
+
 function ToolCallGroup({ events }: { events: AiEvent[] }) {
   const [open, setOpen] = useState(false)
   const calls   = events.filter(e => e.type === 'tool_call')
   const results = events.filter(e => e.type === 'tool_result')
 
   return (
-    <div style={{ marginBottom: 8 }}>
-      <button onClick={() => setOpen(p => !p)} style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        background: `${t.brand}10`, border: `1px solid ${t.brand}30`,
-        borderRadius: t.radius, padding: '4px 10px', cursor: 'pointer',
-        fontSize: 12, color: t.brand, fontWeight: 600,
-      }}>
-        <span>🔍</span>
-        {calls.map(c => {
-          const res = results.find(r => r.name === c.name)
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: open ? 8 : 0 }}>
+        {calls.map((c, idx) => {
+          const meta = getToolMeta(c.name!, c.args)
+          const res  = results.find(r => r.name === c.name)
+          const done = !!res
+          const hasRecords = done && res!.records && res!.records.length > 0
+
           return (
-            <span key={c.name}>
-              {c.name === 'query_odoo' ? (c.args?.model as string) : c.name}
-              {res?.ok && res.count !== undefined && ` — ${res.count} résultat${res.count > 1 ? 's' : ''}`}
-            </span>
+            <button
+              key={`${c.name}-${idx}`}
+              onClick={() => hasRecords && setOpen(p => !p)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: done ? `${meta.color}12` : `${meta.color}08`,
+                border: `1px solid ${done ? `${meta.color}40` : `${meta.color}25`}`,
+                borderRadius: t.radiusFull, padding: '4px 10px 4px 6px',
+                cursor: hasRecords ? 'pointer' : 'default',
+                fontSize: 11, color: meta.color, fontWeight: 600,
+                transition: 'all .2s',
+              }}
+            >
+              {/* Odoo O badge */}
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 18, height: 18, borderRadius: '50%',
+                background: meta.color, color: '#fff', fontSize: 9, fontWeight: 800,
+                flexShrink: 0,
+                animation: done ? 'none' : 'toolPulse 1.2s ease-in-out infinite',
+              }}>
+                {c.name === 'query_odoo' ? 'O' : c.name === 'search_odoo_source' ? '⌕' : '◈'}
+              </span>
+
+              {/* App icon if query_odoo */}
+              <span style={{ fontSize: 13 }}>{meta.icon}</span>
+
+              <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {meta.label}
+              </span>
+
+              {/* Result count */}
+              {done && res!.count !== undefined && (
+                <span style={{
+                  background: `${meta.color}25`, borderRadius: 9999,
+                  padding: '1px 6px', fontSize: 10,
+                }}>
+                  {res!.count}
+                </span>
+              )}
+
+              {/* State indicator */}
+              {done ? (
+                <span style={{ fontSize: 10, opacity: .7 }}>✓{hasRecords ? (open ? ' ▲' : ' ▼') : ''}</span>
+              ) : (
+                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: `2px solid ${meta.color}`, borderTopColor: 'transparent', animation: 'toolSpin .6s linear infinite', flexShrink: 0 }} />
+              )}
+            </button>
           )
         })}
-        <span style={{ marginLeft: 4, fontSize: 10 }}>{open ? '▲' : '▼'}</span>
-      </button>
+      </div>
 
       {open && results.map((r, i) => r.records && r.records.length > 0 && (
         <div key={i} style={{
-          marginTop: 6, background: '#1e1e2e', borderRadius: t.radius,
+          background: '#1e1e2e', borderRadius: t.radius,
           padding: '10px 12px', overflowX: 'auto', maxHeight: 220, overflowY: 'auto',
+          marginTop: 4,
         }}>
           <RecordsTable records={r.records} />
         </div>
       ))}
+
+      <style>{`
+        @keyframes toolPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
+        @keyframes toolSpin  { to{transform:rotate(360deg)} }
+      `}</style>
     </div>
   )
 }

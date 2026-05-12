@@ -9,10 +9,12 @@ AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=F
 
 # Columns added after initial release — applied with ALTER TABLE if missing
 _MIGRATIONS = [
-    ("profile", "environments",  "TEXT"),
-    ("profile", "company_name",  "TEXT"),
-    ("profile", "company_city",  "TEXT"),
-    ("profile", "company_logo",  "TEXT"),
+    ("profile", "environments",    "TEXT"),
+    ("profile", "company_name",    "TEXT"),
+    ("profile", "company_city",    "TEXT"),
+    ("profile", "company_logo",    "TEXT"),
+    ("profile", "company_ids",     "TEXT"),
+    ("profile", "api_key_expires", "TEXT"),
 ]
 
 

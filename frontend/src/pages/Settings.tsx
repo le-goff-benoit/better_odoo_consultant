@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, getModelConfig, saveModelConfig } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile } from '../api/client'
 import { t } from '../theme'
 
 interface ProviderDef {
@@ -374,6 +374,17 @@ export default function Settings() {
         <ModelConfigEditor />
       </section>
 
+      {/* User profile section */}
+      <section style={{ marginTop: 40 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+          Profil consultant
+        </h2>
+        <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+          Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.
+        </p>
+        <UserProfileEditor />
+      </section>
+
       {/* Context files section */}
       <section style={{ marginTop: 40 }}>
         <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
@@ -615,6 +626,145 @@ function ContextEditor() {
           Fichier Markdown · {content.split('\n').length} lignes · {content.length} caractères
           · Chemin : <code style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px' }}>~/.odoo-consultant/context/{selected}</code>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── User profile editor ──────────────────────────────────────────
+
+const PRESET_COLORS = ['#017e84', '#2563EB', '#7C3AED', '#DC2626', '#D97706', '#16A34A', '#0891B2', '#EC4899', '#374151']
+
+interface UserProfile {
+  name?: string
+  title?: string
+  team?: string
+  avatar?: string   // emoji or data-URI
+  primaryColor?: string
+}
+
+function applyPrimaryColor(color: string) {
+  document.documentElement.style.setProperty('--brand', color)
+}
+
+function UserProfileEditor() {
+  const qc = useQueryClient()
+  const { data } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
+  const [form, setForm] = useState<UserProfile>({})
+  const [saved, setSaved] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const p: UserProfile = data?.data ?? {}
+    setForm(p)
+    if (p.primaryColor) applyPrimaryColor(p.primaryColor)
+  }, [data])
+
+  const set = (key: keyof UserProfile, val: string) => setForm(f => ({ ...f, [key]: val }))
+
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => set('avatar', ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const handleSave = async () => {
+    await saveUserProfile(form)
+    qc.invalidateQueries({ queryKey: ['user-profile'] })
+    if (form.primaryColor) applyPrimaryColor(form.primaryColor)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const avatarIsImage = form.avatar?.startsWith('data:')
+
+  return (
+    <div style={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+
+        {/* Avatar */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <div
+            onClick={() => fileRef.current?.click()}
+            title="Cliquer pour changer l'avatar"
+            style={{
+              width: 72, height: 72, borderRadius: '50%',
+              background: `${form.primaryColor ?? t.brand}20`,
+              border: `2px solid ${form.primaryColor ?? t.brand}40`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: avatarIsImage ? 0 : 32, cursor: 'pointer',
+              overflow: 'hidden', flexShrink: 0,
+            }}
+          >
+            {avatarIsImage
+              ? <img src={form.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : (form.avatar || '👤')
+            }
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFile} />
+          <div style={{ display: 'flex', gap: 4 }}>
+            {['👤', '🧑‍💻', '👨‍💼', '👩‍💼', '🦊'].map(em => (
+              <button key={em} onClick={() => set('avatar', em)} style={{
+                fontSize: 16, background: form.avatar === em ? `${t.brand}15` : 'transparent',
+                border: `1px solid ${form.avatar === em ? t.brand : t.border}`,
+                borderRadius: 6, padding: '2px 4px', cursor: 'pointer',
+              }}>{em}</button>
+            ))}
+          </div>
+          <span style={{ fontSize: 10, color: t.muted }}>ou cliquer sur l'avatar</span>
+        </div>
+
+        {/* Form fields */}
+        <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <label style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Nom complet</div>
+              <input value={form.name ?? ''} onChange={e => set('name', e.target.value)} placeholder="Benoît Le Goff"
+                style={{ width: '100%', padding: '7px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, color: t.text, boxSizing: 'border-box' }} />
+            </label>
+            <label style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Poste</div>
+              <input value={form.title ?? ''} onChange={e => set('title', e.target.value)} placeholder="Consultant Odoo Senior"
+                style={{ width: '100%', padding: '7px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, color: t.text, boxSizing: 'border-box' }} />
+            </label>
+          </div>
+          <label>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Équipe / Cabinet</div>
+            <input value={form.team ?? ''} onChange={e => set('team', e.target.value)} placeholder="Le Projet · Pôle ERP"
+              style={{ width: '100%', padding: '7px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, color: t.text, boxSizing: 'border-box' }} />
+          </label>
+
+          {/* Color picker */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>Couleur principale des menus</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {PRESET_COLORS.map(c => (
+                <button key={c} onClick={() => set('primaryColor', c)} style={{
+                  width: 26, height: 26, borderRadius: '50%', background: c, border: 'none',
+                  cursor: 'pointer', outline: form.primaryColor === c ? `3px solid ${c}` : 'none',
+                  outlineOffset: 2, transition: 'outline .1s',
+                }} />
+              ))}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.muted, cursor: 'pointer' }}>
+                <input type="color" value={form.primaryColor ?? t.brand}
+                  onChange={e => set('primaryColor', e.target.value)}
+                  style={{ width: 26, height: 26, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
+                Autre
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={handleSave} style={{
+          padding: '8px 20px', background: form.primaryColor ?? t.brand, color: '#fff',
+          border: 'none', borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+        }}>
+          {saved ? '✓ Enregistré' : 'Sauvegarder le profil'}
+        </button>
       </div>
     </div>
   )

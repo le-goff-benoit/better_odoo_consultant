@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -8,8 +9,16 @@ import Query from './pages/Query'
 import History from './pages/History'
 import Settings from './pages/Settings'
 import About from './pages/About'
+import { getUserProfile } from './api/client'
 
 export default function App() {
+  useEffect(() => {
+    getUserProfile().then(res => {
+      const color = res.data?.primaryColor
+      if (color) document.documentElement.style.setProperty('--brand', color)
+    }).catch(() => {})
+  }, [])
+
   return (
     <Layout>
       <Routes>

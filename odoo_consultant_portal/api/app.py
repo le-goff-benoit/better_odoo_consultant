@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from ..core.database import init_db
 from ..core.config import settings
-from .routes import sources, profiles, projects, queries, history, ai, context
+from .routes import sources, profiles, projects, queries, history, ai, context, settings as settings_routes
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.include_router(queries.router, prefix="/api/queries", tags=["queries"])
 app.include_router(history.router, prefix="/api/history", tags=["history"])
 app.include_router(ai.router,      prefix="/api/ai",      tags=["ai"])
 app.include_router(context.router, prefix="/api/context", tags=["context"])
+app.include_router(settings_routes.router, prefix="/api/settings", tags=["settings"])
 
 
 @app.get("/api/health")
