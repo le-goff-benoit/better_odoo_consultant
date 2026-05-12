@@ -1,8 +1,64 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { listProfiles, getAiProviders, checkAllSources, getModelConfig } from '../api/client'
+import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getProfileApps } from '../api/client'
 import { t } from '../theme'
+
+const APP_ICONS_ASST: Record<string, { icon: string; label: string; color: string }> = {
+  account:         { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
+  sale:            { icon: '🛒', label: 'Ventes',       color: '#2563EB' },
+  purchase:        { icon: '🛍️', label: 'Achats',       color: '#7C3AED' },
+  stock:           { icon: '📦', label: 'Inventaire',   color: '#D97706' },
+  mrp:             { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
+  project:         { icon: '📋', label: 'Projets',      color: '#0891B2' },
+  hr:              { icon: '👥', label: 'RH',           color: '#059669' },
+  hr_payroll:      { icon: '💶', label: 'Paie',         color: '#10B981' },
+  crm:             { icon: '🎯', label: 'CRM',          color: '#F59E0B' },
+  website:         { icon: '🌐', label: 'Site Web',     color: '#3B82F6' },
+  point_of_sale:   { icon: '🖥️', label: 'POS',          color: '#8B5CF6' },
+  helpdesk:        { icon: '🎧', label: 'Support',      color: '#06B6D4' },
+  hr_timesheet:    { icon: '⏱️', label: 'Timesheets',   color: '#6366F1' },
+  hr_expense:      { icon: '💳', label: 'Notes de frais', color: '#EC4899' },
+  sign:            { icon: '✍️', label: 'Signature',    color: '#84CC16' },
+  fleet:           { icon: '🚗', label: 'Flotte',       color: '#14B8A6' },
+  maintenance:     { icon: '⚙️', label: 'Maintenance',  color: '#6B7280' },
+  quality_control: { icon: '✅', label: 'Qualité',      color: '#22C55E' },
+  email_marketing: { icon: '📧', label: 'Marketing',    color: '#F97316' },
+  accounting:      { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
+  inventory:       { icon: '📦', label: 'Inventaire',   color: '#D97706' },
+  manufacturing:   { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
+}
+
+function AppBadgesAsst({ apps, max = 6 }: { apps: { name: string; shortdesc: string }[]; max?: number }) {
+  const known = apps.filter(a => APP_ICONS_ASST[a.name])
+  const shown = known.slice(0, max)
+  const rest  = known.length - max
+  if (shown.length === 0) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+      {shown.map(a => {
+        const def = APP_ICONS_ASST[a.name]
+        return (
+          <span key={a.name} title={a.shortdesc} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            padding: '2px 7px', borderRadius: 4,
+            background: `${def.color}15`, border: `1px solid ${def.color}40`,
+            fontSize: 10, fontWeight: 600, color: def.color,
+          }}>
+            {def.icon} {def.label}
+          </span>
+        )
+      })}
+      {rest > 0 && (
+        <span style={{
+          padding: '2px 7px', borderRadius: 4,
+          background: '#F3F4F6', border: '1px solid #E5E7EB',
+          fontSize: 10, color: '#6B7280',
+        }}>+{rest}</span>
+      )}
+    </div>
+  )
+}
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -201,6 +257,15 @@ export default function Assistant() {
   const isGeneralMode = profileId === GENERAL_KEY
   const selectedProfile = profiles.find(p => p.id === profileId)
   const currentProv = PROVIDERS.find(p => p.id === provider)
+
+  const { data: profileAppsData } = useQuery({
+    queryKey: ['profile-apps', typeof profileId === 'number' ? profileId : null],
+    queryFn: () => typeof profileId === 'number' ? getProfileApps(profileId) : Promise.resolve(null),
+    enabled: typeof profileId === 'number',
+    staleTime: 300_000,
+    retry: false,
+  })
+  const profileApps: { name: string; shortdesc: string }[] = profileAppsData?.data?.apps ?? []
 
   const sourcesStatus: Record<string, { installed: boolean }> = srcData?.data ?? {}
   const activeVersion = isGeneralMode ? generalVersion : (selectedProfile?.odoo_version ?? null)
@@ -564,13 +629,14 @@ export default function Assistant() {
               {selectedProfile.company_logo && (
                 <img src={selectedProfile.company_logo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6, background: t.bgMuted, padding: 3, border: `1px solid ${t.border}` }} />
               )}
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{selectedProfile.company_name || selectedProfile.name}</div>
                 {currentProv && (
                   <div style={{ fontSize: 11, color: t.muted, marginTop: 1 }}>
                     {currentProv.label} · {PROVIDERS.find(p => p.id === provider)?.models.find(m => m.id === modelId)?.label}
                   </div>
                 )}
+                <AppBadgesAsst apps={profileApps} />
               </div>
             </div>
             <div style={{ fontSize: 13, color: t.muted, marginBottom: 10 }}>Suggestions :</div>

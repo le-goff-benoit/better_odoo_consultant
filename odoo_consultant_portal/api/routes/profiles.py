@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Optional
@@ -31,6 +32,8 @@ class ProfileCreate(BaseModel):
     company_name: Optional[str] = None
     company_city: Optional[str] = None
     company_logo: Optional[str] = None
+    company_ids: Optional[str] = None
+    api_key_expires: Optional[str] = None
 
 
 class ProfileUpdate(BaseModel):
@@ -46,6 +49,8 @@ class ProfileUpdate(BaseModel):
     company_name: Optional[str] = None
     company_city: Optional[str] = None
     company_logo: Optional[str] = None
+    company_ids: Optional[str] = None
+    api_key_expires: Optional[str] = None
 
 
 class DiagnoseRequest(BaseModel):
@@ -185,6 +190,17 @@ async def diagnose(body: DiagnoseRequest):
     except Exception:
         pass
 
+    # Step 5 — available companies (best-effort, for multi-company detection)
+    company_ids_json = None
+    try:
+        all_companies = await loop.run_in_executor(
+            None,
+            lambda: client.search_read("res.company", [], ["id", "name"], limit=50)
+        )
+        company_ids_json = json.dumps([{"id": c["id"], "name": c["name"]} for c in all_companies])
+    except Exception:
+        pass
+
     return {
         "steps": steps,
         "uid": uid,
@@ -195,6 +211,7 @@ async def diagnose(body: DiagnoseRequest):
         "company_name": company_name,
         "company_city": company_city,
         "company_logo": company_logo,
+        "company_ids": company_ids_json,
     }
 
 
@@ -245,6 +262,28 @@ async def delete_profile(profile_id: int, session: AsyncSession = Depends(get_se
     await session.delete(profile)
     await session.commit()
     return {"ok": True}
+
+
+def _get_client_from_profile(profile: Profile) -> OdooClient:
+    from ...services.profile_manager import get_profile_api_key
+    api_key = get_profile_api_key(profile.name)
+    if not api_key:
+        raise HTTPException(400, "Aucune clé API enregistrée pour ce profil")
+    return OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
+
+
+@router.get("/{profile_id}/apps")
+async def get_profile_apps(profile_id: int, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Profil introuvable")
+    client = _get_client_from_profile(profile)
+    loop = asyncio.get_event_loop()
+    try:
+        apps = await loop.run_in_executor(None, client.get_installed_apps)
+        return {"apps": apps}
+    except Exception as exc:
+        raise HTTPException(400, str(exc))
 
 
 @router.post("/{profile_id}/test")

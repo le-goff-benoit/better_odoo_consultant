@@ -29,6 +29,8 @@ class Profile(SQLModel, table=True):
     company_name: Optional[str] = None
     company_city: Optional[str] = None
     company_logo: Optional[str] = Field(default=None)  # data URI base64
+    company_ids: Optional[str] = Field(default=None)   # JSON: [{"id":1,"name":"..."}]
+    api_key_expires: Optional[str] = None               # format ISO date: "2026-12-31"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

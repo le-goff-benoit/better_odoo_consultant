@@ -23,6 +23,7 @@ export const createProfile = (data: object) => api.post('/profiles/', data)
 export const updateProfile = (id: number, data: object) => api.patch(`/profiles/${id}`, data)
 export const deleteProfile = (id: number) => api.delete(`/profiles/${id}`)
 export const testProfile = (id: number) => api.post(`/profiles/${id}/test`)
+export const getProfileApps = (id: number) => api.get(`/profiles/${id}/apps`)
 export const diagnoseOdoo = (data: object) => api.post('/profiles/diagnose', data)
 
 // Projects

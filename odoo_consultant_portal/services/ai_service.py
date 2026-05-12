@@ -203,11 +203,12 @@ def build_system(profile, source_path: Optional[str] = None, context_md: str = "
     source_section = ""
     if source_path:
         source_section = f"""
-Code source disponible : {source_path}
-- Utilise search_odoo_source pour trouver le nom exact d'un modèle, d'un champ ou d'une méthode
-- Utilise read_odoo_file pour lire l'implémentation d'un fichier trouvé
-- Quand un modèle Odoo n'existe pas sur l'instance, cherche d'abord dans le code source son vrai nom
-- Exemple : si stock.location.route n'existe pas, cherche '_name = ' dans addons/stock pour trouver stock.route
+Code source Odoo disponible localement : {source_path}
+IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.
+Exemples d'utilisation :
+- Trouver un modèle : search_odoo_source(pattern="_name = 'sale.order'")
+- Trouver une méthode : search_odoo_source(pattern="def action_confirm", path="addons/sale")
+- Lire un fichier : read_odoo_file(path="addons/account/models/account_move.py", start_line=1, end_line=100)
 """
     else:
         source_section = "\nCode source non disponible (sources non installées pour cette version).\n"
@@ -251,9 +252,12 @@ Modèles Odoo fréquents (noms peuvent varier selon la version) :
 
 def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "") -> str:
     source_section = (
-        f"Code source disponible : {source_path}\n"
-        "- Utilise search_odoo_source pour explorer les modules, modèles et méthodes\n"
-        "- Utilise read_odoo_file pour lire l'implémentation complète d'un fichier\n"
+        f"Code source Odoo disponible localement : {source_path}\n"
+        "IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
+        "Exemples d'utilisation :\n"
+        "- Trouver un modèle : search_odoo_source(pattern=\"_name = 'sale.order'\")\n"
+        "- Trouver une méthode : search_odoo_source(pattern=\"def action_confirm\", path=\"addons/sale\")\n"
+        "- Lire un fichier : read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)\n"
     ) if source_path else "Code source non disponible pour cette version.\n"
 
     return f"""Tu es un expert Odoo qui répond à des questions générales sur l'ERP, indépendamment de tout projet client.

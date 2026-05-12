@@ -71,6 +71,14 @@ class OdooClient:
             limit=500,
         )
 
+    def get_installed_apps(self) -> list[dict]:
+        return self.search_read(
+            "ir.module.module",
+            [["state", "=", "installed"], ["application", "=", True]],
+            ["name", "shortdesc", "category_id"],
+            limit=200,
+        )
+
     def export_markdown(self, records: list[dict]) -> str:
         if not records:
             return "_No results._"

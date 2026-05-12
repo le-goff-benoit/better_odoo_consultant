@@ -296,12 +296,26 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     odoo = OdooClient(profile.db_url, profile.db_name, profile.login, odoo_key)
 
     source_path = None
-    if profile.odoo_version:
-        candidate = _os.path.expanduser(f"~/odoo-sources/{profile.odoo_version}")
-        if _os.path.isdir(candidate):
-            source_path = candidate
+    _version_to_use = profile.odoo_version
+    candidate = _os.path.expanduser(f"~/odoo-sources/{_version_to_use}") if _version_to_use else ""
+    if _version_to_use and _os.path.isdir(candidate):
+        source_path = candidate
+    elif not source_path:
+        # Fallback : chercher la version la plus récente installée
+        sources_base = _os.path.expanduser("~/odoo-sources")
+        if _os.path.isdir(sources_base):
+            import re as _re
+            _ver_re = _re.compile(r'^\d+\.\d+$')
+            available = sorted(
+                [d for d in _os.listdir(sources_base) if _ver_re.match(d) and _os.path.isdir(_os.path.join(sources_base, d))],
+                reverse=True
+            )
+            if available:
+                source_path = _os.path.join(sources_base, available[0])
+                if not _version_to_use:
+                    _version_to_use = available[0]
 
-    context_md = load_context_for_prompt(profile.odoo_version)
+    context_md = load_context_for_prompt(_version_to_use)
 
     async def generate():
         try:

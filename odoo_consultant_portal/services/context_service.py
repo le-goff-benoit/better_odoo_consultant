@@ -57,6 +57,10 @@ def load_context_for_prompt(odoo_version: Optional[str] = None) -> str:
         sections.append(("Compétences consultant", read_file("skills.md")))
     except FileNotFoundError:
         pass
+    try:
+        sections.append(("Modèle compte-rendu", read_file("meeting-minute.md")))
+    except FileNotFoundError:
+        pass
     if odoo_version:
         try:
             sections.append((f"Notes de version Odoo {odoo_version}", read_file(f"odoo-{odoo_version}.md")))

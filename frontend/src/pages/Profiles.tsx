@@ -1,20 +1,79 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo } from '../api/client'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps } from '../api/client'
 import { t } from '../theme'
+
+const APP_ICONS: Record<string, { icon: string; label: string; color: string }> = {
+  account:         { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
+  sale:            { icon: '🛒', label: 'Ventes',       color: '#2563EB' },
+  purchase:        { icon: '🛍️', label: 'Achats',       color: '#7C3AED' },
+  stock:           { icon: '📦', label: 'Inventaire',   color: '#D97706' },
+  mrp:             { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
+  project:         { icon: '📋', label: 'Projets',      color: '#0891B2' },
+  hr:              { icon: '👥', label: 'RH',           color: '#059669' },
+  hr_payroll:      { icon: '💶', label: 'Paie',         color: '#10B981' },
+  crm:             { icon: '🎯', label: 'CRM',          color: '#F59E0B' },
+  website:         { icon: '🌐', label: 'Site Web',     color: '#3B82F6' },
+  point_of_sale:   { icon: '🖥️', label: 'POS',          color: '#8B5CF6' },
+  helpdesk:        { icon: '🎧', label: 'Support',      color: '#06B6D4' },
+  hr_timesheet:    { icon: '⏱️', label: 'Timesheets',   color: '#6366F1' },
+  hr_expense:      { icon: '💳', label: 'Notes de frais', color: '#EC4899' },
+  sign:            { icon: '✍️', label: 'Signature',    color: '#84CC16' },
+  fleet:           { icon: '🚗', label: 'Flotte',       color: '#14B8A6' },
+  maintenance:     { icon: '⚙️', label: 'Maintenance',  color: '#6B7280' },
+  quality_control: { icon: '✅', label: 'Qualité',      color: '#22C55E' },
+  email_marketing: { icon: '📧', label: 'Marketing',    color: '#F97316' },
+  accounting:      { icon: '💰', label: 'Comptabilité', color: '#16A34A' },
+  inventory:       { icon: '📦', label: 'Inventaire',   color: '#D97706' },
+  manufacturing:   { icon: '🏭', label: 'Fabrication',  color: '#DC2626' },
+}
+
+function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string }[]; max?: number }) {
+  const known = apps.filter(a => APP_ICONS[a.name])
+  const shown = known.slice(0, max)
+  const rest  = known.length - max
+  if (shown.length === 0) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8, marginBottom: 4 }}>
+      {shown.map(a => {
+        const def = APP_ICONS[a.name]
+        return (
+          <span key={a.name} title={a.shortdesc} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '3px 8px', borderRadius: 4,
+            background: `${def.color}15`, border: `1px solid ${def.color}40`,
+            fontSize: 11, fontWeight: 600, color: def.color,
+          }}>
+            {def.icon} {def.label}
+          </span>
+        )
+      })}
+      {rest > 0 && (
+        <span style={{
+          padding: '3px 8px', borderRadius: 4,
+          background: '#F3F4F6', border: '1px solid #E5E7EB',
+          fontSize: 11, color: '#6B7280',
+        }}>+{rest}</span>
+      )}
+    </div>
+  )
+}
 
 interface Env { name: string; db_url: string; branch: string }
 interface Profile {
   id: number; name: string; db_url: string; db_name: string
   login: string; odoo_version?: string; odoo_sh_url?: string; github_repo?: string
   environments?: string; company_name?: string; company_city?: string; company_logo?: string
+  company_ids?: string; api_key_expires?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
 interface DiagResult {
   steps: DiagStep[]; uid: number | null; odoo_version: string | null
   module_count: number; db_name_suggestion: string
   company_name?: string; company_city?: string; company_logo?: string
+  company_ids?: string
 }
+interface CompanyOption { id: number; name: string }
 
 const VERSIONS = ['15.0', '16.0', '17.0', '18.0', '19.0']
 
@@ -57,6 +116,7 @@ export default function Profiles() {
       setForm(p => ({ ...p, [k]: e.target.value }))
 
   const [companyInfo, setCompanyInfo] = useState<{ name?: string; city?: string; logo?: string } | null>(null)
+  const [availableCompanies, setAvailableCompanies] = useState<CompanyOption[]>([])
 
   const diagnose = useMutation({
     mutationFn: () => diagnoseOdoo({
@@ -71,6 +131,9 @@ export default function Profiles() {
         setForm(p => ({ ...p, db_name: d.db_name_suggestion }))
       if (d.company_name || d.company_logo)
         setCompanyInfo({ name: d.company_name ?? undefined, city: d.company_city ?? undefined, logo: d.company_logo ?? undefined })
+      if (d.company_ids) {
+        try { setAvailableCompanies(JSON.parse(d.company_ids)) } catch { /* ignore */ }
+      }
     },
   })
 
@@ -81,10 +144,11 @@ export default function Profiles() {
       company_name: companyInfo?.name,
       company_city: companyInfo?.city,
       company_logo: companyInfo?.logo,
+      company_ids: availableCompanies.length > 0 ? JSON.stringify(availableCompanies) : undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] })
-      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null)
+      setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([])
       notify('Projet ajouté avec succès !')
     },
     onError: (e: ApiErr) =>
@@ -279,6 +343,23 @@ export default function Profiles() {
                           </div>
                         </div>
                       )}
+                      {availableCompanies.length > 1 && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 12, color: t.muted, marginBottom: 5, fontWeight: 600 }}>
+                            {availableCompanies.length} sociétés détectées
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                            {availableCompanies.map(c => (
+                              <span key={c.id} style={{
+                                padding: '2px 8px', borderRadius: 3, fontSize: 11,
+                                background: t.bgMuted, border: `1px solid ${t.border}`, color: t.textSub,
+                              }}>
+                                {c.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -447,6 +528,14 @@ function ProjectCard({ profile, onTest, onDelete, onUpdateEnvs }: {
   const [addingEnv, setAddingEnv] = useState(false)
   const [newEnv, setNewEnv] = useState<Env>({ name: '', db_url: '', branch: '' })
 
+  const { data: appsData } = useQuery({
+    queryKey: ['profile-apps', profile.id],
+    queryFn: () => getProfileApps(profile.id),
+    staleTime: 300_000,
+    retry: false,
+  })
+  const apps: { name: string; shortdesc: string }[] = appsData?.data?.apps ?? []
+
   const saveEnv = () => {
     if (!newEnv.name || !newEnv.db_url) return
     const updated = [...envs, newEnv]
@@ -476,12 +565,37 @@ function ProjectCard({ profile, onTest, onDelete, onUpdateEnvs }: {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: t.text, marginBottom: 4 }}>{profile.name}</div>
-            {profile.odoo_version && (
-              <span style={{
-                fontSize: 11, fontWeight: 600, color: '#fff',
-                background: t.brand, borderRadius: 3, padding: '2px 8px',
-              }}>Odoo {profile.odoo_version}</span>
-            )}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {profile.odoo_version && (
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: '#fff',
+                  background: t.brand, borderRadius: 3, padding: '2px 8px',
+                }}>Odoo {profile.odoo_version}</span>
+              )}
+              {(() => {
+                if (!profile.api_key_expires) return null
+                const expDate = new Date(profile.api_key_expires)
+                const now = new Date()
+                const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                if (diffDays <= 0) {
+                  return (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: t.danger, borderRadius: 3, padding: '2px 8px' }}
+                      title={`Clé expirée le ${profile.api_key_expires}`}>
+                      ⚠ Clé expirée
+                    </span>
+                  )
+                }
+                if (diffDays <= 30) {
+                  return (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: '#F59E0B', borderRadius: 3, padding: '2px 8px' }}
+                      title={`Clé expire le ${profile.api_key_expires}`}>
+                      ⚠ Expire dans {diffDays}j
+                    </span>
+                  )
+                }
+                return null
+              })()}
+            </div>
           </div>
           {profile.company_logo ? (
             <img src={profile.company_logo} alt="logo" style={{
@@ -499,6 +613,8 @@ function ProjectCard({ profile, onTest, onDelete, onUpdateEnvs }: {
             {profile.company_name}{profile.company_city ? ` — ${profile.company_city}` : ''}
           </div>
         )}
+
+        <AppBadges apps={apps} />
 
         <div style={{ fontSize: 12, color: t.muted, marginBottom: 3 }}>🔗 {profile.db_url}</div>
         <div style={{ fontSize: 12, color: t.muted, marginBottom: 12 }}>👤 {profile.login}</div>
