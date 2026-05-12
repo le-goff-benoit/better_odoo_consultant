@@ -14,6 +14,16 @@ from ...services.source_manager import (
 router = APIRouter()
 
 
+def _branch_for_version(version: str) -> str:
+    """Return the Git branch name for a given Odoo version string.
+    Major releases (X.0) use the version directly; intermediate/saas releases (X.Y where Y>0) use saas-X.Y.
+    """
+    parts = version.split('.')
+    if len(parts) == 2 and parts[1] != '0':
+        return f"saas-{version}"
+    return version
+
+
 class SyncRequest(BaseModel):
     version: str
     path: str
@@ -164,17 +174,19 @@ async def sync_source_stream(req: SyncRequest):
         raise HTTPException(400, f"Version invalide : {req.version} (format attendu : X.Y)")
     base = Path(req.path).expanduser().resolve()
 
+    branch = _branch_for_version(req.version)
+
     async def generate():
         jobs: list[tuple[str, list[str]]] = []
         if req.community:
             if (base / ".git").exists():
                 jobs.append((f"Mise à jour Community {req.version}",
-                             ["git", "-C", str(base), "pull", "--progress", "origin", req.version]))
+                             ["git", "-C", str(base), "pull", "--progress", "origin", branch]))
             else:
                 base.mkdir(parents=True, exist_ok=True)
                 jobs.append((f"Téléchargement Community {req.version}",
                              ["git", "clone", "--progress", "--depth=1",
-                              "--branch", req.version, COMMUNITY_REMOTE, str(base)]))
+                              "--branch", branch, COMMUNITY_REMOTE, str(base)]))
         if req.enterprise:
             if not test_github_ssh():
                 yield _sse({"type": "error", "msg": "Pas d'accès SSH GitHub."})
@@ -182,12 +194,12 @@ async def sync_source_stream(req: SyncRequest):
                 ent = base.parent / (base.name + "-enterprise")
                 if (ent / ".git").exists():
                     jobs.append((f"Mise à jour Enterprise {req.version}",
-                                 ["git", "-C", str(ent), "pull", "--progress", "origin", req.version]))
+                                 ["git", "-C", str(ent), "pull", "--progress", "origin", branch]))
                 else:
                     ent.mkdir(parents=True, exist_ok=True)
                     jobs.append((f"Téléchargement Enterprise {req.version}",
                                  ["git", "clone", "--progress", "--depth=1",
-                                  "--branch", req.version, ENTERPRISE_REMOTE, str(ent)]))
+                                  "--branch", branch, ENTERPRISE_REMOTE, str(ent)]))
         for label, cmd in jobs:
             async for evt in _stream_git(cmd, label):
                 yield _sse(evt)
@@ -204,13 +216,14 @@ async def sync_source(req: SyncRequest):
         raise HTTPException(400, f"Version invalide : {req.version}")
     results = []
     base = Path(req.path).expanduser()
+    branch = _branch_for_version(req.version)
     if req.community:
-        results.append({"type": "community", **clone_or_pull(COMMUNITY_REMOTE, base, req.version)})
+        results.append({"type": "community", **clone_or_pull(COMMUNITY_REMOTE, base, branch)})
     if req.enterprise:
         if not test_github_ssh():
             raise HTTPException(403, "Pas d'accès SSH GitHub")
         ent = base.parent / (base.name + "-enterprise")
-        results.append({"type": "enterprise", **clone_or_pull(ENTERPRISE_REMOTE, ent, req.version)})
+        results.append({"type": "enterprise", **clone_or_pull(ENTERPRISE_REMOTE, ent, branch)})
     return {"results": results}
 
 
