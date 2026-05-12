@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates } from '../api/client'
+import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates, checkSingleVersion } from '../api/client'
 import { t } from '../theme'
 
 const VERSIONS = [
@@ -60,9 +60,15 @@ export default function Sources() {
   const abortRefs = useRef<Record<string, AbortController>>({})
 
   // SSH state
-  const [sshStep,   setSshStep]   = useState<'idle' | 'generating' | 'done'>('idle')
-  const [publicKey, setPublicKey] = useState('')
-  const [copied,    setCopied]    = useState(false)
+  const [sshStep,        setSshStep]       = useState<'idle' | 'generating' | 'done'>('idle')
+  const [publicKey,      setPublicKey]     = useState('')
+  const [copied,         setCopied]        = useState(false)
+  const [customVersions, setCustomVersions] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] }
+  })
+  const [customInput,    setCustomInput]   = useState('')
+  const [customStatus,   setCustomStatus]  = useState<Record<string, Record<string, { installed: boolean }>>>({})
+  const [showCustomForm, setShowCustomForm] = useState(false)
 
   const { data: sshData,  refetch: recheckSsh } = useQuery({ queryKey: ['github-ssh'], queryFn: testGithubSsh, retry: false })
   const { data: keysData }                       = useQuery({ queryKey: ['ssh-keys'],   queryFn: listSshKeys,   retry: false })
@@ -88,6 +94,25 @@ export default function Sources() {
       ...prev,
       [version]: { ...{ status: 'idle' as CardState, pct: 0, currentLabel: '', logs: [], showLogs: false }, ...prev[version], ...patch },
     }))
+
+  const addCustomVersion = () => {
+    const v = customInput.trim()
+    if (!v || !/^\d+\.\d+$/.test(v) || customVersions.includes(v) || VERSIONS.some(x => x.version === v)) return
+    const updated = [...customVersions, v]
+    setCustomVersions(updated)
+    localStorage.setItem('odoo-custom-versions', JSON.stringify(updated))
+    setCustomInput('')
+    checkSingleVersion(v).then(res => setCustomStatus(prev => ({ ...prev, [v]: res.data ?? {} })))
+  }
+
+  const removeCustomVersion = (v: string) => {
+    const updated = customVersions.filter(x => x !== v)
+    setCustomVersions(updated)
+    localStorage.setItem('odoo-custom-versions', JSON.stringify(updated))
+  }
+
+  const refreshCustomStatus = (v: string) =>
+    checkSingleVersion(v).then(res => setCustomStatus(prev => ({ ...prev, [v]: res.data ?? {} })))
 
   const toggleLogs = (version: string) =>
     setCards(prev => ({
@@ -327,6 +352,93 @@ export default function Sources() {
             </div>
           )
         })}
+      </div>
+
+      {/* Custom / intermediate versions */}
+      <div style={{ marginTop: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+            Versions intermédiaires
+          </h2>
+          <button onClick={() => setShowCustomForm(f => !f)} style={{
+            padding: '3px 10px', background: 'none', border: `1px solid ${t.border}`,
+            borderRadius: t.radiusFull, fontSize: 11, cursor: 'pointer', color: t.muted,
+          }}>
+            {showCustomForm ? '✕ Fermer' : '+ Ajouter'}
+          </button>
+        </div>
+
+        {showCustomForm && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <input
+              value={customInput}
+              onChange={e => setCustomInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addCustomVersion()}
+              placeholder="ex: 19.1 ou 18.2"
+              style={{
+                padding: '7px 12px', border: `1px solid ${t.border}`, borderRadius: t.radius,
+                fontSize: 13, color: t.text, background: t.bgCard, width: 140, outline: 'none',
+              }}
+            />
+            <button onClick={addCustomVersion} style={{
+              padding: '7px 16px', background: t.brand, color: '#fff', border: 'none',
+              borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>Ajouter</button>
+            <span style={{ fontSize: 11, color: t.muted, alignSelf: 'center' }}>
+              Format : majeur.mineur (ex: 19.1)
+            </span>
+          </div>
+        )}
+
+        {customVersions.length === 0 ? (
+          <p style={{ fontSize: 13, color: t.muted }}>
+            Aucune version intermédiaire ajoutée. Cliquez sur "+ Ajouter" pour suivre une version comme 19.1 ou 18.2.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {customVersions.map(v => {
+              const st = customStatus[v]
+              const comm = st?.[v]
+              const ent  = st?.[`${v}-enterprise`]
+              return (
+                <div key={v} style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '12px 16px', background: t.bgCard,
+                  border: `1px solid ${t.border}`, borderRadius: t.radiusLg,
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: t.text }}>Odoo {v}</span>
+                    <span style={{ fontSize: 11, color: t.muted, marginLeft: 10 }}>version intermédiaire</span>
+                    {comm !== undefined && (
+                      <div style={{ fontSize: 12, color: comm.installed ? t.success : t.muted, marginTop: 4 }}>
+                        Community : {comm.installed ? '✓ Installé' : '✗ Non installé'}
+                        {ent && <span style={{ marginLeft: 14, color: ent.installed ? t.success : t.muted }}>
+                          Enterprise : {ent.installed ? '✓' : '✗'}
+                        </span>}
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => refreshCustomStatus(v)} style={{
+                    padding: '5px 10px', background: 'none', border: `1px solid ${t.border}`,
+                    borderRadius: t.radius, fontSize: 11, cursor: 'pointer', color: t.muted,
+                  }}>Vérifier</button>
+                  <button
+                    onClick={() => startSync(v)}
+                    style={{
+                      padding: '5px 12px', background: t.brand, color: '#fff', border: 'none',
+                      borderRadius: t.radius, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                    {cards[v]?.status === 'running' ? '...' : comm?.installed ? '↺ Mettre à jour' : '⬇ Télécharger'}
+                  </button>
+                  <button onClick={() => removeCustomVersion(v)} style={{
+                    padding: '5px 8px', background: 'none', border: `1px solid ${t.border}`,
+                    borderRadius: t.radius, fontSize: 11, cursor: 'pointer', color: t.muted,
+                  }}>✕</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <style>{`

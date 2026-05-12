@@ -1,0 +1,210 @@
+import { t } from '../theme'
+
+const VERSION = '0.8.0'
+
+const CHANGELOG = [
+  {
+    version: '0.8.0',
+    date: '2026-05-12',
+    badge: 'Actuel',
+    badgeColor: t.brand,
+    items: [
+      'Page À propos avec historique des versions',
+      'Modèle de compte-rendu de réunion dans les Paramètres',
+      'Bouton "Meeting Minute" depuis le chat (génère un CR formaté)',
+      'Version 19.0 sélectionnée par défaut en mode général',
+      'Sources : ajout de versions intermédiaires (19.1, 19.2, etc.)',
+      'install.sh : auto-rechargement après git pull (correction bootstrap)',
+      'install.sh : rebuild frontend systématique à chaque installation',
+      'install.sh : installation automatique de Node.js et curl si absents',
+      'Bandeau d\'avertissement sources manquantes dans l\'assistant',
+    ],
+  },
+  {
+    version: '0.7.0',
+    date: '2026-05-12',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Configuration des modèles disponibles par provider dans les Paramètres',
+      'Nouveaux modèles Copilot : Claude 3.7, o1-mini, o3-mini',
+      'Nouveaux modèles GitHub : Claude 3.7, Llama 3.1 405B, Mistral Large, Phi-3.5',
+      'Contexte consultant Odoo entièrement refondu : tableaux de référence complets, patterns de diagnostic avancés, droits d\'accès, détection customisations',
+      'Cache-Control no-cache sur index.html (plus besoin de hard refresh)',
+    ],
+  },
+  {
+    version: '0.6.0',
+    date: '2026-05-11',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Mode général Odoo (sans projet client) pour questions sur le code source',
+      'Notes de version enrichies pour Odoo 15 à 19 (tables de migration, breaking changes)',
+      'Suggestions contextuelles différentes en mode général vs mode projet',
+      'Sélecteur de version Odoo en mode général',
+    ],
+  },
+  {
+    version: '0.5.0',
+    date: '2026-05-10',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Outils code source Odoo dans l\'assistant : search_odoo_source et read_odoo_file',
+      'L\'IA peut explorer le code source Odoo local pour répondre aux questions',
+      'Fichiers de contexte éditables dans les Paramètres (skills.md + notes de version)',
+      'Synchronisation des sources Odoo avec progression en temps réel',
+    ],
+  },
+  {
+    version: '0.4.0',
+    date: '2026-05-09',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Sélecteur de modèle IA avec recommandations et descriptions',
+      'Chatter par projet (conversations séparées par client)',
+      'Streaming des réponses IA en temps réel',
+      'Affichage détaillé des appels d\'outils (tool_call / tool_result)',
+    ],
+  },
+  {
+    version: '0.3.0',
+    date: '2026-05-08',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Page Paramètres pour les clés API',
+      'Provider GitHub Models (GPT-4o via token GitHub)',
+      'Test de connectivité pour chaque clé API',
+    ],
+  },
+  {
+    version: '0.2.0',
+    date: '2026-05-07',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Connexion GitHub Copilot Business via OAuth Device Flow',
+      'Support multi-provider : Claude, GPT-4o, Gemini, Copilot, GitHub Models',
+      'Clés API stockées dans le trousseau système (keyring)',
+    ],
+  },
+  {
+    version: '0.1.0',
+    date: '2026-05-05',
+    badge: 'Initial',
+    badgeColor: t.muted,
+    items: [
+      'Assistant IA connecté aux données Odoo via JSON-RPC',
+      'Gestion de profils clients (multi-instance)',
+      'Synchronisation des sources Odoo Community & Enterprise (git clone)',
+      'Page de requêtes manuelles (search_read avec export CSV/Excel/Markdown)',
+      'Historique des requêtes et conversations',
+    ],
+  },
+]
+
+export default function About() {
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div style={{ marginBottom: 36 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 6 }}>À propos</h1>
+        <p style={{ fontSize: 14, color: t.muted }}>Odoo Consultant Portal — outil de productivité pour consultants Odoo.</p>
+      </div>
+
+      {/* Author card */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 20,
+        padding: '20px 24px',
+        background: t.bgCard, border: `1px solid ${t.border}`,
+        borderRadius: t.radiusLg, marginBottom: 40,
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: `linear-gradient(135deg, ${t.brand}, ${t.brandDark})`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 24, fontWeight: 800, color: '#fff', flexShrink: 0,
+        }}>B</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 2 }}>Benoît Le Goff</div>
+          <div style={{ fontSize: 13, color: t.muted, marginBottom: 8 }}>Consultant Odoo — Le Projet Sàrl · Genève, Suisse</div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <a
+              href="https://github.com/le-goff-benoit/better_odoo_consultant"
+              target="_blank" rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px',
+                background: t.bgMuted, border: `1px solid ${t.border}`,
+                borderRadius: t.radiusFull, fontSize: 12, fontWeight: 600,
+                color: t.text, textDecoration: 'none',
+                transition: 'border-color .15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = t.brand)}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = t.border)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+              </svg>
+              le-goff-benoit / better_odoo_consultant
+            </a>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 11, color: t.muted, marginBottom: 4 }}>Version</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: t.brand }}>{VERSION}</div>
+        </div>
+      </div>
+
+      {/* Changelog */}
+      <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 20 }}>
+        Historique des versions
+      </h2>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {CHANGELOG.map((entry, i) => (
+          <div key={entry.version} style={{ display: 'flex', gap: 0 }}>
+            {/* Timeline */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 20, flexShrink: 0 }}>
+              <div style={{
+                width: 12, height: 12, borderRadius: '50%', marginTop: 4, flexShrink: 0,
+                background: entry.badge === 'Actuel' ? t.brand : t.borderLight,
+                border: `2px solid ${entry.badge === 'Actuel' ? t.brand : t.border}`,
+              }} />
+              {i < CHANGELOG.length - 1 && (
+                <div style={{ flex: 1, width: 2, background: t.borderLight, minHeight: 24 }} />
+              )}
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, paddingBottom: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: t.text }}>v{entry.version}</span>
+                {entry.badge && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 7px',
+                    background: entry.badgeColor === t.brand ? `${t.brand}20` : t.bgMuted,
+                    color: entry.badgeColor === t.brand ? t.brand : t.muted,
+                    borderRadius: t.radiusFull, border: `1px solid ${entry.badgeColor === t.brand ? `${t.brand}40` : t.border}`,
+                  }}>{entry.badge}</span>
+                )}
+                <span style={{ fontSize: 11, color: t.muted, marginLeft: 'auto' }}>{entry.date}</span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {entry.items.map((item, j) => (
+                  <li key={j} style={{ fontSize: 13, color: t.textSub, lineHeight: 1.5 }}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 8, padding: '14px 18px', background: t.bgMuted, borderRadius: t.radius, fontSize: 12, color: t.muted }}>
+        Code source disponible sur GitHub sous licence privée. Usage interne au cabinet de conseil.
+      </div>
+    </div>
+  )
+}

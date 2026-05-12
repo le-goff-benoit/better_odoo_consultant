@@ -72,6 +72,8 @@ def load_context_for_prompt(odoo_version: Optional[str] = None) -> str:
 def _default_content(name: str) -> Optional[str]:
     if name == "skills.md":
         return _SKILLS_MD
+    if name == "meeting-minute.md":
+        return _MEETING_MINUTE_MD
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
     if m:
         return _VERSION_NOTES.get(m.group(1))
@@ -484,6 +486,79 @@ ir.model.fields | [["name","like","x_studio"], ["state","=","manual"]]
 - Utilisateurs avec droits `base.group_system` non justifiés
 - `res.partner` doublons : même `email` ou même `vat` sur plusieurs enregistrements
 - Produits avec `standard_price = 0` dans une valorisation au coût réel
+"""
+
+_MEETING_MINUTE_MD = """\
+# Modèle de compte-rendu de réunion
+
+Quand on te demande de générer un compte-rendu de réunion, utilise ce modèle.
+Adapte les sections au contenu réel de la conversation — supprime les sections vides.
+
+---
+
+# Compte-rendu de réunion — [Sujet principal]
+
+**Date :** [date de la réunion]
+**Durée :** [durée approximative]
+**Lieu / Canal :** [présentiel / Teams / Zoom / etc.]
+
+**Participants :**
+- [Prénom Nom] — [Rôle]
+- [Prénom Nom] — [Rôle]
+
+**Rédigé par :** [Nom du consultant]
+
+---
+
+## 1. Contexte et objectif de la réunion
+
+[Brève description du contexte et de ce qui était attendu de cette réunion]
+
+---
+
+## 2. Points discutés
+
+### 2.1 [Premier sujet]
+[Résumé des échanges, informations partagées, problèmes soulevés]
+
+### 2.2 [Deuxième sujet]
+[Résumé des échanges]
+
+---
+
+## 3. Décisions prises
+
+| # | Décision | Décideur |
+|---|----------|---------|
+| 1 | [Description de la décision] | [Nom] |
+| 2 | [Description de la décision] | [Nom] |
+
+---
+
+## 4. Actions de suivi
+
+| # | Action | Responsable | Échéance | Statut |
+|---|--------|-------------|---------|--------|
+| 1 | [Description de l'action] | [Nom] | [Date] | À faire |
+| 2 | [Description de l'action] | [Nom] | [Date] | À faire |
+
+---
+
+## 5. Points en suspens / Questions ouvertes
+
+- [Question ou point qui nécessite un suivi ou une clarification]
+- [Point bloquant identifié]
+
+---
+
+## 6. Prochaines étapes
+
+- **Prochaine réunion :** [date prévue ou "à définir"]
+- **Ordre du jour prévu :** [sujets à aborder]
+
+---
+
+*Compte-rendu généré par Odoo Consultant Portal*
 """
 
 _VERSION_NOTES: dict = {

@@ -13,6 +13,7 @@ export const generateSshKey = () => api.post('/sources/generate-ssh-key')
 export const syncSource = (data: object) => api.post('/sources/sync', data)
 export const getGitStatus = (path: string) => api.get(`/sources/status?path=${encodeURIComponent(path)}`)
 export const checkAllSources = () => api.get('/sources/check-all')
+export const checkSingleVersion = (version: string) => api.get(`/sources/check/${version}`)
 export const checkSourceUpdates = (version: string, path?: string) =>
   api.get(`/sources/check-updates/${version}${path ? `?path=${encodeURIComponent(path)}` : ''}`)
 

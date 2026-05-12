@@ -154,7 +154,7 @@ export default function Assistant() {
   const [modelId,   setModelId]   = useState('')
   // profileId: number = project tab, GENERAL_KEY = general tab, null = not yet selected
   const [profileId, setProfileId] = useState<number | typeof GENERAL_KEY | null>(null)
-  const [generalVersion, setGeneralVersion] = useState('17.0')
+  const [generalVersion, setGeneralVersion] = useState('19.0')
 
   // Conversations keyed by string (profile id as string, or 'general')
   const [conversations, setConversations] = useState<Record<string, Message[]>>({})
@@ -212,6 +212,61 @@ export default function Assistant() {
       ...prev,
       [convKey]: fn(prev[convKey] ?? []),
     }))
+  }
+
+  const makeMeetingMinute = async () => {
+    if (streaming || profileId === null || !provider || messages.length === 0) return
+    const history = messages
+      .filter(m => !m.loading)
+      .map(m => ({
+        role: m.role,
+        content: m.role === 'user'
+          ? (m.text ?? '')
+          : (m.events?.find(e => e.type === 'text')?.content ?? ''),
+      }))
+      .filter(m => m.content)
+    const prompt = `En utilisant le modèle de compte-rendu de réunion défini dans tes instructions (fichier meeting-minute.md), génère un compte-rendu structuré basé sur la conversation ci-dessus. Si aucun modèle n'est disponible, utilise un format professionnel standard avec : titre, date, participants, points discutés, décisions prises, actions de suivi avec responsables et échéances.`
+    history.push({ role: 'user', content: prompt })
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', text: '📋 Générer le compte-rendu de réunion' }
+    const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', events: [], loading: true }
+    setMessages(prev => [...prev, userMsg, assistantMsg])
+    setStreaming(true)
+    abortRef.current?.abort()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+    try {
+      const body = isGeneralMode
+        ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId }
+        : { provider, profile_id: profileId, messages: history, model: modelId }
+      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal })
+      const reader = res.body!.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
+          try {
+            const evt: AiEvent = JSON.parse(line.slice(5).trim())
+            if (evt.type === 'end') break
+            setMessages(prev => {
+              const msgs = [...prev]
+              const last = msgs[msgs.length - 1]
+              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, events: [...(last.events ?? []), evt], loading: evt.type !== 'done' && evt.type !== 'error' }
+              return msgs
+            })
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name !== 'AbortError') {
+        setMessages(prev => { const msgs = [...prev]; const last = msgs[msgs.length - 1]; if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, events: [{ type: 'error', msg: String(e) }], loading: false }; return msgs })
+      }
+    } finally { setStreaming(false) }
   }
 
   const send = async () => {
@@ -441,10 +496,16 @@ export default function Assistant() {
             <div style={{ flex: 1 }} />
 
             {messages.length > 0 && (
-              <button onClick={resetCurrentConversation}
-                style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.muted }}>
-                ✕ Nouvelle conversation
-              </button>
+              <>
+                <button onClick={makeMeetingMinute} disabled={streaming}
+                  style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.brand}60`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.brand, fontWeight: 600 }}>
+                  📋 Meeting Minute
+                </button>
+                <button onClick={resetCurrentConversation}
+                  style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.muted }}>
+                  ✕ Nouvelle conversation
+                </button>
+              </>
             )}
           </>
         )}

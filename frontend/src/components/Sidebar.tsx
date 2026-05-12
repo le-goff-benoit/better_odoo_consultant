@@ -10,6 +10,7 @@ const links: { to: string; label: string; icon: IconName }[] = [
   { to: '/query',     label: 'Requêtes',         icon: 'search'    },
   { to: '/history',   label: 'Historique',       icon: 'clock'     },
   { to: '/settings',  label: 'Paramètres',       icon: 'settings'  },
+  { to: '/about',     label: 'À propos',         icon: 'info'      },
 ]
 
 export default function Sidebar() {
@@ -86,8 +87,8 @@ export default function Sidebar() {
         fontSize: 11,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span>v0.1.0</span>
-        <span>MVP</span>
+        <span>v0.8.0</span>
+        <span>© Benoît Le Goff</span>
       </div>
     </nav>
   )

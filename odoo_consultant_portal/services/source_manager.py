@@ -1,9 +1,11 @@
+import re
 import subprocess
 from pathlib import Path
 from typing import Optional
 import git
 
 SUPPORTED_VERSIONS = ["15.0", "16.0", "17.0", "18.0", "19.0"]
+VERSION_RE = re.compile(r'^\d+\.\d+$')
 COMMUNITY_REMOTE = "https://github.com/odoo/odoo.git"
 ENTERPRISE_REMOTE = "git@github.com:odoo/enterprise.git"
 

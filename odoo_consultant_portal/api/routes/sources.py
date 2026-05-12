@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from ...services.source_manager import (
-    SUPPORTED_VERSIONS, detect_ssh_keys, test_github_ssh,
+    SUPPORTED_VERSIONS, VERSION_RE, detect_ssh_keys, test_github_ssh,
     COMMUNITY_REMOTE, ENTERPRISE_REMOTE,
 )
 
@@ -160,8 +160,8 @@ async def _stream_git(cmd: list[str], label: str):
 
 @router.post("/sync-stream")
 async def sync_source_stream(req: SyncRequest):
-    if req.version not in SUPPORTED_VERSIONS and not req.version.startswith("custom"):
-        raise HTTPException(400, f"Version non supportée : {req.version}")
+    if not VERSION_RE.match(req.version):
+        raise HTTPException(400, f"Version invalide : {req.version} (format attendu : X.Y)")
     base = Path(req.path).expanduser().resolve()
 
     async def generate():
@@ -200,8 +200,8 @@ async def sync_source_stream(req: SyncRequest):
 @router.post("/sync")
 async def sync_source(req: SyncRequest):
     from ...services.source_manager import clone_or_pull
-    if req.version not in SUPPORTED_VERSIONS and not req.version.startswith("custom"):
-        raise HTTPException(400, f"Version non supportée : {req.version}")
+    if not VERSION_RE.match(req.version):
+        raise HTTPException(400, f"Version invalide : {req.version}")
     results = []
     base = Path(req.path).expanduser()
     if req.community:
@@ -212,6 +212,18 @@ async def sync_source(req: SyncRequest):
         ent = base.parent / (base.name + "-enterprise")
         results.append({"type": "enterprise", **clone_or_pull(ENTERPRISE_REMOTE, ent, req.version)})
     return {"results": results}
+
+
+@router.get("/check/{version}")
+async def check_version(version: str):
+    """Check installation status for a single version."""
+    if not VERSION_RE.match(version):
+        raise HTTPException(400, f"Version invalide : {version}")
+    loop = asyncio.get_event_loop()
+    base = Path.home() / "odoo-sources" / version
+    comm = await loop.run_in_executor(None, _repo_status, base)
+    ent  = await loop.run_in_executor(None, _repo_status, base.parent / f"{version}-enterprise")
+    return {version: comm, f"{version}-enterprise": ent}
 
 
 @router.get("/status")

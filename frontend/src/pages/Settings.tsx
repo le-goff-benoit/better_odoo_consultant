@@ -501,12 +501,13 @@ function ModelConfigEditor() {
 // ── Context files editor ─────────────────────────────────────────
 
 const KNOWN_FILES = [
-  { name: 'skills.md',      label: 'Compétences consultant', icon: '🧠', desc: 'Connaissances métier, patterns courants, approche de diagnostic' },
-  { name: 'odoo-19.0.md',   label: 'Odoo 19.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-18.0.md',   label: 'Odoo 18.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-17.0.md',   label: 'Odoo 17.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-16.0.md',   label: 'Odoo 16.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-15.0.md',   label: 'Odoo 15.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'skills.md',          label: 'Compétences consultant', icon: '🧠', desc: 'Connaissances métier, patterns courants, approche de diagnostic' },
+  { name: 'meeting-minute.md',  label: 'Modèle compte-rendu',   icon: '📝', desc: 'Template utilisé par le bouton "Meeting Minute" dans le chat' },
+  { name: 'odoo-19.0.md',       label: 'Odoo 19.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-18.0.md',       label: 'Odoo 18.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-17.0.md',       label: 'Odoo 17.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-16.0.md',       label: 'Odoo 16.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'odoo-15.0.md',       label: 'Odoo 15.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
 ]
 
 function ContextEditor() {
