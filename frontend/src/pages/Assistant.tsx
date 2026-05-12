@@ -545,7 +545,7 @@ export default function Assistant() {
               {p.company_logo && (
                 <img src={p.company_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }} />
               )}
-              {p.company_name || p.name}
+              {p.name}
               {msgCount > 0 && (
                 <span style={{
                   background: isActive ? t.brand : t.borderLight,
@@ -613,6 +613,23 @@ export default function Assistant() {
 
             <div style={{ flex: 1 }} />
 
+            {/* Project + sources context pill */}
+            {selectedProfile && !isGeneralMode && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: t.muted }}>
+                <span style={{ fontWeight: 600, color: t.textSub }}>{selectedProfile.name}</span>
+                {activeVersion && (
+                  <span style={{
+                    padding: '2px 7px', borderRadius: t.radiusFull, fontWeight: 700,
+                    background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
+                    color: sourcesInstalled ? t.success : '#b45309',
+                    border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
+                  }}>
+                    {sourcesInstalled ? `📁 v${activeVersion}` : `v${activeVersion}`}
+                  </span>
+                )}
+              </div>
+            )}
+
             {messages.length > 0 && (
               <>
                 <button onClick={makeMeetingMinute} disabled={streaming}
@@ -678,49 +695,39 @@ export default function Assistant() {
 
         {messages.length === 0 && selectedProfile && !isGeneralMode && (
           <div style={{ marginTop: 16 }}>
-            {(() => {
-              const companies: CompanyOption[] = (() => { try { return JSON.parse(selectedProfile.company_ids ?? '[]') } catch { return [] } })()
-              const activeCompanyId = selectedCompanyId ?? companies[0]?.id ?? null
-              return (
-                <div style={{ marginBottom: 20, padding: '10px 14px', background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {selectedProfile.company_logo && (
-                      <img src={selectedProfile.company_logo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6, background: t.bgMuted, padding: 3, border: `1px solid ${t.border}` }} />
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{selectedProfile.company_name || selectedProfile.name}</div>
-                      {currentProv && (
-                        <div style={{ fontSize: 11, color: t.muted, marginTop: 1 }}>
-                          {currentProv.label} · {PROVIDERS.find(p => p.id === provider)?.models.find(m => m.id === modelId)?.label}
-                        </div>
-                      )}
-                      <AppBadgesAsst apps={profileApps} />
-                    </div>
-                  </div>
-                  {companies.length > 1 && (
-                    <div style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: 11, color: t.muted, marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Société active</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                        {companies.map(c => {
-                          const isActive = activeCompanyId === c.id
-                          return (
-                            <button key={c.id} onClick={() => setSelectedCompanyId(c.id)} style={{
-                              fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 4,
-                              border: `1px solid ${isActive ? t.brand : t.border}`,
-                              background: isActive ? t.brand : t.bgMuted,
-                              color: isActive ? '#fff' : t.textSub,
-                              cursor: 'pointer',
-                            }}>
-                              🏢 {c.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
+            <div style={{ marginBottom: 20, padding: '14px 16px', background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {selectedProfile.company_logo
+                  ? <img src={selectedProfile.company_logo} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, background: t.bgMuted, padding: 4, border: `1px solid ${t.border}`, flexShrink: 0 }} />
+                  : <div style={{ width: 40, height: 40, borderRadius: 8, background: t.brand20, border: `1px solid ${t.brand40}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🏢</div>
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 2 }}>{selectedProfile.name}</div>
+                  {selectedProfile.company_name && (
+                    <div style={{ fontSize: 12, color: t.textSub, marginBottom: 4 }}>{selectedProfile.company_name}</div>
                   )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+                    {currentProv && (
+                      <span style={{ fontSize: 11, color: t.muted }}>
+                        {currentProv.label} · {currentProv.models.find(m => m.id === modelId)?.label}
+                      </span>
+                    )}
+                    {activeVersion && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '2px 7px',
+                        borderRadius: t.radiusFull,
+                        background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
+                        color: sourcesInstalled ? t.success : '#b45309',
+                        border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
+                      }}>
+                        {sourcesInstalled ? `📁 Sources v${activeVersion} ✓` : `⚠ Sources v${activeVersion} manquantes`}
+                      </span>
+                    )}
+                  </div>
+                  <AppBadgesAsst apps={profileApps} />
                 </div>
-              )
-            })()}
+              </div>
+            </div>
             <div style={{ fontSize: 13, color: t.muted, marginBottom: 10 }}>Suggestions :</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {SUGGESTIONS.map(s => (
