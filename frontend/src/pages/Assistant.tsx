@@ -573,186 +573,158 @@ export default function Assistant() {
         action={<Link to="/settings" className="btn btn-ghost" style={{ textDecoration: 'none' }}>⚙ Paramètres</Link>}
       />
 
-      {/* Project + General tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* General mode tab */}
-        {(() => {
-          const isActive = isGeneralMode
-          const msgCount = (conversations[GENERAL_KEY] ?? []).filter(m => m.role === 'user').length
-          return (
-            <button onClick={() => setProfileId(GENERAL_KEY)} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px',
-              background: isActive ? t.bgCard : 'transparent',
-              border: `1px solid ${isActive ? '#6366f1' : t.border}`,
-              borderRadius: t.radiusFull,
-              fontSize: 12, fontWeight: isActive ? 600 : 400,
-              color: isActive ? '#6366f1' : t.muted,
-              cursor: 'pointer',
-              boxShadow: isActive ? t.shadow : 'none',
-              transition: 'all .15s',
-            }}>
-              🌐 Odoo Général
-              {msgCount > 0 && (
-                <span style={{
-                  background: isActive ? '#6366f1' : t.borderLight,
-                  color: isActive ? '#fff' : t.muted,
-                  borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700,
-                  padding: '1px 6px', minWidth: 18, textAlign: 'center',
-                }}>{msgCount}</span>
-              )}
-            </button>
-          )
-        })()}
+      {/* ── Unified context bar ── */}
+      <div style={{
+        background: t.bgCard, border: `1px solid ${t.border}`,
+        borderRadius: t.radiusLg, marginBottom: 12, flexShrink: 0, overflow: 'hidden',
+      }}>
 
-        {/* Project tabs */}
-        {profiles.map(p => {
-          const msgs = conversations[String(p.id)] ?? []
-          const msgCount = msgs.filter(m => m.role === 'user').length
-          const isActive = p.id === profileId
-          return (
-            <button key={p.id} onClick={() => setProfileId(p.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px',
-              background: isActive ? t.bgCard : 'transparent',
-              border: `1px solid ${isActive ? t.brand : t.border}`,
-              borderRadius: t.radiusFull,
-              fontSize: 12, fontWeight: isActive ? 600 : 400,
-              color: isActive ? t.brand : t.muted,
-              cursor: 'pointer',
-              boxShadow: isActive ? t.shadow : 'none',
-              transition: 'all .15s',
-            }}>
-              {p.company_logo && (
-                <img src={p.company_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }} />
-              )}
-              {p.name}
-              {msgCount > 0 && (
-                <span style={{
-                  background: isActive ? t.brand : t.borderLight,
-                  color: isActive ? '#fff' : t.muted,
-                  borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700,
-                  padding: '1px 6px', minWidth: 18, textAlign: 'center',
-                }}>{msgCount}</span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+        {/* Row 1 — Project tabs + Version */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', flexWrap: 'wrap' }}>
+          {/* General tab */}
+          {(() => {
+            const isActive = isGeneralMode
+            const msgCount = (conversations[GENERAL_KEY] ?? []).filter(m => m.role === 'user').length
+            return (
+              <button onClick={() => setProfileId(GENERAL_KEY)} style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 11px',
+                background: isActive ? '#6366f115' : 'transparent',
+                border: `1px solid ${isActive ? '#6366f1' : t.border}`,
+                borderRadius: t.radiusFull,
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                color: isActive ? '#6366f1' : t.muted,
+                cursor: 'pointer', transition: 'all .15s',
+              }}>
+                🌐 Odoo Général
+                {msgCount > 0 && (
+                  <span style={{
+                    background: isActive ? '#6366f1' : t.borderLight, color: isActive ? '#fff' : t.muted,
+                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700, padding: '1px 5px',
+                  }}>{msgCount}</span>
+                )}
+              </button>
+            )
+          })()}
 
-      {/* Version row — selector (general mode) or read-only badge (project mode) */}
-      {(isGeneralMode || activeVersion) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexShrink: 0, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: t.muted, fontWeight: 500 }}>Version Odoo :</span>
-          {isGeneralMode
-            ? [...new Set([
+          {/* Project tabs */}
+          {profiles.map(p => {
+            const msgCount = (conversations[String(p.id)] ?? []).filter(m => m.role === 'user').length
+            const isActive = p.id === profileId
+            return (
+              <button key={p.id} onClick={() => setProfileId(p.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 11px',
+                background: isActive ? t.brand20 : 'transparent',
+                border: `1px solid ${isActive ? t.brand40 : t.border}`,
+                borderRadius: t.radiusFull,
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                color: isActive ? t.brand : t.muted,
+                cursor: 'pointer', transition: 'all .15s',
+              }}>
+                {p.company_logo
+                  ? <img src={p.company_logo} alt="" style={{ width: 14, height: 14, objectFit: 'contain', borderRadius: 2 }} />
+                  : <span style={{ fontSize: 11 }}>🏢</span>
+                }
+                {p.name}
+                {msgCount > 0 && (
+                  <span style={{
+                    background: isActive ? t.brand : t.borderLight, color: isActive ? '#fff' : t.muted,
+                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700, padding: '1px 5px',
+                  }}>{msgCount}</span>
+                )}
+              </button>
+            )
+          })}
+
+          <div style={{ flex: 1 }} />
+
+          {/* Version — dropdown (general) or badge (project) */}
+          {isGeneralMode ? (
+            <VersionDropdown
+              value={generalVersion}
+              onChange={setGeneralVersion}
+              versions={[...new Set([
                 ...ODOO_VERSIONS_BASE,
                 ...((): string[] => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })(),
               ])].sort((a, b) => {
                 const [aMaj, aMin = 0] = a.split('.').map(Number)
                 const [bMaj, bMin = 0] = b.split('.').map(Number)
                 return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
-              }).map(v => (
-                <button key={v} onClick={() => setGeneralVersion(v)} style={{
-                  padding: '3px 12px',
-                  background: generalVersion === v ? '#6366f110' : 'transparent',
-                  border: `1px solid ${generalVersion === v ? '#6366f1' : t.border}`,
-                  borderRadius: t.radiusFull,
-                  fontSize: 12, fontWeight: generalVersion === v ? 700 : 400,
-                  color: generalVersion === v ? '#6366f1' : t.muted,
-                  cursor: 'pointer', transition: 'all .15s',
-                }}>
-                  {v}
-                  {!ODOO_VERSIONS_BASE.includes(v) && (
-                    <span style={{ marginLeft: 3, fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px', verticalAlign: 'middle' }}>saas</span>
-                  )}
-                </button>
-              ))
-            : activeVersion && (
-              <span style={{
-                padding: '3px 14px', borderRadius: t.radiusFull, fontSize: 12, fontWeight: 700,
-                background: t.brand20, border: `1px solid ${t.brand40}`, color: t.brand,
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-              }}>
-                {activeVersion}
-                <span style={{ fontSize: 9, color: t.muted, fontWeight: 400 }}>projet</span>
-              </span>
-            )
-          }
+              })}
+            />
+          ) : activeVersion ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '4px 11px', borderRadius: t.radiusFull, fontSize: 12, fontWeight: 600,
+              background: t.brand20, border: `1px solid ${t.brand40}`, color: t.brand,
+            }}>
+              Odoo {activeVersion}
+              <span style={{ fontSize: 10, color: t.muted, fontWeight: 400 }}>projet</span>
+            </span>
+          ) : null}
         </div>
-      )}
 
-      {/* Provider + model toolbar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
-        {configuredProviders.length === 0 ? (
-          <div style={{ fontSize: 13, color: t.muted }}>
-            Aucun fournisseur IA configuré —{' '}
-            <Link to="/settings" style={{ color: t.brand, fontWeight: 600 }}>ajouter une clé API →</Link>
-          </div>
-        ) : (
-          <>
-            {/* Provider tabs */}
-            <div style={{ display: 'flex', gap: 3, background: t.bgMuted, borderRadius: t.radius, padding: 3 }}>
-              {configuredProviders.map(p => (
-                <button key={p.id} onClick={() => switchProvider(p.id)} style={{
-                  padding: '4px 12px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  border: 'none',
-                  background: provider === p.id ? t.bgCard : 'transparent',
-                  color: provider === p.id ? p.color : t.muted,
-                  boxShadow: provider === p.id ? t.shadow : 'none',
-                  transition: 'all .15s',
-                }}>
-                  {p.label}
-                </button>
-              ))}
+        {/* Divider */}
+        <div style={{ height: 1, background: t.border }} />
+
+        {/* Row 2 — Model + Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', flexWrap: 'wrap' }}>
+          {configuredProviders.length === 0 ? (
+            <div style={{ fontSize: 13, color: t.muted }}>
+              Aucun fournisseur IA configuré —{' '}
+              <Link to="/settings" style={{ color: t.brand, fontWeight: 600 }}>ajouter une clé API →</Link>
             </div>
-
-            {/* Model dropdown */}
-            {currentProv && (
-              <ModelDropdown
-                provider={currentProv}
-                selected={modelId}
-                onChange={setModelId}
-              />
-            )}
-
-            <div style={{ flex: 1 }} />
-
-            {/* Project + sources context pill */}
-            {selectedProfile && !isGeneralMode && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: t.muted }}>
-                <span style={{ fontWeight: 600, color: t.textSub }}>{selectedProfile.name}</span>
-                {activeVersion && (
-                  <span style={{
-                    padding: '2px 7px', borderRadius: t.radiusFull, fontWeight: 700,
-                    background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
-                    color: sourcesInstalled ? t.success : '#b45309',
-                    border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
+          ) : (
+            <>
+              {/* Provider segmented control */}
+              <div style={{ display: 'flex', gap: 2, background: t.bgMuted, borderRadius: t.radius, padding: 2 }}>
+                {configuredProviders.map(p => (
+                  <button key={p.id} onClick={() => switchProvider(p.id)} style={{
+                    padding: '4px 12px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    border: 'none',
+                    background: provider === p.id ? t.bgCard : 'transparent',
+                    color: provider === p.id ? p.color : t.muted,
+                    boxShadow: provider === p.id ? t.shadow : 'none',
+                    transition: 'all .15s',
                   }}>
-                    {sourcesInstalled ? `📁 v${activeVersion}` : `v${activeVersion}`}
-                  </span>
-                )}
+                    {p.label}
+                  </button>
+                ))}
               </div>
-            )}
 
-            {messages.length > 0 && (
-              <>
-                <button className="btn btn-outline" onClick={makeMeetingMinute} disabled={streaming}>
-                  📋 CR réunion
+              {currentProv && <ModelDropdown provider={currentProv} selected={modelId} onChange={setModelId} />}
+
+              <div style={{ flex: 1 }} />
+
+              {/* Sources badge (project mode) */}
+              {selectedProfile && !isGeneralMode && activeVersion && (
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: t.radiusFull,
+                  background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
+                  color: sourcesInstalled ? t.success : '#b45309',
+                  border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
+                }}>
+                  {sourcesInstalled ? `📁 v${activeVersion} ✓` : `⚠ v${activeVersion}`}
+                </span>
+              )}
+
+              {/* Action buttons */}
+              {messages.length > 0 && (
+                <>
+                  <button className="btn btn-ghost btn-sm" onClick={makeMeetingMinute} disabled={streaming}>📋 CR réunion</button>
+                  <button className="btn btn-ghost btn-sm" onClick={resetCurrentConversation}>↺ Nouvelle</button>
+                </>
+              )}
+              {convKey && (savedConvs[convKey] ?? []).length > 0 && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowHistory(h => !h)}
+                  style={showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}}>
+                  📂 {(savedConvs[convKey] ?? []).length}
                 </button>
-                <button className="btn btn-outline-muted" onClick={resetCurrentConversation}>
-                  ↺ Nouvelle conv.
-                </button>
-              </>
-            )}
-            {convKey && (savedConvs[convKey] ?? []).length > 0 && (
-              <button className="btn btn-ghost" onClick={() => setShowHistory(h => !h)}
-                style={showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}}>
-                📂 Historique ({(savedConvs[convKey] ?? []).length})
-              </button>
-            )}
-          </>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Sources warning banner */}
@@ -1056,6 +1028,64 @@ function ModelDropdown({ provider, selected, onChange }: {
               <div style={{ fontSize: 11, color: t.muted }}>{m.desc}</div>
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Version dropdown ───────────────────────────────────────────
+
+function VersionDropdown({ value, onChange, versions }: {
+  value: string; onChange: (v: string) => void; versions: string[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const isSaas = !ODOO_VERSIONS_BASE.includes(value)
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '4px 11px', borderRadius: t.radiusFull,
+        background: '#6366f115', border: '1px solid #6366f1',
+        fontSize: 12, fontWeight: 700, color: '#6366f1', cursor: 'pointer',
+      }}>
+        Odoo {value}
+        {isSaas && <span style={{ fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px' }}>saas</span>}
+        <span style={{ fontSize: 9, opacity: .6 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 100,
+          background: t.bgCard, border: `1px solid ${t.border}`,
+          borderRadius: t.radiusLg, boxShadow: t.shadowMd, minWidth: 120, overflow: 'hidden',
+        }}>
+          {versions.map(v => {
+            const isSaasV = !ODOO_VERSIONS_BASE.includes(v)
+            return (
+              <button key={v} onClick={() => { onChange(v); setOpen(false) }} style={{
+                width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 12px', border: 'none', cursor: 'pointer',
+                background: v === value ? '#6366f110' : 'transparent',
+                borderLeft: v === value ? '3px solid #6366f1' : '3px solid transparent',
+                fontSize: 12, fontWeight: v === value ? 700 : 400,
+                color: v === value ? '#6366f1' : t.text,
+              }}
+                onMouseEnter={e => { if (v !== value) e.currentTarget.style.background = t.bgMuted }}
+                onMouseLeave={e => { if (v !== value) e.currentTarget.style.background = 'transparent' }}
+              >
+                {v}
+                {isSaasV && <span style={{ fontSize: 9, fontWeight: 700, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 3px' }}>saas</span>}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
