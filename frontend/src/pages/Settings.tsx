@@ -81,7 +81,68 @@ interface CopilotFlowState {
   error?: string
 }
 
+type SettingsTab = 'profile' | 'api' | 'context'
+
 export default function Settings() {
+  const [tab, setTab] = useState<SettingsTab>('profile')
+
+  const tabs: { id: SettingsTab; label: string; icon: string }[] = [
+    { id: 'profile', label: 'Profil',     icon: '👤' },
+    { id: 'api',     label: 'Clés API',   icon: '🔑' },
+    { id: 'context', label: 'Contexte IA', icon: '📚' },
+  ]
+
+  return (
+    <div style={{ maxWidth: 760 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 4 }}>Paramètres</h1>
+      </div>
+
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 28, borderBottom: `2px solid ${t.border}` }}>
+        {tabs.map(tb => (
+          <button key={tb.id} onClick={() => setTab(tb.id)} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 16px', background: 'none', border: 'none',
+            borderBottom: `2px solid ${tab === tb.id ? `var(--brand, ${t.brand})` : 'transparent'}`,
+            marginBottom: -2, cursor: 'pointer',
+            fontSize: 13, fontWeight: tab === tb.id ? 700 : 400,
+            color: tab === tb.id ? `var(--brand, ${t.brand})` : t.muted,
+            transition: 'color .15s',
+          }}>
+            <span>{tb.icon}</span> {tb.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'profile' && (
+        <section>
+          <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+            Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.
+          </p>
+          <UserProfileEditor />
+        </section>
+      )}
+
+      {tab === 'api' && <ApiSection />}
+
+      {tab === 'context' && (
+        <section>
+          <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+            Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier.
+          </p>
+          <ContextEditor />
+        </section>
+      )}
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
+    </div>
+  )
+}
+
+// ── API keys + model config tab ───────────────────────────────────
+
+function ApiSection() {
   const qc = useQueryClient()
   const { data: provData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
   const configured: Record<string, boolean> = provData?.data ?? {}
@@ -95,7 +156,6 @@ export default function Settings() {
   const [copilotLoading, setCopilotLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Clean up poll timer on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
   const startCopilotLogin = async () => {
@@ -105,9 +165,7 @@ export default function Settings() {
       const res = await copilotLogin()
       const flow = res.data as { device_code: string; user_code: string; verification_uri: string; interval: number }
       setCopilotFlow({ ...flow, status: 'waiting' })
-      // Open GitHub device activation in new tab
       window.open(flow.verification_uri, '_blank', 'noopener')
-      // Start polling
       pollRef.current = setInterval(async () => {
         try {
           const poll = await copilotPoll(flow.device_code)
@@ -123,8 +181,7 @@ export default function Settings() {
             clearInterval(pollRef.current!)
             setCopilotFlow(f => f ? { ...f, status: 'error', error: 'Accès refusé sur GitHub.' } : null)
           }
-          // 'authorization_pending' | 'slow_down' → keep polling
-        } catch { /* network hiccup — keep polling */ }
+        } catch { /* keep polling */ }
       }, (flow.interval + 1) * 1000)
     } catch (e: any) {
       setCopilotFlow({ device_code: '', user_code: '', verification_uri: '', interval: 5, status: 'error', error: e.response?.data?.detail ?? e.message })
@@ -160,26 +217,54 @@ export default function Settings() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-providers'] }),
   })
 
+  const configuredList = PROVIDERS.filter(p => configured[p.id])
+  const unconfiguredList = PROVIDERS.filter(p => !configured[p.id])
+
   return (
-    <div style={{ maxWidth: 720 }}>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 4 }}>Paramètres</h1>
-        <p style={{ fontSize: 14, color: t.muted }}>Gérez vos clés API et préférences.</p>
+    <div>
+      <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+        Les clés sont stockées dans le trousseau système (keyring) — jamais en clair dans la base de données.
+      </p>
+
+      {configuredList.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: t.success, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+            ✓ Configurés ({configuredList.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {configuredList.map(p => renderProvider(p, true))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: t.muted, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+          Ajouter un fournisseur
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {unconfiguredList.map(p => renderProvider(p, false))}
+        </div>
       </div>
 
-      <section>
-        <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-          Clés API — Assistants IA
-        </h2>
-        <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
-          Les clés sont stockées dans le trousseau système de votre machine (keyring) — jamais en clair dans la base de données.
-        </p>
+      {configuredList.length > 0 && (
+        <div style={{ marginTop: 36 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Modèles disponibles
+          </div>
+          <p style={{ fontSize: 13, color: t.muted, marginBottom: 16 }}>
+            Masquez les modèles non inclus dans votre abonnement.
+          </p>
+          <ModelConfigEditor configuredProviderIds={configuredList.map(p => p.id)} />
+        </div>
+      )}
+    </div>
+  )
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {PROVIDERS.map(p => {
-            const isConfigured = configured[p.id] ?? false
-            const isEditing    = editing[p.id] ?? false
-            const keyVal       = keys[p.id] ?? ''
+  function renderProvider(p: ProviderDef, isConfigured: boolean) {
+    const isEditing = editing[p.id] ?? false
+    const keyVal    = keys[p.id] ?? ''
+
+
 
             return (
               <div key={p.id} style={{
@@ -357,47 +442,8 @@ export default function Settings() {
                 </div>
               </div>
             )
-          })}
-        </div>
-      </section>
-
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
-
-      {/* Model config section */}
-      <section style={{ marginTop: 40 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-          Modèles disponibles
-        </h2>
-        <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
-          Choisissez quels modèles apparaissent dans l'assistant IA. Utile pour masquer les modèles non disponibles sur votre abonnement.
-        </p>
-        <ModelConfigEditor />
-      </section>
-
-      {/* User profile section */}
-      <section style={{ marginTop: 40 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-          Profil consultant
-        </h2>
-        <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
-          Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.
-        </p>
-        <UserProfileEditor />
-      </section>
-
-      {/* Context files section */}
-      <section style={{ marginTop: 40 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-          Contexte IA — Fichiers de connaissances
-        </h2>
-        <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
-          Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier, ajouter des conventions propres à votre cabinet, ou enrichir les notes de version.
-        </p>
-        <ContextEditor />
-      </section>
-    </div>
-  )
-}
+  } // end renderProvider
+} // end ApiSection
 
 // ── Model config editor ──────────────────────────────────────────
 
@@ -438,14 +484,15 @@ const ALL_MODELS: { provider: string; label: string; color: string; models: { id
   ]},
 ]
 
-function ModelConfigEditor() {
+function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: string[] }) {
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
-  const config: Record<string, string[]> = data?.data ?? {}
   const [local, setLocal] = useState<Record<string, string[]>>({})
   const [saved, setSaved] = useState(false)
 
   useEffect(() => { setLocal(data?.data ?? {}) }, [data])
+
+  const visibleModels = ALL_MODELS.filter(p => configuredProviderIds.includes(p.provider))
 
   const toggle = (provider: string, modelId: string) => {
     setLocal(prev => {
@@ -459,8 +506,7 @@ function ModelConfigEditor() {
 
   const isEnabled = (provider: string, modelId: string) => {
     const providerModels = ALL_MODELS.find(p => p.provider === provider)!.models.map(m => m.id)
-    const current: string[] = local[provider] ?? providerModels
-    return current.includes(modelId)
+    return (local[provider] ?? providerModels).includes(modelId)
   }
 
   const handleSave = async () => {
@@ -470,26 +516,28 @@ function ModelConfigEditor() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  if (visibleModels.length === 0) return null
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {ALL_MODELS.map(prov => (
-        <div key={prov.provider} style={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, padding: '14px 18px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: prov.color, marginBottom: 10 }}>{prov.label}</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {visibleModels.map(prov => (
+        <div key={prov.provider} style={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, padding: '12px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: prov.color, marginBottom: 8 }}>{prov.label}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {prov.models.map(m => {
               const on = isEnabled(prov.provider, m.id)
               return (
                 <button key={m.id} onClick={() => toggle(prov.provider, m.id)} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '5px 12px',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px',
                   background: on ? `${prov.color}15` : t.bgMuted,
                   border: `1px solid ${on ? prov.color : t.border}`,
                   borderRadius: t.radiusFull,
-                  fontSize: 12, fontWeight: on ? 600 : 400,
+                  fontSize: 11, fontWeight: on ? 600 : 400,
                   color: on ? prov.color : t.muted,
                   cursor: 'pointer', transition: 'all .15s',
                 }}>
-                  <span style={{ fontSize: 11 }}>{on ? '✓' : '○'}</span>
+                  <span style={{ fontSize: 10 }}>{on ? '✓' : '○'}</span>
                   {m.label}
                 </button>
               )
@@ -499,8 +547,8 @@ function ModelConfigEditor() {
       ))}
       <div>
         <button onClick={handleSave} style={{
-          padding: '8px 20px', background: t.brand, color: '#fff', border: 'none',
-          borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          padding: '7px 18px', background: `var(--brand, ${t.brand})`, color: '#fff', border: 'none',
+          borderRadius: t.radius, fontSize: 12, fontWeight: 600, cursor: 'pointer',
         }}>
           {saved ? '✓ Enregistré' : 'Enregistrer'}
         </button>
@@ -660,7 +708,10 @@ function UserProfileEditor() {
     if (p.primaryColor) applyPrimaryColor(p.primaryColor)
   }, [data])
 
-  const set = (key: keyof UserProfile, val: string) => setForm(f => ({ ...f, [key]: val }))
+  const set = (key: keyof UserProfile, val: string) => {
+    setForm(f => ({ ...f, [key]: val }))
+    if (key === 'primaryColor') applyPrimaryColor(val)
+  }
 
   const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

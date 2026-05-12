@@ -1,9 +1,8 @@
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body
 import json
 from pathlib import Path
 
-router = APIRouter(prefix='/settings', tags=['settings'])
+router = APIRouter()
 
 SETTINGS_DIR = Path.home() / '.odoo-consultant'
 USER_PROFILE_FILE = SETTINGS_DIR / 'user-profile.json'
@@ -17,7 +16,7 @@ def get_user_profile():
 
 
 @router.post('/user-profile')
-def save_user_profile(data: dict):
+def save_user_profile(data: dict = Body(...)):
     SETTINGS_DIR.mkdir(exist_ok=True)
     USER_PROFILE_FILE.write_text(json.dumps(data, ensure_ascii=False))
     return data
