@@ -9,11 +9,14 @@ from ...core.models import Profile
 from ...services.keyring_service import store_secret, get_secret, delete_secret
 from ...services.profile_manager import get_profile_api_key
 from ...services.odoo_client import OdooClient
-from ...services.ai_service import stream_chat, DEFAULT_MODELS
+from ...services.ai_service import (
+    stream_chat, DEFAULT_MODELS,
+    GITHUB_MODELS_BASE_URL, COPILOT_BASE_URL, COPILOT_HEADERS,
+)
 
 router = APIRouter()
 
-_PROVIDERS = ("claude", "openai", "gemini", "github")
+_PROVIDERS = ("claude", "openai", "gemini", "github", "copilot")
 _KEY_PREFIX = "ai_key:"
 
 
@@ -51,6 +54,63 @@ async def delete_key(provider: str):
         raise HTTPException(400, f"Fournisseur inconnu : {provider}")
     delete_secret(f"{_KEY_PREFIX}{provider}")
     return {"ok": True}
+
+
+class TestKeyBody(BaseModel):
+    provider: str
+
+
+@router.post("/test-key")
+async def test_key(body: TestKeyBody):
+    """Ping the AI provider with a minimal request to verify the key."""
+    if body.provider not in _PROVIDERS:
+        raise HTTPException(400, f"Fournisseur inconnu : {body.provider}")
+    api_key = _ai_key(body.provider)
+    if not api_key:
+        raise HTTPException(400, "Clé non configurée")
+
+    loop = asyncio.get_event_loop()
+    try:
+        if body.provider == "claude":
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            await loop.run_in_executor(None, lambda: client.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=5,
+                messages=[{"role": "user", "content": "Hi"}],
+            ))
+
+        elif body.provider in ("openai", "github", "copilot"):
+            import openai as _oai
+            kwargs: dict = {"api_key": api_key}
+            if body.provider == "github":
+                kwargs["base_url"] = GITHUB_MODELS_BASE_URL
+            elif body.provider == "copilot":
+                kwargs["base_url"]         = COPILOT_BASE_URL
+                kwargs["default_headers"]  = COPILOT_HEADERS
+            model = "gpt-4o-mini" if body.provider != "copilot" else "gpt-4o"
+            client = _oai.OpenAI(**kwargs)
+            await loop.run_in_executor(None, lambda: client.chat.completions.create(
+                model=model, max_tokens=5,
+                messages=[{"role": "user", "content": "Hi"}],
+            ))
+
+        elif body.provider == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            mdl = genai.GenerativeModel("gemini-1.5-flash")
+            await loop.run_in_executor(None, lambda: mdl.generate_content("Hi"))
+
+        return {"ok": True, "msg": "Connexion réussie ✓"}
+    except Exception as exc:
+        msg = str(exc)
+        # Simplify common error messages
+        if "401" in msg or "authentication" in msg.lower() or "unauthorized" in msg.lower():
+            msg = "Clé invalide ou expirée (401 Unauthorized)"
+        elif "403" in msg or "forbidden" in msg.lower():
+            msg = "Accès refusé — vérifiez les permissions du token (403 Forbidden)"
+        elif "429" in msg:
+            msg = "Quota dépassé — réessayez dans quelques secondes (429)"
+        return {"ok": False, "msg": msg}
 
 
 # ── Chat ─────────────────────────────────────────────────────────

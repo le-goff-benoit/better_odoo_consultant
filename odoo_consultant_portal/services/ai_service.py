@@ -80,13 +80,20 @@ TOOLS_GEMINI = [
 ]
 
 DEFAULT_MODELS = {
-    "claude":  "claude-sonnet-4-6",
-    "openai":  "gpt-4o",
-    "gemini":  "gemini-2.0-flash",
-    "github":  "gpt-4o",
+    "claude":   "claude-sonnet-4-6",
+    "openai":   "gpt-4o",
+    "gemini":   "gemini-2.0-flash",
+    "github":   "gpt-4o",
+    "copilot":  "gpt-4o",
 }
 
-GITHUB_MODELS_BASE_URL = "https://models.inference.ai.azure.com"
+GITHUB_MODELS_BASE_URL  = "https://models.inference.ai.azure.com"
+COPILOT_BASE_URL        = "https://api.githubcopilot.com"
+COPILOT_HEADERS         = {
+    "editor-version":        "vscode/1.95.0",
+    "editor-plugin-version": "copilot-chat/0.22.4",
+    "copilot-integration-id": "vscode-chat",
+}
 
 
 # ── System prompt ────────────────────────────────────────────────
@@ -253,6 +260,23 @@ async def _chat_github(api_key: str, model_id: str, system: str, messages: list,
         yield evt
 
 
+# ── GitHub Copilot Business ───────────────────────────────────────
+
+async def _chat_copilot(api_key: str, model_id: str, system: str, messages: list, odoo) -> AsyncIterator[dict]:
+    try:
+        import openai
+    except ImportError:
+        yield {"type": "error", "msg": "Package 'openai' non installé."}
+        return
+    client = openai.AsyncOpenAI(
+        api_key=api_key,
+        base_url=COPILOT_BASE_URL,
+        default_headers=COPILOT_HEADERS,
+    )
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo):
+        yield evt
+
+
 # ── Gemini ───────────────────────────────────────────────────────
 
 async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list, odoo) -> AsyncIterator[dict]:
@@ -328,6 +352,9 @@ async def stream_chat(
             yield evt
     elif provider == "github":
         async for evt in _chat_github(api_key, model, system, messages, odoo):
+            yield evt
+    elif provider == "copilot":
+        async for evt in _chat_copilot(api_key, model, system, messages, odoo):
             yield evt
     else:
         yield {"type": "error", "msg": f"Fournisseur inconnu : {provider}"}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAiProviders, saveAiKey, deleteAiKey } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey } from '../api/client'
 import { t } from '../theme'
 
 interface ProviderDef {
@@ -51,7 +51,17 @@ const PROVIDERS: Omit<ProviderDef, 'available'>[] = [
     docsUrl: 'https://github.com/settings/tokens',
     docsLabel: 'github.com/settings/tokens',
     description: 'Accès à GPT-4o, Claude, Llama, Mistral via votre compte GitHub. Inclus dans GitHub Free/Pro.',
-    note: 'Utilisez un token GitHub personnel (classic ou fine-grained). Activez la permission "models: read" si fine-grained.',
+    note: 'Token GitHub personnel (classic ou fine-grained). Permission "models: read" si fine-grained.',
+  },
+  {
+    id: 'copilot',
+    label: 'GitHub Copilot Business',
+    color: '#6e40c9',
+    placeholder: 'ghp_… ou github_pat_…',
+    docsUrl: 'https://github.com/settings/tokens',
+    docsLabel: 'github.com/settings/tokens',
+    description: 'Accès via votre abonnement Copilot Business/Enterprise. Modèles GPT-4o, Claude, o1 selon votre plan.',
+    note: 'Expérimental — API non officielle. Utilisez votre token GitHub avec accès Copilot. Peut ne pas fonctionner sans compte Business actif.',
   },
 ]
 
@@ -60,9 +70,24 @@ export default function Settings() {
   const { data: provData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
   const configured: Record<string, boolean> = provData?.data ?? {}
 
-  const [keys,      setKeys]      = useState<Record<string, string>>({})
-  const [editing,   setEditing]   = useState<Record<string, boolean>>({})
-  const [showKey,   setShowKey]   = useState<Record<string, boolean>>({})
+  const [keys,        setKeys]        = useState<Record<string, string>>({})
+  const [editing,     setEditing]     = useState<Record<string, boolean>>({})
+  const [showKey,     setShowKey]     = useState<Record<string, boolean>>({})
+  const [testResult,  setTestResult]  = useState<Record<string, { ok: boolean; msg: string } | null>>({})
+  const [testing,     setTesting]     = useState<Record<string, boolean>>({})
+
+  const runTest = async (provider: string) => {
+    setTesting(p => ({ ...p, [provider]: true }))
+    setTestResult(p => ({ ...p, [provider]: null }))
+    try {
+      const res = await testAiKey(provider)
+      setTestResult(p => ({ ...p, [provider]: res.data }))
+    } catch (e: any) {
+      setTestResult(p => ({ ...p, [provider]: { ok: false, msg: e.response?.data?.detail ?? e.message } }))
+    } finally {
+      setTesting(p => ({ ...p, [provider]: false }))
+    }
+  }
 
   const save = useMutation({
     mutationFn: ({ provider, key }: { provider: string; key: string }) => saveAiKey(provider, key),
@@ -129,15 +154,38 @@ export default function Settings() {
 
                   {/* Actions */}
                   {isConfigured && !isEditing ? (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                      <button onClick={() => setEditing(e => ({ ...e, [p.id]: true }))}
-                        style={btnOutline(t.brand)}>
-                        ↺ Remplacer la clé
-                      </button>
-                      <button onClick={() => del.mutate(p.id)}
-                        style={btnOutline(t.danger)}>
-                        Supprimer
-                      </button>
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button
+                          onClick={() => runTest(p.id)}
+                          disabled={testing[p.id]}
+                          style={{
+                            ...btnOutline(p.color),
+                            background: testing[p.id] ? `${p.color}10` : 'transparent',
+                          }}>
+                          {testing[p.id] ? '⟳ Test en cours…' : '▶ Tester la connexion'}
+                        </button>
+                        <button onClick={() => setEditing(e => ({ ...e, [p.id]: true }))}
+                          style={btnOutline(t.brand)}>
+                          ↺ Remplacer
+                        </button>
+                        <button onClick={() => { del.mutate(p.id); setTestResult(r => ({ ...r, [p.id]: null })) }}
+                          style={btnOutline(t.danger)}>
+                          Supprimer
+                        </button>
+                      </div>
+                      {/* Test result */}
+                      {testResult[p.id] && (
+                        <div style={{
+                          marginTop: 8, padding: '7px 12px', borderRadius: t.radius, fontSize: 12,
+                          background: testResult[p.id]!.ok ? `${t.success}12` : `${t.danger}10`,
+                          border: `1px solid ${testResult[p.id]!.ok ? `${t.success}40` : `${t.danger}30`}`,
+                          color: testResult[p.id]!.ok ? t.success : t.danger,
+                          fontWeight: 500,
+                        }}>
+                          {testResult[p.id]!.ok ? '✓' : '✗'} {testResult[p.id]!.msg}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={{ marginTop: 12 }}>

@@ -65,6 +65,19 @@ const PROVIDERS: { id: string; label: string; color: string; placeholder: string
     ],
   },
   {
+    id: 'copilot', label: 'Copilot', color: '#6e40c9', placeholder: 'ghp_…',
+    models: [
+      { id: 'gpt-4o',                     label: 'GPT-4o',      speed: 2, recommended: true,
+        desc: 'Copilot Business — GPT-4o via votre abonnement GitHub Copilot' },
+      { id: 'gpt-4o-mini',                label: 'GPT-4o mini', speed: 3,
+        desc: 'Version rapide et économique via Copilot' },
+      { id: 'claude-3.5-sonnet',          label: 'Claude 3.5',  speed: 2,
+        desc: 'Claude via Copilot Business (si activé dans votre plan)' },
+      { id: 'o1-mini',                    label: 'o1 mini',     speed: 1,
+        desc: 'Raisonnement avancé via Copilot' },
+    ],
+  },
+  {
     id: 'github', label: 'GitHub', color: '#24292f', placeholder: 'ghp_…',
     models: [
       { id: 'gpt-4o',                      label: 'GPT-4o',        speed: 2, recommended: true,
