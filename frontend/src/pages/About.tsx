@@ -185,9 +185,9 @@ export default function About() {
                 {entry.badge && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '2px 7px',
-                    background: entry.badgeColor === t.brand ? `${t.brand}20` : t.bgMuted,
+                    background: entry.badgeColor === t.brand ? t.brand20 : t.bgMuted,
                     color: entry.badgeColor === t.brand ? t.brand : t.muted,
-                    borderRadius: t.radiusFull, border: `1px solid ${entry.badgeColor === t.brand ? `${t.brand}40` : t.border}`,
+                    borderRadius: t.radiusFull, border: `1px solid ${entry.badgeColor === t.brand ? t.brand40 : t.border}`,
                   }}>{entry.badge}</span>
                 )}
                 <span style={{ fontSize: 11, color: t.muted, marginLeft: 'auto' }}>{entry.date}</span>

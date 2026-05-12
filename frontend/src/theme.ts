@@ -4,6 +4,12 @@ export const t = {
   brand:       'var(--brand, #017e84)',
   brandDark:   '#015f64',
   brandLight:  '#e6f4f5',
+  // Transparent brand variants — use these instead of ${t.brand}XX (invalid on CSS vars)
+  brand10: 'var(--brand-10)',
+  brand15: 'var(--brand-15)',
+  brand20: 'var(--brand-20)',
+  brand40: 'var(--brand-40)',
+  brand60: 'var(--brand-60)',
 
   // Sidebar
   sidebarBg:        'var(--th-sidebar-bg, #1e293b)',

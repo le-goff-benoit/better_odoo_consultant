@@ -301,7 +301,7 @@ export default function Assistant() {
 
   const isGeneralMode = profileId === GENERAL_KEY
   const selectedProfile = profiles.find(p => p.id === profileId)
-  const currentProv = PROVIDERS.find(p => p.id === provider)
+  const currentProv = configuredProviders.find(p => p.id === provider)
 
   const { data: profileAppsData } = useQuery({
     queryKey: ['profile-apps', typeof profileId === 'number' ? profileId : null],
@@ -472,7 +472,7 @@ export default function Assistant() {
   }
 
   const switchProvider = (id: string) => {
-    const p = PROVIDERS.find(pv => pv.id === id)!
+    const p = configuredProviders.find(pv => pv.id === id)!
     setProvider(id)
     setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
   }
@@ -616,7 +616,7 @@ export default function Assistant() {
             {messages.length > 0 && (
               <>
                 <button onClick={makeMeetingMinute} disabled={streaming}
-                  style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.brand}60`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.brand, fontWeight: 600 }}>
+                  style={{ padding: '5px 12px', background: 'none', border: `1px solid ${t.brand60}`, borderRadius: t.radius, fontSize: 12, cursor: 'pointer', color: t.brand, fontWeight: 600 }}>
                   📋 Meeting Minute
                 </button>
                 <button onClick={resetCurrentConversation}

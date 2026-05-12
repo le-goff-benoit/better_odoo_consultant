@@ -1,5 +1,12 @@
 /* Theme CSS variables — default is light */
 :root {
+  /* Transparent brand variants — color-mix() avoids invalid hex-alpha on CSS vars */
+  --brand-10: color-mix(in srgb, var(--brand, #017e84) 10%, transparent);
+  --brand-15: color-mix(in srgb, var(--brand, #017e84) 15%, transparent);
+  --brand-20: color-mix(in srgb, var(--brand, #017e84) 20%, transparent);
+  --brand-40: color-mix(in srgb, var(--brand, #017e84) 40%, transparent);
+  --brand-60: color-mix(in srgb, var(--brand, #017e84) 60%, transparent);
+
   --th-bg: #f8fafc;
   --th-bg-card: #ffffff;
   --th-bg-muted: #f1f5f9;

@@ -592,6 +592,20 @@ function ContextEditor() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // Include intermediate/custom versions from Sources page
+  const customVersions: string[] = (() => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })()
+  const allFiles = [
+    ...KNOWN_FILES,
+    ...customVersions
+      .filter(v => !KNOWN_FILES.some(f => f.name === `odoo-${v}.md`))
+      .sort((a, b) => {
+        const [aMaj, aMin = 0] = a.split('.').map(Number)
+        const [bMaj, bMin = 0] = b.split('.').map(Number)
+        return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
+      })
+      .map(v => ({ name: `odoo-${v}.md`, label: `Odoo ${v}`, icon: '📋', desc: 'Notes de version intermédiaire' })),
+  ]
+
   const { data: filesData } = useQuery({ queryKey: ['context-files'], queryFn: listContextFiles })
   const existingNames: string[] = (filesData?.data ?? []).map((f: { name: string }) => f.name)
 
@@ -626,21 +640,21 @@ function ContextEditor() {
   }
 
   const isCustomized = existingNames.includes(selected)
-  const currentFile = KNOWN_FILES.find(f => f.name === selected)
+  const currentFile = allFiles.find(f => f.name === selected)
 
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
       {/* File list */}
       <div style={{ width: 200, flexShrink: 0 }}>
-        {KNOWN_FILES.map(f => {
+        {allFiles.map(f => {
           const exists = existingNames.includes(f.name)
           const isActive = f.name === selected
           return (
             <button key={f.name} onClick={() => { if (dirty && !confirm('Modifications non sauvegardées. Continuer ?')) return; setSelected(f.name) }} style={{
               width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 12px', marginBottom: 4,
-              background: isActive ? `${t.brand}10` : 'transparent',
-              border: `1px solid ${isActive ? `${t.brand}40` : t.border}`,
+              background: isActive ? t.brand10 : 'transparent',
+              border: `1px solid ${isActive ? t.brand40 : t.border}`,
               borderRadius: t.radius, cursor: 'pointer',
               transition: 'all .15s',
             }}>
@@ -776,8 +790,8 @@ function UserProfileEditor() {
             title="Cliquer pour changer l'avatar"
             style={{
               width: 72, height: 72, borderRadius: '50%',
-              background: `${form.primaryColor ?? t.brand}20`,
-              border: `2px solid ${form.primaryColor ?? t.brand}40`,
+              background: form.primaryColor ? `${form.primaryColor}20` : t.brand20,
+              border: `2px solid ${form.primaryColor ? `${form.primaryColor}40` : t.brand40}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: avatarIsImage ? 0 : 32, cursor: 'pointer',
               overflow: 'hidden', flexShrink: 0,
@@ -792,7 +806,7 @@ function UserProfileEditor() {
           <div style={{ display: 'flex', gap: 4 }}>
             {['👤', '🧑‍💻', '👨‍💼', '👩‍💼', '🦊'].map(em => (
               <button key={em} onClick={() => set('avatar', em)} style={{
-                fontSize: 16, background: form.avatar === em ? `${t.brand}15` : 'transparent',
+                fontSize: 16, background: form.avatar === em ? t.brand15 : 'transparent',
                 border: `1px solid ${form.avatar === em ? t.brand : t.border}`,
                 borderRadius: 6, padding: '2px 4px', cursor: 'pointer',
               }}>{em}</button>

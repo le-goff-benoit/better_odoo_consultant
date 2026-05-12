@@ -609,7 +609,7 @@ function StatusBadge({ status, isInstalled, loading }: { status: CardState; isIn
   )
   const cfg: Record<CardState, { icon: string; bg: string; color: string }> = {
     idle:    isInstalled ? { icon: '✓', bg: `${t.success}20`, color: t.success } : { icon: '○', bg: t.borderLight, color: t.muted },
-    running: { icon: '⟳',  bg: `${t.action}20`, color: t.action },
+    running: { icon: '⟳',  bg: t.brand20, color: t.action },
     done:    { icon: '✓',  bg: `${t.success}20`, color: t.success },
     error:   { icon: '✗',  bg: `${t.danger}20`,  color: t.danger },
   }

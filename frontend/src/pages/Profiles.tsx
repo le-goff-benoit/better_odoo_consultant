@@ -765,8 +765,8 @@ function QuickLink({ href, label, icon, color }: { href: string; label: string; 
     <a href={href} target="_blank" rel="noreferrer" style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
       padding: '3px 9px', borderRadius: 3,
-      border: `1px solid ${color}30`, background: `${color}0d`,
-      color, fontSize: 11, fontWeight: 600, textDecoration: 'none',
+      border: `1px solid ${t.brand40}`, background: t.brand10,
+      color: t.action, fontSize: 11, fontWeight: 600, textDecoration: 'none',
     }}>
       {icon} {label}
     </a>
@@ -808,7 +808,7 @@ const styles = {
     border: 'none', borderRadius: t.radius, fontWeight: 600, fontSize: 13, cursor: 'pointer',
   } as React.CSSProperties,
   btnSecondary: {
-    padding: '8px 16px', background: 'transparent', color: t.muted,
+    padding: '8px 16px', background: 'transparent', color: t.textSub,
     border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, cursor: 'pointer',
   } as React.CSSProperties,
   btnOutline: (color: string): React.CSSProperties => ({
