@@ -22,6 +22,14 @@ echo -e "║   Odoo Consultant Portal — Installation  ║"
 echo -e "╚══════════════════════════════════════════╝${RESET}"
 echo ""
 
+# ── 0. Mise à jour du code ───────────────────────────────────
+if git -C "$(dirname "$0")" rev-parse --git-dir &>/dev/null; then
+  info "Mise à jour du code depuis GitHub..."
+  git -C "$(dirname "$0")" pull --ff-only \
+    && success "Code à jour" \
+    || warn "Impossible de mettre à jour automatiquement (modifications locales ?)."
+fi
+
 # ── 1. Python ────────────────────────────────────────────────
 info "Vérification de Python..."
 
