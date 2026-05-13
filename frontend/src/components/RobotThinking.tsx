@@ -151,9 +151,11 @@ export default function RobotThinking({ size = 52, color = '#22D3EE' }: { size?:
 
         {/* Neck */}
         <rect x="23" y="30" width="6" height="4" rx="1.5" fill="#B0C4D8" />
+        <rect x="23" y="30" width="6" height="4" rx="1.5" fill={color} opacity="0.3" />
 
         {/* Torso */}
         <rect x="14" y="34" width="24" height="17" rx="4" fill="#C8DAE8" />
+        <rect x="14" y="34" width="24" height="17" rx="4" fill={color} opacity="0.18" />
         <rect x="19" y="37" width="14" height="11" rx="2" fill="#A8BED4" />
         {/* LED row */}
         {[23, 26, 29].map((cx, i) => (
@@ -166,12 +168,14 @@ export default function RobotThinking({ size = 52, color = '#22D3EE' }: { size?:
         {/* Left arm */}
         <g style={leftArmStyle}>
           <rect x="6" y="34" width="7" height="12" rx="3.5" fill="#B0C4D8" />
+          <rect x="6" y="34" width="7" height="12" rx="3.5" fill={color} opacity="0.22" />
           <ellipse cx="9.5" cy="46.5" rx="3.5" ry="2.5" fill="#93AABF" />
         </g>
 
         {/* Right arm */}
         <g style={rightArmStyle}>
           <rect x="39" y="34" width="7" height="12" rx="3.5" fill="#B0C4D8" />
+          <rect x="39" y="34" width="7" height="12" rx="3.5" fill={color} opacity="0.22" />
           <ellipse cx="42.5" cy="46.5" rx="3.5" ry="2.5" fill="#93AABF" />
           <circle cx="40"   cy="44.8" r="1.2" fill="#A8BED4" />
           <circle cx="42.5" cy="44.2" r="1.2" fill="#A8BED4" />
@@ -191,12 +195,14 @@ export default function RobotThinking({ size = 52, color = '#22D3EE' }: { size?:
           {[{ x: 9, cx: 11.5, delay: '0.5s' }, { x: 38, cx: 40.5, delay: '1.1s' }].map(({ x, cx, delay }) => (
             <g key={x} style={{ animation: 'rt-ear-pulse 2.2s ease-in-out infinite', animationDelay: delay, transformBox: 'fill-box', transformOrigin: '50% 50%' }}>
               <rect x={x} y="13" width="5" height="9" rx="2.5" fill="#B0C4D8" />
+              <rect x={x} y="13" width="5" height="9" rx="2.5" fill={color} opacity="0.28" />
               <circle cx={cx} cy="17.5" r="2.2" fill={eyeColor} style={{ animation: 'rt-glow 2s ease-in-out infinite', opacity: 0.65, animationDelay: delay }} />
             </g>
           ))}
 
           {/* Head shell */}
           <rect x="13" y="7" width="26" height="22" rx="8" fill="#C8DAE8" />
+          <rect x="13" y="7" width="26" height="22" rx="8" fill={color} opacity="0.18" />
           <rect x="16" y="10" width="20" height="16" rx="5" fill="#0E3A4A" />
 
           {/* Eyes */}

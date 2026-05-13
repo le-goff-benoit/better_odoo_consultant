@@ -151,14 +151,16 @@ export default function CatThinking({ size = 52, color = '#22D3EE' }: { size?: n
 
         {/* Body */}
         <rect x="15" y="32" width="22" height="20" rx="7" fill="#D4C4B4" />
+        <rect x="15" y="32" width="22" height="20" rx="7" fill={color} opacity="0.18" />
         {/* Tummy */}
         <ellipse cx="26" cy="42" rx="7" ry="8" fill="#EDE0D0" />
         {/* Tummy spot */}
-        <ellipse cx="26" cy="44" rx="4" ry="4" fill={color} opacity="0.12" />
+        <ellipse cx="26" cy="44" rx="4" ry="4" fill={color} opacity="0.22" />
 
         {/* Left paw */}
         <g style={leftPawStyle}>
           <rect x="8" y="34" width="7" height="11" rx="3.5" fill="#D4C4B4" />
+          <rect x="8" y="34" width="7" height="11" rx="3.5" fill={color} opacity="0.2" />
           <ellipse cx="11.5" cy="45.5" rx="3.8" ry="2.2" fill="#C8B4A0" />
           {/* Toe lines */}
           {[-1.2, 0, 1.2].map(dx => <line key={dx} x1={11.5 + dx} y1="44.5" x2={11.5 + dx} y2="47" stroke="#B09480" strokeWidth="0.7" strokeLinecap="round" />)}
@@ -167,6 +169,7 @@ export default function CatThinking({ size = 52, color = '#22D3EE' }: { size?: n
         {/* Right paw */}
         <g style={rightPawStyle}>
           <rect x="37" y="34" width="7" height="11" rx="3.5" fill="#D4C4B4" />
+          <rect x="37" y="34" width="7" height="11" rx="3.5" fill={color} opacity="0.2" />
           <ellipse cx="40.5" cy="45.5" rx="3.8" ry="2.2" fill="#C8B4A0" />
           {[-1.2, 0, 1.2].map(dx => <line key={dx} x1={40.5 + dx} y1="44.5" x2={40.5 + dx} y2="47" stroke="#B09480" strokeWidth="0.7" strokeLinecap="round" />)}
         </g>
@@ -200,6 +203,7 @@ export default function CatThinking({ size = 52, color = '#22D3EE' }: { size?: n
 
           {/* Head base — round */}
           <circle cx="26" cy="20" r="13" fill="#D4C4B4" />
+          <circle cx="26" cy="20" r="13" fill={color} opacity="0.16" />
           {/* Face markings */}
           <ellipse cx="26" cy="23" rx="7" ry="5" fill="#EDE0D0" />
 

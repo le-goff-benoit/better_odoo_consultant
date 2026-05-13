@@ -159,14 +159,16 @@ export default function DogThinking({ size = 52, color = '#22D3EE' }: { size?: n
 
         {/* Body */}
         <rect x="14" y="32" width="24" height="20" rx="8" fill="#D4A87A" />
+        <rect x="14" y="32" width="24" height="20" rx="8" fill={color} opacity="0.18" />
         {/* Tummy */}
         <ellipse cx="26" cy="42" rx="8" ry="8" fill="#EDD8B8" />
         {/* Spot on tummy */}
-        <ellipse cx="26" cy="44" rx="5" ry="4" fill={color} opacity="0.1" />
+        <ellipse cx="26" cy="44" rx="5" ry="4" fill={color} opacity="0.2" />
 
         {/* Left front paw */}
         <g style={leftPawStyle}>
           <rect x="7" y="33" width="7" height="12" rx="3.5" fill="#C8A87A" />
+          <rect x="7" y="33" width="7" height="12" rx="3.5" fill={color} opacity="0.2" />
           <ellipse cx="10.5" cy="46" rx="4" ry="2.4" fill="#B89468" />
           {[-1.2, 0, 1.2].map(dx => <line key={dx} x1={10.5 + dx} y1="44.8" x2={10.5 + dx} y2="47.4" stroke="#A08058" strokeWidth="0.7" strokeLinecap="round" />)}
         </g>
@@ -174,6 +176,7 @@ export default function DogThinking({ size = 52, color = '#22D3EE' }: { size?: n
         {/* Right front paw */}
         <g style={rightPawStyle}>
           <rect x="38" y="33" width="7" height="12" rx="3.5" fill="#C8A87A" />
+          <rect x="38" y="33" width="7" height="12" rx="3.5" fill={color} opacity="0.2" />
           <ellipse cx="41.5" cy="46" rx="4" ry="2.4" fill="#B89468" />
           {[-1.2, 0, 1.2].map(dx => <line key={dx} x1={41.5 + dx} y1="44.8" x2={41.5 + dx} y2="47.4" stroke="#A08058" strokeWidth="0.7" strokeLinecap="round" />)}
         </g>
@@ -190,15 +193,18 @@ export default function DogThinking({ size = 52, color = '#22D3EE' }: { size?: n
           {/* Floppy ears */}
           <g style={leftEarStyle}>
             <ellipse cx="13.5" cy="18" rx="5" ry="8" fill="#C8A87A" />
+            <ellipse cx="13.5" cy="18" rx="5" ry="8" fill={color} opacity="0.22" />
             <ellipse cx="13.5" cy="18" rx="3" ry="6" fill="#B89468" opacity="0.4" />
           </g>
           <g style={rightEarStyle}>
             <ellipse cx="38.5" cy="18" rx="5" ry="8" fill="#C8A87A" />
+            <ellipse cx="38.5" cy="18" rx="5" ry="8" fill={color} opacity="0.22" />
             <ellipse cx="38.5" cy="18" rx="3" ry="6" fill="#B89468" opacity="0.4" />
           </g>
 
           {/* Head */}
           <circle cx="26" cy="18" r="13" fill="#D4A87A" />
+          <circle cx="26" cy="18" r="13" fill={color} opacity="0.16" />
 
           {/* Snout */}
           <ellipse cx="26" cy="23" rx="8" ry="5.5" fill="#EDD8B8" />
