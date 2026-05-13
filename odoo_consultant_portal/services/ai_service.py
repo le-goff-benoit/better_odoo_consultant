@@ -44,14 +44,21 @@ _TOOL_SEARCH_REPO = {
     "description": (
         "Rechercher dans le code source du projet client (modules custom, overrides, configurations). "
         "Utilise pour trouver des modèles custom, des surcharges de méthodes Odoo, des vues modifiées, ou toute logique métier spécifique au client. "
-        "Retourne les lignes correspondantes avec fichier et numéro de ligne."
+        "Retourne les lignes correspondantes avec fichier et numéro de ligne.\n"
+        "IMPORTANT — pour lister les modules custom du projet, utilise file_types=['__manifest__.py'] avec pattern='name' : "
+        "cela cherche les lignes contenant 'name' DANS les fichiers __manifest__.py (un par module).\n"
+        "Exemples :\n"
+        "- Lister tous les modules custom : search_project_source(pattern='name', file_types=['__manifest__.py'])\n"
+        "- Trouver un override : search_project_source(pattern='_inherit', file_types=['*.py'])\n"
+        "- Chercher un modèle : search_project_source(pattern=\"_name = 'sale.order'\", file_types=['*.py'])"
     ),
 }
 _TOOL_READ_REPO = {
     "name": "read_project_file",
     "description": (
         "Lire le contenu d'un fichier du code source du projet client (module custom). "
-        "Utilise après search_project_source pour voir l'implémentation complète d'un override ou d'un module custom."
+        "Utilise après search_project_source pour voir l'implémentation complète d'un override ou d'un module custom. "
+        "Le chemin est relatif depuis la racine du dépôt cloné."
     ),
 }
 
@@ -278,7 +285,12 @@ Exemples d'utilisation :
     if repo_path:
         repo_section = f"""
 Code source du projet client disponible localement : {repo_path}
-IMPORTANT : Ce dépôt contient les modules custom et configurations spécifiques à ce client. Utilise search_project_source et read_project_file pour explorer les overrides, modèles custom, vues modifiées, et toute logique métier particulière.
+Ce dépôt contient les modules custom et configurations spécifiques à ce client.
+IMPORTANT — pour découvrir les modules custom, commence TOUJOURS par :
+  search_project_source(pattern="name", file_types=["__manifest__.py"])
+Cela liste tous les modules du dépôt en cherchant "name" dans les fichiers __manifest__.py.
+Ensuite utilise read_project_file pour lire les fichiers pertinents.
+Ne cherche PAS "__manifest__.py" comme pattern — c'est un nom de fichier, pas du contenu.
 """
 
     return f"""Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
