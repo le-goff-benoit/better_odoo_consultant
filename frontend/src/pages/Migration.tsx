@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, ArrowUp, ChevronDown, Check, Square, TriangleAlert } from 'lucide-react'
+import { ArrowRightLeft, ArrowUp, ChevronDown, Check, CheckCheck, Copy, Square, TriangleAlert } from 'lucide-react'
 import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -438,6 +438,15 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   const errorEvt   = events.find(e => e.type === 'error')
   const time   = fmtTime(timestamp)
   const tokens = fmtTokens(inputTokens, outputTokens)
+  const [copied, setCopied] = useState(false)
+
+  function copyText() {
+    if (!textEvt?.content) return
+    navigator.clipboard.writeText(textEvt.content).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -456,10 +465,25 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
 
         {textEvt?.content && (
           <div style={{
+            position: 'relative',
             background: t.bgCard, border: `1px solid ${t.border}`,
             borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
             padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
           }}>
+            <button
+              onClick={copyText}
+              title="Copier la réponse"
+              style={{
+                position: 'absolute', top: 8, right: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 26, height: 26, border: `1px solid ${t.border}`,
+                borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                color: copied ? t.success : t.muted, opacity: 0.8,
+                transition: 'opacity .15s, color .15s',
+              }}
+            >
+              {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
+            </button>
             <Markdown text={textEvt.content} />
           </div>
         )}
@@ -488,10 +512,26 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           </div>
         )}
 
-        {(time || tokens) && !loading && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 10, color: t.muted, paddingLeft: 2 }}>
+        {(time || tokens || textEvt?.content) && !loading && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 10, color: t.muted, paddingLeft: 2 }}>
             {time && <span>{time}</span>}
             {tokens && <span title="Tokens utilisés (entrée ↑ + sortie ↓)">{tokens}</span>}
+            {textEvt?.content && (
+              <button
+                onClick={copyText}
+                title="Copier la réponse"
+                style={{
+                  marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
+                  border: `1px solid ${t.border}`, borderRadius: t.radius,
+                  background: 'transparent', cursor: 'pointer', padding: '2px 7px',
+                  color: copied ? t.success : t.muted, fontSize: 10, fontWeight: 600,
+                  transition: 'color .15s',
+                }}
+              >
+                {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
+                {copied ? 'Copié !' : 'Copier'}
+              </button>
+            )}
           </div>
         )}
       </div>
