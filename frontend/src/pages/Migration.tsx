@@ -555,41 +555,47 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
   }
   if (name === 'search_odoo_source') {
     const ver = args?.version as string
+    const pat = (args?.pattern as string) ?? ''
+    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
     return {
-      icon: '🔎', appName: null, color: '#2563EB',
+      icon: '🔍', appName: null, color: '#2563EB',
       loadingLabel: `Recherche sources${ver ? ` v${ver}` : ''}…`,
-      doneLabel: ver ? `Sources v${ver}` : 'Sources Odoo',
+      doneLabel: shortPat ? `« ${shortPat} » dans sources${ver ? ` v${ver}` : ''}` : `Sources Odoo${ver ? ` v${ver}` : ''}`,
     }
   }
   if (name === 'read_odoo_file') {
     const path = (args?.path as string) ?? ''
     const file = path.split('/').pop() ?? 'fichier'
     return {
-      icon: '📄', appName: null, color: '#7C3AED',
-      loadingLabel: `Lecture de ${file}…`, doneLabel: file,
+      icon: '📄', appName: null, color: '#2563EB',
+      loadingLabel: `Lecture — ${file}…`, doneLabel: file,
     }
   }
   if (name === 'search_target_source') {
     const ver = args?.version as string
+    const pat = (args?.pattern as string) ?? ''
+    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
     return {
       icon: '🎯', appName: null, color: '#9333ea',
       loadingLabel: `Recherche sources cibles${ver ? ` v${ver}` : ''}…`,
-      doneLabel: ver ? `Sources cibles v${ver}` : 'Sources cibles',
+      doneLabel: shortPat ? `« ${shortPat} » dans sources${ver ? ` v${ver}` : ''}` : `Sources cible${ver ? ` v${ver}` : ''}`,
     }
   }
   if (name === 'read_target_file') {
     const path = (args?.path as string) ?? ''
     const file = path.split('/').pop() ?? 'fichier'
     return {
-      icon: '📋', appName: null, color: '#9333ea',
-      loadingLabel: `Lecture cible : ${file}…`, doneLabel: file,
+      icon: '📄', appName: null, color: '#9333ea',
+      loadingLabel: `Lecture sources cibles — ${file}…`, doneLabel: file,
     }
   }
   if (name === 'search_project_source') {
+    const pat = (args?.pattern as string) ?? ''
+    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
     return {
       icon: '⎇', appName: null, color: '#0891b2',
-      loadingLabel: 'Recherche dans le repo projet…',
-      doneLabel: 'Repo projet',
+      loadingLabel: 'Recherche dans le code custom…',
+      doneLabel: shortPat ? `« ${shortPat} » dans code custom` : 'Code custom',
     }
   }
   if (name === 'read_project_file') {
@@ -597,19 +603,20 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
     const file = path.split('/').pop() ?? 'fichier'
     return {
       icon: '📁', appName: null, color: '#0891b2',
-      loadingLabel: `Lecture repo : ${file}…`, doneLabel: file,
+      loadingLabel: `Lecture code custom — ${file}…`, doneLabel: file,
     }
   }
   if (name === 'count_source_lines') {
     const scope = (args?.scope as string) ?? ''
     const path  = (args?.path as string) ?? ''
     const groupBy = (args?.group_by as string) ?? 'extension'
-    const scopeLabels: Record<string, string> = { odoo: 'sources Odoo', target: 'sources cible', project: 'repo projet' }
+    const groupByLabels: Record<string, string> = { extension: 'par type', module: 'par module', directory: 'par dossier', none: 'total' }
+    const scopeLabels: Record<string, string> = { odoo: 'sources Odoo', target: 'sources cible', project: 'code custom' }
     const scopeLbl = scopeLabels[scope] ?? scope
     return {
       icon: '📊', appName: null, color: '#0EA5E9',
-      loadingLabel: `Comptage lignes — ${scopeLbl}${path ? ` / ${path}` : ''}…`,
-      doneLabel: `LOC · ${scopeLbl}${path ? ` / ${path}` : ''} (par ${groupBy})`,
+      loadingLabel: `Volumétrie — ${scopeLbl}${path ? ` / ${path}` : ''}…`,
+      doneLabel: `Volumétrie · ${scopeLbl}${path ? ` / ${path}` : ''} (${groupByLabels[groupBy] ?? groupBy})`,
     }
   }
   if (name === 'inspect_studio') {
@@ -619,12 +626,12 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
     return {
       icon: '🎨', appName: null, color: '#7C3AED',
       loadingLabel: `Inspection Studio — ${sectLabel}${modelFilter ? ` (${modelFilter})` : ''}…`,
-      doneLabel: `Studio · ${sectLabel}`,
+      doneLabel: `Personnalisations Studio${modelFilter ? ` · ${modelFilter}` : ''}`,
       liveDb: true,
     }
   }
   return {
-    icon: '🔧', appName: null, color: '#64748b',
+    icon: '⚙️', appName: null, color: '#64748b',
     loadingLabel: `${name}…`, doneLabel: name,
   }
 }

@@ -1770,7 +1770,7 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
       icon: app ? app.icon : '🗄️',
       appName: app ? prefix : null,
       color: app ? app.color : '#64748b',
-      loadingLabel: model ? `Requête base client — ${label}…` : 'Requête base client…',
+      loadingLabel: model ? `Lecture base client — ${label}…` : 'Lecture base client…',
       doneLabel: label || 'Odoo',
       liveDb: true,
     }
@@ -1780,8 +1780,8 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
     const label = humanModel(model)
     return {
       icon: '🔢', appName: null, color: '#0891b2',
-      loadingLabel: model ? `Comptage base client — ${label}…` : 'Comptage base client…',
-      doneLabel: model ? `Comptage · ${label}` : 'Comptage',
+      loadingLabel: model ? `Comptage — ${label}…` : 'Comptage…',
+      doneLabel: model ? `${label} (nb)` : 'Comptage',
       liveDb: true,
     }
   }
@@ -1790,27 +1790,44 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
     const label = humanModel(model)
     return {
       icon: '🔬', appName: null, color: '#059669',
-      loadingLabel: model ? `Découverte des champs — ${label}…` : 'Découverte des champs…',
-      doneLabel: model ? `Champs · ${label}` : 'Champs',
+      loadingLabel: model ? `Structure de ${label}…` : 'Structure du modèle…',
+      doneLabel: model ? `Structure · ${label}` : 'Structure',
     }
   }
   if (name === 'search_odoo_source') {
     const ver = args?.version as string
-    const pat = args?.pattern as string ?? ''
-    const shortPat = pat.length > 30 ? pat.slice(0, 30) + '…' : pat
+    const pat = (args?.pattern as string) ?? ''
+    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
     return {
-      icon: '🔎', appName: null, color: '#2563EB',
+      icon: '🔍', appName: null, color: '#2563EB',
       loadingLabel: `Recherche dans les sources${ver ? ` v${ver}` : ''}…`,
-      doneLabel: ver ? `Sources v${ver}` : 'Sources Odoo',
-      hint: shortPat || undefined,
+      doneLabel: shortPat ? `« ${shortPat} » dans sources${ver ? ` v${ver}` : ''}` : `Sources Odoo${ver ? ` v${ver}` : ''}`,
     }
   }
   if (name === 'read_odoo_file') {
     const path = (args?.path as string) ?? ''
     const file = path.split('/').pop() ?? 'fichier'
     return {
-      icon: '📄', appName: null, color: '#7C3AED',
-      loadingLabel: `Lecture de ${file}…`,
+      icon: '📄', appName: null, color: '#2563EB',
+      loadingLabel: `Lecture — ${file}…`,
+      doneLabel: file,
+    }
+  }
+  if (name === 'search_project_source') {
+    const pat = (args?.pattern as string) ?? ''
+    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
+    return {
+      icon: '⧗', appName: null, color: '#0891b2',
+      loadingLabel: 'Recherche dans le code custom…',
+      doneLabel: shortPat ? `« ${shortPat} » dans code custom` : 'Code custom',
+    }
+  }
+  if (name === 'read_project_file') {
+    const path = (args?.path as string) ?? ''
+    const file = path.split('/').pop() ?? 'fichier'
+    return {
+      icon: '📁', appName: null, color: '#0891b2',
+      loadingLabel: `Lecture code custom — ${file}…`,
       doneLabel: file,
     }
   }
@@ -1818,12 +1835,13 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
     const scope = (args?.scope as string) ?? ''
     const path  = (args?.path as string) ?? ''
     const groupBy = (args?.group_by as string) ?? 'extension'
-    const scopeLabels: Record<string, string> = { odoo: 'sources Odoo', target: 'sources cible', project: 'repo projet' }
+    const groupByLabels: Record<string, string> = { extension: 'par type', module: 'par module', directory: 'par dossier', none: 'total' }
+    const scopeLabels: Record<string, string> = { odoo: 'sources Odoo', target: 'sources cible', project: 'code custom' }
     const scopeLbl = scopeLabels[scope] ?? scope
     return {
       icon: '📊', appName: null, color: '#0EA5E9',
-      loadingLabel: `Comptage lignes — ${scopeLbl}${path ? ` / ${path}` : ''}…`,
-      doneLabel: `LOC · ${scopeLbl}${path ? ` / ${path}` : ''} (par ${groupBy})`,
+      loadingLabel: `Volumétrie — ${scopeLbl}${path ? ` / ${path}` : ''}…`,
+      doneLabel: `Volumétrie · ${scopeLbl}${path ? ` / ${path}` : ''} (${groupByLabels[groupBy] ?? groupBy})`,
     }
   }
   if (name === 'inspect_studio') {
@@ -1833,12 +1851,12 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
     return {
       icon: '🎨', appName: null, color: '#7C3AED',
       loadingLabel: `Inspection Studio — ${sectLabel}${modelFilter ? ` (${modelFilter})` : ''}…`,
-      doneLabel: `Studio · ${sectLabel}`,
+      doneLabel: `Personnalisations Studio${modelFilter ? ` · ${modelFilter}` : ''}`,
       liveDb: true,
     }
   }
   return {
-    icon: '🔧', appName: null, color: '#64748b',
+    icon: '⚙️', appName: null, color: '#64748b',
     loadingLabel: `${name}…`,
     doneLabel: name,
   }
