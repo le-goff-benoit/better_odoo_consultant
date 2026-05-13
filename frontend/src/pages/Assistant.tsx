@@ -417,10 +417,16 @@ export default function Assistant() {
     return () => clearTimeout(timer)
   }, [provider, profileId, streaming])
 
-  // Auto-scroll
+  const assistantRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id ?? null
+
+  // When a brand-new assistant response appears, anchor the viewport at its TOP
+  // so the user sees the start of the response (not the bottom).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (!lastAssistantId) return
+    const el = assistantRefs.current.get(lastAssistantId)
+    el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [lastAssistantId])
 
   const isGeneralMode = profileId === GENERAL_KEY
   const selectedProfile = profiles.find(p => p.id === profileId)
@@ -955,7 +961,15 @@ export default function Assistant() {
         {messages.map(msg => (
           msg.role === 'user'
             ? <UserBubble key={msg.id} text={msg.text ?? ''} attachments={msg.attachments} timestamp={msg.timestamp} />
-            : <AssistantBubble key={msg.id} events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} />
+            : (
+              <div
+                key={msg.id}
+                ref={el => { assistantRefs.current.set(msg.id, el) }}
+                style={{ scrollMarginTop: 8 }}
+              >
+                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} />
+              </div>
+            )
         ))}
         <div ref={bottomRef} />
       </div>

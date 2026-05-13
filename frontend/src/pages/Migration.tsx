@@ -877,8 +877,17 @@ export default function Migration() {
   const [streaming, setStreaming] = useState(false)
   const abortRef  = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const assistantRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id ?? null
+
+  // When a brand-new assistant response appears, anchor the viewport at its TOP
+  // so the user sees the start of the response (not the bottom).
+  useEffect(() => {
+    if (!lastAssistantId) return
+    const el = assistantRefs.current.get(lastAssistantId)
+    el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [lastAssistantId])
 
   const sourceVersion = resolveVersion(source, profiles)
   const targetVersion = resolveVersion(target, profiles)
@@ -1000,7 +1009,7 @@ export default function Migration() {
   const suggestionList = perspective === 'functional' ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL
 
   return (
-    <div className="assistant-shell" style={{ gap: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
       <PageHeader
         title="Migration"
         description="Analysez et planifiez vos migrations Odoo en comparant deux versions ou environnements."
@@ -1095,7 +1104,7 @@ export default function Migration() {
       </div>
 
       {/* Messages */}
-      <div className="assistant-message-list">
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 4, marginBottom: 12 }}>
         {messages.length === 0 && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
             <div style={{ textAlign: 'center', color: t.muted, maxWidth: 520 }}>
@@ -1115,15 +1124,20 @@ export default function Migration() {
           m.role === 'user' ? (
             <UserBubble key={m.id} text={m.text ?? ''} timestamp={m.timestamp} />
           ) : (
-            <AssistantBubble
+            <div
               key={m.id}
-              events={m.events ?? []}
-              loading={m.loading}
-              provider={activeProvider}
-              timestamp={m.timestamp}
-              inputTokens={m.inputTokens}
-              outputTokens={m.outputTokens}
-            />
+              ref={el => { assistantRefs.current.set(m.id, el) }}
+              style={{ scrollMarginTop: 8 }}
+            >
+              <AssistantBubble
+                events={m.events ?? []}
+                loading={m.loading}
+                provider={activeProvider}
+                timestamp={m.timestamp}
+                inputTokens={m.inputTokens}
+                outputTokens={m.outputTokens}
+              />
+            </div>
           )
         )}
 
