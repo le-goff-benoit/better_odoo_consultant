@@ -8,6 +8,7 @@ import PerspectiveToggle, { Perspective, loadPerspective, savePerspective } from
 import MascotThinking from '../components/MascotThinking'
 import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
+import { useUiLanguage } from '../i18n'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -75,6 +76,63 @@ const SUGGESTIONS_MIGRATION_FUNCTIONAL = [
   'Quel est l\'impact formation pour les commerciaux ?',
   'Y a-t-il des modules dépréciés ou remplacés entre ces deux versions ?',
 ]
+
+const SUGGESTIONS_MIGRATION_TECHNICAL_EN = [
+  'Which fields changed on sale.order between the two versions?',
+  'How should we migrate XML views using attrs= ?',
+  'Which custom modules are likely to be incompatible?',
+  'Which Python APIs were removed or renamed?',
+  'Analyze stock.move differences between the two versions',
+]
+
+const SUGGESTIONS_MIGRATION_FUNCTIONAL_EN = [
+  'Which new standard features are available in the target version?',
+  'Which new modules could replace our custom modules?',
+  'Which UX or menu changes will impact key users?',
+  'What is the training impact for sales users?',
+  'Are there deprecated or replaced modules between these versions?',
+]
+
+const migrationCopy = {
+  fr: {
+    title: 'Migration',
+    description: 'Analysez et planifiez vos migrations Odoo en comparant deux versions ou environnements.',
+    clearConversation: 'Effacer la conversation',
+    newAnalysis: 'Nouvelle analyse',
+    noProvider: 'Aucun fournisseur IA configuré — configurez une clé API dans les Paramètres',
+    repoActive: 'Dépôt projet source actif',
+    source: 'Source (version actuelle)',
+    target: 'Cible (version de destination)',
+    emptyTitle: 'Assistant Migration Odoo',
+    emptyText: 'Sélectionnez une version source et une version cible ci-dessus, puis posez votre question sur la migration.',
+    configureProvider: 'Configurez un fournisseur IA dans les Paramètres',
+    selectVersions: 'Sélectionnez une version source et une version cible ci-dessus',
+    placeholder: (source?: string | null, target?: string | null) => `Posez une question sur la migration ${source ?? '?'} → ${target ?? '?'}… (Entrée pour envoyer)`,
+    stop: 'Arrêter la génération',
+    send: 'Envoyer (Entrée)',
+    meta: 'Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne',
+    recommended: 'Recommandé',
+  },
+  en: {
+    title: 'Migration',
+    description: 'Analyze and plan Odoo migrations by comparing two versions or environments.',
+    clearConversation: 'Clear conversation',
+    newAnalysis: 'New analysis',
+    noProvider: 'No AI provider configured. Configure an API key in Settings',
+    repoActive: 'Source project repository active',
+    source: 'Source (current version)',
+    target: 'Target (destination version)',
+    emptyTitle: 'Odoo Migration Assistant',
+    emptyText: 'Select a source version and target version above, then ask your migration question.',
+    configureProvider: 'Configure an AI provider in Settings',
+    selectVersions: 'Select a source version and target version above',
+    placeholder: (source?: string | null, target?: string | null) => `Ask a question about the ${source ?? '?'} → ${target ?? '?'} migration… (Enter to send)`,
+    stop: 'Stop generation',
+    send: 'Send (Enter)',
+    meta: 'Enter to send · Shift+Enter for a new line',
+    recommended: 'Recommended',
+  },
+}
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -168,6 +226,7 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
   switchProvider: (id: string) => void
   setModelId: (id: string) => void
 }) {
+  const lang = useUiLanguage()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -236,7 +295,9 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontWeight: 600, fontSize: 12, color: isSelected ? prov.color : t.text }}>{m.label}</span>
                       {m.recommended && (
-                        <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>Recommandé</span>
+                        <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+                          {migrationCopy[lang].recommended}
+                        </span>
                       )}
                     </div>
                     {m.desc && <div style={{ fontSize: 11, color: t.muted }}>{m.desc}</div>}
@@ -275,6 +336,40 @@ function SideSelector({
   sourcesData: Record<string, { installed: boolean }> | undefined
   minVersion?: string | null
 }) {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? {
+      modeVersion: 'Odoo version',
+      modeProject: 'Project',
+      version: 'Version',
+      choose: '— Choose —',
+      noHigher: 'No higher version available. Download a newer version in Sources.',
+      noSources: 'No sources downloaded. Go to Sources to download a version.',
+      hiddenVersion: (n: number) => `${n} version${n > 1 ? 's' : ''} hidden — target must be higher than source.`,
+      project: 'Project',
+      env: 'Environment',
+      defaultEnv: '— Default (project version) —',
+      hiddenEnv: (n: number) => `${n} environment${n > 1 ? 's' : ''} hidden — version ≤ source.`,
+      noHigherEnv: 'No higher-version environment in this project.',
+      sourcesInstalled: (v: string) => `Sources v${v} installed`,
+      sourcesMissing: (v: string) => `Sources v${v} not installed`,
+    }
+    : {
+      modeVersion: 'Version Odoo',
+      modeProject: 'Projet',
+      version: 'Version',
+      choose: '— Choisir —',
+      noHigher: 'Aucune version supérieure disponible — téléchargez une version plus récente dans Sources.',
+      noSources: 'Aucune source téléchargée. Allez dans Sources pour télécharger une version.',
+      hiddenVersion: (n: number) => `${n} version${n > 1 ? 's' : ''} masquée${n > 1 ? 's' : ''} — la cible doit être supérieure à la source.`,
+      project: 'Projet',
+      env: 'Environnement',
+      defaultEnv: '— Défaut (version projet) —',
+      hiddenEnv: (n: number) => `${n} environnement${n > 1 ? 's' : ''} masqué${n > 1 ? 's' : ''} — version ≤ source.`,
+      noHigherEnv: 'Aucun environnement de version supérieure dans ce projet.',
+      sourcesInstalled: (v: string) => `Sources v${v} installées`,
+      sourcesMissing: (v: string) => `Sources v${v} non installées`,
+    }
   const selectStyle: React.CSSProperties = {
     width: '100%', padding: '7px 10px', fontSize: 13,
     border: `1px solid ${t.border}`, borderRadius: t.radius,
@@ -317,60 +412,60 @@ function SideSelector({
             border: `1px solid ${cfg.mode === m ? `var(--brand, ${t.brand})` : t.border}`,
             borderRadius: t.radius, cursor: 'pointer', transition: 'all .15s',
           }}>
-            {m === 'version' ? 'Version Odoo' : 'Projet'}
+            {m === 'version' ? c.modeVersion : c.modeProject}
           </button>
         ))}
       </div>
 
       {cfg.mode === 'version' ? (
         <div>
-          <div style={labelStyle}>Version</div>
+          <div style={labelStyle}>{c.version}</div>
           <select value={cfg.version} onChange={e => onChange({ ...cfg, version: e.target.value })} style={selectStyle}>
-            <option value="">— Choisir —</option>
+            <option value="">{c.choose}</option>
             {allowedVersions.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
           {allowedVersions.length === 0 && versions.length > 0 ? (
             <div style={{ fontSize: 11, color: t.danger ?? '#dc2626', marginTop: 6 }}>
-              Aucune version supérieure disponible — téléchargez une version plus récente dans Sources.
+              {c.noHigher}
             </div>
           ) : versions.length === 0 ? (
             <div style={{ fontSize: 11, color: t.muted, marginTop: 6 }}>
-              Aucune source téléchargée. Allez dans Sources pour télécharger une version.
+              {c.noSources}
             </div>
           ) : hiddenVersions > 0 ? (
             <div style={{ fontSize: 11, color: t.muted, marginTop: 4 }}>
-              {hiddenVersions} version{hiddenVersions > 1 ? 's' : ''} masquée{hiddenVersions > 1 ? 's' : ''} — la cible doit être supérieure à la source.
+              {c.hiddenVersion(hiddenVersions)}
             </div>
           ) : null}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <div style={labelStyle}>Projet</div>
+            <div style={labelStyle}>{c.project}</div>
             <select
               value={cfg.profileId ?? ''}
               onChange={e => onChange({ ...cfg, profileId: e.target.value ? Number(e.target.value) : null, envId: null })}
               style={selectStyle}
             >
-              <option value="">— Choisir —</option>
+              <option value="">{c.choose}</option>
               {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           {allEnvs.length > 0 && (
             <div>
-              <div style={labelStyle}>Environnement</div>
+              <div style={labelStyle}>{c.env}</div>
               <select value={cfg.envId ?? ''} onChange={e => onChange({ ...cfg, envId: e.target.value || null })} style={selectStyle}>
-                <option value="">— Défaut (version projet) —</option>
+                <option value="">{c.defaultEnv}</option>
                 {allowedEnvs.map(e => <option key={e.id} value={e.id}>{e.name}{e.odoo_version ? ` (${e.odoo_version})` : ''}</option>)}
               </select>
               {hiddenEnvs > 0 && (
                 <div style={{ fontSize: 11, color: t.muted, marginTop: 4 }}>
-                  {hiddenEnvs} environnement{hiddenEnvs > 1 ? 's' : ''} masqué{hiddenEnvs > 1 ? 's' : ''} — version ≤ source.
+                  {c.hiddenEnv(hiddenEnvs)}
                 </div>
               )}
               {allowedEnvs.length === 0 && allEnvs.length > 0 && (
                 <div style={{ fontSize: 11, color: t.danger ?? '#dc2626', marginTop: 4 }}>
-                  Aucun environnement de version supérieure dans ce projet.
+                  {c.noHigherEnv}
                 </div>
               )}
             </div>
@@ -384,7 +479,7 @@ function SideSelector({
           <span style={{ fontSize: 12, color: `var(--brand, ${t.brand})`, fontWeight: 600 }}>
             Odoo {version}
           </span>
-          <span title={installed ? `Sources v${version} installées` : `Sources v${version} non installées`}
+          <span title={installed ? c.sourcesInstalled(version) : c.sourcesMissing(version)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: t.radiusFull,
@@ -432,6 +527,10 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   mascotType?: 'robot' | 'cat' | 'dog'
   mascotColor?: string
 }) {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? { copyTitle: 'Copy answer', analyzing: 'Analyzing results and drafting the answer…', thinking: 'Analyzing…', tokens: 'Tokens used (input ↑ + output ↓)', copied: 'Copied!', copy: 'Copy' }
+    : { copyTitle: 'Copier la réponse', analyzing: 'Analyse des résultats et rédaction de la réponse…', thinking: 'Analyse en cours…', tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)', copied: 'Copié !', copy: 'Copier' }
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt    = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
@@ -472,7 +571,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           }}>
             <button
               onClick={copyText}
-              title="Copier la réponse"
+              title={c.copyTitle}
               style={{
                 position: 'absolute', top: 8, right: 8,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -507,7 +606,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           }}>
             <MascotThinking size={44} mascot={mascotType} color={mascotColor} />
             <span style={{ fontWeight: 500 }}>
-              {toolEvents.length > 0 ? 'Analyse des résultats et rédaction de la réponse…' : 'Analyse en cours…'}
+              {toolEvents.length > 0 ? c.analyzing : c.thinking}
             </span>
           </div>
         )}
@@ -515,11 +614,11 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
         {(time || tokens || textEvt?.content) && !loading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 10, color: t.muted, paddingLeft: 2 }}>
             {time && <span>{time}</span>}
-            {tokens && <span title="Tokens utilisés (entrée ↑ + sortie ↓)">{tokens}</span>}
+            {tokens && <span title={c.tokens}>{tokens}</span>}
             {textEvt?.content && (
               <button
                 onClick={copyText}
-                title="Copier la réponse"
+                title={c.copyTitle}
                 style={{
                   marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
                   border: `1px solid ${t.border}`, borderRadius: t.radius,
@@ -529,7 +628,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
                 }}
               >
                 {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
-                {copied ? 'Copié !' : 'Copier'}
+                {copied ? c.copied : c.copy}
               </button>
             )}
           </div>
@@ -931,6 +1030,8 @@ function Markdown({ text }: { text: string }) {
 // ── Main page ─────────────────────────────────────────────────────
 
 export default function Migration() {
+  const lang = useUiLanguage()
+  const c = migrationCopy[lang]
   const { data: profilesData } = useQuery({ queryKey: ['profiles'],     queryFn: listProfiles })
   const { data: sourcesData }  = useQuery({ queryKey: ['sources-all'],  queryFn: checkAllSources, staleTime: 30_000 })
   const { data: provData }     = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
@@ -1115,17 +1216,19 @@ export default function Migration() {
   const send = () => { if (input.trim()) sendWithText(input.trim()) }
 
   const showSuggestions = messages.length === 0 && ready && !input.trim()
-  const suggestionList = perspective === 'functional' ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL
+  const suggestionList = lang === 'en'
+    ? (perspective === 'functional' ? SUGGESTIONS_MIGRATION_FUNCTIONAL_EN : SUGGESTIONS_MIGRATION_TECHNICAL_EN)
+    : (perspective === 'functional' ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
       <PageHeader
-        title="Migration"
-        description="Analysez et planifiez vos migrations Odoo en comparant deux versions ou environnements."
+        title={c.title}
+        description={c.description}
         action={
           <button
             onClick={resetConversation}
-            title="Effacer la conversation"
+            title={c.clearConversation}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
@@ -1137,7 +1240,7 @@ export default function Migration() {
             disabled={messages.length === 0}
           >
             <ArrowRightLeft size={13} />
-            Nouvelle analyse
+            {c.newAnalysis}
           </button>
         }
       />
@@ -1149,7 +1252,7 @@ export default function Migration() {
       }}>
         {configuredProviders.length === 0 ? (
           <span style={{ fontSize: 13, color: t.muted }}>
-            Aucun fournisseur IA configuré — configurez une clé API dans les Paramètres
+            {c.noProvider}
           </span>
         ) : (
           <>
@@ -1178,7 +1281,7 @@ export default function Migration() {
 
             {/* Repo badge */}
             {sourceRepo.profileId && (
-              <span title="Dépôt projet source actif"
+              <span title={c.repoActive}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
                   padding: '3px 10px', borderRadius: t.radiusFull,
@@ -1195,7 +1298,7 @@ export default function Migration() {
       {/* Side selectors */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16, flexShrink: 0 }}>
         <SideSelector
-          label="Source (version actuelle)"
+          label={c.source}
           cfg={source} onChange={setSource}
           versions={versions} profiles={profiles} sourcesData={srcStatus}
         />
@@ -1206,7 +1309,7 @@ export default function Migration() {
           →
         </div>
         <SideSelector
-          label="Cible (version de destination)"
+          label={c.target}
           cfg={target} onChange={setTarget}
           versions={versions} profiles={profiles} sourcesData={srcStatus}
           minVersion={sourceVersion}
@@ -1220,11 +1323,10 @@ export default function Migration() {
             <div style={{ textAlign: 'center', color: t.muted, maxWidth: 520 }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>⇄</div>
               <div style={{ fontWeight: 700, fontSize: 16, color: t.text, marginBottom: 8 }}>
-                Assistant Migration Odoo
+                {c.emptyTitle}
               </div>
               <div style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
-                Sélectionnez une version source et une version cible ci-dessus,
-                puis posez votre question sur la migration.
+                {c.emptyText}
               </div>
             </div>
           </div>
@@ -1274,10 +1376,10 @@ export default function Migration() {
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             placeholder={
               configuredProviders.length === 0
-                ? 'Configurez un fournisseur IA dans les Paramètres'
+                ? c.configureProvider
                 : !sourceVersion && !targetVersion
-                ? 'Sélectionnez une version source et une version cible ci-dessus'
-                : `Posez une question sur la migration ${sourceVersion ?? '?'} → ${targetVersion ?? '?'}… (Entrée pour envoyer)`
+                ? c.selectVersions
+                : c.placeholder(sourceVersion, targetVersion)
             }
             disabled={!ready || streaming}
             rows={3}
@@ -1295,14 +1397,14 @@ export default function Migration() {
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
             disabled={!streaming && (!input.trim() || !ready)}
-            title={streaming ? 'Arrêter la génération' : 'Envoyer (Entrée)'}
+            title={streaming ? c.stop : c.send}
             className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
           >
             {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
           </button>
         </div>
         <div className="assistant-composer-meta">
-          <span>Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne</span>
+          <span>{c.meta}</span>
           {(sourceVersion || targetVersion) && (
             <span>{sourceLabel} → {targetLabel}</span>
           )}

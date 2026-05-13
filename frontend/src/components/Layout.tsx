@@ -3,10 +3,10 @@ import { t } from '../theme'
 import Sidebar from './Sidebar'
 
 export const WIDTH_OPTIONS = [
-  { id: 'narrow',  label: 'Étroit',    px: 800  },
-  { id: 'medium',  label: 'Moyen',     px: 1100 },
-  { id: 'wide',    label: 'Large',     px: 1400 },
-  { id: 'full',    label: 'Pleine largeur', px: 0 },
+  { id: 'narrow',  label: 'Étroit', labelEn: 'Narrow', px: 800  },
+  { id: 'medium',  label: 'Moyen', labelEn: 'Medium', px: 1100 },
+  { id: 'wide',    label: 'Large', labelEn: 'Wide', px: 1400 },
+  { id: 'full',    label: 'Pleine largeur', labelEn: 'Full width', px: 0 },
 ] as const
 
 export type ContentWidth = typeof WIDTH_OPTIONS[number]['id']

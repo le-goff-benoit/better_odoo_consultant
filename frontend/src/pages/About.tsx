@@ -1,15 +1,29 @@
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { APP_VERSION } from '../version'
+import { useUiLanguage } from '../i18n'
 
 const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.20.0',
+    version: '0.21.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Internationalisation UI : migration FR/EN des écrans historiques principaux (Sources, Projets, Assistant IA, Migration, Paramètres, À propos, Dashboard, Requêtes, Historique)',
+      'Composants communs : sidebar, largeur de contenu, toggle de perspective et helpers i18n harmonisés',
+      'Assistant & Migration : placeholders, suggestions, actions, historique, bulles de réponse et tooltips adaptés à la langue utilisateur',
+      'Paramètres : onglets, stockage, interface, providers, modèles, éditeur de contexte et profil consultant traduits',
+      'Documentation : README et changelog mis à jour pour clarifier la couverture bilingue de l’interface',
+    ],
+  },
+  {
+    version: '0.20.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Internationalisation v1 : préférences de langue pour l’application, les réponses IA et les fichiers de contexte',
       'Assistant IA : nouvelle instruction de langue avec mode automatique, français forcé ou anglais forcé, sans traduire les identifiants techniques Odoo',
@@ -290,9 +304,29 @@ const CHANGELOG = [
 ]
 
 export default function About() {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? {
+      title: 'About',
+      description: 'Odoo Consultant Portal — productivity tool for Odoo consultants.',
+      version: 'Version',
+      history: 'Version history',
+      current: 'Current',
+      initial: 'Initial',
+      source: 'Source code available on GitHub under a private license. Internal use for the consulting firm.',
+    }
+    : {
+      title: 'À propos',
+      description: 'Odoo Consultant Portal — outil de productivité pour consultants Odoo.',
+      version: 'Version',
+      history: 'Historique des versions',
+      current: 'Actuel',
+      initial: 'Initial',
+      source: 'Code source disponible sur GitHub sous licence privée. Usage interne au cabinet de conseil.',
+    }
   return (
     <div className="page-stack">
-      <PageHeader title="À propos" description="Odoo Consultant Portal — outil de productivité pour consultants Odoo." />
+      <PageHeader title={c.title} description={c.description} />
 
       {/* Author card */}
       <div style={{
@@ -333,14 +367,14 @@ export default function About() {
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 11, color: t.muted, marginBottom: 4 }}>Version</div>
+          <div style={{ fontSize: 11, color: t.muted, marginBottom: 4 }}>{c.version}</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: t.brand }}>{VERSION}</div>
         </div>
       </div>
 
       {/* Changelog */}
       <h2 style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 20 }}>
-        Historique des versions
+        {c.history}
       </h2>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -368,7 +402,7 @@ export default function About() {
                     background: entry.badgeColor === t.brand ? t.brand20 : t.bgMuted,
                     color: entry.badgeColor === t.brand ? t.brand : t.muted,
                     borderRadius: t.radiusFull, border: `1px solid ${entry.badgeColor === t.brand ? t.brand40 : t.border}`,
-                  }}>{entry.badge}</span>
+                  }}>{entry.badge === 'Actuel' ? c.current : entry.badge === 'Initial' ? c.initial : entry.badge}</span>
                 )}
                 <span style={{ fontSize: 11, color: t.muted, marginLeft: 'auto' }}>{entry.date}</span>
               </div>
@@ -383,7 +417,7 @@ export default function About() {
       </div>
 
       <div style={{ marginTop: 8, padding: '14px 18px', background: t.bgMuted, borderRadius: t.radius, fontSize: 12, color: t.muted }}>
-        Code source disponible sur GitHub sous licence privée. Usage interne au cabinet de conseil.
+        {c.source}
       </div>
     </div>
   )

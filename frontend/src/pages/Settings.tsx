@@ -11,6 +11,7 @@ import PageHeader from '../components/PageHeader'
 import { applyBrandColor, applyThemeMode } from '../App'
 import { WIDTH_OPTIONS, WIDTH_KEY, getStoredWidth, type ContentWidth } from '../components/Layout'
 import { Tabs } from '../components/ui'
+import { useUiLanguage, type UiLanguage } from '../i18n'
 
 interface ProviderDef {
   id: string
@@ -93,26 +94,41 @@ interface CopilotFlowState {
 type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage'
 
 export default function Settings() {
+  const lang = useUiLanguage()
   const [tab, setTab] = useState<SettingsTab>('profile')
+  const c = {
+    fr: {
+      title: 'Paramètres',
+      tabs: { profile: 'Profil', api: 'Clés API', context: 'Contexte IA', interface: 'Interface', storage: 'Stockage' },
+      profileIntro: "Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.",
+      contextIntro: "Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier.",
+    },
+    en: {
+      title: 'Settings',
+      tabs: { profile: 'Profile', api: 'API keys', context: 'AI context', interface: 'Interface', storage: 'Storage' },
+      profileIntro: 'Customize your identity and interface appearance. Your name and role are injected into the AI assistant context.',
+      contextIntro: 'These Markdown files are injected into the assistant system prompt. Edit them to adapt the business context.',
+    },
+  }[lang]
 
   const tabs = [
-    { id: 'profile' as const,   label: 'Profil',      icon: <UserRound size={15} /> },
-    { id: 'api' as const,       label: 'Clés API',    icon: <KeyRound size={15} /> },
-    { id: 'context' as const,   label: 'Contexte IA', icon: <FileText size={15} /> },
-    { id: 'interface' as const, label: 'Interface',   icon: <LayoutPanelTop size={15} /> },
-    { id: 'storage' as const,   label: 'Stockage',    icon: <Database size={15} /> },
+    { id: 'profile' as const,   label: c.tabs.profile, icon: <UserRound size={15} /> },
+    { id: 'api' as const,       label: c.tabs.api, icon: <KeyRound size={15} /> },
+    { id: 'context' as const,   label: c.tabs.context, icon: <FileText size={15} /> },
+    { id: 'interface' as const, label: c.tabs.interface, icon: <LayoutPanelTop size={15} /> },
+    { id: 'storage' as const,   label: c.tabs.storage, icon: <Database size={15} /> },
   ]
 
   return (
     <div className="page-stack">
-      <PageHeader title="Paramètres" />
+      <PageHeader title={c.title} />
 
       <Tabs items={tabs} value={tab} onChange={setTab} />
 
       {tab === 'profile' && (
         <section className="settings-panel">
           <p className="settings-intro">
-            Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.
+            {c.profileIntro}
           </p>
           <UserProfileEditor />
         </section>
@@ -123,7 +139,7 @@ export default function Settings() {
       {tab === 'context' && (
         <section className="settings-panel settings-panel-plain">
           <p className="settings-intro">
-            Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier.
+            {c.contextIntro}
           </p>
           <ContextEditor />
         </section>
@@ -141,45 +157,75 @@ export default function Settings() {
 // ── Storage section ───────────────────────────────────────────────
 
 function StorageSection() {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? {
+      intro: 'All local data is centralized in one folder. You can back it up, move it, or delete it without touching the application.',
+      contents: 'Data folder contents',
+      open: 'Open in file explorer',
+      securityTitle: 'Security:',
+      security: 'API keys (Odoo and AI) are stored in the system keyring (Keychain on macOS, Secret Service on Linux), never in this folder. The database only contains non-sensitive metadata.',
+      rows: [
+        ['Main folder', 'Database, configuration, encryption keys.'],
+        ['Odoo sources', 'Local git clones of Community and Enterprise sources.'],
+        ['Client custom repositories', 'GitHub repositories for custom modules, one folder per project and environment.'],
+        ['AI context', 'Markdown files injected into the assistant system prompt.'],
+        ['Model configuration', 'Enabled AI models and selection preferences.'],
+      ],
+    }
+    : {
+      intro: "Toutes les données locales sont centralisées dans un seul dossier. Vous pouvez le sauvegarder, le déplacer ou le supprimer sans toucher à l'application.",
+      contents: 'Contenu du dossier de données',
+      open: "Ouvrir dans l'explorateur",
+      securityTitle: 'Sécurité :',
+      security: 'Les clés API (Odoo et IA) sont stockées dans le keyring système (Keychain sur macOS, Secret Service sur Linux) — jamais dans ce dossier. La base de données ne contient que des métadonnées non sensibles.',
+      rows: [
+        ['Dossier principal', 'Base de données, configuration, clés de chiffrement.'],
+        ['Sources Odoo', 'Dépôts git des sources Community et Enterprise clonés localement.'],
+        ['Dépôts custom clients', 'Dépôts GitHub des modules custom, un dossier par projet et environnement.'],
+        ['Contexte IA', "Fichiers Markdown injectés dans le prompt système de l'assistant."],
+        ['Configuration modèles', 'Modèles IA activés et préférences de sélection.'],
+      ],
+    }
   const { data } = useQuery({ queryKey: ['data-dir'], queryFn: getDataDir })
   const dataDir: string = data?.data?.path ?? '~/.odoo-consultant'
 
   const rows: { label: string; path: string; description: string }[] = [
     {
-      label: 'Dossier principal',
+      label: c.rows[0][0],
       path: dataDir,
-      description: 'Base de données, configuration, clés de chiffrement.',
+      description: c.rows[0][1],
     },
     {
-      label: 'Sources Odoo',
+      label: c.rows[1][0],
       path: `${dataDir}/sources/`,
-      description: 'Dépôts git des sources Community et Enterprise clonés localement.',
+      description: c.rows[1][1],
     },
     {
-      label: 'Dépôts custom clients',
+      label: c.rows[2][0],
       path: `${dataDir}/repos/`,
-      description: 'Dépôts GitHub des modules custom, un dossier par projet et environnement.',
+      description: c.rows[2][1],
     },
     {
-      label: 'Contexte IA',
+      label: c.rows[3][0],
       path: `${dataDir}/context/`,
-      description: 'Fichiers Markdown injectés dans le prompt système de l\'assistant.',
+      description: c.rows[3][1],
     },
     {
-      label: 'Configuration modèles',
+      label: c.rows[4][0],
       path: `${dataDir}/model-config.json`,
-      description: 'Modèles IA activés et préférences de sélection.',
+      description: c.rows[4][1],
     },
   ]
 
   return (
     <section className="settings-panel">
       <p style={{ fontSize: 13, color: t.muted, marginBottom: 24, lineHeight: 1.6 }}>
-        Toutes les données locales sont centralisées dans un seul dossier. Vous pouvez le sauvegarder, le déplacer ou le supprimer sans toucher à l'application.
+        {c.intro}
       </p>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: t.text }}>Contenu du dossier de données</div>
+        <div style={{ fontWeight: 700, fontSize: 14, color: t.text }}>{c.contents}</div>
         <button
           onClick={() => openDataFolder()}
           style={{
@@ -194,7 +240,7 @@ function StorageSection() {
           onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(0.93)')}
           onMouseLeave={e => (e.currentTarget.style.filter = '')}
         >
-          <FolderOpen size={16} /> Ouvrir dans l'explorateur
+          <FolderOpen size={16} /> {c.open}
         </button>
       </div>
 
@@ -222,7 +268,7 @@ function StorageSection() {
         marginTop: 20, padding: '12px 16px', background: t.bgMuted,
         borderRadius: t.radius, fontSize: 12, color: t.muted, lineHeight: 1.6,
       }}>
-        <strong style={{ color: t.text }}>Sécurité :</strong> Les clés API (Odoo et IA) sont stockées dans le keyring système (Keychain sur macOS, Secret Service sur Linux) — jamais dans ce dossier. La base de données ne contient que des métadonnées non sensibles.
+        <strong style={{ color: t.text }}>{c.securityTitle}</strong> {c.security}
       </div>
     </section>
   )
@@ -231,6 +277,10 @@ function StorageSection() {
 // ── Interface settings ────────────────────────────────────────────
 
 function InterfaceSection() {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? { intro: 'Adjust content width to match your screen and reading preferences.', title: 'Content width', active: 'Active' }
+    : { intro: 'Ajustez la largeur du contenu selon votre écran et vos préférences de lecture.', title: 'Largeur du contenu', active: 'Actif' }
   const [currentWidth, setCurrentWidth] = useState<ContentWidth>(() => getStoredWidth())
 
   const applyWidth = (id: ContentWidth) => {
@@ -242,10 +292,10 @@ function InterfaceSection() {
   return (
     <section className="settings-panel">
       <p className="settings-intro">
-        Ajustez la largeur du contenu selon votre écran et vos préférences de lecture.
+        {c.intro}
       </p>
 
-      <div style={{ fontWeight: 700, fontSize: 14, color: t.text, marginBottom: 14 }}>Largeur du contenu</div>
+      <div style={{ fontWeight: 700, fontSize: 14, color: t.text, marginBottom: 14 }}>{c.title}</div>
 
       <div className="settings-width-grid">
         {WIDTH_OPTIONS.map(opt => {
@@ -264,7 +314,7 @@ function InterfaceSection() {
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 14, fontWeight: isActive ? 700 : 500, color: isActive ? `var(--brand, ${t.brand})` : t.text }}>
-                  {opt.label}
+                  {lang === 'en' ? opt.labelEn : opt.label}
                 </div>
                 {opt.px > 0 && (
                   <div style={{ fontSize: 11, color: t.muted, marginTop: 2 }}>{opt.px} px</div>
@@ -274,7 +324,7 @@ function InterfaceSection() {
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 8px',
                   background: `var(--brand, ${t.brand})`, color: '#fff', borderRadius: 9999,
-                }}>Actif</span>
+                }}>{c.active}</span>
               )}
             </button>
           )
@@ -287,6 +337,52 @@ function InterfaceSection() {
 // ── API keys + model config tab ───────────────────────────────────
 
 function ApiSection() {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? {
+      intro: 'Keys are stored in the system keyring, never in clear text in the database.',
+      configured: 'Configured',
+      addProvider: 'Add a provider',
+      modelsTitle: 'Available models',
+      modelsIntro: 'Hide models that are not included in your subscription.',
+      expired: 'Code expired. Start again.',
+      denied: 'Access denied on GitHub.',
+      testing: 'Testing…',
+      test: 'Test connection',
+      reconnect: 'Reconnect',
+      replace: 'Replace',
+      delete: 'Delete',
+      init: 'Initializing…',
+      connectGithub: 'Connect with GitHub',
+      cancel: 'Cancel',
+      enterCode: 'Enter this code on GitHub. The page opened in a new tab:',
+      openDevice: 'Open github.com/login/device →',
+      waiting: 'Waiting for your approval…',
+      save: 'Save',
+      getKey: 'Get your key from',
+    }
+    : {
+      intro: 'Les clés sont stockées dans le trousseau système (keyring) — jamais en clair dans la base de données.',
+      configured: 'Configurés',
+      addProvider: 'Ajouter un fournisseur',
+      modelsTitle: 'Modèles disponibles',
+      modelsIntro: 'Masquez les modèles non inclus dans votre abonnement.',
+      expired: 'Code expiré. Recommencez.',
+      denied: 'Accès refusé sur GitHub.',
+      testing: 'Test en cours…',
+      test: 'Tester la connexion',
+      reconnect: 'Reconnecter',
+      replace: 'Remplacer',
+      delete: 'Supprimer',
+      init: 'Initialisation…',
+      connectGithub: 'Se connecter avec GitHub',
+      cancel: 'Annuler',
+      enterCode: "Entrez ce code sur GitHub — la page s'est ouverte dans un nouvel onglet :",
+      openDevice: 'Ouvrir github.com/login/device →',
+      waiting: 'En attente de votre validation…',
+      save: 'Sauvegarder',
+      getKey: 'Obtenez votre clé sur',
+    }
   const qc = useQueryClient()
   const { data: provData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
   const configured: Record<string, boolean> = provData?.data ?? {}
@@ -320,10 +416,10 @@ function ApiSection() {
             qc.invalidateQueries({ queryKey: ['ai-providers'] })
           } else if (st === 'expired_token') {
             clearInterval(pollRef.current!)
-            setCopilotFlow(f => f ? { ...f, status: 'error', error: 'Code expiré. Recommencez.' } : null)
+            setCopilotFlow(f => f ? { ...f, status: 'error', error: c.expired } : null)
           } else if (st === 'access_denied') {
             clearInterval(pollRef.current!)
-            setCopilotFlow(f => f ? { ...f, status: 'error', error: 'Accès refusé sur GitHub.' } : null)
+            setCopilotFlow(f => f ? { ...f, status: 'error', error: c.denied } : null)
           }
         } catch { /* keep polling */ }
       }, (flow.interval + 1) * 1000)
@@ -367,13 +463,13 @@ function ApiSection() {
   return (
     <div>
       <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
-        Les clés sont stockées dans le trousseau système (keyring) — jamais en clair dans la base de données.
+        {c.intro}
       </p>
 
       {configuredList.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: t.success, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
-            Configurés ({configuredList.length})
+            {c.configured} ({configuredList.length})
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {configuredList.map(p => renderProvider(p, true))}
@@ -383,7 +479,7 @@ function ApiSection() {
 
       <div>
         <div style={{ fontSize: 12, fontWeight: 700, color: t.muted, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
-          Ajouter un fournisseur
+          {c.addProvider}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {unconfiguredList.map(p => renderProvider(p, false))}
@@ -393,10 +489,10 @@ function ApiSection() {
       {configuredList.length > 0 && (
         <div style={{ marginTop: 36 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            Modèles disponibles
+            {c.modelsTitle}
           </div>
           <p style={{ fontSize: 13, color: t.muted, marginBottom: 16 }}>
-            Masquez les modèles non inclus dans votre abonnement.
+            {c.modelsIntro}
           </p>
           <ModelConfigEditor configuredProviderIds={configuredList.map(p => p.id)} />
         </div>
@@ -448,22 +544,22 @@ function ApiSection() {
                           disabled={testing[p.id]}
                           style={{ ...btnOutline(p.color), background: testing[p.id] ? `${p.color}10` : 'transparent' }}>
                           {testing[p.id] ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Settings2 size={13} />}
-                          {testing[p.id] ? 'Test en cours…' : 'Tester la connexion'}
+                          {testing[p.id] ? c.testing : c.test}
                         </button>
                         {p.oauthFlow ? (
                           <button onClick={() => { startCopilotLogin(); setEditing(e => ({ ...e, [p.id]: true })) }}
                             style={btnOutline(t.brand)}>
-                            <RefreshCw size={13} /> Reconnecter
+                            <RefreshCw size={13} /> {c.reconnect}
                           </button>
                         ) : (
                           <button onClick={() => setEditing(e => ({ ...e, [p.id]: true }))}
                             style={btnOutline(t.brand)}>
-                            <RefreshCw size={13} /> Remplacer
+                            <RefreshCw size={13} /> {c.replace}
                           </button>
                         )}
                         <button onClick={() => { del.mutate(p.id); setTestResult(r => ({ ...r, [p.id]: null })) }}
                           style={btnOutline(t.danger)}>
-                          Supprimer
+                          {c.delete}
                         </button>
                       </div>
                       {testResult[p.id] && (
@@ -493,7 +589,7 @@ function ApiSection() {
                             cursor: copilotLoading ? 'default' : 'pointer', opacity: copilotLoading ? 0.7 : 1,
                           }}>
                           <GitHubIcon />
-                          {copilotLoading ? 'Initialisation…' : 'Se connecter avec GitHub'}
+                          {copilotLoading ? c.init : c.connectGithub}
                         </button>
                       ) : copilotFlow.status === 'error' ? (
                         <div>
@@ -502,13 +598,13 @@ function ApiSection() {
                           </div>
                           <button onClick={() => { setCopilotFlow(null); setEditing(e => ({ ...e, [p.id]: false })) }}
                             style={btnOutline(t.muted)}>
-                            Annuler
+                            {c.cancel}
                           </button>
                         </div>
                       ) : (
                         <div>
                           <p style={{ fontSize: 12, color: t.muted, marginBottom: 10 }}>
-                            Entrez ce code sur GitHub — la page s'est ouverte dans un nouvel onglet :
+                            {c.enterCode}
                           </p>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                             <div style={{
@@ -521,15 +617,15 @@ function ApiSection() {
                             </div>
                             <a href={copilotFlow.verification_uri} target="_blank" rel="noreferrer"
                               style={{ fontSize: 12, color: t.brand, fontWeight: 500 }}>
-                              Ouvrir github.com/login/device →
+                              {c.openDevice}
                             </a>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: t.muted }}>
                             <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: p.color, animation: 'pulse 1.5s infinite' }} />
-                            En attente de votre validation…
+                            {c.waiting}
                             <button onClick={() => { if (pollRef.current) clearInterval(pollRef.current); setCopilotFlow(null); setEditing(e => ({ ...e, [p.id]: false })) }}
                               style={{ marginLeft: 'auto', ...btnOutline(t.muted), padding: '3px 10px' }}>
-                              Annuler
+                              {c.cancel}
                             </button>
                           </div>
                         </div>
@@ -567,17 +663,17 @@ function ApiSection() {
                             color: keyVal.trim() ? '#fff' : t.muted,
                             border: 'none', borderRadius: t.radius, fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>
-                          {save.isPending ? '…' : 'Sauvegarder'}
+                          {save.isPending ? '…' : c.save}
                         </button>
                         {isEditing && (
                           <button onClick={() => setEditing(e => ({ ...e, [p.id]: false }))}
                             style={{ padding: '8px 12px', background: 'none', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, cursor: 'pointer', color: t.muted }}>
-                            Annuler
+                            {c.cancel}
                           </button>
                         )}
                       </div>
                       <div style={{ marginTop: 6, fontSize: 12, color: t.muted }}>
-                        Obtenez votre clé sur{' '}
+                        {c.getKey}{' '}
                         <a href={p.docsUrl} target="_blank" rel="noreferrer" style={{ color: t.brand, fontWeight: 500 }}>
                           {p.docsLabel} →
                         </a>
@@ -600,6 +696,7 @@ const ALL_MODELS = AI_PROVIDERS.map(p => ({
 }))
 
 function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: string[] }) {
+  const lang = useUiLanguage()
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
   const [local, setLocal] = useState<Record<string, string[]>>({})
@@ -666,7 +763,7 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
           borderRadius: t.radius, fontSize: 12, fontWeight: 600, cursor: 'pointer',
         }}>
           {saved ? <Check size={13} /> : null}
-          {saved ? 'Enregistré' : 'Enregistrer'}
+          {saved ? (lang === 'en' ? 'Saved' : 'Enregistré') : (lang === 'en' ? 'Save' : 'Enregistrer')}
         </button>
       </div>
     </div>
@@ -676,18 +773,54 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
 // ── Context files editor ─────────────────────────────────────────
 
 const KNOWN_FILES = [
-  { name: 'skills.md',          label: 'Compétences consultant', icon: '🧠', desc: 'Connaissances métier, patterns courants, approche de diagnostic' },
-  { name: 'meeting-minute.md',  label: 'Modèle compte-rendu',   icon: '📝', desc: 'Template utilisé par le bouton "Meeting Minute" dans le chat' },
-  { name: 'migration.md',       label: 'Méthodologie migration', icon: '⇄',  desc: 'Checklist et breaking changes injectés dans l\'assistant Migration' },
-  { name: 'studio.md',          label: 'Inspection Studio',      icon: '🎨', desc: 'Guide d\'interprétation des personnalisations Studio (modèles, champs, vues, automatisations)' },
-  { name: 'odoo-19.0.md',       label: 'Odoo 19.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-18.0.md',       label: 'Odoo 18.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-17.0.md',       label: 'Odoo 17.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-16.0.md',       label: 'Odoo 16.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
-  { name: 'odoo-15.0.md',       label: 'Odoo 15.0',  icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés' },
+  { name: 'skills.md',          label: 'Compétences consultant', labelEn: 'Consultant skills', icon: '🧠', desc: 'Connaissances métier, patterns courants, approche de diagnostic', descEn: 'Business knowledge, common patterns, diagnostic approach' },
+  { name: 'meeting-minute.md',  label: 'Modèle compte-rendu', labelEn: 'Meeting minutes template', icon: '📝', desc: 'Template utilisé par le bouton "Meeting Minute" dans le chat', descEn: 'Template used by the "Meeting Minute" button in chat' },
+  { name: 'migration.md',       label: 'Méthodologie migration', labelEn: 'Migration methodology', icon: '⇄',  desc: 'Checklist et breaking changes injectés dans l\'assistant Migration', descEn: 'Checklist and breaking changes injected into the Migration assistant' },
+  { name: 'studio.md',          label: 'Inspection Studio', labelEn: 'Studio inspection', icon: '🎨', desc: 'Guide d\'interprétation des personnalisations Studio (modèles, champs, vues, automatisations)', descEn: 'Interpretation guide for Studio customizations (models, fields, views, automations)' },
+  { name: 'odoo-19.0.md',       label: 'Odoo 19.0', labelEn: 'Odoo 19.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
+  { name: 'odoo-18.0.md',       label: 'Odoo 18.0', labelEn: 'Odoo 18.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
+  { name: 'odoo-17.0.md',       label: 'Odoo 17.0', labelEn: 'Odoo 17.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
+  { name: 'odoo-16.0.md',       label: 'Odoo 16.0', labelEn: 'Odoo 16.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
+  { name: 'odoo-15.0.md',       label: 'Odoo 15.0', labelEn: 'Odoo 15.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
 ]
 
 function ContextEditor() {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? {
+      intermediateNotes: 'Intermediate release notes',
+      unsavedContinue: 'Unsaved changes. Continue?',
+      resetConfirm: (name: string) => `Reset "${name}" to default content? Your changes will be lost.`,
+      customized: '✓ Customized',
+      default: '○ Default',
+      language: 'Language',
+      unsaved: '● Unsaved',
+      reset: '↺ Reset',
+      saved: '✓ Saved',
+      save: 'Save',
+      markdown: 'Markdown file',
+      lines: 'lines',
+      chars: 'characters',
+      path: 'Path',
+      languageChange: 'Unsaved changes. Change language?',
+    }
+    : {
+      intermediateNotes: 'Notes de version intermédiaire',
+      unsavedContinue: 'Modifications non sauvegardées. Continuer ?',
+      resetConfirm: (name: string) => `Réinitialiser "${name}" au contenu par défaut ? Vos modifications seront perdues.`,
+      customized: '✓ Personnalisé',
+      default: '○ Par défaut',
+      language: 'Langue',
+      unsaved: '● Non sauvegardé',
+      reset: '↺ Réinitialiser',
+      saved: '✓ Sauvegardé',
+      save: 'Sauvegarder',
+      markdown: 'Fichier Markdown',
+      lines: 'lignes',
+      chars: 'caractères',
+      path: 'Chemin',
+      languageChange: 'Modifications non sauvegardées. Changer de langue ?',
+    }
   const qc = useQueryClient()
   const [selected, setSelected] = useState('skills.md')
   const [locale, setLocale] = useState<'fr' | 'en'>('fr')
@@ -713,7 +846,7 @@ function ContextEditor() {
         const [bMaj, bMin = 0] = b.split('.').map(Number)
         return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
       })
-      .map(v => ({ name: `odoo-${v}.md`, label: `Odoo ${v}`, icon: '📋', desc: 'Notes de version intermédiaire' })),
+      .map(v => ({ name: `odoo-${v}.md`, label: `Odoo ${v}`, labelEn: `Odoo ${v}`, icon: '📋', desc: c.intermediateNotes, descEn: c.intermediateNotes })),
   ]
 
   const { data: filesData } = useQuery({ queryKey: ['context-files', locale], queryFn: () => listContextFiles(locale) })
@@ -741,7 +874,7 @@ function ContextEditor() {
   }
 
   const handleReset = async () => {
-    if (!confirm(`Réinitialiser "${selected}" au contenu par défaut ? Vos modifications seront perdues.`)) return
+    if (!confirm(c.resetConfirm(selected))) return
     await deleteContextFile(selected, locale)
     qc.invalidateQueries({ queryKey: ['context-files', locale] })
     const res = await getContextFile(selected, locale)
@@ -760,7 +893,7 @@ function ContextEditor() {
           const exists = existingNames.includes(f.name)
           const isActive = f.name === selected
           return (
-            <button key={f.name} onClick={() => { if (dirty && !confirm('Modifications non sauvegardées. Continuer ?')) return; setSelected(f.name) }} style={{
+            <button key={f.name} onClick={() => { if (dirty && !confirm(c.unsavedContinue)) return; setSelected(f.name) }} style={{
               width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 12px', marginBottom: 4,
               background: isActive ? t.brand10 : 'transparent',
@@ -771,10 +904,10 @@ function ContextEditor() {
               <span style={{ fontSize: 14 }}>{f.icon}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? t.brand : t.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {f.label}
+                  {lang === 'en' ? f.labelEn : f.label}
                 </div>
                 <div style={{ fontSize: 10, color: t.muted }}>
-                  {exists ? '✓ Personnalisé' : '○ Par défaut'}
+                  {exists ? c.customized : c.default}
                 </div>
               </div>
             </button>
@@ -786,16 +919,16 @@ function ContextEditor() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{currentFile?.label ?? selected}</div>
-            <div style={{ fontSize: 12, color: t.muted }}>{currentFile?.desc}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{lang === 'en' ? currentFile?.labelEn : currentFile?.label ?? selected}</div>
+            <div style={{ fontSize: 12, color: t.muted }}>{lang === 'en' ? currentFile?.descEn : currentFile?.desc}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: t.muted }}>
-              Langue
+              {c.language}
               <select
                 value={locale}
                 onChange={e => {
-                  if (dirty && !confirm('Modifications non sauvegardées. Changer de langue ?')) return
+                  if (dirty && !confirm(c.languageChange)) return
                   setLocale(e.target.value as 'fr' | 'en')
                 }}
                 style={{ ...selectStyle, width: 120, padding: '5px 8px', fontSize: 12 }}
@@ -804,14 +937,14 @@ function ContextEditor() {
                 <option value="en">English</option>
               </select>
             </label>
-            {dirty && <span style={{ fontSize: 11, color: t.warning }}>● Non sauvegardé</span>}
+            {dirty && <span style={{ fontSize: 11, color: t.warning }}>{c.unsaved}</span>}
             {isCustomized && !dirty && (
               <button onClick={handleReset} style={{
                 padding: '5px 10px', background: 'transparent',
                 border: `1px solid ${t.border}`, borderRadius: t.radius,
                 fontSize: 11, color: t.muted, cursor: 'pointer',
               }} title="Revenir au contenu par défaut">
-                ↺ Réinitialiser
+                {c.reset}
               </button>
             )}
             <button
@@ -823,7 +956,7 @@ function ContextEditor() {
                 border: 'none', borderRadius: t.radius, fontSize: 12, fontWeight: 600,
                 cursor: dirty ? 'pointer' : 'default',
               }}>
-              {saving ? '…' : saved ? '✓ Sauvegardé' : 'Sauvegarder'}
+              {saving ? '…' : saved ? c.saved : c.save}
             </button>
           </div>
         </div>
@@ -843,8 +976,8 @@ function ContextEditor() {
           }}
         />
         <div style={{ fontSize: 11, color: t.muted }}>
-          Fichier Markdown · {content.split('\n').length} lignes · {content.length} caractères
-          · Chemin : <code style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px' }}>~/.odoo-consultant/context/{locale === 'fr' ? selected : `${locale}/${selected}`}</code>
+          {c.markdown} · {content.split('\n').length} {c.lines} · {content.length} {c.chars}
+          · {c.path} : <code style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px' }}>~/.odoo-consultant/context/{locale === 'fr' ? selected : `${locale}/${selected}`}</code>
         </div>
       </div>
     </div>
@@ -880,6 +1013,58 @@ interface UserProfile {
 }
 
 function UserProfileEditor() {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? {
+      avatarTitle: 'Click to change avatar',
+      avatarHint: 'or click the avatar',
+      fullName: 'Full name',
+      role: 'Role',
+      team: 'Team / Firm',
+      appLanguage: 'Application language',
+      aiLanguage: 'AI response language',
+      contextLanguage: 'AI context language',
+      automatic: 'Automatic',
+      primaryColor: 'Main menu color',
+      other: 'Other',
+      theme: 'Display theme',
+      light: 'Light',
+      dark: 'Dark',
+      sepia: 'Sepia',
+      mascot: 'Thinking mascot',
+      robot: 'Robot',
+      cat: 'Cat',
+      dog: 'Dog',
+      color: 'Color',
+      customColor: 'Custom color',
+      saved: '✓ Saved',
+      save: 'Save profile',
+    }
+    : {
+      avatarTitle: "Cliquer pour changer l'avatar",
+      avatarHint: "ou cliquer sur l'avatar",
+      fullName: 'Nom complet',
+      role: 'Poste',
+      team: 'Équipe / Cabinet',
+      appLanguage: "Langue de l'application",
+      aiLanguage: 'Langue des réponses IA',
+      contextLanguage: 'Langue du contexte IA',
+      automatic: 'Automatique',
+      primaryColor: 'Couleur principale des menus',
+      other: 'Autre',
+      theme: "Thème d'affichage",
+      light: 'Clair',
+      dark: 'Sombre',
+      sepia: 'Sépia',
+      mascot: 'Mascotte de réflexion',
+      robot: 'Robot',
+      cat: 'Chat',
+      dog: 'Chien',
+      color: 'Couleur',
+      customColor: 'Couleur personnalisée',
+      saved: '✓ Enregistré',
+      save: 'Sauvegarder le profil',
+    }
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
   const [form, setForm] = useState<UserProfile>({})
@@ -927,7 +1112,7 @@ function UserProfileEditor() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
           <div
             onClick={() => fileRef.current?.click()}
-            title="Cliquer pour changer l'avatar"
+            title={c.avatarTitle}
             style={{
               width: 72, height: 72, borderRadius: '50%',
               background: form.primaryColor ? `${form.primaryColor}20` : t.brand20,
@@ -952,47 +1137,47 @@ function UserProfileEditor() {
               }}>{em}</button>
             ))}
           </div>
-          <span style={{ fontSize: 10, color: t.muted }}>ou cliquer sur l'avatar</span>
+          <span style={{ fontSize: 10, color: t.muted }}>{c.avatarHint}</span>
         </div>
 
         {/* Form fields */}
         <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', gap: 12 }}>
             <label style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Nom complet</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>{c.fullName}</div>
               <input value={form.name ?? ''} onChange={e => set('name', e.target.value)} placeholder="Benoît Le Goff"
                 style={{ width: '100%', padding: '7px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, color: t.text, boxSizing: 'border-box' }} />
             </label>
             <label style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Poste</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>{c.role}</div>
               <input value={form.title ?? ''} onChange={e => set('title', e.target.value)} placeholder="Consultant Odoo Senior"
                 style={{ width: '100%', padding: '7px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, color: t.text, boxSizing: 'border-box' }} />
             </label>
           </div>
           <label>
-            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Équipe / Cabinet</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>{c.team}</div>
             <input value={form.team ?? ''} onChange={e => set('team', e.target.value)} placeholder="Le Projet · Pôle ERP"
               style={{ width: '100%', padding: '7px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, color: t.text, boxSizing: 'border-box' }} />
           </label>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
             <label>
-              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Langue de l'application</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>{c.appLanguage}</div>
               <select value={form.language ?? 'fr'} onChange={e => set('language', e.target.value)} style={selectStyle}>
                 <option value="fr">Français</option>
                 <option value="en">English</option>
               </select>
             </label>
             <label>
-              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Langue des réponses IA</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>{c.aiLanguage}</div>
               <select value={form.assistantLanguage ?? 'auto'} onChange={e => set('assistantLanguage', e.target.value)} style={selectStyle}>
-                <option value="auto">Automatique</option>
+                <option value="auto">{c.automatic}</option>
                 <option value="fr">Français</option>
                 <option value="en">English</option>
               </select>
             </label>
             <label>
-              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Langue du contexte IA</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>{c.contextLanguage}</div>
               <select value={form.contextLanguage ?? form.language ?? 'fr'} onChange={e => set('contextLanguage', e.target.value)} style={selectStyle}>
                 <option value="fr">Français</option>
                 <option value="en">English</option>
@@ -1002,7 +1187,7 @@ function UserProfileEditor() {
 
           {/* Color picker */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>Couleur principale des menus</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>{c.primaryColor}</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               {PRESET_COLORS.map(c => (
                 <button key={c} onClick={() => set('primaryColor', c)} style={{
@@ -1015,19 +1200,19 @@ function UserProfileEditor() {
                 <input type="color" value={form.primaryColor ?? '#017e84'}
                   onChange={e => set('primaryColor', e.target.value)}
                   style={{ width: 26, height: 26, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
-                Autre
+                {c.other}
               </label>
             </div>
           </div>
 
           {/* Theme mode */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>Thème d'affichage</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>{c.theme}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               {([
-                { id: 'light', label: 'Clair',  icon: '☀️' },
-                { id: 'dark',  label: 'Sombre', icon: '🌙' },
-                { id: 'sepia', label: 'Sépia',  icon: '📜' },
+                { id: 'light', label: c.light,  icon: '☀️' },
+                { id: 'dark',  label: c.dark, icon: '🌙' },
+                { id: 'sepia', label: c.sepia,  icon: '📜' },
               ] as const).map(m => {
                 const active = (form.themeMode ?? 'light') === m.id
                 return (
@@ -1049,12 +1234,12 @@ function UserProfileEditor() {
 
           {/* Mascot picker */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>Mascotte de réflexion</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>{c.mascot}</div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               {([
-                { id: 'robot', label: 'Robot',  preview: <RobotThinking size={40} color={form.mascotColor ?? '#22D3EE'} /> },
-                { id: 'cat',   label: 'Chat',   preview: <CatThinking   size={40} color={form.mascotColor ?? '#22D3EE'} /> },
-                { id: 'dog',   label: 'Chien',  preview: <DogThinking   size={40} color={form.mascotColor ?? '#22D3EE'} /> },
+                { id: 'robot', label: c.robot,  preview: <RobotThinking size={40} color={form.mascotColor ?? '#22D3EE'} /> },
+                { id: 'cat',   label: c.cat,   preview: <CatThinking   size={40} color={form.mascotColor ?? '#22D3EE'} /> },
+                { id: 'dog',   label: c.dog,  preview: <DogThinking   size={40} color={form.mascotColor ?? '#22D3EE'} /> },
               ] as const).map(({ id, label, preview }) => {
                 const active = (form.mascotType ?? 'robot') === id
                 return (
@@ -1073,7 +1258,7 @@ function UserProfileEditor() {
 
               {/* Mascot color picker */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignSelf: 'center', marginLeft: 4 }}>
-                <div style={{ fontSize: 10, color: t.muted, fontWeight: 600 }}>Couleur</div>
+                <div style={{ fontSize: 10, color: t.muted, fontWeight: 600 }}>{c.color}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {['#22D3EE', '#818CF8', '#F472B6', '#34D399', '#F59E0B', '#EF4444', '#A855F7', '#F97316'].map(c => (
                     <button key={c} onClick={() => set('mascotColor', c)} style={{
@@ -1082,7 +1267,7 @@ function UserProfileEditor() {
                       outlineOffset: 2, transition: 'outline .1s',
                     }} />
                   ))}
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} title="Couleur personnalisée">
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} title={c.customColor}>
                     <input type="color" value={form.mascotColor ?? '#22D3EE'}
                       onChange={e => set('mascotColor', e.target.value)}
                       style={{ width: 22, height: 22, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
@@ -1099,7 +1284,7 @@ function UserProfileEditor() {
           padding: '8px 20px', background: form.primaryColor ?? t.brand, color: '#fff',
           border: 'none', borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
         }}>
-          {saved ? '✓ Enregistré' : 'Sauvegarder le profil'}
+          {saved ? c.saved : c.save}
         </button>
       </div>
     </div>
@@ -1139,6 +1324,7 @@ function ProviderLogo({ logoUrl, label, color }: { logoUrl: string; label: strin
 }
 
 function StatusBadge({ configured }: { configured: boolean }) {
+  const lang = useUiLanguage()
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -1149,7 +1335,7 @@ function StatusBadge({ configured }: { configured: boolean }) {
       flexShrink: 0,
     }}>
       <span>{configured ? <Check size={12} /> : null}</span>
-      {configured ? 'Configurée' : 'Non configurée'}
+      {configured ? (lang === 'en' ? 'Configured' : 'Configurée') : (lang === 'en' ? 'Not configured' : 'Non configurée')}
     </div>
   )
 }

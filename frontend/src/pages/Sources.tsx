@@ -6,18 +6,19 @@ import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourc
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { Badge, Card, StatusPill } from '../components/ui'
+import { useUiLanguage, type UiLanguage } from '../i18n'
 
 // ── Version definitions ─────────────────────────────────────────
 
 const MAJOR_VERSIONS = [
-  { version: '19.0', label: 'Odoo 19', badge: 'Nouveau',  badgeColor: t.action },
+  { version: '19.0', label: 'Odoo 19', badge: 'Nouveau',  badgeEn: 'New', badgeColor: t.action },
   { version: '18.0', label: 'Odoo 18', badge: 'Stable',   badgeColor: t.success },
   { version: '17.0', label: 'Odoo 17', badge: 'LTS',      badgeColor: t.brand },
   { version: '16.0', label: 'Odoo 16', badge: '',          badgeColor: t.muted },
   { version: '15.0', label: 'Odoo 15', badge: '',          badgeColor: t.muted },
 ]
 
-type VersionDef = { version: string; label: string; badge: string; badgeColor: string; isMajor: boolean }
+type VersionDef = { version: string; label: string; badge: string; badgeEn?: string; badgeColor: string; isMajor: boolean }
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -41,10 +42,17 @@ interface RepoInfo {
 
 const defaultPath = (v: string) => `~/.odoo-consultant/sources/${v}`
 
-function relativeDate(iso?: string): string {
+function relativeDate(iso: string | undefined, lang: UiLanguage): string {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
   const days = Math.floor(diff / 86400000)
+  if (lang === 'en') {
+    if (days === 0) return 'today'
+    if (days === 1) return 'yesterday'
+    if (days < 30) return `${days}d ago`
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`
+    return `${Math.floor(days / 365)}y ago`
+  }
   if (days === 0) return "aujourd'hui"
   if (days === 1) return 'hier'
   if (days < 30) return `il y a ${days} j`
@@ -52,9 +60,118 @@ function relativeDate(iso?: string): string {
   return `il y a ${Math.floor(days / 365)} an(s)`
 }
 
+const sourcesCopy = {
+  fr: {
+    title: 'Sources Odoo',
+    description: 'Téléchargez et maintenez les sources Odoo localement pour consultation et analyse.',
+    add: 'Ajouter',
+    cancel: 'Annuler',
+    intermediateVersion: 'Version intermédiaire',
+    customPlaceholder: 'ex: 19.1 ou 18.2',
+    sshCheckingTitle: 'Vérification de la clé SSH…',
+    sshCheckingDesc: 'Connexion à GitHub en cours',
+    sshOkTitle: 'Accès SSH GitHub disponible',
+    sshOkDesc: 'Vous pouvez télécharger Odoo Enterprise en plus de Community.',
+    start: 'Démarrage…',
+    done: 'Terminé',
+    error: 'Erreur',
+    removeVersion: 'Retirer cette version',
+    installedSmall: 'installé',
+    includeEnterprise: 'Inclure Enterprise',
+    showOptions: 'Options avancées',
+    hideOptions: 'Masquer options',
+    targetFolder: 'Dossier cible',
+    showLogs: 'Voir les logs',
+    hideLogs: 'Masquer les logs',
+    stop: 'Annuler',
+    update: 'Mettre à jour',
+    download: 'Télécharger',
+    notInstalled: 'Non installé',
+    behind: 'en retard',
+    hide: 'Masquer',
+    aiSummary: 'Résumé 30 j',
+    checking: 'Vérif…',
+    check: 'Vérifier',
+    status: 'Statut',
+    installed: 'Installé',
+    missing: 'Absent',
+    running: 'En cours',
+    upToDate: 'À jour',
+    noSshTitle: "Pas d'accès SSH GitHub",
+    noSshWithKey: "Une clé SSH existe mais n'est pas encore autorisée sur GitHub.",
+    noSshNoKey: 'Aucune clé SSH. Créez-en une pour télécharger Odoo Enterprise.',
+    viewKey: 'Voir ma clé',
+    createKey: 'Créer une clé SSH',
+    generating: 'Génération en cours…',
+    addKeyTitle: 'Ajoutez la clé SSH à GitHub — 3 étapes',
+    copyPublicKey: 'Copiez votre clé publique',
+    copied: 'Copié',
+    copy: 'Copier',
+    openGithubSsh: 'Ouvrez les paramètres SSH GitHub',
+    pasteKey: 'Collez la clé et cliquez "Add SSH key"',
+    pasteKeyHelp: 'Champ Title : "Odoo Portal" — champ Key : collez la clé copiée.',
+    recheck: "J'ai ajouté la clé - vérifier l'accès",
+    prefillAsk: 'Fais-moi un résumé clair des changements importants et leur impact potentiel pour un consultant Odoo.',
+  },
+  en: {
+    title: 'Odoo Sources',
+    description: 'Download and maintain Odoo sources locally for consulting and analysis.',
+    add: 'Add',
+    cancel: 'Cancel',
+    intermediateVersion: 'Intermediate version',
+    customPlaceholder: 'e.g. 19.1 or 18.2',
+    sshCheckingTitle: 'Checking SSH key…',
+    sshCheckingDesc: 'Connecting to GitHub',
+    sshOkTitle: 'GitHub SSH access available',
+    sshOkDesc: 'You can download Odoo Enterprise in addition to Community.',
+    start: 'Starting…',
+    done: 'Done',
+    error: 'Error',
+    removeVersion: 'Remove this version',
+    installedSmall: 'installed',
+    includeEnterprise: 'Include Enterprise',
+    showOptions: 'Advanced options',
+    hideOptions: 'Hide options',
+    targetFolder: 'Target folder',
+    showLogs: 'Show logs',
+    hideLogs: 'Hide logs',
+    stop: 'Stop',
+    update: 'Update',
+    download: 'Download',
+    notInstalled: 'Not installed',
+    behind: 'behind',
+    hide: 'Hide',
+    aiSummary: '30d summary',
+    checking: 'Checking…',
+    check: 'Check',
+    status: 'Status',
+    installed: 'Installed',
+    missing: 'Missing',
+    running: 'Running',
+    upToDate: 'Up to date',
+    noSshTitle: 'No GitHub SSH access',
+    noSshWithKey: 'An SSH key exists but is not authorized on GitHub yet.',
+    noSshNoKey: 'No SSH key. Create one to download Odoo Enterprise.',
+    viewKey: 'Show my key',
+    createKey: 'Create SSH key',
+    generating: 'Generating…',
+    addKeyTitle: 'Add the SSH key to GitHub — 3 steps',
+    copyPublicKey: 'Copy your public key',
+    copied: 'Copied',
+    copy: 'Copy',
+    openGithubSsh: 'Open GitHub SSH settings',
+    pasteKey: 'Paste the key and click "Add SSH key"',
+    pasteKeyHelp: 'Title field: "Odoo Portal" — Key field: paste the copied key.',
+    recheck: 'I added the key - check access',
+    prefillAsk: 'Give me a clear summary of the important changes and their potential impact for an Odoo consultant.',
+  },
+}
+
 // ── Main component ──────────────────────────────────────────────
 
 export default function Sources() {
+  const lang = useUiLanguage()
+  const c = sourcesCopy[lang]
   const qc       = useQueryClient()
   const navigate = useNavigate()
 
@@ -211,7 +328,7 @@ export default function Sources() {
     const ctrl = new AbortController()
     abortRefs.current[version] = ctrl
 
-    setCard(version, { status: 'running', pct: 0, currentLabel: 'Démarrage…', logs: [], showLogs: false })
+    setCard(version, { status: 'running', pct: 0, currentLabel: c.start, logs: [], showLogs: false })
 
     try {
       const res = await fetch('/api/sources/sync-stream', {
@@ -247,11 +364,11 @@ export default function Sources() {
             setCard(version, { currentLabel: msg })
             if (msg) setCards(p => ({ ...p, [version]: { ...p[version], logs: [...(p[version]?.logs ?? []), msg] } }))
           } else if (evt.type === 'done') {
-            setCard(version, { status: 'done', pct: 100, currentLabel: evt.msg ?? 'Terminé' })
+            setCard(version, { status: 'done', pct: 100, currentLabel: evt.msg ?? c.done })
             qc.invalidateQueries({ queryKey: ['sources-status'] })
             if (!MAJOR_VERSIONS.some(v => v.version === version)) fetchCustomStatus(version)
           } else if (evt.type === 'error') {
-            setCard(version, { status: 'error', currentLabel: evt.msg ?? 'Erreur' })
+            setCard(version, { status: 'error', currentLabel: evt.msg ?? c.error })
           }
         }
       }
@@ -264,27 +381,27 @@ export default function Sources() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Sources Odoo"
-        description="Téléchargez et maintenez les sources Odoo localement pour consultation et analyse."
+        title={c.title}
+        description={c.description}
         action={showAddForm ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               value={customInput}
               onChange={e => setCustomInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addCustomVersion()}
-              placeholder="ex: 19.1 ou 18.2"
+              placeholder={c.customPlaceholder}
               autoFocus
               style={{
                 padding: '7px 12px', border: `1px solid ${t.border}`, borderRadius: t.radius,
                 fontSize: 13, color: t.text, background: t.bgCard, width: 130, outline: 'none',
               }}
             />
-            <button className="btn btn-primary" onClick={addCustomVersion}>Ajouter</button>
-            <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setCustomInput('') }}>Annuler</button>
+            <button className="btn btn-primary" onClick={addCustomVersion}>{c.add}</button>
+            <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setCustomInput('') }}>{c.cancel}</button>
           </div>
         ) : (
           <button className="btn btn-secondary" onClick={() => setShowAddForm(true)}>
-            <Plus size={15} /> Version intermédiaire
+            <Plus size={15} /> {c.intermediateVersion}
           </button>
         )}
       />
@@ -294,9 +411,9 @@ export default function Sources() {
         <div style={{ ...bannerStyle(t.border), color: t.muted }}>
           <Loader2 size={18} style={{ animation: 'spin .9s linear infinite', opacity: .7 }} />
           <div>
-            <strong style={{ color: t.muted }}>Vérification de la clé SSH…</strong>
+            <strong style={{ color: t.muted }}>{c.sshCheckingTitle}</strong>
             <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
-              Connexion à GitHub en cours
+              {c.sshCheckingDesc}
             </div>
           </div>
         </div>
@@ -304,15 +421,16 @@ export default function Sources() {
         <div style={bannerStyle(t.success)}>
           <KeyRound size={18} color={t.success} />
           <div>
-            <strong style={{ color: t.text }}>Accès SSH GitHub disponible</strong>
+            <strong style={{ color: t.text }}>{c.sshOkTitle}</strong>
             <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
-              Vous pouvez télécharger Odoo Enterprise en plus de Community.
+              {c.sshOkDesc}
             </div>
           </div>
         </div>
       ) : (
         <SshSetup
           hasKeys={hasKeys} sshStep={sshStep} publicKey={publicKey} copied={copied}
+          labels={c}
           onGenerate={() => genKey.mutate()}
           onCopy={() => { navigator.clipboard.writeText(publicKey); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
           onRecheck={() => recheckSsh()}
@@ -321,7 +439,7 @@ export default function Sources() {
 
       {/* Unified version cards grid */}
       <div className="page-grid page-grid-sources">
-        {allVersionDefs.map(({ version, label, badge, badgeColor, isMajor }) => {
+        {allVersionDefs.map(({ version, label, badge, badgeEn, badgeColor, isMajor }) => {
           const card     = cards[version]
           const status   = card?.status ?? 'idle'
           const pct      = card?.pct    ?? 0
@@ -381,7 +499,7 @@ export default function Sources() {
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {badge && (
                         <Badge tone={badge === 'Stable' || badge === 'LTS' ? 'success' : 'brand'} style={{ color: badgeColor }}>
-                          {badge}
+                          {lang === 'en' ? (badgeEn ?? badge) : badge}
                         </Badge>
                       )}
                     </div>
@@ -391,9 +509,9 @@ export default function Sources() {
                       <button onClick={() => removeCustomVersion(version)} style={{
                         background: 'none', border: 'none', color: t.muted, fontSize: 16,
                         cursor: 'pointer', padding: '2px 4px', lineHeight: 1,
-                      }} title="Retirer cette version"><Trash2 size={14} /></button>
+                      }} title={c.removeVersion}><Trash2 size={14} /></button>
                     )}
-                    <StatusBadge status={status} isInstalled={isInstalled} loading={statusLoading} />
+                    <StatusBadge status={status} isInstalled={isInstalled} loading={statusLoading} labels={c} />
                   </div>
                 </div>
 
@@ -419,6 +537,8 @@ export default function Sources() {
                     onToggleCommits={() => setShowCommits(p => ({ ...p, [version]: !p[version] }))}
                     onCheckUpdates={() => doCheckUpdates(version)}
                     checking={checking}
+                    lang={lang}
+                    labels={c}
                     onAiSummary={(prefill) => navigate('/assistant', { state: { prefill, version, autoSend: true } })}
                   />
                 )}
@@ -431,9 +551,9 @@ export default function Sources() {
                       onChange={e => setEnterprise(p => ({ ...p, [version]: e.target.checked }))}
                       style={{ accentColor: 'var(--brand, #017e84)', width: 14, height: 14 }} />
                     <span style={{ color: t.muted }}>
-                      Inclure Enterprise
+                      {c.includeEnterprise}
                       {entInfo?.installed && (
-                        <span style={{ marginLeft: 6, fontSize: 10, color: t.success, fontWeight: 600 }}>✓ installé</span>
+                        <span style={{ marginLeft: 6, fontSize: 10, color: t.success, fontWeight: 600 }}>✓ {c.installedSmall}</span>
                       )}
                     </span>
                   </label>
@@ -443,12 +563,12 @@ export default function Sources() {
                 <button onClick={() => setAdvanced(isOpen ? null : version)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: t.action, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
                   {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  {isOpen ? 'Masquer options' : 'Options avancées'}
+                  {isOpen ? c.hideOptions : c.showOptions}
                 </button>
 
                 {isOpen && (
                   <div style={{ marginBottom: 8 }}>
-                    <label style={{ display: 'block', fontSize: 11, color: t.muted, marginBottom: 4 }}>Dossier cible</label>
+                    <label style={{ display: 'block', fontSize: 11, color: t.muted, marginBottom: 4 }}>{c.targetFolder}</label>
                     <input value={customPaths[version] ?? ''} placeholder={defaultPath(version)}
                       onChange={e => setCustomPaths(p => ({ ...p, [version]: e.target.value }))}
                       style={{ width: '100%', padding: '6px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, boxSizing: 'border-box', background: t.bgCard, color: t.text }} />
@@ -460,7 +580,7 @@ export default function Sources() {
                   <button onClick={() => setCards(p => ({ ...p, [version]: { ...p[version], showLogs: !p[version]?.showLogs } }))}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: t.muted, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
                     {card?.showLogs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                    {card?.showLogs ? 'Masquer les logs' : `Voir les logs (${card?.logs.length})`}
+                    {card?.showLogs ? c.hideLogs : `${c.showLogs} (${card?.logs.length})`}
                   </button>
                 )}
                 {card?.showLogs && <LogBox logs={card.logs} />}
@@ -474,9 +594,9 @@ export default function Sources() {
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginRight: 7, verticalAlign: '-2px' }}>
                     {status === 'running' ? <Square size={13} /> : isInstalled ? <RefreshCw size={14} /> : <Download size={14} />}
                   </span>
-                  {status === 'running' ? 'Annuler'
-                    : isInstalled ? 'Mettre à jour'
-                    : 'Télécharger'}
+                  {status === 'running' ? c.stop
+                    : isInstalled ? c.update
+                    : c.download}
                 </button>
               </div>
             </Card>
@@ -497,15 +617,15 @@ export default function Sources() {
 
 // ── InstalledStrip ──────────────────────────────────────────────
 
-function InstalledStrip({ info, entInfo, version: _version, label, showCommits, onToggleCommits, onCheckUpdates, checking, onAiSummary }: {
+function InstalledStrip({ info, entInfo, version: _version, label, showCommits, onToggleCommits, onCheckUpdates, checking, onAiSummary, lang, labels }: {
   info: RepoInfo; entInfo?: RepoInfo; version: string; label: string
   showCommits: boolean; onToggleCommits: () => void; onCheckUpdates: () => void
-  checking: boolean; onAiSummary: (prefill: string) => void
+  checking: boolean; onAiSummary: (prefill: string) => void; lang: UiLanguage; labels: typeof sourcesCopy.fr
 }) {
   if (!info.installed && (!entInfo || !entInfo.installed)) {
     return (
       <div style={{ fontSize: 12, color: t.muted, marginBottom: 10, padding: '6px 0', borderBottom: `1px solid ${t.border}` }}>
-        Non installé
+        {labels.notInstalled}
       </div>
     )
   }
@@ -516,9 +636,11 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
 
   const buildPrefill = () => {
     const lines = recentCommits.map(c =>
-      `- \`${c.sha}\` ${c.message} (${relativeDate(c.date)}, ${c.author})`
+      `- \`${c.sha}\` ${c.message} (${relativeDate(c.date, lang)}, ${c.author})`
     )
-    return `Voici les ${recentCommits.length} commits de **${label}** des 30 derniers jours :\n\n${lines.join('\n')}\n\nFais-moi un résumé clair des changements importants et leur impact potentiel pour un consultant Odoo.`
+    return lang === 'en'
+      ? `Here are the ${recentCommits.length} commits from **${label}** over the last 30 days:\n\n${lines.join('\n')}\n\n${labels.prefillAsk}`
+      : `Voici les ${recentCommits.length} commits de **${label}** des 30 derniers jours :\n\n${lines.join('\n')}\n\n${labels.prefillAsk}`
   }
 
   return (
@@ -529,12 +651,12 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
             <CheckCircle2 size={12} /> Community
           </span>
           <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{info.head}</span>
-          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(info.date)}</span>
+          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(info.date, lang)}</span>
           {(info.behind ?? 0) > 0 && (
             <span style={{
               fontSize: 10, fontWeight: 700, color: t.warning, background: t.warningBg,
               border: `1px solid ${t.warning}30`, borderRadius: 3, padding: '1px 6px',
-            }}>{info.behind} en retard</span>
+            }}>{info.behind} {labels.behind}</span>
           )}
         </div>
       )}
@@ -544,12 +666,12 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
             <CheckCircle2 size={12} /> Enterprise
           </span>
           <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{entInfo.head}</span>
-          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(entInfo.date)}</span>
+          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(entInfo.date, lang)}</span>
           {(entInfo.behind ?? 0) > 0 && (
             <span style={{
               fontSize: 10, fontWeight: 700, color: t.warning, background: t.warningBg,
               border: `1px solid ${t.warning}30`, borderRadius: 3, padding: '1px 6px',
-            }}>{entInfo.behind} en retard</span>
+            }}>{entInfo.behind} {labels.behind}</span>
           )}
         </div>
       )}
@@ -557,17 +679,17 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
         {(info.recent_commits?.length ?? 0) > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={onToggleCommits}>
             {showCommits ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            {showCommits ? 'Masquer' : `${info.recent_commits!.length} commits`}
+            {showCommits ? labels.hide : `${info.recent_commits!.length} commits`}
           </button>
         )}
         {hasAiData && (
           <button className="btn btn-outline btn-sm" onClick={() => onAiSummary(buildPrefill())}>
-            <Bot size={13} /> Résumé 30 j
+            <Bot size={13} /> {labels.aiSummary}
           </button>
         )}
         <button className="btn btn-ghost btn-sm" onClick={onCheckUpdates} disabled={checking} style={{ marginLeft: 'auto' }}>
           <RefreshCw size={13} style={checking ? { animation: 'spin .9s linear infinite' } : undefined} />
-          {checking ? 'Vérif…' : 'Vérifier'}
+          {checking ? labels.checking : labels.check}
         </button>
       </div>
       {showCommits && info.recent_commits && (
@@ -579,7 +701,7 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
             <div key={c.sha} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
               <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#89b4fa', flexShrink: 0, marginTop: 1 }}>{c.sha}</span>
               <span style={{ fontSize: 11, color: '#cdd6f4', flex: 1, lineHeight: 1.4 }}>{c.message}</span>
-              <span style={{ fontSize: 10, color: '#585b70', flexShrink: 0 }}>{relativeDate(c.date)}</span>
+              <span style={{ fontSize: 10, color: '#585b70', flexShrink: 0 }}>{relativeDate(c.date, lang)}</span>
             </div>
           ))}
         </div>
@@ -609,64 +731,64 @@ function LogBox({ logs }: { logs: string[] }) {
   )
 }
 
-function StatusBadge({ status, isInstalled, loading }: { status: CardState; isInstalled?: boolean; loading?: boolean }) {
-  if (loading) return <StatusPill tone="running">Statut</StatusPill>
+function StatusBadge({ status, isInstalled, loading, labels }: { status: CardState; isInstalled?: boolean; loading?: boolean; labels: typeof sourcesCopy.fr }) {
+  if (loading) return <StatusPill tone="running">{labels.status}</StatusPill>
   const cfg: Record<CardState, { tone: 'ok' | 'warning' | 'error' | 'idle' | 'running'; label: string }> = {
-    idle:    isInstalled ? { tone: 'ok', label: 'Installé' } : { tone: 'idle', label: 'Absent' },
-    running: { tone: 'running', label: 'En cours' },
-    done:    { tone: 'ok', label: 'À jour' },
-    error:   { tone: 'error', label: 'Erreur' },
+    idle:    isInstalled ? { tone: 'ok', label: labels.installed } : { tone: 'idle', label: labels.missing },
+    running: { tone: 'running', label: labels.running },
+    done:    { tone: 'ok', label: labels.upToDate },
+    error:   { tone: 'error', label: labels.error },
   }
   const item = cfg[status]
   return <StatusPill tone={item.tone}>{item.label}</StatusPill>
 }
 
-function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onRecheck }: {
+function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onRecheck, labels }: {
   hasKeys: boolean; sshStep: string; publicKey: string; copied: boolean
-  onGenerate: () => void; onCopy: () => void; onRecheck: () => void
+  onGenerate: () => void; onCopy: () => void; onRecheck: () => void; labels: typeof sourcesCopy.fr
 }) {
   return (
     <div style={{ ...bannerStyle(t.warning), flexDirection: 'column', gap: 0, marginBottom: 24 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
         <TriangleAlert size={19} color={t.warning} style={{ flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <strong style={{ color: t.text }}>Pas d'accès SSH GitHub</strong>
+          <strong style={{ color: t.text }}>{labels.noSshTitle}</strong>
           <div style={{ fontSize: 12, color: t.muted, marginTop: 3 }}>
-            {hasKeys ? "Une clé SSH existe mais n'est pas encore autorisée sur GitHub." : "Aucune clé SSH. Créez-en une pour télécharger Odoo Enterprise."}
+            {hasKeys ? labels.noSshWithKey : labels.noSshNoKey}
           </div>
         </div>
         {sshStep === 'idle' && (
           <button className="btn btn-primary" onClick={onGenerate}>
-            <KeyRound size={15} /> {hasKeys ? 'Voir ma clé' : 'Créer une clé SSH'}
+            <KeyRound size={15} /> {hasKeys ? labels.viewKey : labels.createKey}
           </button>
         )}
       </div>
       {sshStep === 'generating' && (
         <div style={{ marginTop: 14, fontSize: 13, color: t.muted, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Loader2 size={15} style={{ animation: 'spin .9s linear infinite' }} /> Génération en cours…
+          <Loader2 size={15} style={{ animation: 'spin .9s linear infinite' }} /> {labels.generating}
         </div>
       )}
       {sshStep === 'done' && (
         <div style={{ marginTop: 18, background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '18px 20px' }}>
-          <div style={{ fontWeight: 700, marginBottom: 16, color: t.text }}>Ajoutez la clé SSH à GitHub — 3 étapes</div>
-          <SshStep n={1} title="Copiez votre clé publique">
+          <div style={{ fontWeight: 700, marginBottom: 16, color: t.text }}>{labels.addKeyTitle}</div>
+          <SshStep n={1} title={labels.copyPublicKey}>
             <div style={{ position: 'relative', marginTop: 8 }}>
               <textarea readOnly value={publicKey} style={{ width: '100%', height: 70, resize: 'none', fontFamily: 'monospace', fontSize: 11, padding: '8px 10px', background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radiusSm, color: t.text, boxSizing: 'border-box' }} />
               <button className="btn btn-primary btn-sm" onClick={onCopy}
                 style={{ position: 'absolute', top: 8, right: 8, background: copied ? t.success : undefined }}>
                 {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
-                {copied ? 'Copié' : 'Copier'}
+                {copied ? labels.copied : labels.copy}
               </button>
             </div>
           </SshStep>
-          <SshStep n={2} title="Ouvrez les paramètres SSH GitHub">
+          <SshStep n={2} title={labels.openGithubSsh}>
             <a href="https://github.com/settings/ssh/new" target="_blank" rel="noreferrer" style={{ fontSize: 13, color: t.action, fontWeight: 600, display: 'block', marginTop: 5 }}>github.com/settings/ssh/new →</a>
           </SshStep>
-          <SshStep n={3} title={`Collez la clé et cliquez "Add SSH key"`}>
-            <div style={{ fontSize: 12, color: t.muted, marginTop: 5 }}>Champ <strong>Title</strong> : <em>"Odoo Portal"</em> — champ <strong>Key</strong> : collez la clé copiée.</div>
+          <SshStep n={3} title={labels.pasteKey}>
+            <div style={{ fontSize: 12, color: t.muted, marginTop: 5 }}>{labels.pasteKeyHelp}</div>
           </SshStep>
           <button className="btn btn-primary" onClick={onRecheck} style={{ marginTop: 6 }}>
-            <RefreshCw size={15} /> {"J'ai ajouté la clé - vérifier l'accès"}
+            <RefreshCw size={15} /> {labels.recheck}
           </button>
         </div>
       )}

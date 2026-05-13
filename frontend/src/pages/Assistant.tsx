@@ -10,6 +10,7 @@ import MascotThinking from '../components/MascotThinking'
 
 import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
+import { useUiLanguage } from '../i18n'
 
 function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
   const def = ODOO_APPS[name]
@@ -137,6 +138,119 @@ const SUGGESTIONS_GENERAL = [
   'Montre la structure du modèle stock.move',
 ]
 
+const SUGGESTIONS_EN = [
+  'How many unpaid invoices are there?',
+  'What is the current month revenue?',
+  'Show the last 10 orders',
+  'How many active customers?',
+  'List open CRM opportunities',
+]
+
+const SUGGESTIONS_GENERAL_EN = [
+  'What are the accounting models?',
+  'How does the sales workflow work?',
+  'What is new in this version?',
+  'How do I migrate from the previous version?',
+  'Show the stock.move model structure',
+]
+
+const assistantCopy = {
+  fr: {
+    title: 'Assistant IA',
+    description: 'Posez des questions sur vos données Odoo en langage naturel.',
+    settings: 'Paramètres',
+    general: 'Odoo Général',
+    addApi: 'ajouter une clé API →',
+    noProvider: 'Aucun fournisseur IA configuré —',
+    sourcesInstalled: (v: string) => `Code source Odoo ${v} installé`,
+    sourcesMissing: (v: string) => `Sources Odoo ${v} non installées`,
+    repoTitle: (repo: string) => `Dépôt projet : ${repo} — source complémentaire active`,
+    meetingTitle: 'Générer un compte-rendu structuré de cette conversation',
+    meeting: 'Compte-rendu',
+    newConvTitle: "Démarrer une nouvelle conversation (sauvegarde automatique de l'actuelle)",
+    newConv: 'Nouvelle conv.',
+    history: 'Historique',
+    savedConversations: (n: number) => `${n} conversation(s) sauvegardée(s)`,
+    sourceWarningStrong: (v: string) => `Code source Odoo ${v} non installé`,
+    sourceWarning: 'les questions sur le code source ne fonctionneront pas.',
+    installSources: 'Installer les sources →',
+    company: 'Société :',
+    inaccessibleCompany: 'Société inaccessible pour cet utilisateur',
+    inaccessibleDetail: (user: string) => `L'utilisateur ${user} n'a pas accès à la société sélectionnée. Sélectionnez une société accessible ou modifiez les droits de l'utilisateur dans Odoo.`,
+    removeAttachment: (name: string) => `Retirer ${name}`,
+    analyzeAttachments: 'Analyse les pièces jointes.',
+    configureProvider: 'Configurez un fournisseur IA dans les Paramètres',
+    selectTab: 'Sélectionnez un onglet ci-dessus',
+    generalPlaceholder: (v: string) => `Question générale sur Odoo ${v}… (Entrée pour envoyer)`,
+    ask: 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour nouvelle ligne)',
+    attach: 'Joindre un fichier',
+    stop: 'Arrêter la génération',
+    companyBlocked: 'Société inaccessible — changez de société',
+    send: 'Envoyer (Entrée)',
+    meta: 'Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne',
+    files: 'fichier(s)',
+    truncated: 'texte tronqué côté serveur',
+    emptyHistory: 'Aucune conversation sauvegardée',
+    resume: 'Reprendre',
+    activeEnv: 'Environnement actif',
+    default: 'défaut',
+    recommended: 'Recommandé',
+    copyTitle: 'Copier la réponse',
+    thinking: 'Réflexion en cours…',
+    analyzing: 'Analyse des résultats et rédaction de la réponse…',
+    tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)',
+    copied: 'Copié !',
+    copy: 'Copier',
+  },
+  en: {
+    title: 'AI Assistant',
+    description: 'Ask questions about your Odoo data in natural language.',
+    settings: 'Settings',
+    general: 'Odoo General',
+    addApi: 'add an API key →',
+    noProvider: 'No AI provider configured —',
+    sourcesInstalled: (v: string) => `Odoo ${v} source code installed`,
+    sourcesMissing: (v: string) => `Odoo ${v} sources not installed`,
+    repoTitle: (repo: string) => `Project repository: ${repo} — additional source active`,
+    meetingTitle: 'Generate structured meeting minutes from this conversation',
+    meeting: 'Meeting minutes',
+    newConvTitle: 'Start a new conversation (current one is saved automatically)',
+    newConv: 'New conv.',
+    history: 'History',
+    savedConversations: (n: number) => `${n} saved conversation(s)`,
+    sourceWarningStrong: (v: string) => `Odoo ${v} source code not installed`,
+    sourceWarning: 'source-code questions will not work.',
+    installSources: 'Install sources →',
+    company: 'Company:',
+    inaccessibleCompany: 'Company inaccessible for this user',
+    inaccessibleDetail: (user: string) => `User ${user} does not have access to the selected company. Select an accessible company or update the user's rights in Odoo.`,
+    removeAttachment: (name: string) => `Remove ${name}`,
+    analyzeAttachments: 'Analyze the attachments.',
+    configureProvider: 'Configure an AI provider in Settings',
+    selectTab: 'Select a tab above',
+    generalPlaceholder: (v: string) => `General question about Odoo ${v}… (Enter to send)`,
+    ask: 'Ask a question… (Enter to send, Shift+Enter for a new line)',
+    attach: 'Attach a file',
+    stop: 'Stop generation',
+    companyBlocked: 'Company inaccessible — change company',
+    send: 'Send (Enter)',
+    meta: 'Enter to send · Shift+Enter for a new line',
+    files: 'file(s)',
+    truncated: 'text truncated server-side',
+    emptyHistory: 'No saved conversations',
+    resume: 'Resume',
+    activeEnv: 'Active environment',
+    default: 'default',
+    recommended: 'Recommended',
+    copyTitle: 'Copy answer',
+    thinking: 'Thinking…',
+    analyzing: 'Analyzing results and drafting the answer…',
+    tokens: 'Tokens used (input ↑ + output ↓)',
+    copied: 'Copied!',
+    copy: 'Copy',
+  },
+}
+
 const ODOO_VERSIONS_BASE = ['19.0', '18.0', '17.0', '16.0', '15.0']
 
 const GENERAL_KEY = 'general'
@@ -181,6 +295,8 @@ function attachmentMeta(att: AttachmentDraft): AttachmentMeta {
 // ── Main page ─────────────────────────────────────────────────
 
 export default function Assistant() {
+  const lang = useUiLanguage()
+  const c = assistantCopy[lang]
   const location = useLocation()
   const { data: profData }  = useQuery({ queryKey: ['profiles'],      queryFn: listProfiles })
   const { data: provData }  = useQuery({ queryKey: ['ai-providers'],  queryFn: getAiProviders })
@@ -302,7 +418,9 @@ export default function Assistant() {
 
   const promptSuggestions =
     messages.length === 0 && profileId !== null && !input.trim()
-      ? (isGeneralMode ? SUGGESTIONS_GENERAL : SUGGESTIONS)
+      ? (lang === 'en'
+        ? (isGeneralMode ? SUGGESTIONS_GENERAL_EN : SUGGESTIONS_EN)
+        : (isGeneralMode ? SUGGESTIONS_GENERAL : SUGGESTIONS))
       : []
 
   const sourcesStatus: Record<string, { installed: boolean }> = srcData?.data ?? {}
@@ -569,7 +687,7 @@ export default function Assistant() {
   const send = async () => {
     const attached = readyAttachments
     if (!input.trim() && attached.length === 0) return
-    const text = input.trim() || 'Analyse les pièces jointes.'
+    const text = input.trim() || c.analyzeAttachments
     setInput('')
     await sendWithText(text, undefined, attached)
   }
@@ -636,9 +754,9 @@ export default function Assistant() {
     <div className="assistant-shell">
 
       <PageHeader
-        title="Assistant IA"
-        description="Posez des questions sur vos données Odoo en langage naturel."
-        action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}><Settings size={15} /> Paramètres</Link>}
+        title={c.title}
+        description={c.description}
+        action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}><Settings size={15} /> {c.settings}</Link>}
       />
 
       {/* ── Context bar ── */}
@@ -655,7 +773,7 @@ export default function Assistant() {
             const msgCount = (conversations[GENERAL_KEY] ?? []).filter(m => m.role === 'user').length
             return (
               <button onClick={() => setProfileId(GENERAL_KEY)} className={`assistant-tab-button${isActive ? ' is-active' : ''}`}>
-                <Globe2 size={14} /> Odoo Général
+                <Globe2 size={14} /> {c.general}
                 {msgCount > 0 && (
                   <span className="assistant-tab-count">{msgCount}</span>
                 )}
@@ -717,8 +835,8 @@ export default function Assistant() {
         <div className="assistant-control-row">
           {configuredProviders.length === 0 ? (
             <div style={{ fontSize: 13, color: t.muted }}>
-              Aucun fournisseur IA configuré —{' '}
-              <Link to="/settings" style={{ color: t.brand, fontWeight: 600 }}>ajouter une clé API →</Link>
+              {c.noProvider}{' '}
+              <Link to="/settings" style={{ color: t.brand, fontWeight: 600 }}>{c.addApi}</Link>
             </div>
           ) : (
             <>
@@ -745,8 +863,8 @@ export default function Assistant() {
               {selectedProfile && !isGeneralMode && activeVersion && (
                 <span
                   title={sourcesInstalled
-                    ? `Code source Odoo ${activeVersion} installé`
-                    : `Sources Odoo ${activeVersion} non installées`}
+                    ? c.sourcesInstalled(activeVersion)
+                    : c.sourcesMissing(activeVersion)}
                   style={{
                     fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
                     background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
@@ -763,7 +881,7 @@ export default function Assistant() {
               {/* Repo badge — shown when active env has a linked GitHub repo */}
               {selectedProfile && !isGeneralMode && activeEnvRepo && (
                 <span
-                  title={`Dépôt projet : ${activeEnvRepo} — source complémentaire active`}
+                  title={c.repoTitle(activeEnvRepo)}
                   style={{
                     fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
                     background: `${t.brand}12`, color: t.brand,
@@ -781,24 +899,24 @@ export default function Assistant() {
                     <>
                       <button
                         onClick={makeMeetingMinute} disabled={streaming}
-                        title="Générer un compte-rendu structuré de cette conversation"
+                        title={c.meetingTitle}
                         className="assistant-soft-action">
-                        <FileText size={13} /> <span>Compte-rendu</span>
+                        <FileText size={13} /> <span>{c.meeting}</span>
                       </button>
                       <button
                         onClick={resetCurrentConversation}
-                        title="Démarrer une nouvelle conversation (sauvegarde automatique de l'actuelle)"
+                        title={c.newConvTitle}
                         className="assistant-soft-action">
-                        <Bot size={13} /> <span>Nouvelle conv.</span>
+                        <Bot size={13} /> <span>{c.newConv}</span>
                       </button>
                     </>
                   )}
                   {convKey && (savedConvs[convKey] ?? []).length > 0 && (
                     <button
                       onClick={() => setShowHistory(h => !h)}
-                      title={`${(savedConvs[convKey] ?? []).length} conversation(s) sauvegardée(s)`}
+                      title={c.savedConversations((savedConvs[convKey] ?? []).length)}
                       className={`assistant-soft-action${showHistory ? ' is-active' : ''}`}>
-                      <History size={13} /> <span>Historique ({(savedConvs[convKey] ?? []).length})</span>
+                      <History size={13} /> <span>{c.history} ({(savedConvs[convKey] ?? []).length})</span>
                     </button>
                   )}
                 </div>
@@ -813,8 +931,8 @@ export default function Assistant() {
         <div className="assistant-source-warning">
           <TriangleAlert size={17} />
           <div style={{ fontSize: 12, flex: 1 }}>
-            <strong>Code source Odoo {activeVersion} non installé</strong> — les questions sur le code source ne fonctionneront pas.{' '}
-            <Link to="/sources" style={{ color: '#b45309', fontWeight: 600 }}>Installer les sources →</Link>
+            <strong>{c.sourceWarningStrong(activeVersion)}</strong> — {c.sourceWarning}{' '}
+            <Link to="/sources" style={{ color: '#b45309', fontWeight: 600 }}>{c.installSources}</Link>
           </div>
         </div>
       )}
@@ -852,7 +970,7 @@ export default function Assistant() {
         return (
           <>
             <div className="assistant-company-bar">
-              <span style={{ fontSize: 11, color: t.muted, fontWeight: 600 }}>Société :</span>
+              <span style={{ fontSize: 11, color: t.muted, fontWeight: 600 }}>{c.company}</span>
               {companies.map(c => {
                 const isActive = activeId === c.id
                 const isAccessible = !accessInfo || accessInfo.accessible_company_ids.includes(c.id)
@@ -875,12 +993,9 @@ export default function Assistant() {
               }}>
                 <Lock size={18} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>
-                    Société inaccessible pour cet utilisateur
-                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>{c.inaccessibleCompany}</div>
                   <div style={{ fontSize: 12, color: '#991b1b' }}>
-                    L'utilisateur <strong>{accessInfo?.user_name}</strong> n'a pas accès à la société sélectionnée.
-                    Sélectionnez une société accessible ou modifiez les droits de l'utilisateur dans Odoo.
+                    {c.inaccessibleDetail(accessInfo?.user_name ?? '')}
                   </div>
                 </div>
               </div>
@@ -930,7 +1045,7 @@ export default function Assistant() {
                   <span className="assistant-attachment-name">{att.name}</span>
                   <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
                   {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
-                  <button type="button" onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))} aria-label={`Retirer ${att.name}`}>
+                  <button type="button" onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))} aria-label={c.removeAttachment(att.name)}>
                     <X size={12} />
                   </button>
                 </div>
@@ -943,12 +1058,12 @@ export default function Assistant() {
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             placeholder={
               configuredProviders.length === 0
-                ? 'Configurez un fournisseur IA dans les Paramètres'
+                ? c.configureProvider
                 : profileId === null
-                ? 'Sélectionnez un onglet ci-dessus'
+                ? c.selectTab
                 : isGeneralMode
-                ? `Question générale sur Odoo ${generalVersion}… (Entrée pour envoyer)`
-                : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour nouvelle ligne)'
+                ? c.generalPlaceholder(generalVersion)
+                : c.ask
             }
             disabled={configuredProviders.length === 0 || profileId === null}
             rows={3}
@@ -958,7 +1073,7 @@ export default function Assistant() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={streaming || readyAttachments.length >= ATTACHMENT_MAX_FILES}
-            title="Joindre un fichier"
+            title={c.attach}
             className="assistant-attach-button"
           >
             <Paperclip size={16} />
@@ -974,7 +1089,7 @@ export default function Assistant() {
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
             disabled={configuredProviders.length === 0 || profileId === null || (!streaming && ((!input.trim() && readyAttachments.length === 0) || companyAccessBlocked))}
-            title={streaming ? 'Arrêter la génération' : companyAccessBlocked ? 'Société inaccessible — changez de société' : 'Envoyer (Entrée)'}
+            title={streaming ? c.stop : companyAccessBlocked ? c.companyBlocked : c.send}
             className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
           >
             {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
@@ -982,9 +1097,9 @@ export default function Assistant() {
         </div>
         <div className="assistant-composer-meta">
           <span>
-            Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne
-            {readyAttachments.length > 0 && ` · ${readyAttachments.length}/${ATTACHMENT_MAX_FILES} fichier(s)`}
-            {attachmentChars > ATTACHMENT_MAX_TOTAL_CHARS && ' · texte tronqué côté serveur'}
+            {c.meta}
+            {readyAttachments.length > 0 && ` · ${readyAttachments.length}/${ATTACHMENT_MAX_FILES} ${c.files}`}
+            {attachmentChars > ATTACHMENT_MAX_TOTAL_CHARS && ` · ${c.truncated}`}
           </span>
           {currentProv && <span>{currentProv.label} · {currentProv.models.find(m => m.id === modelId)?.label}</span>}
         </div>
@@ -995,11 +1110,11 @@ export default function Assistant() {
       {showHistory && convKey && (
         <div className="assistant-history-panel">
           <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>Historique</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{c.history}</span>
             <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
           </div>
           {(savedConvs[convKey] ?? []).length === 0
-            ? <div style={{ padding: '20px 14px', fontSize: 12, color: t.muted, textAlign: 'center' }}>Aucune conversation sauvegardée</div>
+            ? <div style={{ padding: '20px 14px', fontSize: 12, color: t.muted, textAlign: 'center' }}>{c.emptyHistory}</div>
             : (savedConvs[convKey] ?? []).map(conv => (
               <div key={conv.id} style={{
                 padding: '11px 14px', borderBottom: `1px solid ${t.borderLight}`,
@@ -1024,7 +1139,7 @@ export default function Assistant() {
                 </div>
                 <button className="btn btn-primary" onClick={() => resumeConv(conv)}
                   style={{ marginTop: 3, fontSize: 11, padding: '5px 10px' }}>
-                  <History size={12} /> Reprendre
+                  <History size={12} /> {c.resume}
                 </button>
               </div>
             ))
@@ -1045,6 +1160,8 @@ function EnvSelector({ profile, activeEnvId, onChange }: {
   activeEnvId: string | null
   onChange: (id: string | null) => void
 }) {
+  const lang = useUiLanguage()
+  const c = assistantCopy[lang]
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const envs: EnvEntry[] = (() => { try { return JSON.parse(profile.environments ?? '[]') as EnvEntry[] } catch { return [] } })()
@@ -1100,7 +1217,7 @@ function EnvSelector({ profile, activeEnvId, onChange }: {
           borderRadius: t.radiusLg, boxShadow: t.shadowMd, minWidth: 200,
         }}>
           <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: t.muted }}>
-            Environnement actif
+            {c.activeEnv}
           </div>
           {envs.map(env => {
             const isActive = env.id === currentId
@@ -1125,7 +1242,7 @@ function EnvSelector({ profile, activeEnvId, onChange }: {
                     </span>
                     {isDefault && (
                       <span style={{ fontSize: 9, color: t.muted, background: t.bgMuted, padding: '1px 5px', borderRadius: 3 }}>
-                        défaut
+                        {c.default}
                       </span>
                     )}
                     {isActive && !isDefault && (
@@ -1159,6 +1276,8 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
   switchProvider: (id: string) => void
   setModelId: (id: string) => void
 }) {
+  const lang = useUiLanguage()
+  const c = assistantCopy[lang]
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -1227,7 +1346,7 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontWeight: 600, fontSize: 12, color: isSelected ? prov.color : t.text }}>{m.label}</span>
                       {m.recommended && (
-                        <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>Recommandé</span>
+                        <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>{c.recommended}</span>
                       )}
                     </div>
                     {m.desc && <div style={{ fontSize: 11, color: t.muted }}>{m.desc}</div>}
@@ -1257,6 +1376,8 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
 function ModelDropdown({ provider, selected, onChange }: {
   provider: typeof PROVIDERS[0]; selected: string; onChange: (id: string) => void
 }) {
+  const lang = useUiLanguage()
+  const c = assistantCopy[lang]
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const current = provider.models.find(m => m.id === selected) ?? provider.models[0]
@@ -1307,7 +1428,7 @@ function ModelDropdown({ provider, selected, onChange }: {
                 </span>
                 {m.recommended && (
                   <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700, marginLeft: 2 }}>
-                    Recommandé
+                    {c.recommended}
                   </span>
                 )}
               </div>
@@ -1483,6 +1604,8 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   mascotType?: 'robot' | 'cat' | 'dog'
   mascotColor?: string
 }) {
+  const lang = useUiLanguage()
+  const c = assistantCopy[lang]
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt   = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
@@ -1523,7 +1646,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           }}>
             <button
               onClick={copyText}
-              title="Copier la réponse"
+              title={c.copyTitle}
               style={{
                 position: 'absolute', top: 8, right: 8,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1560,7 +1683,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           }}>
             <MascotThinking size={44} mascot={mascotType} color={mascotColor} />
             <span style={{ fontWeight: 500 }}>
-              {toolEvents.length > 0 ? 'Analyse des résultats et rédaction de la réponse…' : 'Réflexion en cours…'}
+              {toolEvents.length > 0 ? c.analyzing : c.thinking}
             </span>
           </div>
         )}
@@ -1568,11 +1691,11 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
         {(time || tokens || textEvt?.content) && !loading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 10, color: t.muted, paddingLeft: 2 }}>
             {time && <span>{time}</span>}
-            {tokens && <span title="Tokens utilisés (entrée ↑ + sortie ↓)">{tokens}</span>}
+            {tokens && <span title={c.tokens}>{tokens}</span>}
             {textEvt?.content && (
               <button
                 onClick={copyText}
-                title="Copier la réponse"
+                title={c.copyTitle}
                 style={{
                   marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
                   border: `1px solid ${t.border}`, borderRadius: t.radius,
@@ -1582,7 +1705,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
                 }}
               >
                 {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
-                {copied ? 'Copié !' : 'Copier'}
+                {copied ? c.copied : c.copy}
               </button>
             )}
           </div>

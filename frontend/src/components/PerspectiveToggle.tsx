@@ -1,5 +1,6 @@
 import { Briefcase, Code2 } from 'lucide-react'
 import { t } from '../theme'
+import { useUiLanguage } from '../i18n'
 
 export type Perspective = 'functional' | 'technical'
 
@@ -31,9 +32,27 @@ interface PerspectiveToggleProps {
  * Icons + tooltips, no visible labels — meant to sit next to the send button.
  */
 export default function PerspectiveToggle({ value, onChange, size = 'md', disabled }: PerspectiveToggleProps) {
+  const lang = useUiLanguage()
   const dim   = size === 'sm' ? 26 : 30
   const icon  = size === 'sm' ? 13 : 15
   const activeLabel = value === 'functional' ? 'AM / BA' : 'Archi / Dev'
+  const copy = lang === 'en'
+    ? {
+      group: `Response perspective, active mode ${activeLabel}`,
+      active: `Active mode: ${activeLabel}`,
+      functionalTitle: 'Functional perspective (AM / BA) — user journeys, business processes, configuration',
+      functionalAria: 'Enable functional AM / BA perspective',
+      technicalTitle: 'Technical perspective (Archi / Dev) — models, code, XML views, performance',
+      technicalAria: 'Enable technical Archi / Dev perspective',
+    }
+    : {
+      group: `Perspective de réponse, mode actif ${activeLabel}`,
+      active: `Mode actif : ${activeLabel}`,
+      functionalTitle: 'Perspective fonctionnelle (AM / BA) — orientée parcours utilisateur, processus métier, configuration',
+      functionalAria: 'Activer la perspective fonctionnelle AM / BA',
+      technicalTitle: 'Perspective technique (Archi / Dev) — orientée modèles, code, vues XML, performance',
+      technicalAria: 'Activer la perspective technique Archi / Dev',
+    }
 
   const itemStyle = (active: boolean): React.CSSProperties => ({
     width: dim, height: dim,
@@ -48,8 +67,8 @@ export default function PerspectiveToggle({ value, onChange, size = 'md', disabl
   return (
     <div
       role="group"
-      aria-label={`Perspective de réponse, mode actif ${activeLabel}`}
-      title={`Mode actif : ${activeLabel}`}
+      aria-label={copy.group}
+      title={copy.active}
       style={{
         display: 'inline-flex',
         background: t.bgMuted,
@@ -61,8 +80,8 @@ export default function PerspectiveToggle({ value, onChange, size = 'md', disabl
     >
       <button
         type="button"
-        title="Perspective fonctionnelle (AM / BA) — orientée parcours utilisateur, processus métier, configuration"
-        aria-label="Activer la perspective fonctionnelle AM / BA"
+        title={copy.functionalTitle}
+        aria-label={copy.functionalAria}
         aria-pressed={value === 'functional'}
         disabled={disabled}
         onClick={() => !disabled && onChange('functional')}
@@ -72,8 +91,8 @@ export default function PerspectiveToggle({ value, onChange, size = 'md', disabl
       </button>
       <button
         type="button"
-        title="Perspective technique (Archi / Dev) — orientée modèles, code, vues XML, performance"
-        aria-label="Activer la perspective technique Archi / Dev"
+        title={copy.technicalTitle}
+        aria-label={copy.technicalAria}
         aria-pressed={value === 'technical'}
         disabled={disabled}
         onClick={() => !disabled && onChange('technical')}

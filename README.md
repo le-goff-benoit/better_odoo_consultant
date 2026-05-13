@@ -5,7 +5,7 @@
 L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.20.0**
+> Version actuelle : **0.21.0**
 
 ---
 
@@ -103,7 +103,7 @@ Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauva
 L'application prépare l'ajout progressif de plusieurs langues. La version actuelle supporte **Français** et **English** sur trois niveaux distincts :
 
 1. **Langue de l'application**
-   Pilotée depuis Paramètres → Profil. Elle sert de préférence globale d'interface et permet aux composants compatibles de s'afficher en français ou en anglais.
+   Pilotée depuis Paramètres → Profil. Elle sert de préférence globale d'interface et permet aux écrans principaux de s'afficher en français ou en anglais : navigation, Sources, Projets, Assistant, Migration, Fonctionnement, Paramètres, À propos et pages historiques simples.
 
 2. **Langue des réponses IA**
    Trois modes sont disponibles :

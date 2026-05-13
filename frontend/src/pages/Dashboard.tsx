@@ -3,8 +3,58 @@ import { Link } from 'react-router-dom'
 import { health, listProfiles } from '../api/client'
 import { t } from '../theme'
 import Icon, { IconName } from '../components/Icon'
+import { useUiLanguage } from '../i18n'
+
+const copy = {
+  fr: {
+    title: 'Tableau de bord',
+    welcome: 'Bienvenue dans votre portail Odoo Consultant.',
+    apiStatus: 'Statut API',
+    online: 'En ligne',
+    offline: 'Hors ligne',
+    projects: 'Projets',
+    quickActions: 'Actions rapides',
+    newProject: 'Nouveau projet',
+    newProjectDesc: 'Connecter une instance Odoo',
+    downloadOdoo: 'Télécharger Odoo',
+    downloadOdooDesc: 'Sources Community / Enterprise',
+    queryOdoo: 'Requêter Odoo',
+    queryOdooDesc: 'Lire des données en direct',
+    start: 'Par où commencer ?',
+    stepSources: 'pour télécharger Odoo localement',
+    stepProjects: 'pour connecter une instance Odoo client',
+    stepQuery: 'pour explorer et exporter les données',
+    sources: 'Sources',
+    myProjects: 'Mes projets',
+    queries: 'Requêtes',
+  },
+  en: {
+    title: 'Dashboard',
+    welcome: 'Welcome to your Odoo Consultant portal.',
+    apiStatus: 'API status',
+    online: 'Online',
+    offline: 'Offline',
+    projects: 'Projects',
+    quickActions: 'Quick actions',
+    newProject: 'New project',
+    newProjectDesc: 'Connect an Odoo instance',
+    downloadOdoo: 'Download Odoo',
+    downloadOdooDesc: 'Community / Enterprise sources',
+    queryOdoo: 'Query Odoo',
+    queryOdooDesc: 'Read live data',
+    start: 'Where to start?',
+    stepSources: 'to download Odoo locally',
+    stepProjects: 'to connect a client Odoo instance',
+    stepQuery: 'to explore and export data',
+    sources: 'Sources',
+    myProjects: 'Projects',
+    queries: 'Queries',
+  },
+}
 
 export default function Dashboard() {
+  const lang = useUiLanguage()
+  const c = copy[lang]
   const { data: h }        = useQuery({ queryKey: ['health'],   queryFn: health })
   const { data: profRes }  = useQuery({ queryKey: ['profiles'], queryFn: listProfiles })
 
@@ -16,32 +66,32 @@ export default function Dashboard() {
       {/* Page title */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: t.text, letterSpacing: '-0.3px' }}>
-          Tableau de bord
+          {c.title}
         </h1>
         <p style={{ color: t.muted, marginTop: 4 }}>
-          Bienvenue dans votre portail Odoo Consultant.
+          {c.welcome}
         </p>
       </div>
 
       {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 36 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 36 }}>
         <StatCard
-          label="Statut API" value={online ? 'En ligne' : 'Hors ligne'}
+          label={c.apiStatus} value={online ? c.online : c.offline}
           icon="zap" color={online ? t.success : t.danger}
           bg={online ? t.successBg : t.dangerBg}
         />
-        <StatCard label="Projets" value={String(profiles)} icon="building" color={t.brand} bg={t.brandLight} />
+        <StatCard label={c.projects} value={String(profiles)} icon="building" color={t.brand} bg={t.brandLight} />
       </div>
 
       {/* Quick actions */}
       <div style={{ marginBottom: 12 }}>
         <h2 style={{ fontSize: 14, fontWeight: 600, color: t.textSub, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Actions rapides
+          {c.quickActions}
         </h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-          <QuickAction to="/profiles" icon="building" title="Nouveau projet"    desc="Connecter une instance Odoo" />
-          <QuickAction to="/sources"  icon="download" title="Télécharger Odoo"  desc="Sources Community / Enterprise" />
-          <QuickAction to="/query"    icon="search"   title="Requêter Odoo"     desc="Lire des données en direct" />
+          <QuickAction to="/profiles" icon="building" title={c.newProject} desc={c.newProjectDesc} />
+          <QuickAction to="/sources"  icon="download" title={c.downloadOdoo} desc={c.downloadOdooDesc} />
+          <QuickAction to="/query"    icon="search"   title={c.queryOdoo} desc={c.queryOdooDesc} />
         </div>
       </div>
 
@@ -55,17 +105,17 @@ export default function Dashboard() {
           padding: '18px 22px',
         }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: t.text, marginBottom: 10 }}>
-            Par où commencer ?
+            {c.start}
           </div>
           <ol style={{ paddingLeft: 18, color: t.muted, lineHeight: 2.2, fontSize: 13 }}>
             <li>
-              Allez dans <Link to="/sources" style={{ color: t.brand, fontWeight: 500 }}>Sources</Link> pour télécharger Odoo localement
+              {lang === 'en' ? 'Go to ' : 'Allez dans '}<Link to="/sources" style={{ color: t.brand, fontWeight: 500 }}>{c.sources}</Link> {c.stepSources}
             </li>
             <li>
-              Allez dans <Link to="/profiles" style={{ color: t.brand, fontWeight: 500 }}>Mes projets</Link> pour connecter une instance Odoo client
+              {lang === 'en' ? 'Go to ' : 'Allez dans '}<Link to="/profiles" style={{ color: t.brand, fontWeight: 500 }}>{c.myProjects}</Link> {c.stepProjects}
             </li>
             <li>
-              Utilisez <Link to="/query" style={{ color: t.brand, fontWeight: 500 }}>Requêtes</Link> pour explorer et exporter les données
+              {lang === 'en' ? 'Use ' : 'Utilisez '}<Link to="/query" style={{ color: t.brand, fontWeight: 500 }}>{c.queries}</Link> {c.stepQuery}
             </li>
           </ol>
         </div>
