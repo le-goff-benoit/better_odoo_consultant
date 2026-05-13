@@ -1097,53 +1097,53 @@ export default function Assistant() {
       })()}
 
       {/* Input area */}
-      <div style={{ flexShrink: 0, paddingTop: 12, borderTop: `1px solid ${t.border}`, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-        <textarea
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          placeholder={
-            configuredProviders.length === 0
-              ? 'Configurez un fournisseur IA dans les Paramètres'
-              : profileId === null
-              ? 'Sélectionnez un onglet ci-dessus'
-              : isGeneralMode
-              ? `Question générale sur Odoo ${generalVersion}… (Entrée pour envoyer)`
-              : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour nouvelle ligne)'
-          }
-          disabled={configuredProviders.length === 0 || profileId === null}
-          rows={3}
-          style={{
-            flex: 1, padding: '12px 16px', border: `1px solid ${t.border}`,
-            borderRadius: t.radiusLg, fontSize: 14, resize: 'none',
-            color: t.text, background: t.bgCard, outline: 'none',
-            fontFamily: t.font, lineHeight: 1.6,
-            transition: 'border-color .15s',
-          }}
-          onFocus={e => (e.currentTarget.style.borderColor = t.brand)}
-          onBlur={e => (e.currentTarget.style.borderColor = t.border)}
-        />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ flexShrink: 0, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
+        <div style={{ position: 'relative' }}>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+            placeholder={
+              configuredProviders.length === 0
+                ? 'Configurez un fournisseur IA dans les Paramètres'
+                : profileId === null
+                ? 'Sélectionnez un onglet ci-dessus'
+                : isGeneralMode
+                ? `Question générale sur Odoo ${generalVersion}… (Entrée pour envoyer)`
+                : 'Posez une question… (Entrée pour envoyer, Maj+Entrée pour nouvelle ligne)'
+            }
+            disabled={configuredProviders.length === 0 || profileId === null}
+            rows={3}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              padding: '12px 56px 12px 16px', border: `1px solid ${t.border}`,
+              borderRadius: t.radiusLg, fontSize: 14, resize: 'none',
+              color: t.text, background: t.bgCard, outline: 'none',
+              fontFamily: t.font, lineHeight: 1.6,
+              transition: 'border-color .15s',
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = t.brand)}
+            onBlur={e => (e.currentTarget.style.borderColor = t.border)}
+          />
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
             disabled={configuredProviders.length === 0 || profileId === null || (!streaming && (!input.trim() || companyAccessBlocked))}
-            title={companyAccessBlocked ? 'Société inaccessible — changez de société' : undefined}
+            title={streaming ? 'Arrêter la génération' : companyAccessBlocked ? 'Société inaccessible — changez de société' : 'Envoyer (Entrée)'}
             style={{
-              padding: '10px 18px', minWidth: 90,
+              position: 'absolute', bottom: 10, right: 10,
+              width: 36, height: 36,
               background: streaming ? t.danger : t.brand,
-              color: '#fff', border: 'none', borderRadius: t.radiusLg,
-              fontWeight: 700, fontSize: 13, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              opacity: (configuredProviders.length === 0 || profileId === null || (!streaming && (!input.trim() || companyAccessBlocked))) ? .45 : 1,
-              transition: 'background .15s, filter .15s',
+              color: '#fff', border: 'none', borderRadius: '50%',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, fontWeight: 700,
+              opacity: (configuredProviders.length === 0 || profileId === null || (!streaming && (!input.trim() || companyAccessBlocked))) ? .35 : 1,
+              transition: 'background .15s, filter .15s, opacity .15s',
+              flexShrink: 0,
             }}
-            onMouseEnter={e => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.1)' }}
+            onMouseEnter={e => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.12)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.filter = '' }}
           >
-            {streaming
-              ? <><span style={{ fontSize: 16 }}>⏹</span> Arrêter</>
-              : <><span style={{ fontSize: 16 }}>↑</span> Envoyer</>
-            }
+            {streaming ? '⏹' : '↑'}
           </button>
         </div>
       </div>
