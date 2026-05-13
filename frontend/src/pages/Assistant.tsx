@@ -958,7 +958,7 @@ export default function Assistant() {
         {messages.map(msg => (
           msg.role === 'user'
             ? <UserBubble key={msg.id} text={msg.text ?? ''} timestamp={msg.timestamp} />
-            : <AssistantBubble key={msg.id} events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} />
+            : <AssistantBubble key={msg.id} events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -1328,9 +1328,10 @@ function UserBubble({ text, timestamp }: { text: string; timestamp?: number }) {
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, inputTokens, outputTokens }: {
+function AssistantBubble({ events, loading, provider, timestamp, inputTokens, outputTokens, projectName }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; inputTokens?: number; outputTokens?: number
+  projectName?: string
 }) {
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt   = events.find(e => e.type === 'text')
@@ -1352,7 +1353,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} />}
+        {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} projectName={projectName} />}
 
         {textEvt?.content && (
           <div style={{
@@ -1540,7 +1541,7 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
   }
 }
 
-function ToolCallGroup({ events }: { events: AiEvent[] }) {
+function ToolCallGroup({ events, projectName }: { events: AiEvent[]; projectName?: string }) {
   const [open, setOpen] = useState(false)
   const calls   = events.filter(e => e.type === 'tool_call')
   const results = events.filter(e => e.type === 'tool_result')
@@ -1602,14 +1603,15 @@ function ToolCallGroup({ events }: { events: AiEvent[] }) {
                 }} />
               )}
 
-              {/* Live DB badge */}
-              {'liveDb' in meta && meta.liveDb && (
+              {/* Live DB — project name badge */}
+              {'liveDb' in meta && meta.liveDb && projectName && (
                 <span style={{
-                  fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                  fontSize: 9, fontWeight: 600, padding: '1px 6px',
                   borderRadius: 3, flexShrink: 0,
-                  background: '#f97316', color: '#fff',
-                  letterSpacing: '0.02em',
-                }}>BD</span>
+                  background: '#f9731620', color: '#ea6c0a',
+                  border: '1px solid #f9731640',
+                  maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>↗ {projectName}</span>
               )}
 
               {/* App icon when done */}

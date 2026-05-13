@@ -4,6 +4,7 @@ import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilo
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { applyBrandColor, applyThemeMode } from '../App'
+import { WIDTH_OPTIONS, WIDTH_KEY, type ContentWidth } from '../components/Layout'
 
 interface ProviderDef {
   id: string
@@ -83,15 +84,16 @@ interface CopilotFlowState {
   error?: string
 }
 
-type SettingsTab = 'profile' | 'api' | 'context'
+type SettingsTab = 'profile' | 'api' | 'context' | 'interface'
 
 export default function Settings() {
   const [tab, setTab] = useState<SettingsTab>('profile')
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
-    { id: 'profile', label: 'Profil',     icon: '👤' },
-    { id: 'api',     label: 'Clés API',   icon: '🔑' },
-    { id: 'context', label: 'Contexte IA', icon: '📚' },
+    { id: 'profile',   label: 'Profil',      icon: '👤' },
+    { id: 'api',       label: 'Clés API',    icon: '🔑' },
+    { id: 'context',   label: 'Contexte IA', icon: '📚' },
+    { id: 'interface', label: 'Interface',   icon: '🖥' },
   ]
 
   return (
@@ -135,8 +137,79 @@ export default function Settings() {
         </section>
       )}
 
+      {tab === 'interface' && <InterfaceSection />}
+
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
     </div>
+  )
+}
+
+// ── Interface settings ────────────────────────────────────────────
+
+function InterfaceSection() {
+  const [currentWidth, setCurrentWidth] = useState<ContentWidth>(() => {
+    try { return (localStorage.getItem(WIDTH_KEY) as ContentWidth) ?? 'medium' } catch { return 'medium' }
+  })
+
+  const applyWidth = (id: ContentWidth) => {
+    localStorage.setItem(WIDTH_KEY, id)
+    setCurrentWidth(id)
+    window.dispatchEvent(new Event('app-width-change'))
+  }
+
+  return (
+    <section>
+      <p style={{ fontSize: 13, color: t.muted, marginBottom: 28, lineHeight: 1.6 }}>
+        Ajustez la largeur du contenu selon votre écran et vos préférences de lecture.
+      </p>
+
+      <div style={{ fontWeight: 700, fontSize: 14, color: t.text, marginBottom: 14 }}>Largeur du contenu</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+        {WIDTH_OPTIONS.map(opt => {
+          const isActive = currentWidth === opt.id
+          return (
+            <button
+              key={opt.id}
+              onClick={() => applyWidth(opt.id)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                padding: '18px 16px',
+                background: isActive ? `var(--brand-10)` : t.bgCard,
+                border: `2px solid ${isActive ? `var(--brand, ${t.brand})` : t.border}`,
+                borderRadius: t.radiusLg, cursor: 'pointer', transition: 'all .15s',
+              }}
+            >
+              {/* Width visualisation */}
+              <div style={{ width: '100%', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{
+                  height: 28,
+                  width: opt.id === 'narrow' ? '55%' : opt.id === 'medium' ? '70%' : opt.id === 'wide' ? '85%' : '100%',
+                  background: isActive ? `var(--brand-20)` : t.bgMuted,
+                  border: `1px solid ${isActive ? `var(--brand-40)` : t.border}`,
+                  borderRadius: 4,
+                  transition: 'all .15s',
+                }} />
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: isActive ? 700 : 500, color: isActive ? `var(--brand, ${t.brand})` : t.text }}>
+                  {opt.label}
+                </div>
+                {opt.px > 0 && (
+                  <div style={{ fontSize: 11, color: t.muted, marginTop: 2 }}>{opt.px} px</div>
+                )}
+              </div>
+              {isActive && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px',
+                  background: `var(--brand, ${t.brand})`, color: '#fff', borderRadius: 9999,
+                }}>Actif</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
