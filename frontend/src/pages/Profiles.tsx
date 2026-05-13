@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile } from '../api/client'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext } from '../api/client'
 import { t, btn } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
@@ -49,7 +49,7 @@ interface Profile {
   default_branch?: string; environments?: string
   company_name?: string; company_city?: string; company_logo?: string
   company_ids?: string; selected_company_id?: number; api_key_expires?: string
-  user_access_info?: string
+  user_access_info?: string; project_context?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
 interface DiagResult {
@@ -196,6 +196,52 @@ export default function Profiles() {
   })
 
   const [checkingAccessId, setCheckingAccessId] = useState<number | null>(null)
+
+  // ── Context modal ──────────────────────────────────────────────
+  const [contextProfileId, setContextProfileId] = useState<number | null>(null)
+  const [contextText, setContextText] = useState('')
+  const [contextSaving, setContextSaving] = useState(false)
+  const [contextAutoFilling, setContextAutoFilling] = useState(false)
+
+  const openContext = async (profileId: number) => {
+    setContextProfileId(profileId)
+    try {
+      const res = await getProfileContext(profileId)
+      setContextText(res.data.content ?? '')
+    } catch {
+      setContextText('')
+    }
+  }
+
+  const saveContext = async () => {
+    if (contextProfileId === null) return
+    setContextSaving(true)
+    try {
+      await saveProfileContext(contextProfileId, contextText)
+      qc.invalidateQueries({ queryKey: ['profiles'] })
+      notify('Contexte enregistré ✓')
+      setContextProfileId(null)
+    } catch {
+      notify('Erreur lors de l\'enregistrement', false)
+    } finally {
+      setContextSaving(false)
+    }
+  }
+
+  const doAutoFill = async () => {
+    if (contextProfileId === null) return
+    setContextAutoFilling(true)
+    try {
+      const res = await autoFillContext(contextProfileId)
+      setContextText(res.data.content ?? '')
+      notify('Contexte généré par l\'IA ✓')
+    } catch {
+      notify('Impossible de générer le contexte', false)
+    } finally {
+      setContextAutoFilling(false)
+    }
+  }
+
   const checkAccess = async (profileId: number) => {
     setCheckingAccessId(profileId)
     try {
@@ -559,6 +605,63 @@ export default function Profiles() {
         </div>
       )}
 
+      {/* Context modal */}
+      {contextProfileId !== null && (
+        <div style={styles.overlay}>
+          <div style={{ ...styles.modal, maxWidth: 600 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: t.text, margin: 0 }}>
+                📋 Contexte projet — {profiles.find(p => p.id === contextProfileId)?.name}
+              </h2>
+              <button onClick={() => setContextProfileId(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, lineHeight: 1, padding: '2px 6px' }}>
+                ×
+              </button>
+            </div>
+
+            <p style={{ fontSize: 12, color: t.muted, marginBottom: 12, lineHeight: 1.5 }}>
+              Notez ici tout ce qui est utile pour ce client : activité, particularités, modules clés, contacts importants…
+              Ce contexte sera automatiquement injecté dans les prompts IA de ce projet.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button
+                onClick={doAutoFill}
+                disabled={contextAutoFilling}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 14px', fontSize: 12, fontWeight: 600,
+                  background: contextAutoFilling ? t.bgMuted : `${t.action}15`,
+                  color: contextAutoFilling ? t.muted : t.action,
+                  border: `1px solid ${t.action}40`, borderRadius: t.radius, cursor: 'pointer',
+                }}>
+                {contextAutoFilling ? '⟳ Génération en cours…' : '✨ Auto-compléter avec l\'IA'}
+              </button>
+            </div>
+
+            <textarea
+              value={contextText}
+              onChange={e => setContextText(e.target.value)}
+              placeholder="Ex: Client dans la distribution industrielle, utilise principalement ventes + stock + facturation. Multi-sociétés avec 3 entités. Point d'attention : dépôt douanier non standard..."
+              style={{
+                width: '100%', minHeight: 220, padding: '10px 12px',
+                border: `1px solid ${t.border}`, borderRadius: t.radius,
+                fontSize: 13, color: t.text, background: t.white,
+                fontFamily: 'inherit', lineHeight: 1.6, resize: 'vertical',
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: `1px solid ${t.border}` }}>
+              <button className="btn btn-secondary" onClick={() => setContextProfileId(null)}>Annuler</button>
+              <button className="btn btn-primary" onClick={saveContext} disabled={contextSaving}>
+                {contextSaving ? '⟳ Enregistrement…' : '✓ Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cards */}
       {profiles.length === 0 ? (
         <EmptyState onAdd={() => setShowWizard(true)} />
@@ -574,7 +677,8 @@ export default function Profiles() {
               onSelectCompany={(companyId) => updateProfile(p.id, { selected_company_id: companyId })
                 .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
               onCheckAccess={() => checkAccess(p.id)}
-              checkingAccess={checkingAccessId === p.id} />
+              checkingAccess={checkingAccessId === p.id}
+              onContext={() => openContext(p.id)} />
           ))}
         </div>
       )}
@@ -607,11 +711,12 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelectCompany, onCheckAccess, checkingAccess }: {
+function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelectCompany, onCheckAccess, checkingAccess, onContext }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
   onUpdateEnvs: (envs: Env[]) => void
   onSelectCompany: (companyId: number) => void
   onCheckAccess: () => void; checkingAccess: boolean
+  onContext: () => void
 }) {
   const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
   const [envs, setEnvs] = useState<Env[]>(() => { try { return JSON.parse(profile.environments ?? '[]') } catch { return [] } })
@@ -619,6 +724,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
   const accessInfo: AccessInfo | null = (() => { try { return profile.user_access_info ? JSON.parse(profile.user_access_info) : null } catch { return null } })()
   const [addingEnv, setAddingEnv] = useState(false)
   const [newEnv, setNewEnv] = useState<Env>({ name: '', db_url: '', branch: '' })
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const { data: appsData } = useQuery({
     queryKey: ['profile-apps', profile.id],
@@ -825,29 +931,102 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
         )}
 
         {/* ── Footer actions ── */}
-        <div style={{
-          marginTop: 'auto', paddingTop: 10, borderTop: `1px solid ${t.borderLight}`,
-          display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
-        }}>
-          {/* Quick links */}
-          {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
-          {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="🐙" color="#24292f" />}
-          <button onClick={() => setAddingEnv(a => !a)} style={{
-            fontSize: 11, color: t.muted, background: 'none',
-            border: `1px dashed ${t.border}`, borderRadius: t.radius,
-            padding: '3px 9px', cursor: 'pointer',
-          }}>+ env</button>
-
-          <div style={{ flex: 1 }} />
-
-          <button className="btn btn-outline" onClick={onEdit}>✏ Modifier</button>
-          <button className="btn btn-outline" onClick={onTest}>Tester</button>
-          <button className="btn btn-outline" onClick={onCheckAccess} disabled={checkingAccess}
-            title="Vérifier les droits d'accès de l'utilisateur Odoo">
-            {checkingAccess ? '⟳' : '🔍'} Accès
-          </button>
-          <button className="btn btn-outline-danger" onClick={onDelete}>Supprimer</button>
+        <div style={{ marginTop: 'auto', paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
+          {/* Row 1: links */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+            {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
+            {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="🐙" color="#24292f" />}
+            <button onClick={() => setAddingEnv(a => !a)} style={{
+              fontSize: 11, color: t.muted, background: 'none',
+              border: `1px dashed ${t.border}`, borderRadius: t.radius,
+              padding: '3px 9px', cursor: 'pointer',
+            }}>+ env</button>
+          </div>
+          {/* Row 2: main actions + delete at the end */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className="btn btn-outline" onClick={onEdit}>✏ Modifier</button>
+            <button className="btn btn-outline" onClick={onTest}>▶ Tester</button>
+            <button className="btn btn-outline" onClick={onCheckAccess} disabled={checkingAccess}
+              title="Vérifier les droits d'accès de l'utilisateur Odoo">
+              {checkingAccess ? '⟳' : '🔍'} Accès
+            </button>
+            <button className="btn btn-outline" onClick={onContext}
+              title="Ouvrir le fichier de contexte de ce projet"
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              📋 Contexte
+              {profile.project_context && (
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: t.success, display: 'inline-block', flexShrink: 0,
+                }} />
+              )}
+            </button>
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={() => setConfirmDelete(true)}
+              title="Supprimer ce projet"
+              style={{
+                background: 'none', border: `1px solid ${t.borderLight}`, cursor: 'pointer',
+                color: t.muted, fontSize: 13, padding: '4px 9px', borderRadius: t.radius,
+                transition: 'all .15s', lineHeight: 1,
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = t.danger
+                e.currentTarget.style.borderColor = `${t.danger}50`
+                e.currentTarget.style.background = `${t.danger}08`
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = t.muted
+                e.currentTarget.style.borderColor = t.borderLight
+                e.currentTarget.style.background = 'none'
+              }}
+            >🗑</button>
+          </div>
         </div>
+
+        {/* ── Confirm delete modal ── */}
+        {confirmDelete && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 600,
+            background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(2px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}>
+            <div style={{
+              background: t.white, borderRadius: t.radiusLg, padding: '28px 32px',
+              maxWidth: 400, width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,.2)',
+            }}>
+              <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⚠️</div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: t.text, textAlign: 'center', margin: '0 0 8px' }}>
+                Supprimer ce projet ?
+              </h3>
+              <p style={{ fontSize: 13, color: t.muted, textAlign: 'center', margin: '0 0 6px', lineHeight: 1.5 }}>
+                Vous êtes sur le point de supprimer le projet
+              </p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: t.text, textAlign: 'center', margin: '0 0 20px' }}>
+                « {profile.name} »
+              </p>
+              <p style={{ fontSize: 12, color: t.danger, textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
+                Cette action est irréversible. La clé API et toutes les données de connexion seront supprimées.
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Annuler
+                </button>
+                <button
+                  className="btn btn-outline-danger"
+                  style={{ flex: 1, fontWeight: 700 }}
+                  onClick={() => { setConfirmDelete(false); onDelete() }}
+                >
+                  Oui, supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

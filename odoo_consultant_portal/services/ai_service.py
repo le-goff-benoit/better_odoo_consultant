@@ -432,6 +432,7 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
     client = anthropic.AsyncAnthropic(api_key=api_key)
     loop_msgs = list(messages)
 
+    total_in = total_out = 0
     for _ in range(10):
         response = await client.messages.create(
             model=model_id,
@@ -440,6 +441,9 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
             messages=loop_msgs,
             tools=tools,
         )
+        if hasattr(response, "usage") and response.usage:
+            total_in  += getattr(response.usage, "input_tokens",  0) or 0
+            total_out += getattr(response.usage, "output_tokens", 0) or 0
 
         if response.stop_reason == "tool_use":
             tool_results = []
@@ -458,7 +462,7 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
         else:
             text = "".join(getattr(b, "text", "") for b in response.content)
             yield {"type": "text", "content": text}
-            yield {"type": "done", "model": model_id}
+            yield {"type": "done", "model": model_id, "input_tokens": total_in, "output_tokens": total_out}
             return
 
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
@@ -470,10 +474,14 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
     if tools is None:
         tools = TOOLS_OPENAI
     oai_msgs = [{"role": "system", "content": system}] + messages
+    total_in = total_out = 0
     for _ in range(10):
         response = await client.chat.completions.create(
             model=model_id, messages=oai_msgs, tools=tools,
         )
+        if hasattr(response, "usage") and response.usage:
+            total_in  += getattr(response.usage, "prompt_tokens",     0) or 0
+            total_out += getattr(response.usage, "completion_tokens",  0) or 0
         choice = response.choices[0]
         if choice.finish_reason == "tool_calls":
             oai_msgs.append(choice.message)
@@ -488,7 +496,7 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
                 })
         else:
             yield {"type": "text", "content": choice.message.content or ""}
-            yield {"type": "done", "model": model_id}
+            yield {"type": "done", "model": model_id, "input_tokens": total_in, "output_tokens": total_out}
             return
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
 
@@ -556,9 +564,13 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
     last_msg = messages[-1]["content"] if messages else ""
 
     chat = model.start_chat(history=history)
+    total_in = total_out = 0
 
     for _ in range(10):
         response = await loop.run_in_executor(None, lambda: chat.send_message(last_msg))
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            total_in  += getattr(response.usage_metadata, "prompt_token_count",     0) or 0
+            total_out += getattr(response.usage_metadata, "candidates_token_count", 0) or 0
         part = response.candidates[0].content.parts[0]
 
         if hasattr(part, "function_call") and part.function_call.name:
@@ -576,7 +588,7 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
         else:
             text = response.text if hasattr(response, "text") else ""
             yield {"type": "text", "content": text}
-            yield {"type": "done", "model": model_id}
+            yield {"type": "done", "model": model_id, "input_tokens": total_in, "output_tokens": total_out}
             return
 
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
@@ -618,6 +630,8 @@ async def stream_chat(
                 f"- Société : {profile.company_name or 'inconnue'}",
                 f"- Société : {profile.company_name or 'inconnue'}\n- Société active (filtre) : {active_company_name}"
             )
+        if getattr(profile, "project_context", None):
+            system += f"\n\n---\n## Contexte projet\n{profile.project_context}\n"
         if user_ctx:
             system = user_ctx + system
         tools_c  = TOOLS_CLAUDE

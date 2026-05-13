@@ -17,6 +17,7 @@ _MIGRATIONS = [
     ("profile", "api_key_expires",     "TEXT"),
     ("profile", "selected_company_id", "INTEGER"),
     ("profile", "user_access_info",    "TEXT"),
+    ("profile", "project_context",     "TEXT"),
 ]
 
 

@@ -33,6 +33,7 @@ class Profile(SQLModel, table=True):
     selected_company_id: Optional[int] = Field(default=None)
     api_key_expires: Optional[str] = None                    # format ISO date: "2026-12-31"
     user_access_info: Optional[str] = Field(default=None)    # JSON: {is_system,is_admin,user_name,accessible_company_ids,checked_at}
+    project_context: Optional[str] = Field(default=None)     # Free-text context notes for this project
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

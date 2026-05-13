@@ -62,7 +62,7 @@ export const t = {
 
   // Type
   font:     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  fontSize: '14px',
+  fontSize: '15px',
   navWidth: '232px',
 } as const
 

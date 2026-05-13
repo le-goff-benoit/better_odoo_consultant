@@ -69,7 +69,7 @@
 
 .btn-primary {
   padding: 8px 18px; background: var(--brand, #017e84);
-  color: #fff; border: none; font-size: 13px;
+  color: #fff; border: none; font-size: 14px;
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 .btn-primary:active:not(:disabled) { filter: brightness(.92); }
@@ -77,7 +77,7 @@
 .btn-secondary {
   padding: 8px 16px; background: transparent;
   color: var(--th-text-sub, #334155);
-  border: 1px solid var(--th-border, #e2e8f0); font-size: 13px;
+  border: 1px solid var(--th-border, #e2e8f0); font-size: 14px;
 }
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--brand, #017e84);
@@ -86,9 +86,9 @@
 }
 
 .btn-ghost {
-  padding: 6px 14px; background: var(--th-bg-muted, #f1f5f9);
+  padding: 7px 14px; background: var(--th-bg-muted, #f1f5f9);
   color: var(--th-text-sub, #334155);
-  border: 1px solid var(--th-border, #e2e8f0); font-size: 12px; font-weight: 500;
+  border: 1px solid var(--th-border, #e2e8f0); font-size: 13px; font-weight: 500;
 }
 .btn-ghost:hover:not(:disabled) {
   border-color: var(--brand, #017e84);
@@ -97,35 +97,35 @@
 
 .btn-danger {
   padding: 8px 16px; background: #dc2626;
-  color: #fff; border: none; font-size: 13px;
+  color: #fff; border: none; font-size: 14px;
 }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.1); }
 
 .btn-outline {
-  padding: 6px 14px; background: transparent;
-  color: var(--brand, #017e84); border: 1px solid var(--brand, #017e84); font-size: 12px;
+  padding: 7px 14px; background: transparent;
+  color: var(--brand, #017e84); border: 1px solid var(--brand, #017e84); font-size: 13px;
 }
 .btn-outline:hover:not(:disabled) { background: var(--brand-10); }
 
 .btn-outline-danger {
-  padding: 6px 14px; background: transparent;
-  color: #dc2626; border: 1px solid #dc2626; font-size: 12px;
+  padding: 7px 14px; background: transparent;
+  color: #dc2626; border: 1px solid #dc2626; font-size: 13px;
 }
 .btn-outline-danger:hover:not(:disabled) { background: #fef2f2; }
 
 .btn-outline-muted {
-  padding: 6px 14px; background: transparent;
-  color: var(--th-muted, #64748b); border: 1px solid var(--th-border, #e2e8f0); font-size: 12px;
+  padding: 7px 14px; background: transparent;
+  color: var(--th-muted, #64748b); border: 1px solid var(--th-border, #e2e8f0); font-size: 13px;
 }
 .btn-outline-muted:hover:not(:disabled) { border-color: var(--th-text-sub, #334155); color: var(--th-text-sub, #334155); }
 
 /* ── Size modifiers (compose with .btn-*) ── */
-.btn-sm { padding: 4px 10px !important; font-size: 11px !important; }
-.btn-xs { padding: 2px 7px !important; font-size: 10px !important; }
+.btn-sm { padding: 5px 11px !important; font-size: 12px !important; }
+.btn-xs { padding: 3px 8px !important; font-size: 11px !important; }
 
 /* ── Section label utility ── */
 .label-section {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--th-muted, #64748b);
   margin: 0;
 }
@@ -134,7 +134,7 @@
 .btn-tab {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 16px; background: none; border: none; border-bottom: 2px solid transparent;
-  margin-bottom: -2px; cursor: pointer; font-size: 13px; font-weight: 400;
+  margin-bottom: -2px; cursor: pointer; font-size: 14px; font-weight: 400;
   color: var(--th-muted, #64748b); font-family: inherit;
   transition: color .15s, border-color .15s;
 }
@@ -145,6 +145,7 @@
 * { box-sizing: border-box; }
 
 body {
+  font-size: 15px;
   background: var(--th-bg);
   color: var(--th-text);
   transition: background .2s, color .2s;

@@ -53,6 +53,11 @@ class ProfileUpdate(BaseModel):
     api_key_expires: Optional[str] = None
     selected_company_id: Optional[int] = None
     user_access_info: Optional[str] = None
+    project_context: Optional[str] = None
+
+
+class ContextAutoFillRequest(BaseModel):
+    pass  # no body needed — profile data is fetched from DB
 
 
 class AccessCheckRequest(BaseModel):
@@ -436,3 +441,104 @@ async def check_access_raw(body: AccessCheckRequest):
         return info
     except Exception as exc:
         raise HTTPException(400, str(exc))
+
+
+# ── Project context ────────────────────────────────────────────────
+
+class ContextSaveRequest(BaseModel):
+    content: str
+
+
+@router.get("/{profile_id}/context")
+async def get_context(profile_id: int, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    return {"content": profile.project_context or ""}
+
+
+@router.put("/{profile_id}/context")
+async def save_context(profile_id: int, body: ContextSaveRequest, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    profile.project_context = body.content.strip() or None
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/{profile_id}/context/auto-fill")
+async def auto_fill_context(profile_id: int, session: AsyncSession = Depends(get_session)):
+    """Use an AI model to generate project context notes from profile metadata."""
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+
+    # Gather available info
+    apps_list = ""
+    try:
+        client = _get_client_from_profile(profile)
+        loop = asyncio.get_event_loop()
+        apps = await loop.run_in_executor(None, client.get_installed_apps)
+        apps_list = ", ".join(a["name"] for a in apps[:30]) if apps else ""
+    except Exception:
+        pass
+
+    companies_str = ""
+    if profile.company_ids:
+        try:
+            cos = json.loads(profile.company_ids)
+            companies_str = ", ".join(c.get("name", "") for c in cos)
+        except Exception:
+            pass
+
+    prompt = f"""Tu es un assistant expert Odoo. Génère un fichier de contexte concis pour ce projet client.
+
+Données du projet :
+- Nom du projet : {profile.name}
+- Société : {profile.company_name or "inconnue"}{", " + profile.company_city if profile.company_city else ""}
+- URL : {profile.db_url}
+- Version Odoo : {profile.odoo_version or "inconnue"}
+- Sociétés détectées : {companies_str or "inconnue"}
+- Modules installés : {apps_list or "inconnus"}
+
+Génère un contexte structuré avec les sections suivantes (en français, concis, bulletpoints) :
+1. **Présentation du client** — 2-3 lignes sur l'activité probable de l'entreprise (base-toi sur le nom, la ville, les modules)
+2. **Modules clés** — liste les modules principaux et leur usage probable chez ce client
+3. **Points d'attention** — risques, particularités, ou points à vérifier pour ce type de client
+4. **Notes consultant** — section vide à compléter manuellement
+
+Sois factuel. Si tu ne sais pas, indique-le clairement. Ne pas inventer."""
+
+    # Find a working AI key
+    from ..routes.ai import _ai_key, _exchange_copilot_token
+    from ...services.ai_service import stream_chat
+
+    for provider in ("claude", "openai", "gemini", "copilot", "github"):
+        key = _ai_key(provider)
+        if not key:
+            continue
+        if provider == "copilot":
+            try:
+                key = await _exchange_copilot_token(key)
+            except Exception:
+                continue
+        try:
+            result_parts = []
+            async for evt in stream_chat(
+                provider, key, None, None, None,
+                [{"role": "user", "content": prompt}],
+                None, "", None, None, None
+            ):
+                if evt.get("type") == "text":
+                    result_parts.append(evt.get("content", ""))
+            generated = "".join(result_parts).strip()
+            if generated:
+                return {"content": generated}
+        except Exception as exc:
+            log.warning("auto_fill_context: provider %s failed: %s", provider, exc)
+            continue
+
+    raise HTTPException(503, "Aucun fournisseur IA disponible — configurez une clé API dans les Paramètres.")

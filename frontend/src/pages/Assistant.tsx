@@ -69,6 +69,8 @@ interface AiEvent {
   msg?: string
   model?: string
   ok?: boolean
+  input_tokens?: number
+  output_tokens?: number
 }
 
 interface Message {
@@ -77,6 +79,9 @@ interface Message {
   text?: string
   events?: AiEvent[]
   loading?: boolean
+  timestamp?: number
+  inputTokens?: number
+  outputTokens?: number
 }
 
 interface SavedConv {
@@ -88,7 +93,7 @@ interface SavedConv {
   updatedAt: number
 }
 
-interface ModelDef { id: string; label: string; speed: number; desc: string; recommended?: boolean }
+interface ModelDef { id: string; label: string; desc: string; tags?: string[]; recommended?: boolean }
 
 // ── Conversation history helpers ───────────────────────────────
 const LS_HISTORY = 'odoo-conv-history'
@@ -124,102 +129,132 @@ const PROVIDERS: { id: string; label: string; color: string; models: ModelDef[] 
   {
     id: 'claude', label: 'Claude', color: '#D97706',
     models: [
-      { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',  speed: 2, recommended: true,
-        desc: 'Excellent rapport qualité/vitesse — idéal pour le quotidien' },
-      { id: 'claude-opus-4-7',           label: 'Opus 4.7',    speed: 1,
-        desc: 'Le plus puissant — analyses complexes, synthèses longues' },
-      { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',   speed: 3,
-        desc: 'Ultra-rapide et économique — questions simples, filtres rapides' },
+      { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', recommended: true,
+        desc: 'Meilleur rapport qualité/prix selon Anthropic — développement, analyse et génération de contenu',
+        tags: ['usage quotidien', 'développement', 'analyse'] },
+      { id: 'claude-opus-4-7', label: 'Opus 4.7',
+        desc: 'Modèle le plus puissant d\'Anthropic — raisonnement avancé, recherche approfondie, tâches complexes',
+        tags: ['analyse complexe', 'recherche', 'raisonnement'] },
+      { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',
+        desc: 'Le plus rapide et économique d\'Anthropic — questions simples, classification, résumés',
+        tags: ['rapide', 'économique', 'questions simples'] },
     ],
   },
   {
-    id: 'openai', label: 'GPT-4o', color: '#16A34A',
+    id: 'openai', label: 'GPT', color: '#16A34A',
     models: [
-      { id: 'gpt-4o',      label: 'GPT-4o',      speed: 2, recommended: true,
-        desc: 'Très capable et rapide — usage polyvalent' },
-      { id: 'gpt-4o-mini', label: 'GPT-4o mini', speed: 3,
-        desc: 'Rapide et économique — questions simples et filtres' },
-      { id: 'o1-mini',     label: 'o1 mini',      speed: 1,
-        desc: 'Raisonnement avancé — problèmes analytiques complexes' },
+      { id: 'gpt-4o', label: 'GPT-4o', recommended: true,
+        desc: 'Modèle phare d\'OpenAI — multimodal et polyvalent, recommandé pour la plupart des tâches',
+        tags: ['usage quotidien', 'polyvalent', 'multimodal'] },
+      { id: 'gpt-4o-mini', label: 'GPT-4o mini',
+        desc: 'Version légère et rapide d\'OpenAI — recommandée pour les tâches simples et les volumes importants',
+        tags: ['rapide', 'économique', 'volume'] },
+      { id: 'o1-mini', label: 'o1 mini',
+        desc: 'Modèle de raisonnement d\'OpenAI — analyse étape par étape, idéal pour les maths et les problèmes complexes',
+        tags: ['raisonnement', 'maths', 'développement'] },
     ],
   },
   {
     id: 'gemini', label: 'Gemini', color: '#2563EB',
     models: [
-      { id: 'gemini-2.0-flash', label: '2.0 Flash', speed: 3, recommended: true,
-        desc: 'Dernier modèle Flash — rapide et très performant' },
-      { id: 'gemini-1.5-pro',   label: '1.5 Pro',   speed: 2,
-        desc: 'Long contexte — grandes quantités de données' },
-      { id: 'gemini-1.5-flash', label: '1.5 Flash', speed: 3,
-        desc: 'Rapide et efficace — bon pour la majorité des requêtes' },
+      { id: 'gemini-2.0-flash', label: '2.0 Flash', recommended: true,
+        desc: 'Dernière génération Flash de Google — rapide, efficace et très bon pour l\'appel d\'outils',
+        tags: ['rapide', 'usage quotidien', 'outils'] },
+      { id: 'gemini-1.5-pro', label: '1.5 Pro',
+        desc: 'Contexte jusqu\'à 2 millions de tokens — idéal pour analyser de longs documents ou une base de code entière',
+        tags: ['contexte long', 'documents', 'développement'] },
+      { id: 'gemini-1.5-flash', label: '1.5 Flash',
+        desc: 'Flash équilibré de Google — rapide et efficace pour la grande majorité des requêtes',
+        tags: ['rapide', 'économique'] },
     ],
   },
   {
     id: 'copilot', label: 'Copilot', color: '#6e40c9',
     models: [
-      { id: 'gpt-4o',                     label: 'GPT-4o',           speed: 2, recommended: true,
-        desc: 'Copilot — GPT-4o via votre abonnement GitHub' },
-      { id: 'gpt-4o-mini',                label: 'GPT-4o mini',      speed: 3,
-        desc: 'Rapide et économique via Copilot' },
-      { id: 'gpt-5-mini',                 label: 'GPT-5 mini',       speed: 3,
-        desc: 'GPT-5 mini — rapide et efficace' },
-      { id: 'gpt-5.2',                    label: 'GPT-5.2',          speed: 2,
-        desc: 'GPT-5.2 via Copilot' },
-      { id: 'gpt-5.4',                    label: 'GPT-5.4',          speed: 2,
-        desc: 'GPT-5.4 via Copilot' },
-      { id: 'gpt-5.2-codex',              label: 'GPT-5.2 Codex',    speed: 2,
-        desc: 'GPT-5.2 Codex — optimisé pour le code' },
-      { id: 'gpt-5.3-codex',              label: 'GPT-5.3 Codex',    speed: 2,
-        desc: 'GPT-5.3 Codex — optimisé pour le code' },
-      { id: 'o1-mini',                    label: 'o1 mini',           speed: 1,
-        desc: 'Raisonnement avancé — analyses complexes via Copilot' },
-      { id: 'o3-mini',                    label: 'o3 mini',           speed: 1,
-        desc: 'Dernier modèle de raisonnement OpenAI via Copilot' },
-      { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', speed: 2,
-        desc: 'Claude 3.5 Sonnet (octobre 2024) via Copilot' },
-      { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', speed: 2,
-        desc: 'Claude 3.7 Sonnet via Copilot Business' },
-      { id: 'claude-sonnet-4-5',          label: 'Claude Sonnet 4.5', speed: 2,
-        desc: 'Claude Sonnet 4.5 via Copilot Business' },
-      { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6', speed: 2,
-        desc: 'Claude Sonnet 4.6 via Copilot Business' },
-      { id: 'claude-opus-4-5',            label: 'Claude Opus 4.5',   speed: 1,
-        desc: 'Claude Opus 4.5 — très puissant via Copilot' },
-      { id: 'claude-opus-4-6',            label: 'Claude Opus 4.6',   speed: 1,
-        desc: 'Claude Opus 4.6 — très puissant via Copilot' },
-      { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7',   speed: 1,
-        desc: 'Claude Opus 4.7 — le plus puissant via Copilot' },
-      { id: 'claude-haiku-4-5',           label: 'Claude Haiku 4.5',  speed: 3,
-        desc: 'Claude Haiku 4.5 — ultra-rapide via Copilot' },
-      { id: 'gemini-2.5-pro',             label: 'Gemini 2.5 Pro',    speed: 2,
-        desc: 'Gemini 2.5 Pro via Copilot' },
-      { id: 'gemini-3.1-pro',             label: 'Gemini 3.1 Pro',    speed: 2,
-        desc: 'Gemini 3.1 Pro via Copilot' },
-      { id: 'gemini-3-flash',             label: 'Gemini 3 Flash',     speed: 3,
-        desc: 'Gemini 3 Flash — rapide via Copilot' },
-      { id: 'grok-code-fast-1',           label: 'Grok Code Fast',     speed: 3,
-        desc: 'xAI Grok Code — optimisé pour le code via Copilot' },
+      { id: 'gpt-4o',                     label: 'GPT-4o',           recommended: true,
+        desc: 'GPT-4o polyvalent via Copilot Business — bon choix par défaut pour la plupart des tâches',
+        tags: ['usage quotidien', 'polyvalent'] },
+      { id: 'gpt-4o-mini',                label: 'GPT-4o mini',
+        desc: 'Rapide et économique via Copilot — adapté aux questions simples et aux tâches répétitives',
+        tags: ['rapide', 'économique'] },
+      { id: 'gpt-5-mini',                 label: 'GPT-5 mini',
+        desc: 'GPT-5 mini — nouvelle génération OpenAI, rapide et efficace',
+        tags: ['rapide', 'nouvelle génération'] },
+      { id: 'gpt-5.2',                    label: 'GPT-5.2',
+        desc: 'GPT-5.2 via Copilot — capacités avancées de la gamme GPT-5',
+        tags: ['polyvalent', 'GPT-5'] },
+      { id: 'gpt-5.4',                    label: 'GPT-5.4',
+        desc: 'GPT-5.4 — version la plus performante de la gamme GPT-5 via Copilot',
+        tags: ['puissant', 'GPT-5'] },
+      { id: 'gpt-5.2-codex',              label: 'GPT-5.2 Codex',
+        desc: 'Codex GPT-5.2 — spécialisé par OpenAI pour la compréhension et la génération de code',
+        tags: ['développement', 'technique'] },
+      { id: 'gpt-5.3-codex',              label: 'GPT-5.3 Codex',
+        desc: 'Codex GPT-5.3 — version améliorée du Codex, pour les tâches de développement avancées',
+        tags: ['développement', 'technique'] },
+      { id: 'o1-mini',                    label: 'o1 mini',
+        desc: 'Modèle de raisonnement d\'OpenAI — résolution de problèmes complexes par étapes',
+        tags: ['raisonnement', 'maths', 'développement'] },
+      { id: 'o3-mini',                    label: 'o3 mini',
+        desc: 'o3 mini — dernier modèle de raisonnement OpenAI, très performant sur les tâches analytiques',
+        tags: ['raisonnement', 'analyse'] },
+      { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet',
+        desc: 'Claude 3.5 Sonnet (oct. 2024) via Copilot — développement et analyse générale',
+        tags: ['développement', 'analyse'] },
+      { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet',
+        desc: 'Claude 3.7 Sonnet — alliance entre raisonnement approfondi et réponse rapide (Anthropic)',
+        tags: ['développement', 'raisonnement'] },
+      { id: 'claude-sonnet-4-5',          label: 'Claude Sonnet 4.5',
+        desc: 'Claude Sonnet 4.5 — quatrième génération Anthropic, développement et analyse',
+        tags: ['développement', 'analyse'] },
+      { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6',
+        desc: 'Claude Sonnet 4.6 — meilleur Sonnet d\'Anthropic disponible via Copilot Business',
+        tags: ['usage quotidien', 'développement'] },
+      { id: 'claude-opus-4-5',            label: 'Claude Opus 4.5',
+        desc: 'Claude Opus 4.5 — très puissant pour les tâches longues et complexes via Copilot',
+        tags: ['analyse complexe', 'raisonnement'] },
+      { id: 'claude-opus-4-6',            label: 'Claude Opus 4.6',
+        desc: 'Claude Opus 4.6 — encore plus puissant, recherche et synthèse avancées',
+        tags: ['analyse complexe', 'recherche'] },
+      { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7',
+        desc: 'Claude Opus 4.7 — le plus puissant d\'Anthropic disponible via Copilot',
+        tags: ['analyse complexe', 'recherche'] },
+      { id: 'claude-haiku-4-5',           label: 'Claude Haiku 4.5',
+        desc: 'Claude Haiku 4.5 — ultra-rapide et très économique via Copilot',
+        tags: ['rapide', 'économique'] },
+      { id: 'gemini-2.5-pro',             label: 'Gemini 2.5 Pro',
+        desc: 'Gemini 2.5 Pro via Copilot — grand contexte de Google, idéal pour les tâches complexes',
+        tags: ['contexte long', 'analyse'] },
+      { id: 'gemini-3.1-pro',             label: 'Gemini 3.1 Pro',
+        desc: 'Gemini 3.1 Pro — dernière génération Google, très performant',
+        tags: ['polyvalent', 'nouvelle génération'] },
+      { id: 'gemini-3-flash',             label: 'Gemini 3 Flash',
+        desc: 'Gemini 3 Flash — troisième génération Google, rapide via Copilot',
+        tags: ['rapide'] },
+      { id: 'grok-code-fast-1',           label: 'Grok Code Fast',
+        desc: 'xAI Grok Code — conçu par xAI pour la compréhension et la génération de code',
+        tags: ['développement', 'rapide'] },
     ],
   },
   {
     id: 'github', label: 'GitHub', color: '#24292f',
     models: [
-      { id: 'gpt-4o',                        label: 'GPT-4o',           speed: 2, recommended: true,
-        desc: 'GPT-4o via GitHub Models (inclus GitHub Free/Pro)' },
-      { id: 'gpt-4o-mini',                   label: 'GPT-4o mini',      speed: 3,
+      { id: 'gpt-4o',                        label: 'GPT-4o',           recommended: true,
+        desc: 'GPT-4o via GitHub Models — inclus dans les abonnements GitHub Free et Pro' },
+      { id: 'gpt-4o-mini',                   label: 'GPT-4o mini',
         desc: 'Ultra-rapide et économique via GitHub Models' },
-      { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5',       speed: 2,
-        desc: 'Claude via GitHub Models — bon équilibre qualité/vitesse' },
-      { id: 'claude-3-7-sonnet-20250219',    label: 'Claude 3.7',       speed: 2,
-        desc: 'Claude 3.7 Sonnet via GitHub Models' },
-      { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2 90B',   speed: 2,
-        desc: 'Open source Meta — alternative gratuite via GitHub Models' },
-      { id: 'Llama-3.1-405B-Instruct',       label: 'Llama 3.1 405B',  speed: 1,
-        desc: 'Le plus grand Llama open source — très capable' },
-      { id: 'mistral-large-2407',             label: 'Mistral Large',    speed: 2,
-        desc: 'Mistral Large via GitHub Models' },
-      { id: 'Phi-3.5-mini-instruct',          label: 'Phi-3.5 mini',    speed: 3,
-        desc: 'Modèle compact Microsoft — ultra-rapide pour les tâches simples' },
+      { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5',
+        desc: 'Claude 3.5 Sonnet via GitHub Models — bon équilibre entre qualité et vitesse' },
+      { id: 'claude-3-7-sonnet-20250219',    label: 'Claude 3.7',
+        desc: 'Claude 3.7 Sonnet via GitHub Models — raisonnement approfondi' },
+      { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2 90B',
+        desc: 'Open source Meta — alternative gratuite et performante via GitHub Models' },
+      { id: 'Llama-3.1-405B-Instruct',       label: 'Llama 3.1 405B',
+        desc: 'Le plus grand modèle Llama open source — très performant' },
+      { id: 'mistral-large-2407',             label: 'Mistral Large',
+        desc: 'Mistral Large via GitHub Models — modèle européen, efficace et polyvalent' },
+      { id: 'Phi-3.5-mini-instruct',          label: 'Phi-3.5 mini',
+        desc: 'Modèle compact de Microsoft — ultra-rapide pour les tâches simples' },
     ],
   },
 ]
@@ -413,8 +448,9 @@ export default function Assistant() {
       .filter(m => m.content)
     const prompt = `En utilisant le modèle de compte-rendu de réunion défini dans tes instructions (fichier meeting-minute.md), génère un compte-rendu structuré basé sur la conversation ci-dessus. Si aucun modèle n'est disponible, utilise un format professionnel standard avec : titre, date, participants, points discutés, décisions prises, actions de suivi avec responsables et échéances.`
     history.push({ role: 'user', content: prompt })
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', text: '📋 Générer le compte-rendu de réunion' }
-    const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', events: [], loading: true }
+    const crNow = Date.now()
+    const userMsg: Message = { id: String(crNow), role: 'user', text: '📋 Générer le compte-rendu de réunion', timestamp: crNow }
+    const assistantMsg: Message = { id: String(crNow + 1), role: 'assistant', events: [], loading: true }
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
     abortRef.current?.abort()
@@ -442,7 +478,12 @@ export default function Assistant() {
             setMessages(prev => {
               const msgs = [...prev]
               const last = msgs[msgs.length - 1]
-              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, events: [...(last.events ?? []), evt], loading: evt.type !== 'done' && evt.type !== 'error' }
+              if (last?.role === 'assistant') {
+                const extra = evt.type === 'done'
+                  ? { timestamp: Date.now(), inputTokens: evt.input_tokens, outputTokens: evt.output_tokens }
+                  : {}
+                msgs[msgs.length - 1] = { ...last, ...extra, events: [...(last.events ?? []), evt], loading: evt.type !== 'done' && evt.type !== 'error' }
+              }
               return msgs
             })
           } catch { /* skip malformed */ }
@@ -458,8 +499,9 @@ export default function Assistant() {
   const sendWithText = async (text: string, overrideVersion?: string) => {
     if (!text.trim() || streaming || profileId === null || !provider) return
 
-    const userMsg: Message      = { id: Date.now().toString(), role: 'user', text }
-    const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', events: [], loading: true }
+    const now = Date.now()
+    const userMsg: Message      = { id: String(now), role: 'user', text, timestamp: now }
+    const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true }
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
@@ -514,6 +556,12 @@ export default function Assistant() {
           if (!line.startsWith('data: ')) continue
           let evt: AiEvent
           try { evt = JSON.parse(line.slice(6)) } catch { continue }
+          if (evt.type === 'done') {
+            setMessages(prev => prev.map(m => m.id === assistantMsg.id
+              ? { ...m, timestamp: Date.now(), inputTokens: evt.input_tokens, outputTokens: evt.output_tokens }
+              : m
+            ))
+          }
           if (evt.type !== 'end') appendEvent(assistantMsg.id, evt)
         }
       }
@@ -739,7 +787,23 @@ export default function Assistant() {
                 </span>
               )}
 
-              {/* Action buttons */}
+            </>
+          )}
+        </div>
+
+        {/* Row 3 — Conversation actions (only when there's something to act on) */}
+        {(messages.length > 0 || (convKey && (savedConvs[convKey] ?? []).length > 0)) && (
+          <>
+            <div style={{ height: 1, background: t.border }} />
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '7px 10px',
+              background: t.bgMuted,
+              borderRadius: `0 0 ${t.radiusLg} ${t.radiusLg}`,
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: t.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 2 }}>
+                Conversation
+              </span>
               {messages.length > 0 && (
                 <>
                   <button className="btn btn-ghost btn-sm" onClick={makeMeetingMinute} disabled={streaming}
@@ -759,9 +823,9 @@ export default function Assistant() {
                   🕐 Historique ({(savedConvs[convKey] ?? []).length})
                 </button>
               )}
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Sources warning banner */}
@@ -867,8 +931,8 @@ export default function Assistant() {
 
         {messages.map(msg => (
           msg.role === 'user'
-            ? <UserBubble key={msg.id} text={msg.text ?? ''} />
-            : <AssistantBubble key={msg.id} events={msg.events ?? []} loading={msg.loading} provider={provider} />
+            ? <UserBubble key={msg.id} text={msg.text ?? ''} timestamp={msg.timestamp} />
+            : <AssistantBubble key={msg.id} events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -1057,7 +1121,6 @@ function ModelDropdown({ provider, selected, onChange }: {
         color: provider.color, fontWeight: 600,
       }}>
         <span>{current.label}</span>
-        <span style={{ opacity: .6 }}>{'⚡'.repeat(current.speed)}</span>
         {current.recommended && <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>}
         <span style={{ fontSize: 9, color: t.muted, marginLeft: 2 }}>▼</span>
       </button>
@@ -1084,7 +1147,6 @@ function ModelDropdown({ provider, selected, onChange }: {
                 <span style={{ fontWeight: 600, fontSize: 13, color: m.id === selected ? provider.color : t.text }}>
                   {m.label}
                 </span>
-                <span style={{ fontSize: 11, opacity: .7 }}>{'⚡'.repeat(m.speed)}</span>
                 {m.recommended && (
                   <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700, marginLeft: 2 }}>
                     Recommandé
@@ -1092,6 +1154,17 @@ function ModelDropdown({ provider, selected, onChange }: {
                 )}
               </div>
               <div style={{ fontSize: 11, color: t.muted }}>{m.desc}</div>
+              {m.tags && m.tags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
+                  {m.tags.map(tag => (
+                    <span key={tag} style={{
+                      fontSize: 9, padding: '1px 6px', borderRadius: 10,
+                      background: `${provider.color}18`, color: provider.color,
+                      border: `1px solid ${provider.color}30`, fontWeight: 600,
+                    }}>{tag}</span>
+                  ))}
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -1191,26 +1264,54 @@ function VersionDropdown({ value, onChange, versions, sourcesStatus = {} }: {
 
 // ── Bubbles ──────────────────────────────────────────────────
 
-function UserBubble({ text }: { text: string }) {
+function fmtTime(ts?: number) {
+  if (!ts) return null
+  const d = new Date(ts)
+  return d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })
+}
+
+function fmtTokens(input?: number, output?: number) {
+  if (!input && !output) return null
+  const total = (input ?? 0) + (output ?? 0)
+  const parts = []
+  if (input)  parts.push(`↑${input.toLocaleString()}`)
+  if (output) parts.push(`↓${output.toLocaleString()}`)
+  return `${total.toLocaleString()} tokens (${parts.join(' · ')})`
+}
+
+function UserBubble({ text, timestamp }: { text: string; timestamp?: number }) {
+  const time = fmtTime(timestamp)
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-      <div style={{
-        maxWidth: '78%', padding: '10px 14px',
-        background: t.brand, color: '#fff',
-        borderRadius: `${t.radiusLg} ${t.radiusLg} 4px ${t.radiusLg}`,
-        fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap',
-      }}>
-        {text}
+      <div style={{ maxWidth: '78%' }}>
+        <div style={{
+          padding: '10px 14px',
+          background: t.brand, color: '#fff',
+          borderRadius: `${t.radiusLg} ${t.radiusLg} 4px ${t.radiusLg}`,
+          fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+        }}>
+          {text}
+        </div>
+        {time && (
+          <div style={{ textAlign: 'right', fontSize: 10, color: t.muted, marginTop: 3, paddingRight: 2 }}>
+            {time}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loading?: boolean; provider: string }) {
+function AssistantBubble({ events, loading, provider, timestamp, inputTokens, outputTokens }: {
+  events: AiEvent[]; loading?: boolean; provider: string
+  timestamp?: number; inputTokens?: number; outputTokens?: number
+}) {
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt   = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
   const errorEvt  = events.find(e => e.type === 'error')
+  const time   = fmtTime(timestamp)
+  const tokens = fmtTokens(inputTokens, outputTokens)
 
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -1251,6 +1352,13 @@ function AssistantBubble({ events, loading, provider }: { events: AiEvent[]; loa
             <span style={{ animation: 'pulse 1s infinite' }}>⟳</span> Réflexion en cours…
           </div>
         )}
+
+        {(time || tokens) && !loading && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 10, color: t.muted, paddingLeft: 2 }}>
+            {time && <span>{time}</span>}
+            {tokens && <span title="Tokens utilisés (entrée ↑ + sortie ↓)">{tokens}</span>}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1265,19 +1373,51 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
       icon: app ? app.icon : '🗄️',
       appName: app ? prefix : null,
       color: app ? app.color : '#64748b',
-      label: model || 'query_odoo',
+      loadingLabel: model ? `Interrogation de ${model}…` : 'Interrogation Odoo…',
+      doneLabel: model || 'Odoo',
+    }
+  }
+  if (name === 'count_odoo') {
+    const model = (args?.model as string) ?? ''
+    return {
+      icon: '🔢', appName: null, color: '#0891b2',
+      loadingLabel: model ? `Comptage de ${model}…` : 'Comptage…',
+      doneLabel: model ? `Comptage ${model}` : 'Comptage',
+    }
+  }
+  if (name === 'get_odoo_fields') {
+    const model = (args?.model as string) ?? ''
+    return {
+      icon: '🔬', appName: null, color: '#059669',
+      loadingLabel: model ? `Découverte des champs de ${model}…` : 'Découverte des champs…',
+      doneLabel: model ? `Champs ${model}` : 'Champs',
     }
   }
   if (name === 'search_odoo_source') {
     const ver = args?.version as string
-    return { icon: '🔎', appName: null, color: '#2563EB', label: ver ? `Sources v${ver}` : 'Sources Odoo' }
+    const pat = args?.pattern as string ?? ''
+    const shortPat = pat.length > 30 ? pat.slice(0, 30) + '…' : pat
+    return {
+      icon: '🔎', appName: null, color: '#2563EB',
+      loadingLabel: `Recherche dans les sources${ver ? ` v${ver}` : ''}…`,
+      doneLabel: ver ? `Sources v${ver}` : 'Sources Odoo',
+      hint: shortPat || undefined,
+    }
   }
   if (name === 'read_odoo_file') {
-    const path = args?.path as string ?? ''
+    const path = (args?.path as string) ?? ''
     const file = path.split('/').pop() ?? 'fichier'
-    return { icon: '📄', appName: null, color: '#7C3AED', label: file }
+    return {
+      icon: '📄', appName: null, color: '#7C3AED',
+      loadingLabel: `Lecture de ${file}…`,
+      doneLabel: file,
+    }
   }
-  return { icon: '🔧', appName: null, color: '#64748b', label: name }
+  return {
+    icon: '🔧', appName: null, color: '#64748b',
+    loadingLabel: `${name}…`,
+    doneLabel: name,
+  }
 }
 
 function ToolCallGroup({ events }: { events: AiEvent[] }) {
@@ -1285,10 +1425,22 @@ function ToolCallGroup({ events }: { events: AiEvent[] }) {
   const calls   = events.filter(e => e.type === 'tool_call')
   const results = events.filter(e => e.type === 'tool_result')
 
+  // Deduplicate: group calls by tool name + key argument (version for sources, model for odoo)
+  const dedupedCalls = calls.reduce<{ call: AiEvent; count: number; key: string }[]>((acc, c) => {
+    const key = c.name === 'search_odoo_source'
+      ? `search_odoo_source:${c.args?.version ?? ''}`
+      : c.name === 'query_odoo'
+      ? `query_odoo:${c.args?.model ?? ''}`
+      : `${c.name}`
+    const existing = acc.find(a => a.key === key)
+    if (existing) { existing.count++; return acc }
+    return [...acc, { call: c, count: 1, key }]
+  }, [])
+
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: open ? 8 : 0 }}>
-        {calls.map((c, idx) => {
+        {dedupedCalls.map(({ call: c, count }, idx) => {
           const meta = getToolMeta(c.name!, c.args)
           const res  = results.find(r => r.name === c.name)
           const done = !!res
@@ -1300,50 +1452,68 @@ function ToolCallGroup({ events }: { events: AiEvent[] }) {
               onClick={() => hasRecords && setOpen(p => !p)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: done ? `${meta.color}12` : `${meta.color}08`,
-                border: `1px solid ${done ? `${meta.color}40` : `${meta.color}25`}`,
-                borderRadius: t.radiusFull, padding: '4px 10px 4px 6px',
+                background: done ? `${meta.color}12` : `${meta.color}06`,
+                border: `1px solid ${done ? `${meta.color}45` : `${meta.color}30`}`,
+                borderRadius: t.radiusFull, padding: '5px 12px 5px 8px',
                 cursor: hasRecords ? 'pointer' : 'default',
-                fontSize: 11, color: meta.color, fontWeight: 600,
-                transition: 'all .2s',
+                fontSize: 12, color: done ? meta.color : t.textSub, fontWeight: done ? 600 : 500,
+                transition: 'all .2s', maxWidth: 340,
               }}
             >
-              {/* Odoo O badge */}
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 18, height: 18, borderRadius: '50%',
-                background: meta.color, color: '#fff', fontSize: 9, fontWeight: 800,
-                flexShrink: 0,
-                animation: done ? 'none' : 'toolPulse 1.2s ease-in-out infinite',
-              }}>
-                {c.name === 'query_odoo' ? 'O' : c.name === 'search_odoo_source' ? '⌕' : '◈'}
+              {/* Status dot / spinner */}
+              {done ? (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 18, height: 18, borderRadius: '50%',
+                  background: meta.color, color: '#fff', fontSize: 9, fontWeight: 800, flexShrink: 0,
+                }}>
+                  {c.name === 'query_odoo' || c.name === 'count_odoo' ? 'O'
+                    : c.name === 'search_odoo_source' ? '⌕'
+                    : c.name === 'get_odoo_fields' ? '≡'
+                    : c.name === 'read_odoo_file' ? '§'
+                    : '◈'}
+                </span>
+              ) : (
+                <span style={{
+                  display: 'inline-block', flexShrink: 0,
+                  width: 14, height: 14, borderRadius: '50%',
+                  border: `2px solid ${meta.color}`, borderTopColor: 'transparent',
+                  animation: 'toolSpin .6s linear infinite',
+                }} />
+              )}
+
+              {/* App icon when done */}
+              {done && meta.appName && <OdooAppIcon name={meta.appName} size={13} />}
+              {done && !meta.appName && <span style={{ fontSize: 12, flexShrink: 0 }}>{meta.icon}</span>}
+
+              {/* Label */}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {done ? meta.doneLabel : meta.loadingLabel}
               </span>
 
-              {/* App icon */}
-              {meta.appName
-                ? <OdooAppIcon name={meta.appName} size={14} />
-                : <span style={{ fontSize: 12 }}>{meta.icon}</span>
-              }
-
-              <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {meta.label}
-              </span>
-
-              {/* Result count */}
+              {/* Count badge */}
               {done && res!.count !== undefined && (
                 <span style={{
-                  background: `${meta.color}25`, borderRadius: 9999,
-                  padding: '1px 6px', fontSize: 10,
+                  background: `${meta.color}28`, borderRadius: 9999,
+                  padding: '1px 7px', fontSize: 10, fontWeight: 700, flexShrink: 0,
                 }}>
                   {res!.count}
                 </span>
               )}
 
-              {/* State indicator */}
-              {done ? (
-                <span style={{ fontSize: 10, opacity: .7 }}>✓{hasRecords ? (open ? ' ▲' : ' ▼') : ''}</span>
-              ) : (
-                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: `2px solid ${meta.color}`, borderTopColor: 'transparent', animation: 'toolSpin .6s linear infinite', flexShrink: 0 }} />
+              {/* Deduplicated call count */}
+              {count > 1 && (
+                <span title={`${count} appels`} style={{
+                  background: `${meta.color}22`, borderRadius: 9999,
+                  padding: '1px 5px', fontSize: 10, flexShrink: 0,
+                }}>×{count}</span>
+              )}
+
+              {/* Expand/done indicator */}
+              {done && (
+                <span style={{ fontSize: 10, color: t.muted, flexShrink: 0 }}>
+                  {hasRecords ? (open ? '▲' : '▼') : '✓'}
+                </span>
               )}
             </button>
           )
