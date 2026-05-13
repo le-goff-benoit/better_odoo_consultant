@@ -694,6 +694,11 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+const sectionLabel: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+  letterSpacing: '0.06em', color: '#64748b', marginBottom: 7,
+}
+
 type EnvModalState = { mode: 'add' } | { mode: 'edit'; env: EnvEntry }
 const EMPTY_ENV_FORM = { id: '', name: '', db_url: '', db_name: '', login: '', api_key: '', odoo_version: '', branch: '' }
 
@@ -902,7 +907,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
 
         {/* ── App badges ── */}
         {apps.length > 0 && (
-          <div style={{ paddingTop: 12, borderTop: `1px solid ${t.borderLight}` }}>
+          <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
+            <div style={sectionLabel}>Applications</div>
             <AppBadges apps={apps} max={6} />
           </div>
         )}
@@ -910,9 +916,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
         {/* ── Multi-company selector ── */}
         {companies.length > 1 && (
           <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: t.muted, marginBottom: 6 }}>
-              Société active dans l'assistant
-            </div>
+            <div style={sectionLabel}>Société active</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {companies.map(c => {
                 const isActive = (profile.selected_company_id ?? companies[0]?.id) === c.id
@@ -938,9 +942,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
         {/* ── Environments ── */}
         <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: t.muted }}>
-              Environnements
-            </span>
+            <span style={sectionLabel as React.CSSProperties}>Environnements</span>
             <button onClick={openAddEnv} title="Ajouter un environnement"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.action, fontSize: 13, padding: '0 2px', lineHeight: 1, fontWeight: 700 }}>
               +
@@ -979,6 +981,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
 
         {/* ── Footer ── */}
         <div style={{ marginTop: 'auto', paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
+          <div style={sectionLabel}>
+            {(profile.odoo_sh_url || ghUrl) ? 'Liens & actions' : 'Actions'}
+          </div>
           {/* External links */}
           {(profile.odoo_sh_url || ghUrl) && (
             <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
