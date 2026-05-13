@@ -1010,7 +1010,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                     </span>
                   )}
                   {env.github_repo && (
-                    <span title={`Dépôt : ${env.github_repo}`} style={{ fontSize: 10, opacity: isActive ? 0.8 : 0.6 }}>🐙</span>
+                    <span title={`Dépôt : ${env.github_repo}`} style={{ fontSize: 10, opacity: isActive ? 0.8 : 0.6 }}>⎇</span>
                   )}
                 </button>
               )
@@ -1027,7 +1027,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
           {(profile.odoo_sh_url || ghUrl) && (
             <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
               {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
-              {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="🐙" color="#24292f" />}
+              {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="⎇" color="#24292f" />}
             </div>
           )}
           {/* Action buttons */}

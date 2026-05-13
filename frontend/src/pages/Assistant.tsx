@@ -840,7 +840,7 @@ export default function Assistant() {
                     border: `1px solid ${t.brand40}`,
                     cursor: 'help', display: 'inline-flex', alignItems: 'center', gap: 4,
                   }}>
-                  🐙 {activeEnvRepo.split('/')[1] ?? activeEnvRepo}
+                  ⎇ {activeEnvRepo.split('/')[1] ?? activeEnvRepo}
                 </span>
               )}
 
