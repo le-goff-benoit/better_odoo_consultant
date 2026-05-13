@@ -78,7 +78,7 @@ export default function Sources() {
   const [showAddForm,  setShowAddForm]  = useState(false)
   const [customInput,  setCustomInput]  = useState('')
 
-  const { data: sshData,  refetch: recheckSsh } = useQuery({ queryKey: ['github-ssh'], queryFn: testGithubSsh, retry: false })
+  const { data: sshData,  refetch: recheckSsh, isLoading: sshLoading } = useQuery({ queryKey: ['github-ssh'], queryFn: testGithubSsh, retry: false })
   const { data: keysData }                       = useQuery({ queryKey: ['ssh-keys'],   queryFn: listSshKeys,   retry: false })
   const { data: allStatus, isLoading: statusLoading } = useQuery({
     queryKey: ['sources-status'],
@@ -288,7 +288,17 @@ export default function Sources() {
       />
 
       {/* SSH banner */}
-      {sshOk ? (
+      {sshLoading ? (
+        <div style={{ ...bannerStyle(t.border), color: t.muted }}>
+          <span style={{ fontSize: 18, opacity: .5 }}>🔑</span>
+          <div>
+            <strong style={{ color: t.muted }}>Vérification de la clé SSH…</strong>
+            <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
+              Connexion à GitHub en cours
+            </div>
+          </div>
+        </div>
+      ) : sshOk ? (
         <div style={bannerStyle(t.success)}>
           <span style={{ fontSize: 18 }}>🔑</span>
           <div>
