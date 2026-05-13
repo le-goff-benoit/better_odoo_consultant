@@ -666,6 +666,7 @@ export default function Assistant() {
         marginBottom: 12, flexShrink: 0,
         boxShadow: t.shadow,
         overflow: 'visible',
+        position: 'relative', zIndex: 50,
       }}>
 
         {/* ── Row 1 : Project tabs ── */}
@@ -868,7 +869,7 @@ export default function Assistant() {
       <div style={{ flex: 1, display: 'flex', gap: 12, overflow: 'hidden' }}>
 
       {/* Chat history */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', zIndex: 0 }}>
 
         {messages.length === 0 && isGeneralMode && (
           <div style={{ marginTop: 16 }}>
