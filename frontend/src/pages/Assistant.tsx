@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getProfileApps } from '../api/client'
@@ -641,6 +641,14 @@ export default function Assistant() {
     setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
   }
 
+  const convActionStyle: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '4px 10px', fontSize: 12, fontWeight: 500,
+    background: 'none', border: `1px solid ${t.border}`, borderRadius: t.radius,
+    color: t.textSub, cursor: 'pointer', transition: 'all .15s',
+    whiteSpace: 'nowrap',
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxWidth: 900 }}>
 
@@ -650,39 +658,56 @@ export default function Assistant() {
         action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}>⚙ Paramètres</Link>}
       />
 
-      {/* ── Unified context bar ── */}
+      {/* ── Context bar ── */}
       <div style={{
-        background: t.bgCard, border: `1px solid ${t.border}`,
-        borderRadius: t.radiusLg, marginBottom: 12, flexShrink: 0,
+        background: t.bgCard,
+        border: `1px solid ${t.border}`,
+        borderRadius: t.radiusLg,
+        marginBottom: 12, flexShrink: 0,
+        boxShadow: t.shadow,
+        overflow: 'hidden',
       }}>
 
-        {/* Row 1 — Project tabs + Version */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', flexWrap: 'wrap' }}>
+        {/* ── Row 1 : Project tabs ── */}
+        <div style={{
+          display: 'flex', alignItems: 'stretch', gap: 0,
+          padding: '0 12px',
+          background: t.bg,
+          borderBottom: `1px solid ${t.border}`,
+          overflowX: 'auto',
+        }}>
           {/* General tab */}
           {(() => {
             const isActive = isGeneralMode
             const msgCount = (conversations[GENERAL_KEY] ?? []).filter(m => m.role === 'user').length
             return (
               <button onClick={() => setProfileId(GENERAL_KEY)} style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '4px 11px',
-                background: isActive ? '#6366f115' : 'transparent',
-                border: `1px solid ${isActive ? '#6366f1' : t.border}`,
-                borderRadius: t.radiusFull,
-                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '10px 14px',
+                background: 'none', border: 'none',
+                borderBottom: `2px solid ${isActive ? '#6366f1' : 'transparent'}`,
+                fontSize: 13, fontWeight: isActive ? 700 : 400,
                 color: isActive ? '#6366f1' : t.muted,
-                cursor: 'pointer', transition: 'all .15s',
+                cursor: 'pointer', transition: 'color .15s, border-color .15s',
+                whiteSpace: 'nowrap', flexShrink: 0,
               }}>
                 🌐 Odoo Général
                 {msgCount > 0 && (
                   <span style={{
-                    background: isActive ? '#6366f1' : t.borderLight, color: isActive ? '#fff' : t.muted,
-                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700, padding: '1px 5px',
+                    background: isActive ? '#6366f1' : t.border,
+                    color: isActive ? '#fff' : t.muted,
+                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700, padding: '1px 6px',
+                    lineHeight: '16px',
                   }}>{msgCount}</span>
                 )}
               </button>
             )
           })()}
+
+          {/* Separator dot */}
+          {profiles.length > 0 && (
+            <span style={{ alignSelf: 'center', color: t.borderLight, fontSize: 16, userSelect: 'none', padding: '0 2px' }}>│</span>
+          )}
 
           {/* Project tabs */}
           {profiles.map(p => {
@@ -690,24 +715,26 @@ export default function Assistant() {
             const isActive = p.id === profileId
             return (
               <button key={p.id} onClick={() => setProfileId(p.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '4px 11px',
-                background: isActive ? t.brand20 : 'transparent',
-                border: `1px solid ${isActive ? t.brand40 : t.border}`,
-                borderRadius: t.radiusFull,
-                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '10px 14px',
+                background: 'none', border: 'none',
+                borderBottom: `2px solid ${isActive ? t.brand : 'transparent'}`,
+                fontSize: 13, fontWeight: isActive ? 700 : 400,
                 color: isActive ? t.brand : t.muted,
-                cursor: 'pointer', transition: 'all .15s',
+                cursor: 'pointer', transition: 'color .15s, border-color .15s',
+                whiteSpace: 'nowrap', flexShrink: 0,
               }}>
                 {p.company_logo
-                  ? <img src={p.company_logo} alt="" style={{ width: 14, height: 14, objectFit: 'contain', borderRadius: 2 }} />
-                  : <span style={{ fontSize: 11 }}>🏢</span>
+                  ? <img src={p.company_logo} alt="" style={{ width: 15, height: 15, objectFit: 'contain', borderRadius: 2 }} />
+                  : <span style={{ fontSize: 12 }}>🏢</span>
                 }
                 {p.name}
                 {msgCount > 0 && (
                   <span style={{
-                    background: isActive ? t.brand : t.borderLight, color: isActive ? '#fff' : t.muted,
-                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700, padding: '1px 5px',
+                    background: isActive ? t.brand : t.border,
+                    color: isActive ? '#fff' : t.muted,
+                    borderRadius: t.radiusFull, fontSize: 10, fontWeight: 700, padding: '1px 6px',
+                    lineHeight: '16px',
                   }}>{msgCount}</span>
                 )}
               </button>
@@ -716,31 +743,30 @@ export default function Assistant() {
 
           <div style={{ flex: 1 }} />
 
-          {/* Version — dropdown (general) or badge (project) */}
-          {isGeneralMode ? (
-            <VersionDropdown
-              value={generalVersion}
-              onChange={setGeneralVersion}
-              versions={installedVersions}
-              sourcesStatus={sourcesStatus}
-            />
-          ) : activeVersion ? (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '4px 11px', borderRadius: t.radiusFull, fontSize: 12, fontWeight: 600,
-              background: t.brand20, border: `1px solid ${t.brand40}`, color: t.brand,
-            }}>
-              Odoo {activeVersion}
-              <span style={{ fontSize: 10, color: t.muted, fontWeight: 400 }}>projet</span>
-            </span>
-          ) : null}
+          {/* Version badge / dropdown — right-aligned, vertically centered */}
+          <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
+            {isGeneralMode ? (
+              <VersionDropdown
+                value={generalVersion}
+                onChange={setGeneralVersion}
+                versions={installedVersions}
+                sourcesStatus={sourcesStatus}
+              />
+            ) : activeVersion ? (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 10px', borderRadius: t.radiusFull, fontSize: 11, fontWeight: 600,
+                background: t.brand20, border: `1px solid ${t.brand40}`, color: t.brand,
+              }}>
+                Odoo {activeVersion}
+                <span style={{ fontSize: 10, color: t.muted, fontWeight: 400 }}>projet</span>
+              </span>
+            ) : null}
+          </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: t.border }} />
-
-        {/* Row 2 — Model + Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', flexWrap: 'wrap' }}>
+        {/* ── Row 2 : AI config + conversation actions ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', flexWrap: 'wrap' }}>
           {configuredProviders.length === 0 ? (
             <div style={{ fontSize: 13, color: t.muted }}>
               Aucun fournisseur IA configuré —{' '}
@@ -768,64 +794,64 @@ export default function Assistant() {
 
               <div style={{ flex: 1 }} />
 
-              {/* Sources badge (project mode) */}
+              {/* Sources badge */}
               {selectedProfile && !isGeneralMode && activeVersion && (
                 <span
                   title={sourcesInstalled
-                    ? `Code source Odoo ${activeVersion} installé${communityInstalled && enterpriseInstalled ? ' (Community + Enterprise)' : communityInstalled ? ' (Community)' : ' (Enterprise)'}`
-                    : `Code source Odoo ${activeVersion} non installé — les questions sur le code source ne fonctionneront pas`}
+                    ? `Code source Odoo ${activeVersion} installé`
+                    : `Sources Odoo ${activeVersion} non installées`}
                   style={{
-                    fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: t.radiusFull,
+                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
                     background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
                     color: sourcesInstalled ? t.success : '#b45309',
                     border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
                     cursor: 'help',
                   }}>
                   {sourcesInstalled
-                    ? `Sources v${activeVersion} ✓${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' C' : ' E'}`
-                    : `⚠ Sources v${activeVersion} manquantes`}
+                    ? `✓ Sources v${activeVersion}${communityInstalled && enterpriseInstalled ? ' · C+E' : communityInstalled ? ' · C' : ' · E'}`
+                    : `⚠ Sources v${activeVersion}`}
                 </span>
               )}
 
+              {/* Conversation action buttons */}
+              {(messages.length > 0 || (convKey && (savedConvs[convKey] ?? []).length > 0)) && (
+                <div style={{
+                  display: 'flex', gap: 4, alignItems: 'center',
+                  paddingLeft: 8,
+                  borderLeft: `1px solid ${t.border}`,
+                }}>
+                  {messages.length > 0 && (
+                    <>
+                      <button
+                        onClick={makeMeetingMinute} disabled={streaming}
+                        title="Générer un compte-rendu structuré de cette conversation"
+                        style={convActionStyle}>
+                        📝 <span>Compte-rendu</span>
+                      </button>
+                      <button
+                        onClick={resetCurrentConversation}
+                        title="Démarrer une nouvelle conversation"
+                        style={convActionStyle}>
+                        ✚ <span>Nouvelle</span>
+                      </button>
+                    </>
+                  )}
+                  {convKey && (savedConvs[convKey] ?? []).length > 0 && (
+                    <button
+                      onClick={() => setShowHistory(h => !h)}
+                      title={`${(savedConvs[convKey] ?? []).length} conversation(s) sauvegardée(s)`}
+                      style={{
+                        ...convActionStyle,
+                        ...(showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}),
+                      }}>
+                      🕐 <span>{(savedConvs[convKey] ?? []).length}</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
-
-        {/* Row 3 — Conversation actions (only when there's something to act on) */}
-        {(messages.length > 0 || (convKey && (savedConvs[convKey] ?? []).length > 0)) && (
-          <>
-            <div style={{ height: 1, background: t.border }} />
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '7px 10px',
-              background: t.bgMuted,
-              borderRadius: `0 0 ${t.radiusLg} ${t.radiusLg}`,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: t.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 2 }}>
-                Conversation
-              </span>
-              {messages.length > 0 && (
-                <>
-                  <button className="btn btn-ghost btn-sm" onClick={makeMeetingMinute} disabled={streaming}
-                    title="Générer un compte-rendu structuré de cette conversation">
-                    📝 Compte-rendu
-                  </button>
-                  <button className="btn btn-ghost btn-sm" onClick={resetCurrentConversation}
-                    title="Démarrer une nouvelle conversation (sauvegarde automatique de l'actuelle)">
-                    🗒️ Nouvelle conv.
-                  </button>
-                </>
-              )}
-              {convKey && (savedConvs[convKey] ?? []).length > 0 && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setShowHistory(h => !h)}
-                  title={`${(savedConvs[convKey] ?? []).length} conversation(s) sauvegardée(s)`}
-                  style={showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}}>
-                  🕐 Historique ({(savedConvs[convKey] ?? []).length})
-                </button>
-              )}
-            </div>
-          </>
-        )}
       </div>
 
       {/* Sources warning banner */}
@@ -1347,9 +1373,31 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           </div>
         )}
 
-        {loading && !textEvt && !errorEvt && toolEvents.length === 0 && (
-          <div style={{ color: t.muted, fontSize: 13, padding: '8px 0' }}>
-            <span style={{ animation: 'pulse 1s infinite' }}>⟳</span> Réflexion en cours…
+        {loading && !textEvt && !errorEvt && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            marginTop: toolEvents.length > 0 ? 10 : 0,
+            padding: '10px 16px',
+            background: t.bgMuted,
+            border: `1px solid ${t.border}`,
+            borderRadius: t.radiusLg,
+            fontSize: 13, color: t.textSub,
+          }}>
+            {/* Animated dots */}
+            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+              {[0, 1, 2].map(i => (
+                <span key={i} style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: t.brand,
+                  display: 'inline-block',
+                  animation: `toolPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+                  opacity: 0.7,
+                }} />
+              ))}
+            </span>
+            <span style={{ fontWeight: 500 }}>
+              {toolEvents.length > 0 ? 'Analyse des résultats et rédaction de la réponse…' : 'Réflexion en cours…'}
+            </span>
           </div>
         )}
 
