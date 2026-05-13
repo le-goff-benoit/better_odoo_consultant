@@ -5,6 +5,7 @@ import { listProfiles, checkAllSources, getAiProviders, getModelConfig } from '.
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
+import { PROVIDERS } from '../constants/providers'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -56,85 +57,6 @@ interface Message {
   outputTokens?: number
 }
 
-interface ModelDef { id: string; label: string; desc: string; tags?: string[]; recommended?: boolean }
-
-// ── PROVIDERS ─────────────────────────────────────────────────────
-
-const PROVIDERS: { id: string; label: string; color: string; models: ModelDef[] }[] = [
-  {
-    id: 'claude', label: 'Claude', color: '#D97706',
-    models: [
-      { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', recommended: true,
-        desc: 'Meilleur rapport qualité/prix selon Anthropic — développement, analyse et génération de contenu',
-        tags: ['usage quotidien', 'développement', 'analyse'] },
-      { id: 'claude-opus-4-7', label: 'Opus 4.7',
-        desc: 'Modèle le plus puissant d\'Anthropic — raisonnement avancé, recherche approfondie, tâches complexes',
-        tags: ['analyse complexe', 'recherche', 'raisonnement'] },
-      { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',
-        desc: 'Le plus rapide et économique d\'Anthropic — questions simples, classification, résumés',
-        tags: ['rapide', 'économique', 'questions simples'] },
-    ],
-  },
-  {
-    id: 'openai', label: 'GPT', color: '#16A34A',
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o', recommended: true,
-        desc: 'Modèle phare d\'OpenAI — multimodal et polyvalent, recommandé pour la plupart des tâches',
-        tags: ['usage quotidien', 'polyvalent', 'multimodal'] },
-      { id: 'gpt-4o-mini', label: 'GPT-4o mini',
-        desc: 'Version légère et rapide d\'OpenAI — recommandée pour les tâches simples et les volumes importants',
-        tags: ['rapide', 'économique', 'volume'] },
-      { id: 'o1-mini', label: 'o1 mini',
-        desc: 'Modèle de raisonnement d\'OpenAI — analyse étape par étape, idéal pour les maths et les problèmes complexes',
-        tags: ['raisonnement', 'maths', 'développement'] },
-    ],
-  },
-  {
-    id: 'gemini', label: 'Gemini', color: '#2563EB',
-    models: [
-      { id: 'gemini-2.0-flash', label: '2.0 Flash', recommended: true,
-        desc: 'Dernière génération Flash de Google — rapide, efficace et très bon pour l\'appel d\'outils',
-        tags: ['rapide', 'usage quotidien', 'outils'] },
-      { id: 'gemini-1.5-pro', label: '1.5 Pro',
-        desc: 'Contexte jusqu\'à 2 millions de tokens — idéal pour analyser de longs documents ou une base de code entière',
-        tags: ['contexte long', 'documents', 'développement'] },
-      { id: 'gemini-1.5-flash', label: '1.5 Flash',
-        desc: 'Flash équilibré de Google — rapide et efficace pour la grande majorité des requêtes',
-        tags: ['rapide', 'économique'] },
-    ],
-  },
-  {
-    id: 'copilot', label: 'Copilot', color: '#6e40c9',
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o', recommended: true,
-        desc: 'GPT-4o polyvalent via Copilot Business — bon choix par défaut pour la plupart des tâches',
-        tags: ['usage quotidien', 'polyvalent'] },
-      { id: 'gpt-4o-mini', label: 'GPT-4o mini',
-        desc: 'Rapide et économique via Copilot — adapté aux questions simples et aux tâches répétitives',
-        tags: ['rapide', 'économique'] },
-      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6',
-        desc: 'Claude Sonnet 4.6 — meilleur Sonnet d\'Anthropic disponible via Copilot Business',
-        tags: ['usage quotidien', 'développement'] },
-      { id: 'claude-opus-4-7', label: 'Claude Opus 4.7',
-        desc: 'Claude Opus 4.7 — le plus puissant d\'Anthropic disponible via Copilot',
-        tags: ['analyse complexe', 'recherche'] },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro',
-        desc: 'Gemini 2.5 Pro via Copilot — grand contexte de Google, idéal pour les tâches complexes',
-        tags: ['contexte long', 'analyse'] },
-    ],
-  },
-  {
-    id: 'github', label: 'GitHub', color: '#24292f',
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o', recommended: true,
-        desc: 'GPT-4o via GitHub Models — inclus dans les abonnements GitHub Free et Pro' },
-      { id: 'gpt-4o-mini', label: 'GPT-4o mini',
-        desc: 'Ultra-rapide et économique via GitHub Models' },
-      { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7',
-        desc: 'Claude 3.7 Sonnet via GitHub Models — raisonnement approfondi' },
-    ],
-  },
-]
 
 const SUGGESTIONS_MIGRATION = [
   'Quels champs ont changé sur sale.order entre les deux versions ?',
