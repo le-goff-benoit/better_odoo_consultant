@@ -830,9 +830,9 @@ export default function Assistant() {
                       </button>
                       <button
                         onClick={resetCurrentConversation}
-                        title="Démarrer une nouvelle conversation"
+                        title="Démarrer une nouvelle conversation (sauvegarde automatique de l'actuelle)"
                         style={convActionStyle}>
-                        ✚ <span>Nouvelle</span>
+                        🗒️ <span>Nouvelle conv.</span>
                       </button>
                     </>
                   )}
@@ -844,7 +844,7 @@ export default function Assistant() {
                         ...convActionStyle,
                         ...(showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}),
                       }}>
-                      🕐 <span>{(savedConvs[convKey] ?? []).length}</span>
+                      🕐 <span>Historique ({(savedConvs[convKey] ?? []).length})</span>
                     </button>
                   )}
                 </div>
