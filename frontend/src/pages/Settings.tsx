@@ -690,10 +690,17 @@ const KNOWN_FILES = [
 function ContextEditor() {
   const qc = useQueryClient()
   const [selected, setSelected] = useState('skills.md')
+  const [locale, setLocale] = useState<'fr' | 'en'>('fr')
   const [content, setContent] = useState('')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const { data: userData } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
+
+  useEffect(() => {
+    const preferred = userData?.data?.contextLanguage ?? userData?.data?.language
+    if (preferred === 'fr' || preferred === 'en') setLocale(preferred)
+  }, [userData])
 
   // Include intermediate/custom versions from Sources page
   const customVersions: string[] = (() => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })()
@@ -709,24 +716,24 @@ function ContextEditor() {
       .map(v => ({ name: `odoo-${v}.md`, label: `Odoo ${v}`, icon: '📋', desc: 'Notes de version intermédiaire' })),
   ]
 
-  const { data: filesData } = useQuery({ queryKey: ['context-files'], queryFn: listContextFiles })
+  const { data: filesData } = useQuery({ queryKey: ['context-files', locale], queryFn: () => listContextFiles(locale) })
   const existingNames: string[] = (filesData?.data ?? []).map((f: { name: string }) => f.name)
 
   useEffect(() => {
     setDirty(false)
     setSaved(false)
-    getContextFile(selected)
+    getContextFile(selected, locale)
       .then(res => setContent(res.data.content))
       .catch(() => setContent(''))
-  }, [selected])
+  }, [selected, locale])
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      await saveContextFile(selected, content)
+      await saveContextFile(selected, content, locale)
       setDirty(false)
       setSaved(true)
-      qc.invalidateQueries({ queryKey: ['context-files'] })
+      qc.invalidateQueries({ queryKey: ['context-files', locale] })
       setTimeout(() => setSaved(false), 2000)
     } finally {
       setSaving(false)
@@ -735,9 +742,9 @@ function ContextEditor() {
 
   const handleReset = async () => {
     if (!confirm(`Réinitialiser "${selected}" au contenu par défaut ? Vos modifications seront perdues.`)) return
-    await deleteContextFile(selected)
-    qc.invalidateQueries({ queryKey: ['context-files'] })
-    const res = await getContextFile(selected)
+    await deleteContextFile(selected, locale)
+    qc.invalidateQueries({ queryKey: ['context-files', locale] })
+    const res = await getContextFile(selected, locale)
     setContent(res.data.content)
     setDirty(false)
   }
@@ -783,6 +790,20 @@ function ContextEditor() {
             <div style={{ fontSize: 12, color: t.muted }}>{currentFile?.desc}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: t.muted }}>
+              Langue
+              <select
+                value={locale}
+                onChange={e => {
+                  if (dirty && !confirm('Modifications non sauvegardées. Changer de langue ?')) return
+                  setLocale(e.target.value as 'fr' | 'en')
+                }}
+                style={{ ...selectStyle, width: 120, padding: '5px 8px', fontSize: 12 }}
+              >
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </label>
             {dirty && <span style={{ fontSize: 11, color: t.warning }}>● Non sauvegardé</span>}
             {isCustomized && !dirty && (
               <button onClick={handleReset} style={{
@@ -823,7 +844,7 @@ function ContextEditor() {
         />
         <div style={{ fontSize: 11, color: t.muted }}>
           Fichier Markdown · {content.split('\n').length} lignes · {content.length} caractères
-          · Chemin : <code style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px' }}>~/.odoo-consultant/context/{selected}</code>
+          · Chemin : <code style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px' }}>~/.odoo-consultant/context/{locale === 'fr' ? selected : `${locale}/${selected}`}</code>
         </div>
       </div>
     </div>
@@ -833,11 +854,24 @@ function ContextEditor() {
 // ── User profile editor ──────────────────────────────────────────
 
 const PRESET_COLORS = ['#017e84', '#2563EB', '#7C3AED', '#DC2626', '#D97706', '#16A34A', '#0891B2', '#EC4899', '#374151']
+const selectStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '7px 10px',
+  border: `1px solid ${t.border}`,
+  borderRadius: t.radius,
+  fontSize: 13,
+  color: t.text,
+  background: t.bgCard,
+  boxSizing: 'border-box',
+}
 
 interface UserProfile {
   name?: string
   title?: string
   team?: string
+  language?: 'fr' | 'en'
+  assistantLanguage?: 'auto' | 'fr' | 'en'
+  contextLanguage?: 'fr' | 'en'
   avatar?: string   // emoji or data-URI
   primaryColor?: string
   themeMode?: 'light' | 'dark' | 'sepia'
@@ -878,6 +912,7 @@ function UserProfileEditor() {
     qc.invalidateQueries({ queryKey: ['user-profile'] })
     if (form.primaryColor) applyBrandColor(form.primaryColor)
     applyThemeMode(form.themeMode)
+    document.documentElement.lang = form.language === 'en' ? 'en' : 'fr'
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -939,6 +974,31 @@ function UserProfileEditor() {
             <input value={form.team ?? ''} onChange={e => set('team', e.target.value)} placeholder="Le Projet · Pôle ERP"
               style={{ width: '100%', padding: '7px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 13, color: t.text, boxSizing: 'border-box' }} />
           </label>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+            <label>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Langue de l'application</div>
+              <select value={form.language ?? 'fr'} onChange={e => set('language', e.target.value)} style={selectStyle}>
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Langue des réponses IA</div>
+              <select value={form.assistantLanguage ?? 'auto'} onChange={e => set('assistantLanguage', e.target.value)} style={selectStyle}>
+                <option value="auto">Automatique</option>
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>
+              <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 4 }}>Langue du contexte IA</div>
+              <select value={form.contextLanguage ?? form.language ?? 'fr'} onChange={e => set('contextLanguage', e.target.value)} style={selectStyle}>
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+          </div>
 
           {/* Color picker */}
           <div>

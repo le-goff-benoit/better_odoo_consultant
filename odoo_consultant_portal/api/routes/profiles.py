@@ -601,7 +601,74 @@ async def auto_fill_context(profile_id: int, session: AsyncSession = Depends(get
     except Exception:
         pass
 
-    prompt = f"""Tu es un assistant expert Odoo. Génère un fichier de contexte projet concis, structuré et directement exploitable par un autre assistant IA.
+    profile_locale = "fr"
+    assistant_language = "auto"
+    try:
+        from ..routes.settings import USER_PROFILE_FILE
+        if USER_PROFILE_FILE.exists():
+            user_settings = json.loads(USER_PROFILE_FILE.read_text())
+            profile_locale = (user_settings.get("contextLanguage") or user_settings.get("language") or "fr")
+            assistant_language = user_settings.get("assistantLanguage") or "auto"
+    except Exception:
+        pass
+
+    if str(profile_locale).lower().startswith("en"):
+        prompt = f"""You are an expert Odoo assistant. Generate a concise project context file that another AI assistant can use directly.
+
+Goal:
+- Anchor future AI answers in the actual client project.
+- Avoid hallucinations by separating observed facts, assumptions, and missing information.
+- Provide enough business context to choose between standard Odoo, configuration, Studio, and custom development.
+
+Project data:
+- Project name: {profile.name}
+- Company: {profile.company_name or "unknown"}{", " + profile.company_city if profile.company_city else ""}
+- URL: {profile.db_url}
+- Odoo version: {profile.odoo_version or "unknown"}
+- Detected companies: {companies_str or "unknown"}
+- Installed modules: {apps_list or "unknown"}{repo_info}
+
+Required format (Markdown, English, short bullets):
+## Observed facts
+- Client / company:
+- Version / environment:
+- Detected companies:
+- Significant installed modules:
+- Repositories or custom modules detected:
+
+## Reasonable assumptions
+- Likely activity:
+- Likely critical business processes:
+- Likely user roles involved:
+
+## Modules and scopes to prioritize
+| Domain | Modules / signals | Why it matters | To verify |
+|---|---|---|---|
+
+## Customizations and integrations
+- Custom modules:
+- Studio fields / models / views to look for:
+- External integrations to confirm:
+
+## Risks and watchpoints
+- Data:
+- Security / access rights:
+- Performance:
+- Migration / upgrade:
+
+## Open questions for the consultant
+- [ ] ...
+
+## Consultant notes
+- To be completed manually.
+
+Rules:
+- Do not invent facts. If you infer something, put it under **Reasonable assumptions**.
+- If information is missing, write `To verify` or `Unknown`.
+- Do not mention custom modules that are not present in the provided manifests.
+- Keep the context short: around 80 lines maximum."""
+    else:
+        prompt = f"""Tu es un assistant expert Odoo. Génère un fichier de contexte projet concis, structuré et directement exploitable par un autre assistant IA.
 
 Objectif du contexte :
 - Orienter les futures réponses IA vers la réalité du projet client.
@@ -674,7 +741,8 @@ Règles :
             async for evt in stream_chat(
                 provider, key, None, None, None,
                 [{"role": "user", "content": prompt}],
-                None, "", None, None, None
+                None, "", None, None, None,
+                response_language=assistant_language if assistant_language in {"fr", "en"} else ("en" if str(profile_locale).lower().startswith("en") else "fr")
             ):
                 if evt.get("type") == "text":
                     result_parts.append(evt.get("content", ""))

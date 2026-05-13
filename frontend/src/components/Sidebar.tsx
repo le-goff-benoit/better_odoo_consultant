@@ -3,21 +3,47 @@ import { NavLink } from 'react-router-dom'
 import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow } from 'lucide-react'
 import { t } from '../theme'
 import { getUserProfile } from '../api/client'
+import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
 
+const labels = {
+  fr: {
+    sources: 'Sources',
+    profiles: 'Mes projets',
+    assistant: 'Assistant IA',
+    migration: 'Migration',
+    how: 'Fonctionnement',
+    settings: 'Paramètres',
+    about: 'À propos',
+    consultant: 'Consultant',
+  },
+  en: {
+    sources: 'Sources',
+    profiles: 'Projects',
+    assistant: 'AI Assistant',
+    migration: 'Migration',
+    how: 'How it works',
+    settings: 'Settings',
+    about: 'About',
+    consultant: 'Consultant',
+  },
+}
+
 const links = [
-  { to: '/sources',   label: 'Sources',      icon: Database },
-  { to: '/profiles',  label: 'Mes projets',  icon: FolderKanban },
-  { to: '/assistant', label: 'Assistant IA', icon: Bot },
-  { to: '/migration', label: 'Migration',    icon: ArrowRightLeft },
-  { to: '/how-it-works', label: 'Fonctionnement', icon: Workflow },
-  { to: '/settings',  label: 'Paramètres',   icon: Settings },
-  { to: '/about',     label: 'À propos',     icon: Info },
+  { to: '/sources',   labelKey: 'sources',   icon: Database },
+  { to: '/profiles',  labelKey: 'profiles',  icon: FolderKanban },
+  { to: '/assistant', labelKey: 'assistant', icon: Bot },
+  { to: '/migration', labelKey: 'migration', icon: ArrowRightLeft },
+  { to: '/how-it-works', labelKey: 'how', icon: Workflow },
+  { to: '/settings',  labelKey: 'settings',  icon: Settings },
+  { to: '/about',     labelKey: 'about',     icon: Info },
 ]
 
 export default function Sidebar() {
   const { data } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile, staleTime: 60_000 })
   const up = data?.data ?? {}
+  const lang = normalizeUiLanguage(up.language)
+  const tr = labels[lang]
   const avatarIsImg = (up.avatar as string | undefined)?.startsWith('data:')
 
   return (
@@ -62,7 +88,7 @@ export default function Sidebar() {
             {up.name || 'Odoo Portal'}
           </div>
           <div style={{ color: 'rgba(255,255,255,.45)', fontSize: 11, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {up.title || 'Consultant'}
+            {up.title || tr.consultant}
           </div>
         </div>
       </div>
@@ -78,7 +104,7 @@ export default function Sidebar() {
             className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
           >
             <Icon size={16} aria-hidden />
-            {l.label}
+            {tr[l.labelKey as keyof typeof tr]}
           </NavLink>
           )
         })}

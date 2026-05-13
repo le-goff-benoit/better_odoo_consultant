@@ -68,10 +68,10 @@ export const getModelConfig = () => api.get('/ai/model-config')
 export const saveModelConfig = (config: Record<string, string[]>) => api.post('/ai/model-config', config)
 
 // Context files
-export const listContextFiles = () => api.get('/context/')
-export const getContextFile = (name: string) => api.get(`/context/file/${name}`)
-export const saveContextFile = (name: string, content: string) => api.put(`/context/file/${name}`, { content })
-export const deleteContextFile = (name: string) => api.delete(`/context/file/${name}`)
+export const listContextFiles = (locale = 'fr') => api.get(`/context/?locale=${encodeURIComponent(locale)}`)
+export const getContextFile = (name: string, locale = 'fr') => api.get(`/context/file/${name}?locale=${encodeURIComponent(locale)}`)
+export const saveContextFile = (name: string, content: string, locale = 'fr') => api.put(`/context/file/${name}?locale=${encodeURIComponent(locale)}`, { content })
+export const deleteContextFile = (name: string, locale = 'fr') => api.delete(`/context/file/${name}?locale=${encodeURIComponent(locale)}`)
 
 // User profile / settings
 export const getUserProfile = () => api.get('/settings/user-profile')

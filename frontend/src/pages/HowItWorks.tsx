@@ -18,6 +18,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import PageHeader from '../components/PageHeader'
+import { useUiLanguage } from '../i18n'
 import { t } from '../theme'
 
 type BadgeKind = 'User' | 'Provider' | 'Markdown' | 'Repo' | 'Odoo' | 'Prompt' | 'Tool'
@@ -210,38 +211,230 @@ const qualityTips = [
   'Choisir AM/BA pour les arbitrages métier, Archi/Dev pour le code, les champs et la migration.',
 ]
 
+const stepsEn: DiagramStep[] = [
+  {
+    title: '1. User settings',
+    subtitle: 'Consultant identity and interface preferences',
+    icon: UserRound,
+    badges: ['User'],
+    details: [
+      'The consultant profile provides the name, role and team displayed in the application.',
+      'Theme, avatar, primary color and visual preferences adjust the experience without changing project data.',
+      'The consultant identity can be injected into the system context to steer the tone and posture of answers.',
+    ],
+    technicalRefs: ['Settings → Profile', 'getUserProfile()', 'USER_PROFILE_FILE'],
+    inputs: ['Name', 'Role', 'Team', 'Avatar', 'Theme', 'Primary color'],
+    outputs: ['Personalized UI', 'Consultant identity available for the prompt'],
+  },
+  {
+    title: '2. AI configuration',
+    subtitle: 'Providers, API keys, available models and active model',
+    icon: KeyRound,
+    badges: ['Provider'],
+    details: [
+      'Configured providers determine which engines can answer: Claude, OpenAI, Gemini, Copilot or GitHub Models.',
+      'Models enabled or disabled in settings filter the assistant and migration model selectors.',
+      'When sending a message, the selected provider and model drive streaming, capabilities and answer cost.',
+    ],
+    technicalRefs: ['Settings → API', 'constants/providers.ts', 'ChatRequest.provider', 'ChatRequest.model'],
+    inputs: ['API keys', 'Active provider', 'Selected model', 'Enabled models'],
+    outputs: ['Filtered selectors', 'Provider call', 'Streamed answer'],
+  },
+  {
+    title: '3. Response perspective',
+    subtitle: 'AM/BA or Archi/Dev toggle for each request',
+    icon: ToggleLeft,
+    badges: ['Prompt'],
+    details: [
+      'The toggle changes the nature of the answer for the current request.',
+      'AM/BA prioritizes user journeys, business processes, configuration, role impacts and training.',
+      'Archi/Dev prioritizes models, fields, XML views, code, performance, migration and technical evidence.',
+    ],
+    technicalRefs: ['PerspectiveToggle.tsx', 'ChatRequest.perspective', '_perspective_block()'],
+    inputs: ['Functional mode', 'Technical mode'],
+    outputs: ['Adapted system instructions', 'Oriented suggestions and answer format'],
+  },
+  {
+    title: '4. Markdown context files',
+    subtitle: 'Editable knowledge injected according to the request',
+    icon: FileText,
+    badges: ['Markdown'],
+    details: [
+      'Context files describe answer rules, common Odoo patterns, migration, Studio, meeting minutes and release notes.',
+      'They are editable from Settings and act as a working memory, not as the only source of truth.',
+      'The context router selects only useful sections to avoid saturating the prompt.',
+    ],
+    technicalRefs: ['~/.odoo-consultant/context/en/', 'skills.md', 'studio.md', 'migration.md', 'meeting-minute.md', 'odoo-*.md'],
+    inputs: ['Custom Markdown files', 'Bundled defaults'],
+    outputs: ['Context sections ready for routing'],
+  },
+  {
+    title: '5. Client project',
+    subtitle: 'Instance, active company, environment and project context',
+    icon: BriefcaseBusiness,
+    badges: ['User', 'Odoo', 'Markdown'],
+    details: [
+      'Each project stores URL, database, version, environments, accessible companies and project context.',
+      'The active company scopes Odoo requests with allowed_company_ids when available.',
+      'Project context adds what the AI cannot guess: client vocabulary, constraints, integrations and decisions.',
+    ],
+    technicalRefs: ['Profile', 'project_context', 'active_env_id', 'allowed_company_ids'],
+    inputs: ['Project', 'Environment', 'Active company', 'Project context'],
+    outputs: ['Targeted instance', 'Injected client context', 'Company-scoped requests'],
+  },
+  {
+    title: '6. Local Odoo sources',
+    subtitle: 'Standard code used to verify models, fields and behavior',
+    icon: Database,
+    badges: ['Odoo', 'Tool'],
+    details: [
+      'Local Odoo sources let the AI verify the real structure of the selected version.',
+      'In general or project mode, they avoid invented model, field or method names.',
+      'In migration mode, source and target versions can be compared to identify changes.',
+    ],
+    technicalRefs: ['~/.odoo-consultant/sources/<version>', 'search_odoo_source', 'read_odoo_file', 'search_target_source'],
+    inputs: ['Odoo version', 'Community / Enterprise sources'],
+    outputs: ['Standard-code evidence', 'Source/target comparisons'],
+  },
+  {
+    title: '7. Client repository',
+    subtitle: 'Custom code cloned from GitHub to understand adaptations',
+    icon: GitBranch,
+    badges: ['Repo', 'Tool'],
+    details: [
+      'A project environment can point to a locally cloned GitHub repository.',
+      'The AI inspects manifests, models, views, controllers and data files from custom modules.',
+      'This helps distinguish standard Odoo, Studio customizations and client-specific development.',
+    ],
+    technicalRefs: ['~/.odoo-consultant/repos/<project>/<env>', '__manifest__.py', 'search_project_source', 'read_project_file'],
+    inputs: ['Repo URL', 'Branch', 'Custom modules'],
+    outputs: ['Custom inventory', 'Citable files', 'Migration or support impact'],
+  },
+  {
+    title: '8. User message',
+    subtitle: 'Prompt, attachments and conversation context',
+    icon: MessageSquareText,
+    badges: ['Prompt', 'Markdown'],
+    details: [
+      'The user request determines general, project or migration mode.',
+      'Text, Markdown, JSON, XML, Python, logs or textual PDF attachments are appended to the latest user message.',
+      'The latest prompt is also used to choose relevant context sections.',
+    ],
+    technicalRefs: ['ChatRequest.messages', 'ChatRequest.attachments', '_inject_attachments()'],
+    inputs: ['Question', 'Conversation', 'Attachments', 'Version', 'Migration mode'],
+    outputs: ['Enriched message', 'Intent detectable by the router'],
+  },
+  {
+    title: '9. Context router',
+    subtitle: 'Targeted selection of useful information before generation',
+    icon: Workflow,
+    badges: ['Markdown', 'Prompt', 'Tool'],
+    details: [
+      'The router splits Markdown files by section and keeps operational subsections.',
+      'It loads relevant domains, meeting minutes, Studio or release notes only when useful.',
+      'Priority remains: live data and source code first, Markdown context second.',
+    ],
+    technicalRefs: ['load_context_for_prompt()', '_markdown_sections()', '_fit_context_budget()'],
+    inputs: ['Latest prompt', 'Perspective', 'Version', 'Migration mode'],
+    outputs: ['Compact context', 'Controlled budget', 'Less noise in the prompt'],
+  },
+  {
+    title: '10. System prompt + AI tools',
+    subtitle: 'Final assembly sent to the selected provider',
+    icon: BrainCircuit,
+    badges: ['Provider', 'Tool', 'Odoo', 'Repo'],
+    details: [
+      'The system prompt assembles perspective, instance, available sources, routed Markdown context, project context and consultant identity.',
+      'Exposed tools change by mode: live Odoo data, Odoo source code, client repo, Studio and line counting.',
+      'The AI should use tools to verify facts instead of answering only from memory.',
+    ],
+    technicalRefs: ['build_system()', 'build_system_general()', 'build_system_migration()', 'stream_chat()'],
+    inputs: ['Routed context', 'Project', 'Sources', 'Provider', 'Model'],
+    outputs: ['System prompt', 'Available tools', 'Provider call'],
+  },
+  {
+    title: '11. AI answer',
+    subtitle: 'Streaming, evidence, actions and history',
+    icon: Sparkles,
+    badges: ['Provider', 'Tool'],
+    details: [
+      'The answer streams into the interface with tool calls and results when available.',
+      'Depending on the perspective, it emphasizes business workflows or technical details.',
+      'Conversations can be kept in history and reused to generate meeting minutes.',
+    ],
+    technicalRefs: ['SSE / chat stream', 'tool_call', 'tool_result', 'Conversation history'],
+    inputs: ['Streamed text', 'Tool results', 'Requested format'],
+    outputs: ['Actionable answer', 'Recommended actions', 'History / meeting minutes'],
+  },
+]
+
+const qualityTipsEn = [
+  'Complete the user profile so tone and consultant identity stay consistent.',
+  'Configure the right AI providers and disable unused models to keep selectors clean.',
+  'Fill the project context with business constraints, decisions and client vocabulary.',
+  'Clone custom repositories so the AI can verify client-specific modules.',
+  'Install Odoo sources for the exact versions used by the client.',
+  'Attach one-off files to the prompt instead of copying them into permanent context.',
+  'Choose AM/BA for business trade-offs, Archi/Dev for code, fields and migration.',
+]
+
+const pageCopy = {
+  fr: {
+    title: 'Fonctionnement',
+    description: 'Vue d’ensemble du flux de contexte IA : paramètres, Markdown, sources Odoo, repos client, outils et réponse finale.',
+    heroTitle: 'Du paramétrage à la réponse IA',
+    heroText: 'L’application ne se contente pas d’envoyer votre question au modèle. Elle assemble un contexte contrôlé : identité consultant, provider, projet client, sources locales, repo custom, fichiers Markdown et outils de vérification.',
+    aria: "Diagramme vertical du fonctionnement de l'application",
+    tipsTitle: 'Comment améliorer la qualité des réponses',
+    inputs: 'Entrées',
+    outputs: 'Sorties',
+  },
+  en: {
+    title: 'How it works',
+    description: 'Overview of the AI context flow: settings, Markdown, Odoo sources, client repositories, tools and final answer.',
+    heroTitle: 'From setup to AI answer',
+    heroText: 'The application does not simply send your question to the model. It assembles controlled context: consultant identity, provider, client project, local sources, custom repository, Markdown files and verification tools.',
+    aria: 'Vertical diagram explaining how the application works',
+    tipsTitle: 'How to improve answer quality',
+    inputs: 'Inputs',
+    outputs: 'Outputs',
+  },
+}
+
 export default function HowItWorks() {
+  const lang = useUiLanguage()
+  const copy = pageCopy[lang]
+  const displayedSteps = lang === 'en' ? stepsEn : steps
+  const displayedTips = lang === 'en' ? qualityTipsEn : qualityTips
+
   return (
     <div style={styles.page}>
       <PageHeader
-        title="Fonctionnement"
-        description="Vue d’ensemble du flux de contexte IA : paramètres, Markdown, sources Odoo, repos client, outils et réponse finale."
+        title={copy.title}
+        description={copy.description}
       />
 
       <section style={styles.heroBand}>
         <div style={styles.heroIcon}><Bot size={26} /></div>
         <div>
-          <div style={styles.heroTitle}>Du paramétrage à la réponse IA</div>
-          <p style={styles.heroText}>
-            L’application ne se contente pas d’envoyer votre question au modèle. Elle assemble un contexte contrôlé :
-            identité consultant, provider, projet client, sources locales, repo custom, fichiers Markdown et outils de vérification.
-          </p>
+          <div style={styles.heroTitle}>{copy.heroTitle}</div>
+          <p style={styles.heroText}>{copy.heroText}</p>
         </div>
       </section>
 
-      <section style={styles.diagram} aria-label="Diagramme vertical du fonctionnement de l'application">
-        {steps.map((step, index) => (
-          <DiagramNode key={step.title} step={step} isLast={index === steps.length - 1} />
+      <section style={styles.diagram} aria-label={copy.aria}>
+        {displayedSteps.map((step, index) => (
+          <DiagramNode key={step.title} step={step} isLast={index === displayedSteps.length - 1} labels={copy} />
         ))}
       </section>
 
       <section style={styles.tipsBand}>
         <div style={styles.tipsHeader}>
           <Sparkles size={18} />
-          <h2 style={styles.tipsTitle}>Comment améliorer la qualité des réponses</h2>
+          <h2 style={styles.tipsTitle}>{copy.tipsTitle}</h2>
         </div>
         <div style={styles.tipGrid}>
-          {qualityTips.map(tip => (
+          {displayedTips.map(tip => (
             <div key={tip} style={styles.tipItem}>
               <span style={styles.tipDot} />
               <span>{tip}</span>
@@ -253,7 +446,7 @@ export default function HowItWorks() {
   )
 }
 
-function DiagramNode({ step, isLast }: { step: DiagramStep; isLast: boolean }) {
+function DiagramNode({ step, isLast, labels }: { step: DiagramStep; isLast: boolean; labels: { inputs: string; outputs: string } }) {
   const Icon = step.icon
   return (
     <div style={styles.nodeWrap}>
@@ -276,8 +469,8 @@ function DiagramNode({ step, isLast }: { step: DiagramStep; isLast: boolean }) {
             ))}
           </div>
           <div style={styles.sideGrid}>
-            <MiniPanel title="Entrées" items={step.inputs} icon={Braces} />
-            <MiniPanel title="Sorties" items={step.outputs} icon={Code2} />
+            <MiniPanel title={labels.inputs} items={step.inputs} icon={Braces} />
+            <MiniPanel title={labels.outputs} items={step.outputs} icon={Code2} />
           </div>
           <div style={styles.refs}>
             {step.technicalRefs.map(ref => (

@@ -5,7 +5,7 @@
 L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.19.0**
+> Version actuelle : **0.20.0**
 
 ---
 
@@ -14,6 +14,7 @@ L'Odoo Consultant Portal est une application web qui tourne sur votre machine. E
 - [Installation](#installation)
 - [Démarrage rapide](#démarrage-rapide)
 - [Comprendre le fonctionnement](#comprendre-le-fonctionnement)
+- [Langues et contextes multilingues](#langues-et-contextes-multilingues)
 - [Guide d'utilisation](#guide-dutilisation)
   - [1. Configurer les sources Odoo](#1-configurer-les-sources-odoo)
   - [2. Ajouter un projet client](#2-ajouter-un-projet-client)
@@ -94,6 +95,38 @@ Elle détaille comment le portail combine :
 - les **outils IA** : données live Odoo, lecture du code source, inspection Studio, comptage de lignes, etc.
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
+
+---
+
+## Langues et contextes multilingues
+
+L'application prépare l'ajout progressif de plusieurs langues. La version actuelle supporte **Français** et **English** sur trois niveaux distincts :
+
+1. **Langue de l'application**
+   Pilotée depuis Paramètres → Profil. Elle sert de préférence globale d'interface et permet aux composants compatibles de s'afficher en français ou en anglais.
+
+2. **Langue des réponses IA**
+   Trois modes sont disponibles :
+   - **Automatique** : l'assistant répond dans la langue du dernier message utilisateur ;
+   - **Français** : l'assistant répond toujours en français ;
+   - **English** : l'assistant répond toujours en anglais.
+
+   Les identifiants techniques Odoo ne sont jamais traduits : modèles, champs, XML IDs, chemins de fichiers, domains et méthodes restent exacts.
+
+3. **Langue des fichiers de contexte IA**
+   L'éditeur de contexte permet de choisir la langue du fichier Markdown édité. Les fichiers français historiques restent dans :
+
+   ```text
+   ~/.odoo-consultant/context/
+   ```
+
+   Les fichiers anglais personnalisés sont stockés dans :
+
+   ```text
+   ~/.odoo-consultant/context/en/
+   ```
+
+   Des defaults anglais sont fournis pour `skills.md`, `migration.md`, `studio.md`, `meeting-minute.md` et les notes de version `odoo-15.0.md` à `odoo-19.0.md`. Le français reste le fallback par défaut pour préserver les installations existantes.
 
 ---
 

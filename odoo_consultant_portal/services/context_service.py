@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 
 _CONTEXT_DIR = Path.home() / ".odoo-consultant" / "context"
+_SUPPORTED_LOCALES = {"fr", "en"}
+_DEFAULT_LOCALE = "fr"
 
 _ALLOWED_NAME = re.compile(r'^[\w\-\.]+\.md$')
 _HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$", re.MULTILINE)
@@ -15,41 +17,71 @@ _CORE_SKILLS_HEADINGS = (
     "Règles d'or du consultant",
     "Contrat de réponse par défaut",
 )
-
-_DOMAIN_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("Comptabilité & Finance", ("compta", "finance", "facture", "avoir", "paiement", "écriture", "ecriture", "journal", "taxe", "analytique", "budget", "rapprochement")),
-    ("Ventes & CRM", ("vente", "devis", "commande", "sale", "crm", "lead", "opportun", "pipeline", "commercial", "abonnement")),
-    ("Achats", ("achat", "purchase", "fournisseur", "rfq", "appel d'offre", "approvisionnement")),
-    ("Stock & Logistique", ("stock", "picking", "livraison", "réception", "reception", "transfert", "quant", "lot", "série", "serie", "entrepôt", "entrepot", "route")),
-    ("Ressources Humaines & Paie", ("rh", "hr", "employé", "employe", "congé", "conge", "paie", "payslip", "contrat", "attendance", "présence", "presence")),
-    ("Projets & Timesheets", ("projet", "project", "tâche", "tache", "timesheet", "feuille de temps", "jalon")),
-    ("Fabrication (MRP)", ("fabrication", "mrp", "of", "ordre de fabrication", "nomenclature", "bom", "workorder", "poste de charge")),
-    ("eCommerce & Site Web", ("ecommerce", "e-commerce", "site web", "website", "panier", "shop", "seo", "portail")),
-    ("Point de Vente (POS)", ("pos", "point de vente", "caisse", "session pos", "ticket")),
-    ("Règles de sécurité et droits d'accès", ("droit", "sécurité", "securite", "acl", "record rule", "ir.rule", "groupe", "accès", "access")),
-    ("Customisations : comment les repérer", ("custom", "personnalisation", "studio", "module tiers", "module custom", "x_studio", "x_")),
-    ("Performance & Optimisation", ("performance", "lenteur", "optimisation", "index", "requête", "requete", "timeout", "lent")),
+_CORE_SKILLS_HEADINGS_EN = (
+    "Assistant role",
+    "How the AI should use this file",
+    "Consultant rules",
+    "Default response contract",
 )
 
-_DIAGNOSTIC_TERMS = ("diagnostic", "diagnosti", "audit", "anomalie", "bloqué", "bloque", "problème", "probleme", "erreur", "incohérence", "incoherence", "doublon")
+_DOMAIN_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("Comptabilité & Finance", "Accounting & Finance", ("compta", "account", "accounting", "finance", "invoice", "facture", "avoir", "refund", "payment", "paiement", "écriture", "ecriture", "journal", "tax", "taxe", "analytic", "analytique", "budget", "reconcile", "rapprochement")),
+    ("Ventes & CRM", "Sales & CRM", ("sale", "sales", "vente", "quote", "quotation", "devis", "order", "commande", "crm", "lead", "opportun", "pipeline", "commercial", "subscription", "abonnement")),
+    ("Achats", "Purchasing", ("purchase", "achat", "vendor", "supplier", "fournisseur", "rfq", "appel d'offre", "procurement", "approvisionnement")),
+    ("Stock & Logistique", "Inventory & Logistics", ("stock", "inventory", "picking", "delivery", "livraison", "receipt", "réception", "reception", "transfer", "transfert", "quant", "lot", "serial", "série", "serie", "warehouse", "entrepôt", "entrepot", "route")),
+    ("Ressources Humaines & Paie", "HR & Payroll", ("hr", "employee", "employé", "employe", "leave", "congé", "conge", "payroll", "paie", "payslip", "contract", "contrat", "attendance", "présence", "presence")),
+    ("Projets & Timesheets", "Projects & Timesheets", ("project", "projet", "task", "tâche", "tache", "timesheet", "feuille de temps", "milestone", "jalon")),
+    ("Fabrication (MRP)", "Manufacturing (MRP)", ("manufacturing", "fabrication", "mrp", "of", "manufacturing order", "ordre de fabrication", "bom", "nomenclature", "workorder", "work center", "poste de charge")),
+    ("eCommerce & Site Web", "eCommerce & Website", ("ecommerce", "e-commerce", "website", "site web", "panier", "cart", "shop", "seo", "portal", "portail")),
+    ("Point de Vente (POS)", "Point of Sale (POS)", ("pos", "point of sale", "point de vente", "caisse", "session pos", "ticket")),
+    ("Règles de sécurité et droits d'accès", "Security & Access Rights", ("right", "rights", "permission", "droit", "security", "sécurité", "securite", "acl", "record rule", "ir.rule", "group", "groupe", "access", "accès")),
+    ("Customisations : comment les repérer", "Customizations: how to spot them", ("custom", "customization", "personnalisation", "studio", "third-party module", "module tiers", "module custom", "x_studio", "x_")),
+    ("Performance & Optimisation", "Performance & Optimization", ("performance", "slow", "slowness", "lenteur", "optimization", "optimisation", "index", "query", "requête", "requete", "timeout", "lent")),
+)
+
+_DIAGNOSTIC_TERMS = ("diagnostic", "diagnosti", "diagnos", "audit", "anomalie", "anomaly", "bloqué", "bloque", "blocked", "problème", "probleme", "problem", "issue", "erreur", "error", "incohérence", "incoherence", "duplicate", "doublon")
 _MEETING_TERMS = ("compte-rendu", "compte rendu", "meeting minute", "réunion", "reunion", "pv de réunion", "pv de reunion")
 _STUDIO_TERMS = ("studio", "x_studio", "personnalisation", "customisation", "champ custom", "modèle custom", "modele custom", "inspect_studio")
 _VERSION_TERMS = ("version", "migration", "upgrade", "nouveau", "nouveauté", "nouveaute", "changement", "différence", "difference", "breaking", "deprecated", "dépréci", "depreci", "supprimé", "supprime", "renommé", "renomme", "compatib", "v15", "v16", "v17", "v18", "v19", "odoo 15", "odoo 16", "odoo 17", "odoo 18", "odoo 19")
 
+_SECTION_TITLES = {
+    "fr": {
+        "skills": "Compétences consultant",
+        "meeting": "Modèle compte-rendu",
+        "studio": "Inspection Studio",
+        "version": "Notes de version Odoo {version}",
+        "migration": "Méthodologie de migration",
+    },
+    "en": {
+        "skills": "Consultant skills",
+        "meeting": "Meeting minutes template",
+        "studio": "Studio inspection",
+        "version": "Odoo {version} release notes",
+        "migration": "Migration methodology",
+    },
+}
 
-def context_dir() -> Path:
-    _CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
-    return _CONTEXT_DIR
+
+def normalize_locale(locale: Optional[str]) -> str:
+    code = (locale or _DEFAULT_LOCALE).split("-")[0].lower()
+    return code if code in _SUPPORTED_LOCALES else _DEFAULT_LOCALE
 
 
-def _safe(name: str) -> Path:
+def context_dir(locale: Optional[str] = None) -> Path:
+    lang = normalize_locale(locale)
+    path = _CONTEXT_DIR if lang == _DEFAULT_LOCALE else _CONTEXT_DIR / lang
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _safe(name: str, locale: Optional[str] = None) -> Path:
     if not _ALLOWED_NAME.match(name):
         raise ValueError(f"Nom de fichier invalide : {name}")
-    return context_dir() / name
+    return context_dir(locale) / name
 
 
-def list_files() -> list[dict]:
-    d = context_dir()
+def list_files(locale: Optional[str] = None) -> list[dict]:
+    d = context_dir(locale)
     result = []
     for f in sorted(d.glob("*.md")):
         stat = f.stat()
@@ -57,22 +89,23 @@ def list_files() -> list[dict]:
     return result
 
 
-def read_file(name: str) -> str:
-    path = _safe(name)
+def read_file(name: str, locale: Optional[str] = None) -> str:
+    lang = normalize_locale(locale)
+    path = _safe(name, lang)
     if not path.exists():
-        content = _default_content(name)
+        content = _default_content(name, lang)
         if content:
             return content  # return default without writing to disk
         raise FileNotFoundError(f"{name} introuvable")
     return path.read_text(encoding="utf-8")
 
 
-def write_file(name: str, content: str) -> None:
-    _safe(name).write_text(content, encoding="utf-8")
+def write_file(name: str, content: str, locale: Optional[str] = None) -> None:
+    _safe(name, locale).write_text(content, encoding="utf-8")
 
 
-def delete_file(name: str) -> None:
-    path = _safe(name)
+def delete_file(name: str, locale: Optional[str] = None) -> None:
+    path = _safe(name, locale)
     if path.exists():
         path.unlink()
 
@@ -115,26 +148,31 @@ def _markdown_sections(content: str) -> list[tuple[str, str, int]]:
     return sections
 
 
-def _select_skills_context(prompt: str, perspective: Optional[str]) -> str:
-    skills = read_file("skills.md")
+def _heading_for_locale(fr_heading: str, en_heading: str, locale: str) -> str:
+    return en_heading if locale == "en" else fr_heading
+
+
+def _select_skills_context(prompt: str, perspective: Optional[str], locale: Optional[str] = None) -> str:
+    lang = normalize_locale(locale)
+    skills = read_file("skills.md", lang)
     sections = _markdown_sections(skills)
     by_heading = {heading: chunk for heading, chunk, _level in sections}
     selected: list[str] = []
 
-    for heading in _CORE_SKILLS_HEADINGS:
+    for heading in (_CORE_SKILLS_HEADINGS_EN if lang == "en" else _CORE_SKILLS_HEADINGS):
         chunk = by_heading.get(heading)
         if chunk:
             selected.append(chunk)
 
     matched_domains: list[str] = []
-    for heading, terms in _DOMAIN_RULES:
+    for fr_heading, en_heading, terms in _DOMAIN_RULES:
         if _has_any(prompt, terms):
-            matched_domains.append(heading)
+            matched_domains.append(_heading_for_locale(fr_heading, en_heading, lang))
 
     if not matched_domains and perspective == "functional":
-        matched_domains.extend(["Modèles transversaux essentiels", "Bonnes pratiques d'analyse client"])
+        matched_domains.extend(["Essential cross-functional models", "Client analysis best practices"] if lang == "en" else ["Modèles transversaux essentiels", "Bonnes pratiques d'analyse client"])
     elif not matched_domains:
-        matched_domains.append("Modèles transversaux essentiels")
+        matched_domains.append("Essential cross-functional models" if lang == "en" else "Modèles transversaux essentiels")
 
     for heading in matched_domains:
         chunk = by_heading.get(heading)
@@ -142,11 +180,12 @@ def _select_skills_context(prompt: str, perspective: Optional[str]) -> str:
             selected.append(chunk)
 
     if _has_any(prompt, _DIAGNOSTIC_TERMS):
-        chunk = by_heading.get("Patterns de diagnostic avancés")
+        chunk = by_heading.get("Advanced diagnostic patterns" if lang == "en" else "Patterns de diagnostic avancés")
         if chunk:
             selected.append(chunk)
 
-    for heading in ("Workflow des statuts — Référence rapide", "Bonnes pratiques d'analyse client"):
+    supporting_headings = ("Status workflows — quick reference", "Client analysis best practices") if lang == "en" else ("Workflow des statuts — Référence rapide", "Bonnes pratiques d'analyse client")
+    for heading in supporting_headings:
         if heading in by_heading and (_has_any(prompt, _DIAGNOSTIC_TERMS) or perspective == "functional"):
             selected.append(by_heading[heading])
 
@@ -182,35 +221,38 @@ def load_context_for_prompt(
     migration: bool = False,
     user_prompt: Optional[str] = None,
     perspective: Optional[str] = None,
+    locale: Optional[str] = None,
 ) -> str:
     """Return routed markdown context to inject into the AI system prompt."""
+    lang = normalize_locale(locale)
+    titles = _SECTION_TITLES[lang]
     prompt = _normalize_text(user_prompt)
     sections = []
     try:
-        _maybe_section("Compétences consultant", _select_skills_context(prompt, perspective), sections)
+        _maybe_section(titles["skills"], _select_skills_context(prompt, perspective, lang), sections)
     except FileNotFoundError:
         pass
 
     if not migration and _has_any(prompt, _MEETING_TERMS):
         try:
-            sections.append(("Modèle compte-rendu", read_file("meeting-minute.md")))
+            sections.append((titles["meeting"], read_file("meeting-minute.md", lang)))
         except FileNotFoundError:
             pass
 
     if _has_any(prompt, _STUDIO_TERMS):
         try:
-            sections.append(("Inspection Studio", read_file("studio.md")))
+            sections.append((titles["studio"], read_file("studio.md", lang)))
         except FileNotFoundError:
             pass
 
     if odoo_version and (migration or not prompt or _has_any(prompt, _VERSION_TERMS)):
         try:
-            sections.append((f"Notes de version Odoo {odoo_version}", read_file(f"odoo-{odoo_version}.md")))
+            sections.append((titles["version"].format(version=odoo_version), read_file(f"odoo-{odoo_version}.md", lang)))
         except FileNotFoundError:
             pass
     if migration:
         try:
-            sections.append(("Méthodologie de migration", read_file("migration.md")))
+            sections.append((titles["migration"], read_file("migration.md", lang)))
         except FileNotFoundError:
             pass
     if not sections:
@@ -220,7 +262,20 @@ def load_context_for_prompt(
 
 # ── Default content ───────────────────────────────────────────────
 
-def _default_content(name: str) -> Optional[str]:
+def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
+    lang = normalize_locale(locale)
+    if lang == "en":
+        if name == "skills.md":
+            return _SKILLS_MD_EN
+        if name == "meeting-minute.md":
+            return _MEETING_MINUTE_MD_EN
+        if name == "migration.md":
+            return _MIGRATION_MD_EN
+        if name == "studio.md":
+            return _STUDIO_MD_EN
+        m_en = re.match(r'^odoo-([\d\.]+)\.md$', name)
+        if m_en:
+            return _VERSION_NOTES_EN.get(m_en.group(1))
     if name == "skills.md":
         return _SKILLS_MD
     if name == "meeting-minute.md":
@@ -1493,5 +1548,433 @@ _VERSION_NOTES: dict = {
 - `search()`, `search_count()`, `_search()` : paramètre `args` renommé en `domain`
 - Nouveau flush/cache API sur `Model` et `Environment`
 - Possibilité de spécifier le type d'index PostgreSQL sur les champs
+""",
+}
+
+
+# ── English default context ───────────────────────────────────────
+
+_SKILLS_MD_EN = """\
+# Skills and context — Odoo consultant
+
+## Assistant role
+You are the co-pilot of an experienced Odoo consultant. You analyze client production instances,
+read Odoo and custom source code, diagnose issues, and propose concrete actions.
+
+## How the AI should use this file
+- This file is an operational memo, not the ultimate source of truth.
+- Source priority: live Odoo data > client source code > local Odoo source code > project context > this file.
+- Models and domains can vary by version, edition, installed modules, and customizations.
+- Before asserting a model, field, amount, or volume, verify it with the available tools.
+- If a point remains uncertain, state it explicitly and propose the shortest verification.
+
+## Consultant rules
+1. Cross-check live data and source code when available.
+2. Cite the exact model, field, domain, file, or method used to support the answer.
+3. Proactively flag anomalies: duplicates, inconsistent states, corrupted or stale data.
+4. Distinguish standard Odoo from custom modules or Studio customizations.
+5. Separate verified facts, assumptions, and recommendations when ambiguity matters.
+6. Adapt depth to the active perspective: AM/BA = business process; Archi/Dev = models, fields, code.
+
+## Default response contract
+- Start with a direct 2-5 line answer.
+- Use Markdown tables when they clarify comparisons, anomalies, or action plans.
+- End with at most 3 next actions, sorted by impact.
+- Do not invent menus, fields, or settings: verify or mark them as "to confirm".
+
+---
+
+## Accounting & Finance
+| Need | Model | Key domain |
+|---|---|---|
+| Customer invoices | `account.move` | `[["move_type","in",["out_invoice","out_refund"]]]` |
+| Vendor bills | `account.move` | `[["move_type","in",["in_invoice","in_refund"]]]` |
+| Overdue invoices | `account.move` | `[["payment_state","not in",["paid","in_payment"]],["invoice_date_due","<","<today>"],["state","=","posted"]]` |
+| Payments | `account.payment` | `[["state","=","posted"]]` |
+| Journal items | `account.move.line` | `[["move_id.state","=","posted"]]` |
+| Taxes | `account.tax` | `[["active","=",true]]` |
+| Analytic lines | `account.analytic.line` | — |
+
+Key `account.move` fields: `state`, `move_type`, `payment_state`, `invoice_date_due`, `amount_residual`, `invoice_origin`.
+
+## Sales & CRM
+| Need | Model | Key domain |
+|---|---|---|
+| Sales orders | `sale.order` | `[["state","in",["sale","done"]]]` |
+| Quotations | `sale.order` | `[["state","in",["draft","sent"]]]` |
+| Sales order lines | `sale.order.line` | — |
+| Opportunities | `crm.lead` | `[["type","=","opportunity"]]` |
+| Activities | `mail.activity` | `[["res_model","=","crm.lead"]]` |
+| Pricelists | `product.pricelist` | — |
+
+Key fields: `sale.order.state`, `invoice_status`, `delivery_status`, `commitment_date`; `crm.lead.stage_id`, `probability`, `expected_revenue`, `user_id`.
+
+## Purchasing
+| Need | Model | Key domain |
+|---|---|---|
+| Purchase orders | `purchase.order` | `[["state","in",["purchase","done"]]]` |
+| RFQs | `purchase.order` | `[["state","in",["draft","sent","to approve"]]]` |
+| Purchase lines | `purchase.order.line` | — |
+| Vendor pricelists | `product.supplierinfo` | — |
+
+## Inventory & Logistics
+| Need | Model | Key domain |
+|---|---|---|
+| Stock moves | `stock.move` | `[["state","=","done"]]` |
+| Move lines | `stock.move.line` | `[["state","=","done"]]` |
+| Transfers | `stock.picking` | `[["state","in",["confirmed","assigned","waiting"]]]` |
+| On-hand stock | `stock.quant` | `[["location_id.usage","=","internal"]]` |
+| Lots / serials | `stock.lot` | — |
+| Reordering rules | `stock.warehouse.orderpoint` | — |
+
+Common diagnostics: negative quants, blocked pickings, orphan moves, lots without traceability.
+
+## HR & Payroll
+| Need | Model | Key domain |
+|---|---|---|
+| Employees | `hr.employee` | `[["active","=",true]]` |
+| Contracts | `hr.contract` | `[["state","=","open"]]` |
+| Leaves | `hr.leave` | `[["state","=","validate"]]` |
+| Attendances | `hr.attendance` | `[["check_out","=",false]]` |
+| Payslips | `hr.payslip` | `[["state","=","done"]]` |
+
+## Projects & Timesheets
+| Need | Model | Key domain |
+|---|---|---|
+| Projects | `project.project` | `[["active","=",true]]` |
+| Tasks | `project.task` | `[["stage_id.fold","=",false]]` |
+| Timesheets | `account.analytic.line` | `[["project_id","!=",false],["employee_id","!=",false]]` |
+
+## Manufacturing (MRP)
+| Need | Model | Key domain |
+|---|---|---|
+| Manufacturing orders | `mrp.production` | `[["state","in",["confirmed","progress","to_close"]]]` |
+| Bills of materials | `mrp.bom` | `[["active","=",true]]` |
+| Work orders | `mrp.workorder` | `[["state","in",["ready","progress"]]]` |
+| Work centers | `mrp.workcenter` | — |
+
+## eCommerce & Website
+| Need | Model | Key domain |
+|---|---|---|
+| Published products | `product.template` | `[["is_published","=",true]]` |
+| Website orders | `sale.order` | `[["website_id","!=",false]]` |
+| Abandoned carts | `sale.order` | `[["state","=","draft"],["website_id","!=",false]]` |
+| Pages | `website.page` | — |
+
+## Point of Sale (POS)
+| Need | Model | Key domain |
+|---|---|---|
+| POS sessions | `pos.session` | `[["state","=","opened"]]` |
+| POS orders | `pos.order` | `[["state","in",["paid","done","invoiced"]]]` |
+| POS configs | `pos.config` | `[["active","=",true]]` |
+
+## Essential cross-functional models
+| Model | Usage |
+|---|---|
+| `res.partner` | Customers, vendors, contacts |
+| `res.users` | Internal and portal users |
+| `res.company` | Companies / multi-company |
+| `product.template` | Commercial product record |
+| `product.product` | Stock variant |
+| `ir.attachment` | Attachments |
+| `ir.model.access` | Model-level access rights |
+| `ir.rule` | Record rules |
+| `res.groups` | Security groups |
+
+## Advanced diagnostic patterns
+```
+# Customer invoices overdue by more than 90 days
+account.move | [["payment_state","not in",["paid","in_payment"]],["invoice_date_due","<","<date_90d>"],["state","=","posted"],["move_type","=","out_invoice"]]
+
+# Delivered but uninvoiced sales orders
+sale.order | [["invoice_status","=","to invoice"],["state","=","sale"]]
+
+# Open attendances without checkout
+hr.attendance | [["check_out","=",false]]
+
+# Blocked transfers
+stock.picking | [["state","in",["confirmed","assigned"]],["scheduled_date","<","<date_7d>"]]
+```
+
+## Security & Access Rights
+Important groups: `base.group_user`, `base.group_portal`, `account.group_account_user`,
+`account.group_account_manager`, `sale.group_sale_manager`, `stock.group_stock_manager`,
+`hr.group_hr_user`, `project.group_project_user`.
+
+## Customizations: how to spot them
+- `x_*` fields or models, especially `x_studio_*`.
+- Installed modules whose author is not Odoo.
+- Views inheriting standard views from custom modules.
+- Server actions, crons, and record rules created outside standard modules.
+
+## Performance & Optimization
+- Avoid querying `ir.attachment` without `res_model`.
+- Avoid `mail.message` without `res_model` or `res_id`.
+- Filter large accounting reports on `move_id.state = 'posted'`.
+- For exhaustive code volume, use `count_source_lines`, not search result counts.
+
+## Status workflows — quick reference
+| Document | States |
+|---|---|
+| Quotation to order | draft -> sent -> sale -> done / cancel |
+| Invoice | draft -> posted -> cancel |
+| Transfer | draft -> waiting -> confirmed -> assigned -> done / cancel |
+| Manufacturing order | draft -> confirmed -> progress -> to_close -> done / cancel |
+
+## Client analysis best practices
+- Verify the exact Odoo version from `ir.module.module` / `base`.
+- List third-party modules before concluding a behavior is standard.
+- Check archived records when counts or screens do not match.
+- In multi-company setups, always verify the active company and record rules.
+"""
+
+_MEETING_MINUTE_MD_EN = """\
+# Meeting minutes template
+
+Use this template when asked to generate meeting minutes. Adapt sections to the real conversation and remove empty sections.
+
+## Generation rules
+- Do not invent participants, decisions, deadlines, or owners.
+- If information is missing, write `To confirm`.
+- Convert long discussions into decisions, risks, open questions, and concrete actions.
+
+---
+
+# Meeting minutes — [Main topic]
+
+**Date:** [meeting date]
+**Duration:** [estimated duration]
+**Location / Channel:** [onsite / Teams / Zoom / etc.]
+
+**Participants:**
+- [First Last] — [Role]
+
+**Written by:** [Consultant name]
+
+## 1. Context and objective
+[Short description of the context and expected outcome]
+
+## 2. Topics discussed
+### 2.1 [Topic]
+[Summary of the discussion]
+
+## 3. Decisions
+| # | Decision | Decision maker |
+|---|---|---|
+| 1 | [Decision] | [Name] |
+
+## 4. Follow-up actions
+| # | Action | Owner | Due date | Status |
+|---|---|---|---|---|
+| 1 | [Action] | [Name] | [Date] | To do |
+
+## 5. Open questions
+- [Question or blocker]
+
+## 6. Next steps
+- **Next meeting:** [date or "to be defined"]
+- **Planned agenda:** [topics]
+"""
+
+_MIGRATION_MD_EN = """\
+# Odoo migration methodology
+
+This document is a shared reference for migration questions. Adapt vocabulary to the active perspective:
+functional AM/BA for business process, UX, training, and change management; technical Archi/Dev for ORM, views,
+hooks, scripts, and compatibility.
+
+## Migration response contract
+- Start with the main risk or opportunity.
+- Distinguish standard Odoo, client custom code, data to migrate, and configuration to rebuild.
+- In AM/BA mode, translate changes into user impact, training, and business decisions.
+- In Archi/Dev mode, cite models, fields, files, hooks, scripts, or commands.
+- End with at most 3 next actions.
+
+## 1. Scoping questions
+### Business
+- Which processes are critical: sales, purchase, stock, accounting, HR, project, MRP?
+- Which standard modules are installed and which are heavily customized?
+- Which external integrations exist: payments, EDI, banking, BI, e-commerce, IoT?
+- Are there calendar constraints: closing, payroll, peak sales period, financial year end?
+
+### Technical
+- Exact source and target versions.
+- Custom modules: internal, partner, OCA, paid third-party.
+- Data volume and migration runtime constraints.
+- Hosting: on-premise, Odoo.sh, Odoo Online.
+
+## 2. Migration phases
+| Phase | Main deliverable | Contributors |
+|---|---|---|
+| Audit | Modules, customizations, integrations, volumes | AM + Dev |
+| Scope | Target scenarios, estimate, planning | AM + PM |
+| Technical migration | Database and custom modules on test env | Dev / DBA |
+| Functional testing | Acceptance by business process | AM + key users |
+| Change management | Training, FAQ, communication | AM |
+| Cutover | Go/no-go, freeze, backup, production switch | All |
+| Hypercare | Reinforced support after go-live | AM + Dev |
+
+## 3. Functional analysis
+Produce: new standard features, deprecated/replaced features, obsolete custom modules, UX changes, process impact,
+role impact, training needs.
+
+Recommended table:
+| Business domain | Before | Target version | User impact | AM action | Effort |
+|---|---|---|---|---|---|
+
+## 4. Technical analysis
+Produce: custom module compatibility, framework breaking changes, data migration strategy, infrastructure plan,
+automated tests.
+
+Recommended table:
+| Element | Source | Target | Required action | Risk |
+|---|---|---|---|---|
+
+Common breaking changes:
+- v16 -> v17: XML `attrs` removed, `<tree>` becomes `<list>`, `name_get()` replaced by display name logic.
+- v17 -> v18: Python 3.12 implications, access API changes, stronger CSP.
+- v18 -> v19: PostgreSQL 13 minimum, Membership replaced by Partnership.
+
+## 5. Cutover strategy
+- Big bang: simpler coordination, concentrated risk.
+- Progressive: lower risk by site/company/module, but coexistence complexity.
+
+## 6. Frequent risks
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Incompatible custom module | High | Early code audit |
+| Corrupted or duplicate data | High | Cleanup before migration |
+| Broken integration | High | End-to-end tests |
+| User rejection | Medium | Training and hypercare |
+| Reporting rebuild | Medium | Report inventory |
+
+## 7. Tools to use
+- `search_odoo_source` / `read_odoo_file`: source version.
+- `search_target_source` / `read_target_file`: target version.
+- `search_project_source` / `read_project_file`: client custom modules.
+- `count_source_lines`: exhaustive code volume.
+- `query_odoo`, `count_odoo`, `get_odoo_fields`: live client data.
+"""
+
+_STUDIO_MD_EN = """\
+# Studio inspection guide
+
+## Role of `inspect_studio`
+When the user asks what was done with Studio, which custom fields/models/views exist, or how Studio affects migration,
+always use `inspect_studio` before answering. Do not guess customizations without querying the instance.
+
+## Expected analysis quality
+- Separate facts returned by `inspect_studio` from interpretations.
+- Link each customization to its business impact and technical risk.
+- Do not conclude that a customization is useless without checking the business process.
+- In migration, classify items as: keep, replace with standard, rebuild, remove.
+
+## Naming conventions
+| Element | Technical convention | Examples |
+|---|---|---|
+| Custom models | `x_<name>` with `state='manual'` | `x_construction_project` |
+| Custom fields | `x_<name>` or `x_studio_<name>` | `x_warranty`, `x_studio_ref` |
+| Studio views | `studio_customization.<hash>` | overlay on a standard view |
+| Server actions | bound to a model/action | button in a form view |
+| Automations | `base.automation` triggers | write/create notifications |
+
+## Recommended inspection flow
+1. Full inventory: `inspect_studio(sections=['all'])`.
+2. Data model focus: `models`, `fields`.
+3. Interface focus: `views`, `menus`.
+4. Logic focus: `server_actions`, `cron`, `automations`.
+5. Filter by app when the result is large.
+
+## Recommended output
+| Area | Count | Business impact | Technical risk | Recommended action |
+|---|---:|---|---|---|
+
+## Migration warnings
+- Studio views often break between major versions and must be retested.
+- Embedded Python in server actions must be checked against the target ORM.
+- Custom security rules can hide records after migration if groups changed.
+- Non-stored compute fields can become performance bottlenecks.
+"""
+
+_VERSION_NOTES_EN = {
+    "19.0": """\
+# Odoo 19.0
+
+## Technical prerequisites
+- PostgreSQL 13 minimum.
+- Python 3.11 recommended.
+
+## Functional highlights
+- Partnership replaces Membership.
+- New AI framework and industry packs.
+- Accounting: enhanced fiscal reports, Peppol/tax improvements, WhatsApp follow-ups.
+- Sales/CRM: AI lead probability, business card scanning, portal partial payments.
+- Inventory: multiple routes per sales line, nested packages, WhatsApp shipping notifications.
+- MRP: Gantt for manufacturing orders, lot size improvements, labor cost impact.
+
+## Migration watchpoints
+- PostgreSQL 13 is blocking.
+- Port Membership customizations to Partnership.
+- Validate Python compatibility for custom modules.
+""",
+    "18.0": """\
+# Odoo 18.0
+
+## Technical prerequisites
+- Python 3.10 minimum; Python 3.12 recommended.
+- PostgreSQL 12 minimum.
+
+## Functional highlights
+- Sales Commissions and Dispatch Management.
+- Accounting: abnormal invoice alerts, redesigned analytic budgets, loans, Peppol.
+- Sales: combo products, dynamic quotation templates, EDI order import.
+- Inventory: lot/serial valuation, flexible routes, improved putaway.
+- Website/eCommerce: SEO and product page improvements.
+
+## Migration watchpoints
+- Check removed payment providers and connector replacements.
+- Audit inline scripts / CSP-sensitive frontend customizations.
+""",
+    "17.0": """\
+# Odoo 17.0
+
+## Technical highlights
+- Major view syntax changes: `attrs` and `states` moved to direct expressions.
+- `<tree>` gradually replaced by `<list>`.
+- `name_get()` pattern moves toward computed display names.
+- Route model rename: `stock.location.route` -> `stock.route`.
+
+## Functional highlights
+- UX refresh across apps.
+- Accounting, sales, inventory, and website improvements.
+
+## Migration watchpoints
+- This is one of the most breaking upgrades for custom XML views.
+- Audit every inherited view and custom display name override.
+""",
+    "16.0": """\
+# Odoo 16.0
+
+## Highlights
+- Stronger analytic accounting model with analytic plans.
+- Inventory, MRP, website, and project improvements.
+- More mature OWL frontend stack.
+
+## Migration watchpoints
+- Review analytic customizations and accounting reports.
+- Validate JavaScript assets and frontend custom modules.
+""",
+    "15.0": """\
+# Odoo 15.0
+
+## Highlights
+- Production-ready OWL web client generation.
+- Inventory adjustment redesign and replenishment improvements.
+- Accounting reconciliation improvements.
+- Project, HR, website, and eCommerce enhancements.
+
+## Migration watchpoints
+- Review removed/deprecated ORM fields and search argument naming.
+- Validate custom web assets and reporting.
 """,
 }

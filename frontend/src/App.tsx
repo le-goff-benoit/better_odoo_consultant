@@ -40,6 +40,7 @@ export default function App() {
       const { primaryColor, themeMode } = res.data ?? {}
       if (primaryColor) applyBrandColor(primaryColor)
       applyThemeMode(themeMode)
+      document.documentElement.lang = res.data?.language === 'en' ? 'en' : 'fr'
     }).catch(() => {})
   }, [])
 

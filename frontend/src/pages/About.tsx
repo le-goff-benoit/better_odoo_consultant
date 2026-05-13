@@ -6,10 +6,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.19.0',
+    version: '0.20.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Internationalisation v1 : préférences de langue pour l’application, les réponses IA et les fichiers de contexte',
+      'Assistant IA : nouvelle instruction de langue avec mode automatique, français forcé ou anglais forcé, sans traduire les identifiants techniques Odoo',
+      'Contexte IA : support de fichiers Markdown séparés par langue avec defaults anglais pour skills.md, migration.md, studio.md, meeting-minute.md et notes Odoo 15 à 19',
+      'Paramètres : sélecteurs Français / English pour la langue d’interface, la langue des réponses IA et la langue du contexte IA',
+      'Éditeur de contexte : choix de langue par fichier, stockage anglais sous ~/.odoo-consultant/context/en/',
+    ],
+  },
+  {
+    version: '0.19.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Nouvelle page Fonctionnement : diagramme vertical du flux complet entre config utilisateur, providers IA, Markdown, sources Odoo, repos client, routeur de contexte, outils et réponse finale',
       'Menu latéral : nouvelle entrée Fonctionnement pour expliquer l’architecture d’usage sans mélanger avec le changelog À propos',

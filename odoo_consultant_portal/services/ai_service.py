@@ -413,12 +413,43 @@ def _trim_project_context(ctx: str) -> str:
 PERSPECTIVE_TECHNICAL = "technical"
 PERSPECTIVE_FUNCTIONAL = "functional"
 _VALID_PERSPECTIVES = {PERSPECTIVE_TECHNICAL, PERSPECTIVE_FUNCTIONAL}
+_VALID_RESPONSE_LANGUAGES = {"auto", "fr", "en"}
 
 
 def _normalize_perspective(p: Optional[str]) -> str:
     if p in _VALID_PERSPECTIVES:
         return p  # type: ignore[return-value]
     return PERSPECTIVE_TECHNICAL
+
+
+def _normalize_response_language(language: Optional[str]) -> str:
+    if language in _VALID_RESPONSE_LANGUAGES:
+        return language  # type: ignore[return-value]
+    return "auto"
+
+
+def _language_block(response_language: Optional[str]) -> str:
+    language = _normalize_response_language(response_language)
+    if language == "fr":
+        return """## Langue de réponse
+- Réponds toujours en français, même si le prompt utilisateur est dans une autre langue.
+- Ne traduis jamais les identifiants techniques Odoo : modèles, champs, XML IDs, chemins de fichiers, domains, noms de méthodes.
+
+---
+"""
+    elif language == "en":
+        return """## Response language
+- Always answer in English, even if the user prompt is in another language.
+- Never translate Odoo technical identifiers: models, fields, XML IDs, file paths, domains or method names.
+
+---
+"""
+    return """## Langue de réponse / Response language
+- Réponds dans la langue du dernier message utilisateur. If the user writes in English, answer in English; if they write in French, answer in French.
+- Ne traduis jamais les identifiants techniques Odoo / Never translate Odoo technical identifiers: modèles/models, champs/fields, XML IDs, chemins de fichiers/file paths, domains, noms de méthodes/method names.
+
+---
+"""
 
 
 def _perspective_block(perspective: str, *, migration: bool = False) -> str:
@@ -502,8 +533,9 @@ Cette perspective est active pour la requête en cours : si l'utilisateur vient 
     return common.strip() + "\n\n---\n"
 
 
-def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL) -> str:
+def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
     perspective_md = _perspective_block(perspective, migration=False)
+    language_md = _language_block(response_language)
     source_section = ""
     if source_path:
         source_section = f"""
@@ -533,7 +565,7 @@ utilise **count_source_lines(scope='project', ...)** — il scanne le dépôt en
 Ne déduis JAMAIS un nombre total de lignes à partir de search_project_source : cet outil retourne les *occurrences* d'un pattern, pas un comptage exhaustif.
 """
 
-    return f"""{perspective_md}Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
+    return f"""{language_md}{perspective_md}Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
 
 Instance connectée :
 - URL : {profile.db_url}
@@ -548,7 +580,6 @@ Instructions :
 - Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées quand le sujet est ambigu
 - Présente les listes sous forme de tableaux Markdown
 - Si tu ne connais pas les champs d'un modèle, utilise get_odoo_fields d'abord
-- Réponds dans la langue de l'utilisateur (français si l'utilisateur écrit en français)
 - Sois concis et orienté résultats
 
 Modèles Odoo fréquents (noms peuvent varier selon la version) :
@@ -580,8 +611,10 @@ def build_system_migration(
     context_md: str = "",
     repo_path: Optional[str] = None,
     perspective: str = PERSPECTIVE_TECHNICAL,
+    response_language: str = "auto",
 ) -> str:
     perspective_md = _perspective_block(perspective, migration=True)
+    language_md = _language_block(response_language)
     src_section = (
         f"Sources Odoo VERSION SOURCE ({source_version}) disponibles : {source_path}\n"
         "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source."
@@ -604,7 +637,7 @@ def build_system_migration(
         "ces outils retournent les *occurrences* d'un pattern, pas le nombre total de lignes.\n"
     )
 
-    return f"""{perspective_md}Tu es un expert Odoo spécialisé dans les migrations de version. Tu aides le consultant à préparer, analyser et exécuter une migration Odoo.
+    return f"""{language_md}{perspective_md}Tu es un expert Odoo spécialisé dans les migrations de version. Tu aides le consultant à préparer, analyser et exécuter une migration Odoo.
 
 ## Contexte de migration
 - Version SOURCE : {source_version}
@@ -633,13 +666,13 @@ def build_system_migration(
 - Si le contexte Markdown contredit le code source ou les données client, le code source et les données client gagnent
 - Présente les comparaisons sous forme de tableaux (Source | Cible | Impact)
 - Signale clairement les breaking changes avec ⚠️
-- Réponds dans la langue de l'utilisateur (français si l'utilisateur écrit en français)
 {chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
 """
 
 
-def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL) -> str:
+def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
     perspective_md = _perspective_block(perspective, migration=False)
+    language_md = _language_block(response_language)
     source_section = (
         f"Code source Odoo disponible localement : {source_path}\n"
         "IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
@@ -649,7 +682,7 @@ def build_system_general(version: str, source_path: Optional[str] = None, contex
         "- Lire un fichier : read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)\n"
     ) if source_path else "Code source non disponible pour cette version.\n"
 
-    return f"""{perspective_md}Tu es un expert Odoo qui répond à des questions générales sur l'ERP, indépendamment de tout projet client.
+    return f"""{language_md}{perspective_md}Tu es un expert Odoo qui répond à des questions générales sur l'ERP, indépendamment de tout projet client.
 
 Version Odoo : {version}
 {source_section}
@@ -658,7 +691,6 @@ Instructions :
 - Utilise le code source pour illustrer ou vérifier tes réponses quand c'est pertinent
 - Si le contexte Markdown contredit le code source local, le code source local gagne
 - Présente les listes sous forme de tableaux Markdown
-- Réponds dans la langue de l'utilisateur (français si l'utilisateur écrit en français)
 - Sois précis, pédagogique, orienté consultant
 - Tu n'as pas accès aux données d'une instance Odoo (mode général sans connexion client)
 {chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
@@ -1329,9 +1361,11 @@ async def stream_chat(
     migration_mode: bool = False,
     target_version: Optional[str] = None,
     perspective: str = PERSPECTIVE_TECHNICAL,
+    response_language: str = "auto",
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
     perspective = _normalize_perspective(perspective)
+    response_language = _normalize_response_language(response_language)
 
     user_ctx = ""
     if user_profile:
@@ -1348,14 +1382,14 @@ async def stream_chat(
     if migration_mode:
         src_ver = version or (profile.odoo_version if profile else "?")
         tgt_ver = target_version or "?"
-        system  = build_system_migration(src_ver, tgt_ver, source_path, target_path, context_md, repo_path, perspective)
+        system  = build_system_migration(src_ver, tgt_ver, source_path, target_path, context_md, repo_path, perspective, response_language)
         if user_ctx:
             system = user_ctx + system
         tools_c = TOOLS_CLAUDE_SRC
         tools_o = TOOLS_OPENAI_SRC
         tools_g = TOOLS_GEMINI_SRC
     elif profile is not None:
-        system   = build_system(profile, source_path, context_md, repo_path, perspective)
+        system   = build_system(profile, source_path, context_md, repo_path, perspective, response_language)
         if active_company_name:
             system = system.replace(
                 f"- Société : {profile.company_name or 'inconnue'}",
@@ -1369,7 +1403,7 @@ async def stream_chat(
         tools_o  = TOOLS_OPENAI
         tools_g  = TOOLS_GEMINI
     else:
-        system   = build_system_general(version or "?", source_path, context_md, repo_path, perspective)
+        system   = build_system_general(version or "?", source_path, context_md, repo_path, perspective, response_language)
         if user_ctx:
             system = user_ctx + system
         tools_c  = TOOLS_CLAUDE_SRC

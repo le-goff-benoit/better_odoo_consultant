@@ -1,4 +1,4 @@
-from odoo_consultant_portal.services.ai_service import _perspective_block, _trim_project_context
+from odoo_consultant_portal.services.ai_service import _language_block, _perspective_block, _trim_project_context
 from odoo_consultant_portal.services.context_service import load_context_for_prompt, read_file
 
 
@@ -20,6 +20,13 @@ def test_perspective_blocks_have_distinct_response_contracts():
     assert "Architecte / Développeur" in technical
     assert "fichier, ligne, modèle, champ" in technical
     assert "Impact fonctionnel" in technical
+
+
+def test_language_block_can_force_english_answers():
+    block = _language_block("en")
+
+    assert "Always answer in English" in block
+    assert "Never translate Odoo technical identifiers" in block
 
 
 def test_migration_context_keeps_budget_for_migration_material():
@@ -92,6 +99,30 @@ def test_context_router_includes_version_notes_for_version_sensitive_prompts():
     )
 
     assert "Notes de version Odoo 18.0" in context
+
+
+def test_context_router_supports_english_context_defaults():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Which customer invoices are overdue and how should I diagnose payments?",
+        perspective="technical",
+        locale="en",
+    )
+
+    assert "Consultant skills" in context
+    assert "Accounting & Finance" in context
+    assert "Advanced diagnostic patterns" in context
+    assert "Notes de version" not in context
+
+
+def test_context_router_supports_english_specialized_files():
+    meeting = load_context_for_prompt("18.0", user_prompt="Generate meeting minutes", locale="en")
+    studio = load_context_for_prompt("18.0", user_prompt="Which Studio x_studio fields exist?", locale="en")
+    version = load_context_for_prompt("18.0", user_prompt="What are the Odoo 18 upgrade highlights?", locale="en")
+
+    assert "Meeting minutes template" in meeting
+    assert "Studio inspection" in studio
+    assert "Odoo 18.0 release notes" in version
 
 
 def test_project_context_is_trimmed_independently_from_global_context():
