@@ -33,6 +33,7 @@ interface PerspectiveToggleProps {
 export default function PerspectiveToggle({ value, onChange, size = 'md', disabled }: PerspectiveToggleProps) {
   const dim   = size === 'sm' ? 26 : 30
   const icon  = size === 'sm' ? 13 : 15
+  const activeLabel = value === 'functional' ? 'AM / BA' : 'Archi / Dev'
 
   const itemStyle = (active: boolean): React.CSSProperties => ({
     width: dim, height: dim,
@@ -47,7 +48,8 @@ export default function PerspectiveToggle({ value, onChange, size = 'md', disabl
   return (
     <div
       role="group"
-      aria-label="Perspective de réponse"
+      aria-label={`Perspective de réponse, mode actif ${activeLabel}`}
+      title={`Mode actif : ${activeLabel}`}
       style={{
         display: 'inline-flex',
         background: t.bgMuted,
@@ -60,6 +62,7 @@ export default function PerspectiveToggle({ value, onChange, size = 'md', disabl
       <button
         type="button"
         title="Perspective fonctionnelle (AM / BA) — orientée parcours utilisateur, processus métier, configuration"
+        aria-label="Activer la perspective fonctionnelle AM / BA"
         aria-pressed={value === 'functional'}
         disabled={disabled}
         onClick={() => !disabled && onChange('functional')}
@@ -70,6 +73,7 @@ export default function PerspectiveToggle({ value, onChange, size = 'md', disabl
       <button
         type="button"
         title="Perspective technique (Archi / Dev) — orientée modèles, code, vues XML, performance"
+        aria-label="Activer la perspective technique Archi / Dev"
         aria-pressed={value === 'technical'}
         disabled={disabled}
         onClick={() => !disabled && onChange('technical')}

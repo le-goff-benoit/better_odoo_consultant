@@ -7,6 +7,34 @@ from typing import Optional
 _CONTEXT_DIR = Path.home() / ".odoo-consultant" / "context"
 
 _ALLOWED_NAME = re.compile(r'^[\w\-\.]+\.md$')
+_HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$", re.MULTILINE)
+_CONTEXT_BUDGET_CHARS = 36_000
+_CORE_SKILLS_HEADINGS = (
+    "Rôle de l'assistant",
+    "Mode d'emploi pour l'IA",
+    "Règles d'or du consultant",
+    "Contrat de réponse par défaut",
+)
+
+_DOMAIN_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Comptabilité & Finance", ("compta", "finance", "facture", "avoir", "paiement", "écriture", "ecriture", "journal", "taxe", "analytique", "budget", "rapprochement")),
+    ("Ventes & CRM", ("vente", "devis", "commande", "sale", "crm", "lead", "opportun", "pipeline", "commercial", "abonnement")),
+    ("Achats", ("achat", "purchase", "fournisseur", "rfq", "appel d'offre", "approvisionnement")),
+    ("Stock & Logistique", ("stock", "picking", "livraison", "réception", "reception", "transfert", "quant", "lot", "série", "serie", "entrepôt", "entrepot", "route")),
+    ("Ressources Humaines & Paie", ("rh", "hr", "employé", "employe", "congé", "conge", "paie", "payslip", "contrat", "attendance", "présence", "presence")),
+    ("Projets & Timesheets", ("projet", "project", "tâche", "tache", "timesheet", "feuille de temps", "jalon")),
+    ("Fabrication (MRP)", ("fabrication", "mrp", "of", "ordre de fabrication", "nomenclature", "bom", "workorder", "poste de charge")),
+    ("eCommerce & Site Web", ("ecommerce", "e-commerce", "site web", "website", "panier", "shop", "seo", "portail")),
+    ("Point de Vente (POS)", ("pos", "point de vente", "caisse", "session pos", "ticket")),
+    ("Règles de sécurité et droits d'accès", ("droit", "sécurité", "securite", "acl", "record rule", "ir.rule", "groupe", "accès", "access")),
+    ("Customisations : comment les repérer", ("custom", "personnalisation", "studio", "module tiers", "module custom", "x_studio", "x_")),
+    ("Performance & Optimisation", ("performance", "lenteur", "optimisation", "index", "requête", "requete", "timeout", "lent")),
+)
+
+_DIAGNOSTIC_TERMS = ("diagnostic", "diagnosti", "audit", "anomalie", "bloqué", "bloque", "problème", "probleme", "erreur", "incohérence", "incoherence", "doublon")
+_MEETING_TERMS = ("compte-rendu", "compte rendu", "meeting minute", "réunion", "reunion", "pv de réunion", "pv de reunion")
+_STUDIO_TERMS = ("studio", "x_studio", "personnalisation", "customisation", "champ custom", "modèle custom", "modele custom", "inspect_studio")
+_VERSION_TERMS = ("version", "migration", "upgrade", "nouveau", "nouveauté", "nouveaute", "changement", "différence", "difference", "breaking", "deprecated", "dépréci", "depreci", "supprimé", "supprime", "renommé", "renomme", "compatib", "v15", "v16", "v17", "v18", "v19", "odoo 15", "odoo 16", "odoo 17", "odoo 18", "odoo 19")
 
 
 def context_dir() -> Path:
@@ -49,22 +77,126 @@ def delete_file(name: str) -> None:
         path.unlink()
 
 
-def load_context_for_prompt(odoo_version: Optional[str] = None, migration: bool = False) -> str:
-    """Return combined context string to inject into AI system prompt."""
+def _normalize_text(text: Optional[str]) -> str:
+    return (text or "").casefold()
+
+
+def _has_any(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term in text for term in terms)
+
+
+def _markdown_sections(content: str) -> list[tuple[str, str, int]]:
+    """Split a markdown document by level-2/level-3 headings.
+
+    Returns (heading, markdown_chunk, level). Text before the first level-2 heading is
+    attached to the first section so the document title is preserved.
+    """
+    matches = list(_HEADING_RE.finditer(content))
+    if not matches:
+        return [("", content.strip(), 0)] if content.strip() else []
+
+    sections: list[tuple[str, str, int]] = []
+    preamble = content[:matches[0].start()].strip()
+    for idx, match in enumerate(matches):
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(content)
+        heading = match.group(2).strip()
+        level = len(match.group(1))
+        chunk = content[match.start():end].strip()
+        if idx == 0 and preamble:
+            chunk = f"{preamble}\n\n{chunk}"
+        sections.append((heading, chunk, level))
+    return sections
+
+
+def _select_skills_context(prompt: str, perspective: Optional[str]) -> str:
+    skills = read_file("skills.md")
+    sections = _markdown_sections(skills)
+    by_heading = {heading: chunk for heading, chunk, _level in sections}
+    selected: list[str] = []
+
+    for heading in _CORE_SKILLS_HEADINGS:
+        chunk = by_heading.get(heading)
+        if chunk:
+            selected.append(chunk)
+
+    matched_domains: list[str] = []
+    for heading, terms in _DOMAIN_RULES:
+        if _has_any(prompt, terms):
+            matched_domains.append(heading)
+
+    if not matched_domains and perspective == "functional":
+        matched_domains.extend(["Modèles transversaux essentiels", "Bonnes pratiques d'analyse client"])
+    elif not matched_domains:
+        matched_domains.append("Modèles transversaux essentiels")
+
+    for heading in matched_domains:
+        chunk = by_heading.get(heading)
+        if chunk and chunk not in selected:
+            selected.append(chunk)
+
+    if _has_any(prompt, _DIAGNOSTIC_TERMS):
+        chunk = by_heading.get("Patterns de diagnostic avancés")
+        if chunk:
+            selected.append(chunk)
+
+    for heading in ("Workflow des statuts — Référence rapide", "Bonnes pratiques d'analyse client"):
+        if heading in by_heading and (_has_any(prompt, _DIAGNOSTIC_TERMS) or perspective == "functional"):
+            selected.append(by_heading[heading])
+
+    return "\n\n".join(dict.fromkeys(selected)).strip()
+
+
+def _maybe_section(title: str, content: str, sections: list[tuple[str, str]]) -> None:
+    cleaned = content.strip()
+    if cleaned:
+        sections.append((title, cleaned))
+
+
+def _fit_context_budget(sections: list[tuple[str, str]], budget: int = _CONTEXT_BUDGET_CHARS) -> list[tuple[str, str]]:
+    fitted: list[tuple[str, str]] = []
+    used = 0
+    separator_len = len("\n\n---\n\n")
+    for title, content in sections:
+        rendered_len = len(f"## {title}\n\n{content.strip()}") + (separator_len if fitted else 0)
+        if used + rendered_len <= budget:
+            fitted.append((title, content))
+            used += rendered_len
+            continue
+        remaining = budget - used - len(f"## {title}\n\n") - (separator_len if fitted else 0)
+        suffix = "\n\n[...section de contexte tronquée par le routeur...]"
+        if remaining > len(suffix) + 500:
+            fitted.append((title, content[: remaining - len(suffix)].rstrip() + suffix))
+        break
+    return fitted
+
+
+def load_context_for_prompt(
+    odoo_version: Optional[str] = None,
+    migration: bool = False,
+    user_prompt: Optional[str] = None,
+    perspective: Optional[str] = None,
+) -> str:
+    """Return routed markdown context to inject into the AI system prompt."""
+    prompt = _normalize_text(user_prompt)
     sections = []
     try:
-        sections.append(("Compétences consultant", read_file("skills.md")))
+        _maybe_section("Compétences consultant", _select_skills_context(prompt, perspective), sections)
     except FileNotFoundError:
         pass
-    try:
-        sections.append(("Modèle compte-rendu", read_file("meeting-minute.md")))
-    except FileNotFoundError:
-        pass
-    try:
-        sections.append(("Inspection Studio", read_file("studio.md")))
-    except FileNotFoundError:
-        pass
-    if odoo_version:
+
+    if not migration and _has_any(prompt, _MEETING_TERMS):
+        try:
+            sections.append(("Modèle compte-rendu", read_file("meeting-minute.md")))
+        except FileNotFoundError:
+            pass
+
+    if _has_any(prompt, _STUDIO_TERMS):
+        try:
+            sections.append(("Inspection Studio", read_file("studio.md")))
+        except FileNotFoundError:
+            pass
+
+    if odoo_version and (migration or not prompt or _has_any(prompt, _VERSION_TERMS)):
         try:
             sections.append((f"Notes de version Odoo {odoo_version}", read_file(f"odoo-{odoo_version}.md")))
         except FileNotFoundError:
@@ -76,7 +208,7 @@ def load_context_for_prompt(odoo_version: Optional[str] = None, migration: bool 
             pass
     if not sections:
         return ""
-    return "\n\n---\n\n".join(f"## {title}\n\n{content.strip()}" for title, content in sections)
+    return "\n\n---\n\n".join(f"## {title}\n\n{content.strip()}" for title, content in _fit_context_budget(sections))
 
 
 # ── Default content ───────────────────────────────────────────────
@@ -104,12 +236,29 @@ Tu es le co-pilote d'un consultant Odoo expérimenté. Tu analyses des instances
 tu lis le code source Odoo, tu diagnostiques des anomalies et tu proposes des solutions concrètes.
 Sois toujours factuel : interroge les vraies données avant de conclure. Ne devine jamais un chiffre.
 
+## Mode d'emploi pour l'IA
+- Ce fichier est un **aide-mémoire opérationnel**, pas une source d'autorité absolue.
+- Priorité des sources : **données live Odoo** > **code source client** > **code source Odoo local** > **contexte projet** > **ce fichier**.
+- Les domaines et modèles ci-dessous peuvent varier selon version, édition, modules installés ou personnalisations.
+- Avant d'affirmer un modèle, un champ, un montant ou un volume : vérifie avec les outils disponibles.
+- Quand une information reste incertaine, dis-le explicitement et propose la vérification la plus courte.
+- Si la question est large, réponds d'abord avec la synthèse utile, puis détaille seulement ce qui aide à décider.
+
 ## Règles d'or du consultant
 1. Toujours croiser données live + code source quand disponible
 2. Citer le modèle, le champ exact et le domain utilisé dans chaque réponse
 3. Signaler proactivement les anomalies trouvées (doublons, incohérences, données corrompues)
 4. Distinguer ce qui est standard Odoo de ce qui est une customisation (module custom)
 5. Proposer des actions concrètes : domain Odoo, module concerné, vue à vérifier, champ exact
+6. Séparer **fait vérifié**, **hypothèse** et **recommandation** dès qu'il y a un risque d'ambiguïté
+7. Adapter la profondeur au mode actif : AM/BA = impact métier et parcours ; Archi/Dev = modèle, champ, code, migration
+
+## Contrat de réponse par défaut
+- Commencer par la réponse directe en 2–5 lignes.
+- Ajouter un tableau seulement s'il clarifie une comparaison, une liste d'anomalies ou un plan d'action.
+- Donner au maximum 3 prochaines actions, ordonnées par impact.
+- Ne pas inventer de navigation, de champ ou de paramètre : vérifier ou marquer "à confirmer".
+- Utiliser des dates relatives sous forme de placeholders (`<date_30j>`, `<date_du_jour>`) dans les exemples de domains.
 
 ---
 
@@ -124,7 +273,7 @@ Sois toujours factuel : interroge les vraies données avant de conclure. Ne devi
 | Avoirs clients | `account.move` | `[["move_type","=","out_refund"]]` |
 | Brouillons de factures | `account.move` | `[["state","=","draft"],["move_type","in",["out_invoice","in_invoice"]]]` |
 | Factures impayées | `account.move` | `[["payment_state","in",["not_paid","partial"]],["state","=","posted"]]` |
-| Factures en retard | `account.move` | `[["payment_state","not in",["paid","in_payment"]],["invoice_date_due","<","2025-01-01"],["state","=","posted"]]` |
+| Factures en retard | `account.move` | `[["payment_state","not in",["paid","in_payment"]],["invoice_date_due","<","<date_du_jour>"],["state","=","posted"]]` |
 | Paiements | `account.payment` | `[["state","=","posted"]]` |
 | Écritures comptables | `account.move.line` | `[["move_id.state","=","posted"]]` |
 | Lignes de rapprochement | `account.bank.statement.line` | — |
@@ -510,6 +659,13 @@ _MEETING_MINUTE_MD = """\
 Quand on te demande de générer un compte-rendu de réunion, utilise ce modèle.
 Adapte les sections au contenu réel de la conversation — supprime les sections vides.
 
+## Règles de génération
+- Ne pas inventer de participant, décision, échéance ou responsable.
+- Si une information manque, écrire `À confirmer` plutôt que combler.
+- Transformer les échanges longs en décisions, risques, questions ouvertes et actions concrètes.
+- Garder un style professionnel, factuel, sans commentaire sur la qualité de la réunion.
+- Si la conversation contient des désaccords, les résumer comme points à arbitrer.
+
 ---
 
 # Compte-rendu de réunion — [Sujet principal]
@@ -586,6 +742,9 @@ _MIGRATION_MD = """\
 > (parcours, processus, modules, conduite du changement) en mode fonctionnel ; descends
 > dans le code (ORM, vues, hooks) en mode technique. Mais raisonne **toujours** sur les
 > deux dimensions avant de répondre.
+>
+> Priorité : les sources et le dépôt client priment sur cette méthodologie. Si un exemple
+> ci-dessous ne correspond pas au code local, mentionne l'écart et base la réponse sur le code.
 
 ## Rôle de l'assistant en mode migration
 Aider le consultant à **cadrer, sécuriser et exécuter** une migration Odoo en couvrant
@@ -593,6 +752,13 @@ trois dimensions :
 1. **Métier / fonctionnel** : ce que les utilisateurs vont gagner, perdre, refaire ou réapprendre.
 2. **Applicatif / paramétrage** : modules à activer, désactiver, remplacer ; configurations à reprendre.
 3. **Technique** : modules custom, données, performance, infrastructure, breaking changes du framework.
+
+## Contrat de réponse en migration
+- Commencer par le risque principal ou l'opportunité principale.
+- Toujours distinguer : **standard Odoo**, **custom client**, **donnée à migrer**, **configuration à reprendre**.
+- En mode AM/BA : traduire les changements en impacts utilisateurs, formation et arbitrages.
+- En mode Archi/Dev : citer modèles, champs, fichiers, hooks, scripts ou commandes à modifier.
+- Terminer par 3 actions maximum : audit, correction, test ou décision.
 
 ---
 
@@ -785,6 +951,13 @@ _STUDIO_MD = """\
 Quand l'utilisateur demande ce qui a été fait via Studio, quels champs/modèles/vues existent,
 ou veut comprendre les personnalisations de l'instance, utilise **toujours** `inspect_studio`
 avant de répondre. Ne suppose jamais ce qui a été personnalisé sans interroger l'instance.
+
+## Qualité attendue de l'analyse
+- Séparer les faits retournés par `inspect_studio` des interprétations.
+- Relier chaque personnalisation à son **impact métier** et à son **risque technique**.
+- Ne pas conclure qu'une personnalisation est inutile sans vérifier le processus métier concerné.
+- En migration, classer les éléments en : à conserver, à remplacer par standard, à refaire, à supprimer.
+- Si le volume est élevé, commencer par les modèles et vues qui touchent `sale`, `account`, `stock`, `project`, `hr` ou les modèles `x_*`.
 
 ## Conventions de nommage Odoo Studio
 

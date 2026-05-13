@@ -384,6 +384,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             raise HTTPException(400, f"Impossible d'obtenir le token Copilot : {exc}")
 
     import os as _os
+    user_prompt = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     messages = _inject_attachments(messages, req.attachments)
 
@@ -404,7 +405,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         candidate = str(Path.home() / ".odoo-consultant" / "sources" / version)
         if _os.path.isdir(candidate):
             source_path = candidate
-        context_md = load_context_for_prompt(version, migration=req.migration_mode)
+        context_md = load_context_for_prompt(
+            version,
+            migration=req.migration_mode,
+            user_prompt=user_prompt,
+            perspective=req.perspective or "technical",
+        )
 
         # Migration target resolution
         _gen_target_path = None
@@ -511,7 +517,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
                     if _os.path.isdir(_tgt_c):
                         target_path = _tgt_c
 
-    context_md = load_context_for_prompt(_version_to_use, migration=req.migration_mode)
+    context_md = load_context_for_prompt(
+        _version_to_use,
+        migration=req.migration_mode,
+        user_prompt=user_prompt,
+        perspective=req.perspective or "technical",
+    )
 
     async def generate():
         try:
