@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, Database, Eye, EyeOff, FileText, FolderOpen, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, UserRound, X } from 'lucide-react'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
+import RobotThinking from '../components/RobotThinking'
+import CatThinking from '../components/CatThinking'
+import DogThinking from '../components/DogThinking'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { applyBrandColor, applyThemeMode } from '../App'
@@ -881,6 +884,8 @@ interface UserProfile {
   avatar?: string   // emoji or data-URI
   primaryColor?: string
   themeMode?: 'light' | 'dark' | 'sepia'
+  mascotType?: 'robot' | 'cat' | 'dog'
+  mascotColor?: string
 }
 
 function UserProfileEditor() {
@@ -1022,6 +1027,51 @@ function UserProfileEditor() {
                   </button>
                 )
               })}
+            </div>
+          </div>
+
+          {/* Mascot picker */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>Mascotte de réflexion</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              {([
+                { id: 'robot', label: 'Robot',  preview: <RobotThinking size={40} color={form.mascotColor ?? '#22D3EE'} /> },
+                { id: 'cat',   label: 'Chat',   preview: <CatThinking   size={40} color={form.mascotColor ?? '#22D3EE'} /> },
+                { id: 'dog',   label: 'Chien',  preview: <DogThinking   size={40} color={form.mascotColor ?? '#22D3EE'} /> },
+              ] as const).map(({ id, label, preview }) => {
+                const active = (form.mascotType ?? 'robot') === id
+                return (
+                  <button key={id} onClick={() => set('mascotType', id)} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    padding: '8px 12px', borderRadius: t.radius, cursor: 'pointer',
+                    border: `2px solid ${active ? (form.mascotColor ?? 'var(--brand, #017e84)') : t.border}`,
+                    background: active ? `${form.mascotColor ?? 'var(--brand, #017e84)'}15` : t.bgMuted,
+                    transition: 'all .15s',
+                  }}>
+                    <div style={{ height: 44, display: 'flex', alignItems: 'flex-end' }}>{preview}</div>
+                    <span style={{ fontSize: 11, fontWeight: active ? 600 : 400, color: active ? (form.mascotColor ?? t.brand) : t.muted }}>{label}</span>
+                  </button>
+                )
+              })}
+
+              {/* Mascot color picker */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignSelf: 'center', marginLeft: 4 }}>
+                <div style={{ fontSize: 10, color: t.muted, fontWeight: 600 }}>Couleur</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {['#22D3EE', '#818CF8', '#F472B6', '#34D399', '#F59E0B', '#EF4444', '#A855F7', '#F97316'].map(c => (
+                    <button key={c} onClick={() => set('mascotColor', c)} style={{
+                      width: 22, height: 22, borderRadius: '50%', background: c, border: 'none',
+                      cursor: 'pointer', outline: (form.mascotColor ?? '#22D3EE') === c ? `3px solid ${c}` : 'none',
+                      outlineOffset: 2, transition: 'outline .1s',
+                    }} />
+                  ))}
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} title="Couleur personnalisée">
+                    <input type="color" value={form.mascotColor ?? '#22D3EE'}
+                      onChange={e => set('mascotColor', e.target.value)}
+                      style={{ width: 22, height: 22, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         </div>

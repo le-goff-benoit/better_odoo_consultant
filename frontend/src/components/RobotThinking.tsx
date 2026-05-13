@@ -30,7 +30,7 @@ function pickMode(current: Mode): Mode {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-export default function RobotThinking({ size = 52 }: { size?: number }) {
+export default function RobotThinking({ size = 52, color = '#22D3EE' }: { size?: number; color?: string }) {
   const [mode, setMode] = useState<Mode>('idle')
   const modeRef = useRef<Mode>('idle')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -96,8 +96,8 @@ export default function RobotThinking({ size = 52 }: { size?: number }) {
   const eyeScaleY = mode === 'working' || mode === 'sleepy' ? 0.45 : 1
   const eyeScan   = mode === 'searching' ? { animation: 'rt-eye-scan 1.1s ease-in-out infinite' } : {}
 
-  const eyeColor   = mode === 'surprised' ? '#F59E0B' : mode === 'working' ? '#34D399' : '#22D3EE'
-  const eyeInner   = mode === 'surprised' ? '#FCD34D' : mode === 'working' ? '#6EE7B7' : '#67E8F9'
+  const eyeColor   = mode === 'surprised' ? '#F59E0B' : mode === 'working' ? '#34D399' : color
+  const eyeInner   = mode === 'surprised' ? '#FCD34D' : mode === 'working' ? '#6EE7B7' : color
 
   const smilePath  = (mode === 'excited' || mode === 'found')  ? 'M21 22.5 Q26 27.5 31 22.5'
     : mode === 'surprised'  ? 'M22.5 24 Q26 27 29.5 24'
@@ -157,7 +157,7 @@ export default function RobotThinking({ size = 52 }: { size?: number }) {
         <rect x="19" y="37" width="14" height="11" rx="2" fill="#A8BED4" />
         {/* LED row */}
         {[23, 26, 29].map((cx, i) => (
-          <circle key={cx} cx={cx} cy="42" r="1.5" fill={i === 1 ? eyeColor : '#22D3EE'}
+          <circle key={cx} cx={cx} cy="42" r="1.5" fill={i === 1 ? eyeColor : color}
             style={{ animation: antennaGlow, animationDelay: `${i * 0.22}s` }} />
         ))}
         <rect x="16" y="38" width="2" height="7" rx="1" fill="#93AABF" />

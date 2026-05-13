@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { ArrowUp, Bot, Building2, Check, ChevronDown, FileText, FolderCode, Globe2, History, Lock, Paperclip, Settings, Square, TriangleAlert, X } from 'lucide-react'
-import { listProfiles, getAiProviders, checkAllSources, getModelConfig } from '../api/client'
+import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import PerspectiveToggle, { Perspective, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
-import RobotThinking from '../components/RobotThinking'
+import MascotThinking from '../components/MascotThinking'
 
 import { ODOO_APPS } from '../constants/odooApps'
 
@@ -321,6 +321,8 @@ export default function Assistant() {
   const { data: provData }  = useQuery({ queryKey: ['ai-providers'],  queryFn: getAiProviders })
   const { data: srcData }   = useQuery({ queryKey: ['sources-all'],   queryFn: checkAllSources, staleTime: 30_000 })
   const { data: modelCfg }  = useQuery({ queryKey: ['model-config'],  queryFn: getModelConfig })
+  const { data: userProfileData } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
+  const userProfile = userProfileData?.data as { mascotType?: 'robot' | 'cat' | 'dog'; mascotColor?: string } | undefined
 
   const profiles: Profile[] = profData?.data ?? []
   const allProviders: Record<string, boolean> = provData?.data ?? {}
@@ -968,7 +970,7 @@ export default function Assistant() {
                 ref={el => { assistantRefs.current.set(msg.id, el) }}
                 style={{ scrollMarginTop: 8 }}
               >
-                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} />
+                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} mascotType={userProfile?.mascotType} mascotColor={userProfile?.mascotColor} />
               </div>
             )
         ))}
@@ -1609,10 +1611,12 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, inputTokens, outputTokens, projectName }: {
+function AssistantBubble({ events, loading, provider, timestamp, inputTokens, outputTokens, projectName, mascotType, mascotColor }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
+  mascotType?: 'robot' | 'cat' | 'dog'
+  mascotColor?: string
 }) {
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt   = events.find(e => e.type === 'text')
@@ -1665,7 +1669,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
             borderRadius: t.radiusLg,
             fontSize: 13, color: t.textSub,
           }}>
-            <RobotThinking size={44} />
+            <MascotThinking size={44} mascot={mascotType} color={mascotColor} />
             <span style={{ fontWeight: 500 }}>
               {toolEvents.length > 0 ? 'Analyse des résultats et rédaction de la réponse…' : 'Réflexion en cours…'}
             </span>
