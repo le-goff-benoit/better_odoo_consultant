@@ -761,77 +761,118 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
 
   return (
     <div style={{
-      background: t.white, borderRadius: t.radiusLg,
-      border: `1px solid ${t.border}`, boxShadow: t.shadow,
-      overflow: 'hidden', display: 'flex', flexDirection: 'column',
-    }}>
-      {/* Coloured top bar */}
-      <div style={{ height: 4, background: `linear-gradient(90deg, ${t.brand}, ${t.action})` }} />
+      background: t.white,
+      borderRadius: t.radiusXl,
+      border: `1px solid ${t.border}`,
+      boxShadow: t.shadow,
+      overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
+      transition: 'box-shadow .2s, border-color .2s',
+    }}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLDivElement
+        el.style.boxShadow = t.shadowMd
+        el.style.borderColor = t.brand40
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLDivElement
+        el.style.boxShadow = t.shadow
+        el.style.borderColor = t.border
+      }}
+    >
+      {/* ── Header ── */}
+      <div style={{ padding: '18px 20px 14px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        {/* Logo */}
+        <div style={{ flexShrink: 0 }}>
+          {profile.company_logo
+            ? <img src={profile.company_logo} alt="logo" style={{
+                width: 52, height: 52, objectFit: 'contain', borderRadius: 10,
+                background: t.bgMuted, border: `1px solid ${t.border}`, padding: 5,
+              }} />
+            : <div style={{
+                width: 52, height: 52, borderRadius: 10,
+                background: t.brand20, border: `1px solid ${t.brand40}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+              }}>🏢</div>
+          }
+        </div>
 
-      <div style={{ padding: '16px 18px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-        {/* ── Identity row ── */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          {/* Logo / icon */}
-          <div style={{ flexShrink: 0 }}>
-            {profile.company_logo
-              ? <img src={profile.company_logo} alt="logo" style={{
-                  width: 48, height: 48, objectFit: 'contain', borderRadius: 8,
-                  background: t.bgMuted, border: `1px solid ${t.border}`, padding: 4,
-                }} />
-              : <div style={{
-                  width: 48, height: 48, borderRadius: 8,
-                  background: t.brand20, border: `1px solid ${t.brand40}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
-                }}>🏢</div>
-            }
+        {/* Name + meta */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: t.text, lineHeight: 1.2, marginBottom: 2 }}>
+            {profile.name}
           </div>
-
-          {/* Name + badges */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: t.text, marginBottom: 3, lineHeight: 1.2 }}>{profile.name}</div>
-            {profile.company_name && (
-              <div style={{ fontSize: 12, color: t.textSub, marginBottom: 5 }}>
-                {profile.company_name}{profile.company_city ? `, ${profile.company_city}` : ''}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-              {profile.odoo_version && (
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: t.brand, borderRadius: 4, padding: '2px 8px' }}>
-                  Odoo {profile.odoo_version}
-                </span>
-              )}
-              {keyExpiry && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: keyExpiry.color, borderRadius: 4, padding: '2px 8px' }}
-                  title={profile.api_key_expires}>{keyExpiry.label}</span>
-              )}
-              {accessInfo?.is_system && (
-                <span title="Utilisateur administrateur système — droits élevés" style={{
-                  fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626',
-                  borderRadius: 4, padding: '2px 8px', cursor: 'help',
-                }}>⚠ Admin système</span>
-              )}
-              {!accessInfo?.is_system && accessInfo?.is_admin && (
-                <span title="Utilisateur avec droits d'administration" style={{
-                  fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7',
-                  border: '1px solid #fcd34d', borderRadius: 4, padding: '2px 8px', cursor: 'help',
-                }}>⚠ Admin</span>
-              )}
+          {profile.company_name && (
+            <div style={{ fontSize: 12, color: t.muted, marginBottom: 7 }}>
+              {profile.company_name}{profile.company_city ? ` · ${profile.company_city}` : ''}
             </div>
+          )}
+          {/* Badges row */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+            {profile.odoo_version && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: '#fff',
+                background: t.brand, borderRadius: t.radiusFull, padding: '2px 9px',
+              }}>
+                Odoo {profile.odoo_version}
+              </span>
+            )}
+            {keyExpiry && (
+              <span title={profile.api_key_expires} style={{
+                fontSize: 11, fontWeight: 600, color: '#fff', background: keyExpiry.color,
+                borderRadius: t.radiusFull, padding: '2px 9px',
+              }}>{keyExpiry.label}</span>
+            )}
+            {accessInfo?.is_system && (
+              <span title="Utilisateur administrateur système" style={{
+                fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626',
+                borderRadius: t.radiusFull, padding: '2px 9px', cursor: 'help',
+              }}>⚠ Admin système</span>
+            )}
+            {!accessInfo?.is_system && accessInfo?.is_admin && (
+              <span title="Utilisateur avec droits d'administration" style={{
+                fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7',
+                border: '1px solid #fcd34d', borderRadius: t.radiusFull, padding: '2px 9px', cursor: 'help',
+              }}>⚠ Admin</span>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* ── Connection info (slim) ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 0,
+        padding: '7px 20px', background: t.bgMuted,
+        borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`,
+        fontSize: 11, color: t.muted,
+      }}>
+        <a href={profile.db_url} target="_blank" rel="noreferrer" style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          color: t.action, textDecoration: 'none', fontWeight: 600,
+          overflow: 'hidden', flex: 1,
+        }}>
+          <span>🌐</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {profile.db_url.replace(/^https?:\/\//, '')}
+          </span>
+        </a>
+        <span style={{ color: t.borderLight, margin: '0 8px' }}>│</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          <span>👤</span>
+          <span style={{ color: t.textSub, fontWeight: 500 }}>{profile.login}</span>
+        </span>
+      </div>
+
+      <div style={{ padding: '12px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
 
         {/* ── App badges ── */}
         {apps.length > 0 && <AppBadges apps={apps} max={6} />}
 
-        {/* ── Default company (multi-company) ── */}
+        {/* ── Multi-company selector ── */}
         {companies.length > 1 && (
-          <div style={{ background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '8px 10px' }}>
-            <p className="label-section" style={{ marginBottom: 6 }}>
-              Société par défaut dans l'Assistant IA
-            </p>
-            <div style={{ fontSize: 11, color: t.muted, marginBottom: 6 }}>
-              Les requêtes seront filtrées sur cette société.
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: t.muted, marginBottom: 6 }}>
+              Société active dans l'assistant
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {companies.map(c => {
@@ -842,9 +883,10 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
                     key={c.id}
                     onClick={() => isAccessible && onSelectCompany(c.id)}
                     disabled={!isAccessible}
-                    title={!isAccessible ? `L'utilisateur ${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
+                    title={!isAccessible ? `${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
                     style={{
-                      fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 4,
+                      fontSize: 11, fontWeight: 600, padding: '3px 10px',
+                      borderRadius: t.radiusFull,
                       border: `1px solid ${!isAccessible ? t.border : isActive ? t.brand : t.border}`,
                       background: !isAccessible ? t.bgMuted : isActive ? t.brand : t.bgCard,
                       color: !isAccessible ? t.muted : isActive ? '#fff' : t.textSub,
@@ -860,36 +902,13 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
           </div>
         )}
 
-        {/* ── Connection info ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <a href={profile.db_url} target="_blank" rel="noreferrer" style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
-            background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius,
-            fontSize: 11, color: t.action, textDecoration: 'none', fontWeight: 600,
-            overflow: 'hidden',
-          }}>
-            <span>🌐</span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile.db_url.replace(/^https?:\/\//, '')}
-            </span>
-          </a>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
-            background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radius,
-            fontSize: 11, color: t.textSub, overflow: 'hidden',
-          }}>
-            <span>👤</span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.login}</span>
-          </div>
-        </div>
-
         {/* ── Environments ── */}
         {(envs.length > 0 || addingEnv) && (
           <div>
             {envs.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: addingEnv ? 8 : 0 }}>
                 {envs.map((env, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
                     <a href={env.db_url} target="_blank" rel="noreferrer" style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
                       padding: '3px 8px', borderRadius: '4px 0 0 4px',
@@ -930,56 +949,46 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
           </div>
         )}
 
-        {/* ── Footer actions ── */}
+        {/* ── Footer ── */}
         <div style={{ marginTop: 'auto', paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
-          {/* Row 1: links */}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-            {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
-            {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="🐙" color="#24292f" />}
-            <button onClick={() => setAddingEnv(a => !a)} style={{
-              fontSize: 11, color: t.muted, background: 'none',
-              border: `1px dashed ${t.border}`, borderRadius: t.radius,
-              padding: '3px 9px', cursor: 'pointer',
-            }}>+ env</button>
-          </div>
-          {/* Row 2: main actions + delete at the end */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button className="btn btn-outline" onClick={onEdit}>✏ Modifier</button>
-            <button className="btn btn-outline" onClick={onTest}>▶ Tester</button>
-            <button className="btn btn-outline" onClick={onCheckAccess} disabled={checkingAccess}
-              title="Vérifier les droits d'accès de l'utilisateur Odoo">
+          {/* External links */}
+          {(profile.odoo_sh_url || ghUrl) && (
+            <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
+              {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
+              {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="🐙" color="#24292f" />}
+            </div>
+          )}
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-outline btn-sm" onClick={onEdit} title="Modifier ce projet">✏ Modifier</button>
+            <button className="btn btn-outline btn-sm" onClick={onTest} title="Tester la connexion">▶ Tester</button>
+            <button className="btn btn-outline btn-sm" onClick={onCheckAccess} disabled={checkingAccess}
+              title="Vérifier les droits d'accès">
               {checkingAccess ? '⟳' : '🔍'} Accès
             </button>
-            <button className="btn btn-outline" onClick={onContext}
-              title="Ouvrir le fichier de contexte de ce projet"
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button className="btn btn-outline btn-sm" onClick={onContext}
+              title="Fichier de contexte de ce projet"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               📋 Contexte
               {profile.project_context && (
-                <span style={{
-                  width: 7, height: 7, borderRadius: '50%',
-                  background: t.success, display: 'inline-block', flexShrink: 0,
-                }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.success, display: 'inline-block', flexShrink: 0 }} />
               )}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => setAddingEnv(a => !a)}
+              title="Ajouter un environnement de staging">
+              + env
             </button>
             <div style={{ flex: 1 }} />
             <button
               onClick={() => setConfirmDelete(true)}
               title="Supprimer ce projet"
               style={{
-                background: 'none', border: `1px solid ${t.borderLight}`, cursor: 'pointer',
-                color: t.muted, fontSize: 13, padding: '4px 9px', borderRadius: t.radius,
-                transition: 'all .15s', lineHeight: 1,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: t.muted, fontSize: 15, padding: '2px 4px',
+                lineHeight: 1, transition: 'color .15s',
               }}
-              onMouseEnter={e => {
-                e.currentTarget.style.color = t.danger
-                e.currentTarget.style.borderColor = `${t.danger}50`
-                e.currentTarget.style.background = `${t.danger}08`
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = t.muted
-                e.currentTarget.style.borderColor = t.borderLight
-                e.currentTarget.style.background = 'none'
-              }}
+              onMouseEnter={e => { e.currentTarget.style.color = t.danger }}
+              onMouseLeave={e => { e.currentTarget.style.color = t.muted }}
             >🗑</button>
           </div>
         </div>
