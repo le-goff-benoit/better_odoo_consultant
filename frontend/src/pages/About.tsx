@@ -6,10 +6,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.16.0',
+    version: '0.17.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Mascotte de réflexion personnalisable : choix entre Robot, Chat ou Chien animé affiché pendant les réponses IA (8 modes d'animation aléatoires : idle, thinking, excited, searching, found, working, surprised, sleepy)',
+      'Couleur de la mascotte configurable : 8 presets + color picker libre depuis le profil utilisateur',
+      'La mascotte s'applique simultanément sur les pages Assistant et Migration',
+    ],
+  },
+  {
+    version: '0.16.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Outil IA inspect_studio : inventaire complet des personnalisations Studio (modèles custom, champs x_, vues, menus, actions serveur, ir.cron, base.automation, règles d’accès)',
       'Fichier de contexte studio.md : guide d’interprétation éditable depuis les Paramètres (étiquettes, conventions de nommage, impact migration)',
