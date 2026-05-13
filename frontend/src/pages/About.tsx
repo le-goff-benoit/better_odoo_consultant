@@ -6,10 +6,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.15.0',
+    version: '0.16.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Outil IA inspect_studio : inventaire complet des personnalisations Studio (modèles custom, champs x_, vues, menus, actions serveur, ir.cron, base.automation, règles d’accès)',
+      'Fichier de contexte studio.md : guide d’interprétation éditable depuis les Paramètres (étiquettes, conventions de nommage, impact migration)',
+    ],
+  },
+  {
+    version: '0.15.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Page Migration : toggle de perspective fonctionnelle (AM/BA) / technique (ARCHI/DEV) pour adapter le ton des analyses',
       'Page Migration : sélecteur de version cible limité aux versions strictement supérieures à la source (migration ascendante uniquement)',

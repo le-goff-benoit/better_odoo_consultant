@@ -5,7 +5,7 @@
 L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.14.0**
+> Version actuelle : **0.16.0**
 
 ---
 
@@ -26,6 +26,7 @@ L'Odoo Consultant Portal est une application web qui tourne sur votre machine. E
   - [Sources Odoo standard](#sources-odoo-standard)
   - [Dépôt custom GitHub](#dépôt-custom-github)
   - [Contexte projet](#contexte-projet)
+  - [Inspection Studio](#inspection-studio)
   - [Données live Odoo](#données-live-odoo)
   - [Checklist — obtenir les meilleures réponses](#checklist--obtenir-les-meilleures-réponses)
 - [Architecture & développement](#architecture--développement)
@@ -220,6 +221,9 @@ L'assistant IA est la fonctionnalité centrale du portail. Il combine trois sour
 
 <!-- docs/screenshots/assistant-chat.png : exemple de conversation avec un appel d'outil visible -->
 
+**Perspective fonctionnelle / technique :**  
+Un toggle 💼 / `</>` permet de basculer entre le mode **AM/BA** (réponses orientées métier, tableaux processus, vocabulaire utilisateur) et le mode **ARCHI/DEV** (réponses techniques avec extraits de code, ORM, noms de champs exacts). La préférence est mémorisée par page.
+
 **Exemples de questions utiles :**
 
 En mode projet :
@@ -228,6 +232,9 @@ En mode projet :
 "Quels sont les 10 derniers bons de commande avec leur montant total ?"
 "Est-ce que ce client a le module MRP installé ?"
 "Cherche si le modèle sale.order a été surchargé dans les modules custom"
+"Qu'est-ce qui a été personnalisé via Studio sur cette instance ?"
+"Donne-moi l'inventaire des champs custom créés sur sale.order"
+"Combien de lignes de code Python dans le repo client ?"
 ```
 
 En mode général :
@@ -368,6 +375,27 @@ Elle ne cherche pas dans les sources si elle sait déjà. Un contexte bien rédi
 
 ---
 
+### Inspection Studio
+
+**Rôle :** inventorier les personnalisations réalisées via Odoo Studio sur l'instance connectée.
+
+L'IA dispose d'un outil dédié `inspect_studio` qui interroge l'instance pour récupérer :
+- **Modèles custom** (`state='manual'` — typiquement préfixés `x_`)
+- **Champs custom** par modèle (type, stocké, compute, related…)
+- **Vues modifiées** via Studio (overlays sur les vues standard)
+- **Menus** créés par Studio
+- **Actions serveur** (boutons custom dans les formulaires)
+- **Actions planifiées** (`ir.cron`)
+- **Automatisations** (`base.automation` — déclencheurs sur écriture, création…)
+- **Règles d'accès et règles d'enregistrement** créées par Studio
+
+L'outil est déclenché automatiquement quand vous posez des questions du type :
+> *« Qu'est-ce qui a été fait via Studio ? »*, *« Donne-moi l'inventaire des champs custom »*, *« Analyse l'impact Studio avant la migration »*
+
+Il est également possible de personnaliser le guide d'interprétation via le fichier **`studio.md`** dans les Paramètres → Fichiers de contexte.
+
+---
+
 ### Données live Odoo
 
 **Rôle :** interroger directement la base de données du client via XML-RPC pour obtenir de vraies valeurs.
@@ -379,6 +407,7 @@ L'IA peut exécuter des recherches sur n'importe quel modèle Odoo, lire des enr
 - Lire les champs d'un ou plusieurs enregistrements
 - Vérifier la configuration d'un module (ex: `stock.warehouse`, `account.journal`)
 - Détecter des anomalies dans des volumes de données
+- Inspecter les personnalisations Studio (modèles, champs, vues, automatisations)
 
 **Prérequis :** une [clé API Odoo](https://www.odoo.com/documentation/17.0/developer/reference/external_api.html#api-keys) avec les droits suffisants. Une clé en lecture seule est conseillée en production.
 
@@ -401,6 +430,7 @@ Sources IA — checklist par environnement
 [ ] Dépôt à jour (pull récent)     → après chaque déploiement
 [ ] Contexte projet renseigné      → au moins les modules custom et leurs rôles
 [ ] Clé API Odoo testée            → ✓ vert dans la modal d'environnement
+[ ] studio.md personnalisé         → optionnel, guide l'interprétation Studio
 ```
 
 **Indicateurs visuels dans l'assistant :**
@@ -439,6 +469,8 @@ better_odoo_consultant/
 │   │   └── config.py        # Configuration
 │   └── services/
 │       ├── ai_service.py    # Outils IA, system prompts, providers
+│       │                    # (query_odoo, count_odoo, search/read sources,
+│       │                    #  count_source_lines, inspect_studio)
 │       ├── odoo_client.py   # XML-RPC Odoo
 │       ├── profile_manager.py # Keyring, résolution d'environnement
 │       └── source_manager.py  # Gestion sources git
