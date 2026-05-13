@@ -1,16 +1,17 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
-import Dashboard from './pages/Dashboard'
-import Sources from './pages/Sources'
-import Profiles from './pages/Profiles'
-import Assistant from './pages/Assistant'
-import Migration from './pages/Migration'
-import Query from './pages/Query'
-import History from './pages/History'
-import Settings from './pages/Settings'
-import About from './pages/About'
 import { getUserProfile } from './api/client'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Sources   = lazy(() => import('./pages/Sources'))
+const Profiles  = lazy(() => import('./pages/Profiles'))
+const Assistant = lazy(() => import('./pages/Assistant'))
+const Migration = lazy(() => import('./pages/Migration'))
+const Query     = lazy(() => import('./pages/Query'))
+const History   = lazy(() => import('./pages/History'))
+const Settings  = lazy(() => import('./pages/Settings'))
+const About     = lazy(() => import('./pages/About'))
 
 export function applyBrandColor(color: string) {
   document.documentElement.style.setProperty('--brand', color)
@@ -43,6 +44,7 @@ export default function App() {
 
   return (
     <Layout>
+      <Suspense fallback={null}>
       <Routes>
         <Route path="/" element={<Navigate to="/sources" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -55,6 +57,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/about" element={<About />} />
       </Routes>
+      </Suspense>
     </Layout>
   )
 }
