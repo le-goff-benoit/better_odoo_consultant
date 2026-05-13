@@ -126,6 +126,11 @@ function resolveRepoPath(cfg: SideConfig, profiles: Profile[]): { profileId: num
   return { profileId: p.id, envId }
 }
 
+function cmpVersion(a: string | null, b: string | null): number {
+  if (!a || !b) return 0
+  return parseFloat(a) - parseFloat(b)
+}
+
 function fmtTime(ts?: number) {
   if (!ts) return null
   return new Date(ts).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })
@@ -259,7 +264,7 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
 // ── SideSelector ──────────────────────────────────────────────────
 
 function SideSelector({
-  label, cfg, onChange, versions, profiles, sourcesData,
+  label, cfg, onChange, versions, profiles, sourcesData, minVersion,
 }: {
   label: string
   cfg: SideConfig
@@ -267,6 +272,7 @@ function SideSelector({
   versions: string[]
   profiles: Profile[]
   sourcesData: Record<string, { installed: boolean }> | undefined
+  minVersion?: string | null
 }) {
   const selectStyle: React.CSSProperties = {
     width: '100%', padding: '7px 10px', fontSize: 13,
@@ -279,7 +285,17 @@ function SideSelector({
   }
 
   const selectedProfile = profiles.find(p => p.id === cfg.profileId) ?? null
-  const envs = profileEnvs(selectedProfile)
+  const allEnvs = profileEnvs(selectedProfile)
+  // Filter: if minVersion is set, only show strictly higher versions/envs
+  const allowedVersions = minVersion
+    ? versions.filter(v => cmpVersion(v, minVersion) > 0)
+    : versions
+  const allowedEnvs = minVersion
+    ? allEnvs.filter(e => !e.odoo_version || cmpVersion(e.odoo_version, minVersion) > 0)
+    : allEnvs
+  const hiddenVersions = versions.length - allowedVersions.length
+  const hiddenEnvs     = allEnvs.length - allowedEnvs.length
+
   const version = resolveVersion(cfg, profiles)
   const installed = sourcesInstalled(version, sourcesData)
 
@@ -300,7 +316,7 @@ function SideSelector({
             border: `1px solid ${cfg.mode === m ? `var(--brand, ${t.brand})` : t.border}`,
             borderRadius: t.radius, cursor: 'pointer', transition: 'all .15s',
           }}>
-            {m === 'version' ? 'Version Odoo' : 'Environnement'}
+            {m === 'version' ? 'Version Odoo' : 'Projet'}
           </button>
         ))}
       </div>
@@ -310,13 +326,21 @@ function SideSelector({
           <div style={labelStyle}>Version</div>
           <select value={cfg.version} onChange={e => onChange({ ...cfg, version: e.target.value })} style={selectStyle}>
             <option value="">— Choisir —</option>
-            {versions.map(v => <option key={v} value={v}>{v}</option>)}
+            {allowedVersions.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
-          {versions.length === 0 && (
+          {allowedVersions.length === 0 && versions.length > 0 ? (
+            <div style={{ fontSize: 11, color: t.danger ?? '#dc2626', marginTop: 6 }}>
+              Aucune version supérieure disponible — téléchargez une version plus récente dans Sources.
+            </div>
+          ) : versions.length === 0 ? (
             <div style={{ fontSize: 11, color: t.muted, marginTop: 6 }}>
               Aucune source téléchargée. Allez dans Sources pour télécharger une version.
             </div>
-          )}
+          ) : hiddenVersions > 0 ? (
+            <div style={{ fontSize: 11, color: t.muted, marginTop: 4 }}>
+              {hiddenVersions} version{hiddenVersions > 1 ? 's' : ''} masquée{hiddenVersions > 1 ? 's' : ''} — la cible doit être supérieure à la source.
+            </div>
+          ) : null}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -331,13 +355,23 @@ function SideSelector({
               {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
-          {envs.length > 0 && (
+          {allEnvs.length > 0 && (
             <div>
               <div style={labelStyle}>Environnement</div>
               <select value={cfg.envId ?? ''} onChange={e => onChange({ ...cfg, envId: e.target.value || null })} style={selectStyle}>
-                <option value="">— Défaut —</option>
-                {envs.map(e => <option key={e.id} value={e.id}>{e.name} {e.odoo_version ? `(${e.odoo_version})` : ''}</option>)}
+                <option value="">— Défaut (version projet) —</option>
+                {allowedEnvs.map(e => <option key={e.id} value={e.id}>{e.name}{e.odoo_version ? ` (${e.odoo_version})` : ''}</option>)}
               </select>
+              {hiddenEnvs > 0 && (
+                <div style={{ fontSize: 11, color: t.muted, marginTop: 4 }}>
+                  {hiddenEnvs} environnement{hiddenEnvs > 1 ? 's' : ''} masqué{hiddenEnvs > 1 ? 's' : ''} — version ≤ source.
+                </div>
+              )}
+              {allowedEnvs.length === 0 && allEnvs.length > 0 && (
+                <div style={{ fontSize: 11, color: t.danger ?? '#dc2626', marginTop: 4 }}>
+                  Aucun environnement de version supérieure dans ce projet.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -907,6 +941,14 @@ export default function Migration() {
   const targetLabel   = resolveLabel(target, profiles)
   const sourceRepo    = resolveRepoPath(source, profiles)
 
+  // Auto-reset target when it becomes invalid (version ≤ new source)
+  useEffect(() => {
+    if (!sourceVersion || !targetVersion) return
+    if (cmpVersion(targetVersion, sourceVersion) <= 0) {
+      setTarget(prev => ({ ...prev, version: '', envId: null }))
+    }
+  }, [sourceVersion])
+
   const ready = configuredProviders.length > 0 && !!(sourceVersion || targetVersion)
 
   const resetConversation = () => {
@@ -1112,6 +1154,7 @@ export default function Migration() {
           label="Cible (version de destination)"
           cfg={target} onChange={setTarget}
           versions={versions} profiles={profiles} sourcesData={srcStatus}
+          minVersion={sourceVersion}
         />
       </div>
 
