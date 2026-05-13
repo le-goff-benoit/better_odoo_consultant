@@ -402,23 +402,26 @@ async def _check_user_access(client: OdooClient, loop) -> dict:
         system_id  = name_to_id.get("group_system")
         admin_id   = name_to_id.get("group_erp_manager")
 
-        # Read current user's groups_id using direct read (bypasses search ACL)
-        user_rec = await loop.run_in_executor(
-            None,
-            lambda: client._models.execute_kw(
-                client.db, uid, client.api_key,
-                "res.users", "read", [[uid]],
-                {"fields": ["groups_id"]},
+        # Search which of the target groups the current user belongs to (M2M reverse).
+        # Avoids reading groups_id on res.users which was removed in some Odoo versions.
+        target_ids = [gid for gid in [system_id, admin_id] if gid]
+        if target_ids:
+            matched = await loop.run_in_executor(
+                None,
+                lambda: client._models.execute_kw(
+                    client.db, uid, client.api_key,
+                    "res.groups", "search",
+                    [[["id", "in", target_ids], ["users", "in", [uid]]]],
+                    {},
+                )
             )
-        )
-        user_groups: list[int] = user_rec[0].get("groups_id", []) if user_rec else []
+            matched_set = set(matched)
+            if system_id:
+                is_system = system_id in matched_set
+            if admin_id:
+                is_admin = admin_id in matched_set and not is_system
 
-        if system_id:
-            is_system = system_id in user_groups
-        if admin_id and not is_system:
-            is_admin = admin_id in user_groups
-
-        log.info("check_user_access: groups_id read ok — is_system=%s is_admin=%s", is_system, is_admin)
+        log.info("check_user_access: group check ok — is_system=%s is_admin=%s", is_system, is_admin)
     except Exception as exc:
         log.warning("check_user_access: group check failed (non-blocking): %s", exc)
 
