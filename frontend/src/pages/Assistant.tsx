@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, ChevronDown, FileText, FolderCode, Globe2, History, Lock, Settings, Square, TriangleAlert } from 'lucide-react'
+import { ArrowUp, Bot, Building2, Check, ChevronDown, FileText, FolderCode, Globe2, History, Lock, Paperclip, Settings, Square, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -47,6 +47,7 @@ interface Message {
   id: string
   role: 'user' | 'assistant'
   text?: string
+  attachments?: AttachmentMeta[]
   events?: AiEvent[]
   loading?: boolean
   timestamp?: number
@@ -64,6 +65,30 @@ interface SavedConv {
 }
 
 interface ModelDef { id: string; label: string; desc: string; tags?: string[]; recommended?: boolean }
+
+type AttachmentKind = 'text' | 'pdf'
+type AttachmentStatus = 'ready' | 'error'
+
+interface AttachmentPayload {
+  name: string
+  mime_type: string
+  size: number
+  kind: AttachmentKind
+  text?: string
+  content_base64?: string
+}
+
+interface AttachmentMeta {
+  name: string
+  size: number
+  kind: AttachmentKind
+}
+
+interface AttachmentDraft extends AttachmentPayload {
+  id: string
+  status: AttachmentStatus
+  error?: string
+}
 
 // ── Conversation history helpers ───────────────────────────────
 const LS_HISTORY = 'odoo-conv-history'
@@ -248,6 +273,43 @@ const SUGGESTIONS_GENERAL = [
 const ODOO_VERSIONS_BASE = ['19.0', '18.0', '17.0', '16.0', '15.0']
 
 const GENERAL_KEY = 'general'
+const ATTACHMENT_MAX_FILES = 5
+const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
+const ATTACHMENT_TEXT_EXTENSIONS = new Set(['txt', 'md', 'csv', 'json', 'xml', 'py', 'log'])
+const ATTACHMENT_MAX_TOTAL_CHARS = 40_000
+
+function fileExt(name: string): string {
+  return name.split('.').pop()?.toLowerCase() ?? ''
+}
+
+function fileKind(file: File): AttachmentKind | null {
+  const ext = fileExt(file.name)
+  if (ext === 'pdf') return 'pdf'
+  if (ATTACHMENT_TEXT_EXTENSIONS.has(ext)) return 'text'
+  return null
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result ?? '')
+      resolve(result.includes(',') ? result.split(',')[1] : result)
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('Lecture impossible'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function attachmentMeta(att: AttachmentDraft): AttachmentMeta {
+  return { name: att.name, size: att.size, kind: att.kind }
+}
 
 // ── Main page ─────────────────────────────────────────────────
 
@@ -295,6 +357,9 @@ export default function Assistant() {
 
   const [input,     setInput]    = useState('')
   const [streaming, setStreaming] = useState(false)
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
+  const [draggingFiles, setDraggingFiles] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
 
@@ -412,6 +477,70 @@ export default function Assistant() {
     }))
   }
 
+  const addAttachmentError = (file: File, error: string) => {
+    const kind = fileKind(file) ?? 'text'
+    setAttachments(prev => [
+      ...prev,
+      {
+        id: `${Date.now()}-${file.name}-error`,
+        name: file.name,
+        mime_type: file.type,
+        size: file.size,
+        kind,
+        status: 'error',
+        error,
+      },
+    ])
+  }
+
+  const addFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList)
+    if (!files.length || streaming) return
+
+    const currentReady = attachments.filter(a => a.status === 'ready').length
+    const slots = ATTACHMENT_MAX_FILES - currentReady
+    if (slots <= 0) {
+      addAttachmentError(files[0], `Maximum ${ATTACHMENT_MAX_FILES} fichiers par message`)
+      return
+    }
+
+    for (const file of files.slice(0, slots)) {
+      const kind = fileKind(file)
+      if (!kind) {
+        addAttachmentError(file, 'Format non supporté')
+        continue
+      }
+      if (file.size > ATTACHMENT_MAX_BYTES) {
+        addAttachmentError(file, 'Fichier supérieur à 5 MB')
+        continue
+      }
+
+      try {
+        const base = {
+          id: `${Date.now()}-${file.name}-${Math.random().toString(16).slice(2)}`,
+          name: file.name,
+          mime_type: file.type || (kind === 'pdf' ? 'application/pdf' : 'text/plain'),
+          size: file.size,
+          kind,
+          status: 'ready' as const,
+        }
+        const draft: AttachmentDraft = kind === 'pdf'
+          ? { ...base, content_base64: await fileToBase64(file) }
+          : { ...base, text: await file.text() }
+        setAttachments(prev => [...prev.filter(a => a.status === 'ready'), draft].slice(0, ATTACHMENT_MAX_FILES))
+      } catch (err) {
+        addAttachmentError(file, err instanceof Error ? err.message : 'Lecture impossible')
+      }
+    }
+
+    if (files.length > slots) {
+      addAttachmentError(files[slots], `Maximum ${ATTACHMENT_MAX_FILES} fichiers par message`)
+    }
+  }
+
+  const readyAttachments = attachments.filter(a => a.status === 'ready')
+  const attachmentChars = readyAttachments.reduce((sum, a) => sum + (a.text?.length ?? 0), 0)
+
   const makeMeetingMinute = async () => {
     if (streaming || profileId === null || !provider || messages.length === 0) return
     const history = messages
@@ -473,11 +602,12 @@ export default function Assistant() {
     } finally { setStreaming(false) }
   }
 
-  const sendWithText = async (text: string, overrideVersion?: string) => {
-    if (!text.trim() || streaming || profileId === null || !provider) return
+  const sendWithText = async (text: string, overrideVersion?: string, attached: AttachmentDraft[] = []) => {
+    if ((!text.trim() && attached.length === 0) || streaming || profileId === null || !provider) return
 
     const now = Date.now()
-    const userMsg: Message      = { id: String(now), role: 'user', text, timestamp: now }
+    const attachedMeta = attached.map(attachmentMeta)
+    const userMsg: Message      = { id: String(now), role: 'user', text, attachments: attachedMeta, timestamp: now }
     const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true }
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
@@ -502,9 +632,13 @@ export default function Assistant() {
     const useGeneral = overrideVersion != null ? true : isGeneralMode
 
     try {
+      const cleanAttachments = attached.map(({ id: _id, status: _status, error: _error, ...payload }) => payload)
       const body = useGeneral
         ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId }
         : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId }
+      if (cleanAttachments.length > 0) {
+        Object.assign(body, { attachments: cleanAttachments })
+      }
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
@@ -518,6 +652,7 @@ export default function Assistant() {
         appendEvent(assistantMsg.id, { type: 'error', msg: err.detail ?? `HTTP ${res.status}` })
         return
       }
+      if (attached.length > 0) setAttachments([])
 
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
@@ -554,10 +689,11 @@ export default function Assistant() {
   }
 
   const send = async () => {
-    if (!input.trim()) return
-    const text = input.trim()
+    const attached = readyAttachments
+    if (!input.trim() && attached.length === 0) return
+    const text = input.trim() || 'Analyse les pièces jointes.'
     setInput('')
-    await sendWithText(text)
+    await sendWithText(text, undefined, attached)
   }
 
   const appendEvent = (msgId: string, evt: AiEvent) => {
@@ -814,7 +950,7 @@ export default function Assistant() {
 
         {messages.map(msg => (
           msg.role === 'user'
-            ? <UserBubble key={msg.id} text={msg.text ?? ''} timestamp={msg.timestamp} />
+            ? <UserBubble key={msg.id} text={msg.text ?? ''} attachments={msg.attachments} timestamp={msg.timestamp} />
             : <AssistantBubble key={msg.id} events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} />
         ))}
         <div ref={bottomRef} />
@@ -869,13 +1005,49 @@ export default function Assistant() {
 
       {/* Input area */}
       <div className="assistant-composer">
-        <div className="assistant-composer-inner">
+        <div
+          className={`assistant-composer-inner${draggingFiles ? ' is-dragging' : ''}`}
+          onDragEnter={e => { e.preventDefault(); setDraggingFiles(true) }}
+          onDragOver={e => { e.preventDefault(); setDraggingFiles(true) }}
+          onDragLeave={e => { if (e.currentTarget === e.target) setDraggingFiles(false) }}
+          onDrop={e => {
+            e.preventDefault()
+            setDraggingFiles(false)
+            addFiles(e.dataTransfer.files)
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".txt,.md,.csv,.json,.xml,.py,.log,.pdf,text/plain,text/markdown,text/csv,application/json,application/xml,text/xml,application/pdf"
+            style={{ display: 'none' }}
+            onChange={e => {
+              if (e.target.files) addFiles(e.target.files)
+              e.currentTarget.value = ''
+            }}
+          />
           {promptSuggestions.length > 0 && (
             <div className="assistant-composer-suggestions">
               {promptSuggestions.map(s => (
                 <button key={s} type="button" onClick={() => setInput(s)} className="assistant-composer-suggestion">
                   {s}
                 </button>
+              ))}
+            </div>
+          )}
+          {attachments.length > 0 && (
+            <div className="assistant-attachments">
+              {attachments.map(att => (
+                <div key={att.id} className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`} title={att.error ?? att.name}>
+                  {att.kind === 'pdf' ? <FileText size={13} /> : <Paperclip size={13} />}
+                  <span className="assistant-attachment-name">{att.name}</span>
+                  <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
+                  {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
+                  <button type="button" onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))} aria-label={`Retirer ${att.name}`}>
+                    <X size={12} />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -897,8 +1069,17 @@ export default function Assistant() {
             className="assistant-textarea"
           />
           <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={streaming || readyAttachments.length >= ATTACHMENT_MAX_FILES}
+            title="Joindre un fichier"
+            className="assistant-attach-button"
+          >
+            <Paperclip size={16} />
+          </button>
+          <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
-            disabled={configuredProviders.length === 0 || profileId === null || (!streaming && (!input.trim() || companyAccessBlocked))}
+            disabled={configuredProviders.length === 0 || profileId === null || (!streaming && ((!input.trim() && readyAttachments.length === 0) || companyAccessBlocked))}
             title={streaming ? 'Arrêter la génération' : companyAccessBlocked ? 'Société inaccessible — changez de société' : 'Envoyer (Entrée)'}
             className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
           >
@@ -906,7 +1087,11 @@ export default function Assistant() {
           </button>
         </div>
         <div className="assistant-composer-meta">
-          <span>Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne</span>
+          <span>
+            Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne
+            {readyAttachments.length > 0 && ` · ${readyAttachments.length}/${ATTACHMENT_MAX_FILES} fichier(s)`}
+            {attachmentChars > ATTACHMENT_MAX_TOTAL_CHARS && ' · texte tronqué côté serveur'}
+          </span>
           {currentProv && <span>{currentProv.label} · {currentProv.models.find(m => m.id === modelId)?.label}</span>}
         </div>
       </div>
@@ -1358,7 +1543,7 @@ function fmtTokens(input?: number, output?: number) {
   return `${total.toLocaleString()} tokens (${parts.join(' · ')})`
 }
 
-function UserBubble({ text, timestamp }: { text: string; timestamp?: number }) {
+function UserBubble({ text, attachments, timestamp }: { text: string; attachments?: AttachmentMeta[]; timestamp?: number }) {
   const time = fmtTime(timestamp)
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1370,6 +1555,22 @@ function UserBubble({ text, timestamp }: { text: string; timestamp?: number }) {
           fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap',
         }}>
           {text}
+          {attachments && attachments.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {attachments.map(att => (
+                <span key={`${att.name}-${att.size}`} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 7px', borderRadius: 999,
+                  background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.24)',
+                  color: '#fff', fontSize: 11, fontWeight: 650, maxWidth: 260,
+                }}>
+                  <Paperclip size={12} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
+                  <span style={{ opacity: .72, flexShrink: 0 }}>{formatFileSize(att.size)}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         {time && (
           <div style={{ textAlign: 'right', fontSize: 10, color: t.muted, marginTop: 3, paddingRight: 2 }}>

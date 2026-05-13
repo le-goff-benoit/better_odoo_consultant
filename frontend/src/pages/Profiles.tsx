@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bot, Building2, Check, ClipboardList, Cloud, ExternalLink, GitBranch, Globe2, Loader2, Pencil, Play, Plus, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl } from '../api/client'
@@ -874,6 +875,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
       && envForm.login === envModal.env.login
     ))
   )
+  const modalRoot = typeof document !== 'undefined' ? document.body : null
 
   return (
     <div className="project-card">
@@ -1029,7 +1031,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
         </div>
 
         {/* ── Env modal (add / edit) ── */}
-        {envModal && (
+        {envModal && modalRoot && createPortal((
           <div className="ui-modal-overlay project-env-modal-overlay">
             <div className="ui-modal project-env-modal" role="dialog" aria-modal="true" aria-labelledby="env-modal-title">
 
@@ -1216,10 +1218,10 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               </div>
             </div>
           </div>
-        )}
+        ), modalRoot)}
 
         {/* ── Confirm delete modal ── */}
-        {confirmDelete && (
+        {confirmDelete && modalRoot && createPortal((
           <div style={{
             position: 'fixed', inset: 0, zIndex: 600,
             background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(2px)',
@@ -1260,7 +1262,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               </div>
             </div>
           </div>
-        )}
+        ), modalRoot)}
 
       </div>
     </div>

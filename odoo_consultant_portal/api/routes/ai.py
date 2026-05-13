@@ -1,11 +1,13 @@
 import asyncio
+import base64
+import io
 import json
 import httpx
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.database import get_session
 from ...core.models import Profile
@@ -234,6 +236,15 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ChatAttachment(BaseModel):
+    name: str
+    mime_type: str = ""
+    size: int
+    kind: str  # "text" | "pdf"
+    text: Optional[str] = None
+    content_base64: Optional[str] = None
+
+
 class ChatRequest(BaseModel):
     provider: str
     profile_id: Optional[int] = None   # None → general mode
@@ -241,7 +252,112 @@ class ChatRequest(BaseModel):
     active_env_id: Optional[str] = None  # per-conversation env override
     version: Optional[str] = None      # Odoo version for general mode
     messages: list[ChatMessage]
+    attachments: list[ChatAttachment] = Field(default_factory=list)
     model: Optional[str] = None
+
+
+_ATTACHMENT_MAX_FILES = 5
+_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
+_ATTACHMENT_MAX_CHARS = 40_000
+_TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".xml", ".py", ".log"}
+
+
+def _attachment_ext(name: str) -> str:
+    return Path(name or "").suffix.lower()
+
+
+def _trim_attachment_text(text: str, remaining: int) -> tuple[str, int]:
+    if remaining <= 0:
+        return "", 0
+    if len(text) <= remaining:
+        return text, remaining - len(text)
+    suffix = "\n\n[...pièce jointe tronquée pour limiter la taille du prompt...]"
+    usable = max(0, remaining - len(suffix))
+    return text[:usable] + suffix, 0
+
+
+def _extract_pdf_attachment(att: ChatAttachment) -> str:
+    if not att.content_base64:
+        raise HTTPException(400, f"PDF '{att.name}' vide ou illisible")
+    try:
+        raw = base64.b64decode(att.content_base64, validate=True)
+    except Exception:
+        raise HTTPException(400, f"PDF '{att.name}' invalide (base64)")
+    if len(raw) > _ATTACHMENT_MAX_BYTES:
+        raise HTTPException(400, f"'{att.name}' dépasse la limite de 5 MB")
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw))
+        pages = []
+        for idx, page in enumerate(reader.pages, start=1):
+            page_text = (page.extract_text() or "").strip()
+            if page_text:
+                pages.append(f"### Page {idx}\n{page_text}")
+    except Exception as exc:
+        raise HTTPException(400, f"Impossible d'extraire le PDF '{att.name}' : {exc}")
+    text = "\n\n".join(pages).strip()
+    if not text:
+        raise HTTPException(400, f"PDF '{att.name}' sans texte extractible (OCR non supporté en v1)")
+    return text
+
+
+def _attachments_markdown(attachments: list[ChatAttachment]) -> str:
+    if not attachments:
+        return ""
+    if len(attachments) > _ATTACHMENT_MAX_FILES:
+        raise HTTPException(400, f"Maximum {_ATTACHMENT_MAX_FILES} fichiers par message")
+
+    sections: list[str] = []
+    remaining = _ATTACHMENT_MAX_CHARS
+    for att in attachments:
+        if att.size > _ATTACHMENT_MAX_BYTES:
+            raise HTTPException(400, f"'{att.name}' dépasse la limite de 5 MB")
+        ext = _attachment_ext(att.name)
+        if att.kind == "pdf":
+            if ext != ".pdf":
+                raise HTTPException(400, f"'{att.name}' n'est pas un PDF valide")
+            raw_text = _extract_pdf_attachment(att)
+        elif att.kind == "text":
+            if ext not in _TEXT_EXTENSIONS:
+                raise HTTPException(400, f"Format non supporté pour '{att.name}'")
+            raw_text = (att.text or "").strip()
+            if not raw_text:
+                raise HTTPException(400, f"'{att.name}' ne contient pas de texte exploitable")
+        else:
+            raise HTTPException(400, f"Type de pièce jointe inconnu pour '{att.name}'")
+
+        text, remaining = _trim_attachment_text(raw_text, remaining)
+        if not text:
+            break
+        sections.append(
+            f"## Pièce jointe: {att.name}\n"
+            f"- Type: {att.mime_type or att.kind}\n"
+            f"- Taille: {att.size} octets\n\n"
+            f"{text}"
+        )
+    if not sections:
+        return ""
+    return "\n\n---\n\n".join(sections)
+
+
+def _inject_attachments(messages: list[dict], attachments: list[ChatAttachment]) -> list[dict]:
+    md = _attachments_markdown(attachments)
+    if not md:
+        return messages
+    if not messages or messages[-1].get("role") != "user":
+        raise HTTPException(400, "Les pièces jointes doivent être associées à un message utilisateur")
+    patched = list(messages)
+    patched[-1] = {
+        **patched[-1],
+        "content": (
+            f"{patched[-1].get('content', '').strip()}"
+            "\n\n---\n\n"
+            "Utilise les pièces jointes suivantes pour répondre à la demande. "
+            "Ne les mentionne que si c'est utile.\n\n"
+            f"{md}"
+        ).strip(),
+    }
+    return patched
 
 
 @router.post("/chat")
@@ -262,6 +378,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     import os as _os
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
+    messages = _inject_attachments(messages, req.attachments)
 
     # Load user profile for personalisation
     from ..routes.settings import USER_PROFILE_FILE

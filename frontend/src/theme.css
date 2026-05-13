@@ -1036,6 +1036,12 @@
   box-shadow: 0 0 0 3px var(--th-focus-ring);
 }
 
+.assistant-composer-inner.is-dragging {
+  border-color: var(--brand);
+  background: var(--brand-10);
+  box-shadow: inset 0 0 0 1px var(--brand-40), 0 0 0 3px var(--th-focus-ring);
+}
+
 .assistant-composer-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -1066,12 +1072,81 @@
   color: var(--brand);
 }
 
+.assistant-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 56px 0 12px;
+}
+
+.assistant-attachment-chip {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  background: var(--brand-10);
+  border: 1px solid var(--brand-40);
+  border-radius: 999px;
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.assistant-attachment-chip.is-error {
+  background: var(--th-danger-bg);
+  border-color: color-mix(in srgb, #dc2626 35%, transparent);
+  color: #b91c1c;
+}
+
+.assistant-attachment-name {
+  min-width: 0;
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-attachment-size {
+  color: var(--th-muted);
+  font-weight: 600;
+}
+
+.assistant-attachment-error {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: currentColor;
+  opacity: .78;
+  font-weight: 600;
+}
+
+.assistant-attachment-chip button {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+}
+
+.assistant-attachment-chip button:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
 .assistant-textarea {
   width: 100%;
   box-sizing: border-box;
   min-height: 86px;
   max-height: 180px;
-  padding: 13px 58px 13px 15px;
+  padding: 13px 58px 13px 54px;
   border: 0;
   border-radius: 8px;
   font-size: 14px;
@@ -1085,6 +1160,34 @@
 
 .assistant-textarea:focus {
   box-shadow: none;
+}
+
+.assistant-attach-button {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--th-border);
+  border-radius: 50%;
+  background: var(--th-bg-muted);
+  color: var(--th-text-sub);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s, opacity .15s;
+}
+
+.assistant-attach-button:hover:not(:disabled) {
+  border-color: var(--brand-40);
+  background: var(--brand-10);
+  color: var(--brand);
+}
+
+.assistant-attach-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 .assistant-send-button {
