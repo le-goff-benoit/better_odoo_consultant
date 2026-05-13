@@ -62,6 +62,24 @@ _TOOL_READ_REPO = {
     ),
 }
 
+_TOOL_COUNT_LINES = {
+    "name": "count_source_lines",
+    "description": (
+        "Compter exhaustivement les lignes de code dans un dépôt (Odoo source, version cible, ou projet client). "
+        "Utilise cet outil quand tu dois donner un chiffre fiable de lignes/fichiers, par module, par extension ou par dossier — "
+        "au lieu de te fier au nombre de matches d'une recherche grep (qui n'est PAS un comptage exhaustif).\n"
+        "Paramètres :\n"
+        "- scope : 'odoo' (sources Odoo source / general), 'target' (sources de la version cible en migration), 'project' (repo client cloné)\n"
+        "- path : sous-dossier optionnel pour restreindre, ex 'addons/sale' ou 'mon_module'\n"
+        "- file_types : liste de globs, ex ['*.py'], ['*.xml'], ['*.py','*.xml','*.js']\n"
+        "- group_by : 'extension' (par .py, .xml, .js…), 'module' (par module Odoo, déduit du chemin addons/<module>/), 'directory' (par dossier)\n"
+        "Exemples :\n"
+        "- Total Python du projet client : count_source_lines(scope='project', file_types=['*.py'], group_by='module')\n"
+        "- Volumétrie par extension du repo : count_source_lines(scope='project', file_types=['*.py','*.xml','*.js','*.scss'], group_by='extension')\n"
+        "- LOC d'un module précis : count_source_lines(scope='project', path='mon_module', file_types=['*.py'], group_by='directory')"
+    ),
+}
+
 # ── Claude tool schemas ───────────────────────────────────────────
 
 TOOLS_CLAUDE = [
@@ -290,6 +308,29 @@ TARGET_FUNCTION_DECLARATIONS = [
      }}},
 ]
 
+# ── Count-lines tool schemas ─────────────────────────────────────
+
+_COUNT_PROPS = {
+    "scope":      {"type": "string", "enum": ["odoo", "target", "project"], "description": "Dépôt cible : 'odoo' (sources version source), 'target' (version cible migration), 'project' (repo client)"},
+    "path":       {"type": "string", "description": "Sous-dossier optionnel (ex: 'addons/sale' ou 'mon_module')", "default": ""},
+    "file_types": {"type": "array",  "items": {"type": "string"}, "description": "Globs des extensions, ex ['*.py'] ou ['*.py','*.xml']", "default": ["*.py"]},
+    "group_by":   {"type": "string", "enum": ["extension", "module", "directory", "none"], "description": "Comment regrouper le décompte", "default": "extension"},
+}
+
+COUNT_TOOLS_CLAUDE = [
+    {**_TOOL_COUNT_LINES, "input_schema": {"type": "object", "required": ["scope"], "properties": _COUNT_PROPS}},
+]
+COUNT_TOOLS_OPENAI = [
+    {"type": "function", "function": {**_TOOL_COUNT_LINES, "parameters": {"type": "object", "required": ["scope"], "properties": _COUNT_PROPS}}},
+]
+COUNT_FUNCTION_DECLARATIONS = [
+    {"name": "count_source_lines", "description": _TOOL_COUNT_LINES["description"],
+     "parameters": {"type": "object", "required": ["scope"], "properties": {
+         "scope": {"type": "string"}, "path": {"type": "string"},
+         "file_types": {"type": "array"}, "group_by": {"type": "string"},
+     }}},
+]
+
 DEFAULT_MODELS = {
     "claude":   "claude-sonnet-4-6",
     "openai":   "gpt-4o",
@@ -427,6 +468,10 @@ IMPORTANT — pour découvrir les modules custom, commence TOUJOURS par :
 Cela liste tous les modules du dépôt en cherchant "name" dans les fichiers __manifest__.py.
 Ensuite utilise read_project_file pour lire les fichiers pertinents.
 Ne cherche PAS "__manifest__.py" comme pattern — c'est un nom de fichier, pas du contenu.
+
+Pour toute question de **volumétrie** (nombre de lignes Python/XML, taille des modules, répartition par extension),
+utilise **count_source_lines(scope='project', ...)** — il scanne le dépôt entièrement.
+Ne déduis JAMAIS un nombre total de lignes à partir de search_project_source : cet outil retourne les *occurrences* d'un pattern, pas un comptage exhaustif.
 """
 
     return f"""{perspective_md}Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
@@ -492,6 +537,12 @@ def build_system_migration(
         "Pour lister les modules custom : search_project_source(pattern='name', file_types=['__manifest__.py'])\n"
     ) if repo_path else ""
 
+    count_section = (
+        "\nPour toute question impliquant un **comptage exhaustif de lignes/fichiers** (volumétrie, taille d'un module, répartition par extension), "
+        "utilise l'outil **count_source_lines** — il scanne tout le dépôt. Ne jamais déduire un nombre de lignes à partir de search_project_source / search_odoo_source : "
+        "ces outils retournent les *occurrences* d'un pattern, pas le nombre total de lignes.\n"
+    )
+
     return f"""{perspective_md}Tu es un expert Odoo spécialisé dans les migrations de version. Tu aides le consultant à préparer, analyser et exécuter une migration Odoo.
 
 ## Contexte de migration
@@ -502,7 +553,7 @@ def build_system_migration(
 {src_section}
 
 {tgt_section}
-{repo_section}
+{repo_section}{count_section}
 ## Ton rôle
 - Comparer les implémentations source et cible pour identifier les changements breaking
 - Analyser l'impact sur les modules custom du projet (si fournis)
@@ -640,6 +691,125 @@ async def _read_odoo_file(args: dict, source_path: str) -> dict:
     }
 
 
+# ── Line-counting tool ───────────────────────────────────────────
+
+_COUNT_MAX_FILES = 50_000
+_COUNT_TIMEOUT_SECS = 45
+_EXCLUDE_DIRS = ("/.git/", "/node_modules/", "/__pycache__/", "/.venv/", "/venv/", "/.tox/", "/dist/", "/build/")
+
+
+def _count_group_key(rel: str, group_by: str) -> str:
+    if group_by == "module":
+        parts = rel.split(os.sep)
+        # Detect "addons/<module>/..." (any depth before "addons")
+        if "addons" in parts:
+            idx = parts.index("addons")
+            return parts[idx + 1] if idx + 1 < len(parts) else "(root)"
+        # Else: top-level dir is treated as the module (typical client repos)
+        return parts[0] if parts and parts[0] else "(root)"
+    if group_by == "directory":
+        return os.path.dirname(rel) or "(root)"
+    if group_by == "extension":
+        return os.path.splitext(rel)[1].lower() or "(no ext)"
+    return "all"
+
+
+async def _count_lines(args: dict, base_dir: str) -> dict:
+    """Exhaustively count files and lines under base_dir/<sub_path>, grouped."""
+    sub_path   = args.get("path", "") or ""
+    file_types = args.get("file_types") or ["*.py"]
+    group_by   = args.get("group_by") or "extension"
+    if group_by not in ("extension", "module", "directory", "none"):
+        group_by = "extension"
+
+    target_dir = _safe_source_path(base_dir, sub_path)
+    if not target_dir:
+        return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
+    if not os.path.isdir(target_dir):
+        return {"ok": False, "error": f"Dossier introuvable : {sub_path or base_dir}"}
+
+    # Build find command
+    find_cmd = ["find", target_dir, "-type", "f"]
+    types = file_types[:10]
+    if types:
+        find_cmd.append("(")
+        for i, ft in enumerate(types):
+            if i > 0:
+                find_cmd.append("-o")
+            find_cmd += ["-name", ft]
+        find_cmd.append(")")
+    find_cmd += ["-print0"]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *find_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        files_blob, _ = await asyncio.wait_for(proc.communicate(), timeout=_COUNT_TIMEOUT_SECS)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": f"Timeout (>{_COUNT_TIMEOUT_SECS}s) — restreignez via path ou file_types"}
+
+    raw_files = [f.decode("utf-8", errors="replace") for f in files_blob.split(b"\x00") if f]
+    # Filter excluded directories
+    files = [f for f in raw_files if not any(ex in f for ex in _EXCLUDE_DIRS)]
+
+    if not files:
+        return {
+            "ok": True, "scope_path": base_dir, "sub_path": sub_path or ".",
+            "file_types": types, "group_by": group_by,
+            "total_files": 0, "total_lines": 0, "by_group": {},
+            "note": "Aucun fichier trouvé",
+        }
+    if len(files) > _COUNT_MAX_FILES:
+        return {"ok": False, "error": f"Trop de fichiers ({len(files)} > {_COUNT_MAX_FILES}). Restreins via path ou file_types."}
+
+    base_real = os.path.realpath(base_dir) + os.sep
+
+    def _do_count() -> tuple[int, dict]:
+        total = 0
+        groups: dict = {}
+        for fp in files:
+            try:
+                with open(fp, "rb") as fh:
+                    buf = fh.read()
+                n = buf.count(b"\n")
+                if buf and not buf.endswith(b"\n"):
+                    n += 1
+            except OSError:
+                n = 0
+            total += n
+            rel = fp.replace(base_real, "")
+            key = _count_group_key(rel, group_by)
+            g = groups.get(key)
+            if g is None:
+                groups[key] = {"files": 1, "lines": n}
+            else:
+                g["files"] += 1
+                g["lines"] += n
+        return total, groups
+
+    loop = asyncio.get_event_loop()
+    total_lines, by_group = await loop.run_in_executor(None, _do_count)
+
+    # Sort by lines desc, cap at 50 groups
+    sorted_groups = sorted(by_group.items(), key=lambda kv: -kv[1]["lines"])
+    truncated = len(sorted_groups) > 50
+    capped = dict(sorted_groups[:50])
+
+    return {
+        "ok":              True,
+        "scope_path":      base_dir,
+        "sub_path":        sub_path or ".",
+        "file_types":      types,
+        "group_by":        group_by,
+        "total_files":     len(files),
+        "total_lines":     total_lines,
+        "by_group":        capped,
+        "groups_truncated": truncated,
+    }
+
+
 # ── Tool executor ────────────────────────────────────────────────
 
 async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None, repo_path: Optional[str] = None, target_path: Optional[str] = None) -> dict:
@@ -699,6 +869,17 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
             if not target_path:
                 return {"ok": False, "error": "Sources de la version cible non disponibles"}
             return await _read_odoo_file(args, target_path)
+
+        elif name == "count_source_lines":
+            scope = (args.get("scope") or "").lower()
+            scope_map = {"odoo": source_path, "target": target_path, "project": repo_path}
+            if scope not in scope_map:
+                return {"ok": False, "error": "scope doit être 'odoo', 'target' ou 'project'"}
+            base = scope_map[scope]
+            if not base:
+                labels = {"odoo": "Sources Odoo", "target": "Sources de la version cible", "project": "Repo projet client"}
+                return {"ok": False, "error": f"{labels[scope]} non disponible"}
+            return await _count_lines(args, base)
 
         return {"ok": False, "error": f"Outil inconnu: {name}"}
     except Exception as exc:
@@ -958,6 +1139,12 @@ async def stream_chat(
         tools_c = tools_c + TARGET_TOOLS_CLAUDE
         tools_o = tools_o + TARGET_TOOLS_OPENAI
         tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + TARGET_FUNCTION_DECLARATIONS}]
+
+    # Append count-lines tool whenever at least one source/repo path is available
+    if source_path or repo_path or target_path:
+        tools_c = tools_c + COUNT_TOOLS_CLAUDE
+        tools_o = tools_o + COUNT_TOOLS_OPENAI
+        tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + COUNT_FUNCTION_DECLARATIONS}]
 
     if provider == "claude":
         async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path, target_path):

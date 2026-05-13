@@ -566,6 +566,18 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
       loadingLabel: `Lecture repo : ${file}…`, doneLabel: file,
     }
   }
+  if (name === 'count_source_lines') {
+    const scope = (args?.scope as string) ?? ''
+    const path  = (args?.path as string) ?? ''
+    const groupBy = (args?.group_by as string) ?? 'extension'
+    const scopeLabels: Record<string, string> = { odoo: 'sources Odoo', target: 'sources cible', project: 'repo projet' }
+    const scopeLbl = scopeLabels[scope] ?? scope
+    return {
+      icon: '📊', appName: null, color: '#0EA5E9',
+      loadingLabel: `Comptage lignes — ${scopeLbl}${path ? ` / ${path}` : ''}…`,
+      doneLabel: `LOC · ${scopeLbl}${path ? ` / ${path}` : ''} (par ${groupBy})`,
+    }
+  }
   return {
     icon: '🔧', appName: null, color: '#64748b',
     loadingLabel: `${name}…`, doneLabel: name,

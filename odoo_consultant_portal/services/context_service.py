@@ -750,6 +750,8 @@ trois dimensions :
 - `search_odoo_source` / `read_odoo_file` : code de la **version source**
 - `search_target_source` / `read_target_file` : code de la **version cible**
 - `search_project_source` / `read_project_file` : code des **modules custom du client**
+- `count_source_lines(scope, path?, file_types?, group_by?)` : **comptage exhaustif** de lignes/fichiers
+  (par module, extension ou dossier). Utilise-le pour toute question de volumétrie — jamais déduire du nombre de matches d'une recherche grep.
 - `query_odoo` / `count_odoo` / `get_odoo_fields` : interroger l'instance client si connectée
 
 ### Règles d'usage pour répondre
