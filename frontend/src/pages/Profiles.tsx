@@ -724,16 +724,48 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   }
 
   const runEnvDiagnose = async () => {
-    if (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) return
+    const canUseSavedKey = envModal?.mode === 'edit' && !envForm.api_key
+      && envForm.db_url === envModal.env.db_url
+      && envForm.db_name === envModal.env.db_name
+      && envForm.login === envModal.env.login
+    if (!envForm.db_url || !envForm.db_name || !envForm.login || (!envForm.api_key && !canUseSavedKey)) return
     setEnvDiagPending(true)
     setEnvDiag(null)
     try {
+      if (canUseSavedKey && envModal?.mode === 'edit') {
+        const res = await testProfileEnv(profile.id, envModal.env.id)
+        setEnvDiag({
+          steps: [{
+            name: 'Connexion Odoo',
+            ok: true,
+            detail: `Authentification réussie avec la clé enregistrée${res.data.uid ? ` (uid ${res.data.uid})` : ''}.`,
+          }],
+          uid: res.data.uid ?? null,
+          odoo_version: envForm.odoo_version || null,
+          module_count: 0,
+          db_name_suggestion: '',
+        })
+        return
+      }
       const res = await diagnoseOdoo({ db_url: envForm.db_url, db_name: envForm.db_name, login: envForm.login, api_key: envForm.api_key })
       const d: DiagResult = res.data
       setEnvDiag(d)
       if (d.odoo_version) setEnvForm(p => ({ ...p, odoo_version: d.odoo_version! }))
       if (d.db_name_suggestion && !envForm.db_name) setEnvForm(p => ({ ...p, db_name: d.db_name_suggestion }))
-    } catch { /* ignore */ } finally { setEnvDiagPending(false) }
+    } catch (err) {
+      const apiErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      setEnvDiag({
+        steps: [{
+          name: 'Connexion Odoo',
+          ok: false,
+          detail: apiErr.response?.data?.detail ?? apiErr.message ?? 'Erreur de connexion',
+        }],
+        uid: null,
+        odoo_version: null,
+        module_count: 0,
+        db_name_suggestion: '',
+      })
+    } finally { setEnvDiagPending(false) }
   }
 
   const fetchRepoStatus = async (envId: string) => {
@@ -834,6 +866,14 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
     if (diffDays <= 30) return { label: `⚠ Expire dans ${diffDays}j`, color: '#F59E0B' }
     return null
   })()
+  const canRunEnvDiagnose = Boolean(
+    envForm.db_url && envForm.db_name && envForm.login && (envForm.api_key || (
+      envModal?.mode === 'edit'
+      && envForm.db_url === envModal.env.db_url
+      && envForm.db_name === envModal.env.db_name
+      && envForm.login === envModal.env.login
+    ))
+  )
 
   return (
     <div className="project-card">
@@ -990,173 +1030,170 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
 
         {/* ── Env modal (add / edit) ── */}
         {envModal && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div style={{ background: t.white, borderRadius: t.radiusLg, padding: '28px 32px', maxWidth: 560, width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: t.shadowLg }}>
+          <div className="ui-modal-overlay project-env-modal-overlay">
+            <div className="ui-modal project-env-modal" role="dialog" aria-modal="true" aria-labelledby="env-modal-title">
 
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, margin: 0 }}>
-                  {envModal.mode === 'add' ? '+ Nouvel environnement' : `Environnement — ${envModal.env.name}`}
-                </h3>
-                <button onClick={() => setEnvModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, padding: '0 4px' }}><X size={18} /></button>
+              <div className="ui-modal-header">
+                <h2 id="env-modal-title">
+                  {envModal.mode === 'add' ? 'Nouvel environnement' : `Environnement - ${envModal.env.name}`}
+                </h2>
+                <button onClick={() => setEnvModal(null)} className="ui-icon-button" title="Fermer" aria-label="Fermer">
+                  <X size={18} />
+                </button>
               </div>
 
-              {/* Nom + identifiant (add only) */}
-              {envModal.mode === 'add' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, marginBottom: 14 }}>
-                  <div>
-                    <label style={styles.label}>Identifiant</label>
-                    <input style={styles.input} value={envForm.id} onChange={setEnv('id')} placeholder="staging" autoFocus />
-                    <div style={{ fontSize: 11, color: t.muted, marginTop: 3 }}>ex : staging, dev-v18</div>
-                  </div>
-                  <div>
-                    <label style={styles.label}>Nom affiché</label>
-                    <input style={styles.input} value={envForm.name} onChange={setEnv('name')} placeholder="Staging" />
-                  </div>
-                </div>
-              )}
-
-              {/* URL */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={styles.label}>URL de l'instance</label>
-                <input style={styles.input} value={envForm.db_url} onChange={e => {
-                  setEnv('db_url')(e)
-                  if (!envForm.db_name) {
-                    const m = e.target.value.match(/https?:\/\/([^./]+)/)
-                    if (m) setEnvForm(p => ({ ...p, db_name: m[1] }))
-                  }
-                }} placeholder="https://mon-projet-staging.odoo.com" />
-              </div>
-
-              {/* DB + Login */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-                <div>
-                  <label style={styles.label}>Nom de la base</label>
-                  <input style={styles.input} value={envForm.db_name} onChange={setEnv('db_name')} placeholder="mon-projet-staging" />
-                </div>
-                <div>
-                  <label style={styles.label}>Login</label>
-                  <input style={styles.input} value={envForm.login} onChange={setEnv('login')} placeholder="admin@client.com" />
-                </div>
-              </div>
-
-              {/* API key */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={styles.label}>{envModal.mode === 'edit' ? 'Clé API (laisser vide = inchangée)' : 'Clé API'}</label>
-                <input style={styles.input} type="password" value={envForm.api_key} onChange={setEnv('api_key')} placeholder={envModal.mode === 'edit' ? '(inchangée)' : '••••••••••••••••••'} />
-              </div>
-
-              {/* Diagnose box */}
-              <div style={{ background: t.bg, borderRadius: t.radiusLg, padding: '14px 16px', marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: envDiag ? 12 : 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Test de connexion</span>
-                  <button onClick={runEnvDiagnose}
-                    disabled={envDiagPending || !envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key}
-                    style={{
-                      padding: '5px 12px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: t.radius, cursor: 'pointer',
-                      background: (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) ? t.borderLight : t.action,
-                      color: (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) ? t.muted : '#fff',
-                    }}>
-                    {envDiagPending ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Play size={13} />}
-                    {envDiagPending ? 'Test en cours…' : 'Tester'}
-                  </button>
-                </div>
-                {envDiag && (
-                  <>
-                    {envDiag.steps.map((s, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 0', borderTop: i > 0 ? `1px solid ${t.border}` : 'none' }}>
-                        <span style={{ fontSize: 14, flexShrink: 0, color: s.ok ? t.success : t.danger }}>{s.ok ? <Check size={14} /> : <X size={14} />}</span>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{s.name}</div>
-                          <div style={{ fontSize: 11, color: s.ok ? t.muted : t.danger, marginTop: 1, whiteSpace: 'pre-line' }}>{s.detail}</div>
-                        </div>
-                      </div>
-                    ))}
-                    {envDiag.uid !== null && (
-                      <div style={{ marginTop: 10, padding: '8px 12px', background: `${t.success}18`, border: `1px solid ${t.success}40`, borderRadius: t.radius }}>
-                        <span style={{ fontSize: 12, color: t.success, fontWeight: 600 }}>
-                          <Check size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} /> Connexion réussie — Odoo {envDiag.odoo_version} · {envDiag.module_count} modules
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Version + Branch */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-                <div>
-                  <label style={styles.label}>Version Odoo <span style={{ color: t.muted, fontWeight: 400 }}>(auto-détectée)</span></label>
-                  <select style={styles.input} value={envForm.odoo_version} onChange={setEnv('odoo_version')}>
-                    <option value="">— idem projet —</option>
-                    {VERSIONS.map(v => <option key={v}>{v}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={styles.label}>Branche Odoo.sh <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
-                  <input style={styles.input} value={envForm.branch} onChange={setEnv('branch')} placeholder="staging" />
-                </div>
-              </div>
-
-              {/* ── Repo section ── */}
-              <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 14, marginBottom: 6 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: 10 }}>
-                  Source complémentaire (dépôt GitHub)
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <label style={styles.label}>Dépôt <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
-                    <input style={styles.input} value={envForm.github_repo} onChange={setEnv('github_repo')} placeholder="org/mon-projet-odoo" />
-                  </div>
-                  <div>
-                    <label style={styles.label}>Branche</label>
-                    <input style={styles.input} value={envForm.repo_branch} onChange={setEnv('repo_branch')} placeholder="main" />
-                  </div>
-                </div>
-
-                {/* Repo status + sync button */}
-                {envModal?.mode === 'add' && envForm.github_repo && (
-                  <div style={{ fontSize: 11, color: t.muted, fontStyle: 'italic' }}>
-                    Enregistrez l'environnement pour pouvoir cloner le dépôt.
-                  </div>
-                )}
-                {envModal?.mode === 'edit' && (envForm.github_repo || repoStatus) && (
-                  <div style={{ background: t.bg, borderRadius: t.radius, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                        {repoStatus?.cloned ? (
-                          <>
-                            <span style={{ color: t.success, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} /> Cloné</span>
-                            {repoStatus.head && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 11 }}>{repoStatus.head}</span>}
-                            {repoStatus.message && <span style={{ color: t.textSub }} title={repoStatus.date ?? ''}>{repoStatus.message.slice(0, 40)}</span>}
-                          </>
-                        ) : repoStatus?.github_repo ? (
-                          <span style={{ color: '#b45309', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><TriangleAlert size={13} /> Non cloné</span>
-                        ) : null}
-                      </div>
-                      <button
-                        onClick={() => syncRepo(envModal.env.id)}
-                        disabled={repoSyncing || !envForm.github_repo}
-                        style={{
-                          padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: t.radius, cursor: 'pointer',
-                          background: repoSyncing ? t.borderLight : t.action, color: repoSyncing ? t.muted : '#fff',
-                        }}>
-                        {repoSyncing ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <GitBranch size={13} />}
-                        {repoSyncing ? 'En cours…' : repoStatus?.cloned ? 'Mettre à jour' : 'Cloner'}
-                      </button>
+              <div className="ui-modal-body project-env-modal-body">
+                {/* Nom + identifiant (add only) */}
+                {envModal.mode === 'add' && (
+                  <div className="project-env-grid project-env-grid-asymmetric">
+                    <div className="ui-field">
+                      <label style={styles.label}>Identifiant</label>
+                      <input style={styles.input} value={envForm.id} onChange={setEnv('id')} placeholder="staging" autoFocus />
+                      <div style={{ fontSize: 11, color: t.muted, marginTop: 3 }}>ex : staging, dev-v18</div>
                     </div>
-                    {repoLogs.length > 0 && (
-                      <div style={{ fontFamily: 'monospace', fontSize: 10, color: t.muted, maxHeight: 60, overflowY: 'auto', lineHeight: 1.4 }}>
-                        {repoLogs.map((l, i) => <div key={i}>{l}</div>)}
-                      </div>
-                    )}
+                    <div className="ui-field">
+                      <label style={styles.label}>Nom affiché</label>
+                      <input style={styles.input} value={envForm.name} onChange={setEnv('name')} placeholder="Staging" />
+                    </div>
                   </div>
                 )}
+
+                {/* URL */}
+                <div className="project-env-field">
+                  <label style={styles.label}>URL de l'instance</label>
+                  <input style={styles.input} value={envForm.db_url} onChange={e => {
+                    setEnv('db_url')(e)
+                    if (!envForm.db_name) {
+                      const m = e.target.value.match(/https?:\/\/([^./]+)/)
+                      if (m) setEnvForm(p => ({ ...p, db_name: m[1] }))
+                    }
+                  }} placeholder="https://mon-projet-staging.odoo.com" />
+                </div>
+
+                {/* DB + Login */}
+                <div className="project-env-grid">
+                  <div className="ui-field">
+                    <label style={styles.label}>Nom de la base</label>
+                    <input style={styles.input} value={envForm.db_name} onChange={setEnv('db_name')} placeholder="mon-projet-staging" />
+                  </div>
+                  <div className="ui-field">
+                    <label style={styles.label}>Login</label>
+                    <input style={styles.input} value={envForm.login} onChange={setEnv('login')} placeholder="admin@client.com" />
+                  </div>
+                </div>
+
+                {/* API key */}
+                <div className="project-env-field">
+                  <label style={styles.label}>{envModal.mode === 'edit' ? 'Clé API (laisser vide = inchangée)' : 'Clé API'}</label>
+                  <input style={styles.input} type="password" value={envForm.api_key} onChange={setEnv('api_key')} placeholder={envModal.mode === 'edit' ? '(inchangée)' : '••••••••••••••••••'} />
+                </div>
+
+                {/* Diagnose box */}
+                <div className="project-env-test-box">
+                  <div className="project-env-test-header" style={{ marginBottom: envDiag ? 12 : 0 }}>
+                    <span className="project-env-test-title"><Play size={14} /> Test de connexion</span>
+                    <button onClick={runEnvDiagnose}
+                      disabled={envDiagPending || !canRunEnvDiagnose}
+                      className="btn btn-primary btn-sm"
+                      title={envModal.mode === 'edit' && !envForm.api_key ? 'Tester avec la clé API déjà enregistrée, si la connexion n’a pas changé' : 'Tester la connexion'}>
+                      {envDiagPending ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Play size={13} />}
+                      {envDiagPending ? 'Test en cours…' : 'Tester'}
+                    </button>
+                  </div>
+                  {envDiag && (
+                    <>
+                      {envDiag.steps.map((s, i) => (
+                        <div key={i} className="project-env-test-result">
+                          <span style={{ fontSize: 14, flexShrink: 0, color: s.ok ? t.success : t.danger }}>{s.ok ? <Check size={14} /> : <X size={14} />}</span>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{s.name}</div>
+                            <div style={{ fontSize: 11, color: s.ok ? t.muted : t.danger, marginTop: 1, whiteSpace: 'pre-line' }}>{s.detail}</div>
+                          </div>
+                        </div>
+                      ))}
+                      {envDiag.uid !== null && (
+                        <div className="project-env-success">
+                          <Check size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />
+                          Connexion réussie{envDiag.odoo_version ? ` - Odoo ${envDiag.odoo_version}` : ''}{envDiag.module_count ? ` - ${envDiag.module_count} modules` : ''}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Version + Branch */}
+                <div className="project-env-grid">
+                  <div className="ui-field">
+                    <label style={styles.label}>Version Odoo <span style={{ color: t.muted, fontWeight: 400 }}>(auto-détectée)</span></label>
+                    <select style={styles.input} value={envForm.odoo_version} onChange={setEnv('odoo_version')}>
+                      <option value="">— idem projet —</option>
+                      {VERSIONS.map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div className="ui-field">
+                    <label style={styles.label}>Branche Odoo.sh <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
+                    <input style={styles.input} value={envForm.branch} onChange={setEnv('branch')} placeholder="staging" />
+                  </div>
+                </div>
+
+                {/* ── Repo section ── */}
+                <div className="project-env-repo">
+                  <div className="project-env-repo-title">
+                    Source complémentaire (dépôt GitHub)
+                  </div>
+                  <div className="project-env-grid project-env-grid-asymmetric">
+                    <div className="ui-field">
+                      <label style={styles.label}>Dépôt <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
+                      <input style={styles.input} value={envForm.github_repo} onChange={setEnv('github_repo')} placeholder="org/mon-projet-odoo" />
+                    </div>
+                    <div className="ui-field">
+                      <label style={styles.label}>Branche</label>
+                      <input style={styles.input} value={envForm.repo_branch} onChange={setEnv('repo_branch')} placeholder="main" />
+                    </div>
+                  </div>
+
+                  {/* Repo status + sync button */}
+                  {envModal?.mode === 'add' && envForm.github_repo && (
+                    <div style={{ fontSize: 11, color: t.muted, fontStyle: 'italic' }}>
+                      Enregistrez l'environnement pour pouvoir cloner le dépôt.
+                    </div>
+                  )}
+                  {envModal?.mode === 'edit' && (envForm.github_repo || repoStatus) && (
+                    <div className="project-env-repo-status">
+                      <div className="project-env-repo-row">
+                        <div className="project-env-repo-meta">
+                          {repoStatus?.cloned ? (
+                            <>
+                              <span style={{ color: t.success, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} /> Cloné</span>
+                              {repoStatus.head && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 11 }}>{repoStatus.head}</span>}
+                              {repoStatus.message && <span style={{ color: t.textSub }} title={repoStatus.date ?? ''}>{repoStatus.message.slice(0, 40)}</span>}
+                            </>
+                          ) : repoStatus?.github_repo ? (
+                            <span style={{ color: '#b45309', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><TriangleAlert size={13} /> Non cloné</span>
+                          ) : null}
+                        </div>
+                        <button
+                          onClick={() => syncRepo(envModal.env.id)}
+                          disabled={repoSyncing || !envForm.github_repo}
+                          className="btn btn-primary btn-sm">
+                          {repoSyncing ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <GitBranch size={13} />}
+                          {repoSyncing ? 'En cours…' : repoStatus?.cloned ? 'Mettre à jour' : 'Cloner'}
+                        </button>
+                      </div>
+                      {repoLogs.length > 0 && (
+                        <div className="project-env-repo-log">
+                          {repoLogs.map((l, i) => <div key={i}>{l}</div>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Footer */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${t.border}` }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="ui-modal-footer project-env-modal-footer">
+                <div className="project-env-modal-actions">
                   <button className="btn btn-secondary" onClick={() => setEnvModal(null)}>Annuler</button>
                   {envModal.mode === 'edit' && envModal.env.id !== activeEnvId && (
                     <button className="btn btn-outline btn-sm" onClick={() => { activateEnv(envModal.env.id); setEnvModal(null) }}
@@ -1166,10 +1203,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                   )}
                   {envModal.mode === 'edit' && (
                     <button onClick={() => { removeEnv(envModal.env.id); setEnvModal(null) }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 12, padding: '4px 6px' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = t.danger }}
-                      onMouseLeave={e => { e.currentTarget.style.color = t.muted }}>
-                      Supprimer
+                      className="btn btn-outline-danger btn-sm">
+                      <Trash2 size={13} /> Supprimer
                     </button>
                   )}
                 </div>

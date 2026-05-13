@@ -1,14 +1,32 @@
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
+import { APP_VERSION } from '../version'
 
-const VERSION = '0.13.0'
+const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.13.0',
+    version: '0.14.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Refonte ciblée UI/UX : design system frontend, boutons, cartes, badges, modales, états hover/focus/loading cohérents',
+      'Assistant IA retravaillé : barre de contexte stabilisée, sélecteurs provider / modèle / version / environnement clarifiés',
+      'Suggestions de recherche intégrées directement dans la zone de saisie pour gagner de la place',
+      'Résumé client de l\'assistant simplifié et moins intrusif',
+      'Cartes projets améliorées : hiérarchie plus nette, sections lisibles, environnements plus scannables, actions mieux séparées',
+      'Paramètres harmonisés avec les mêmes composants UI et correction du pilotage de largeur',
+      'Sources : cartes de version plus lisibles avec statut, retard, Community / Enterprise et action principale mieux hiérarchisée',
+      'Correctif : modal d\'ajout / modification d\'environnement avec header fixe, contenu scrollable et footer toujours accessible',
+      'Correctif : test de connexion d\'un environnement en édition avec la clé API déjà enregistrée quand les champs n\'ont pas changé',
+    ],
+  },
+  {
+    version: '0.13.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Sources complémentaires par environnement : chaque env peut avoir un dépôt GitHub associé (cloné en local via SSH)',
       'Clone / pull du dépôt depuis la modal d\'environnement avec flux SSE en temps réel',

@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { Bot, Database, FolderKanban, Info, Settings } from 'lucide-react'
 import { t } from '../theme'
 import { getUserProfile } from '../api/client'
+import { APP_VERSION } from '../version'
 
 const links = [
   { to: '/sources',   label: 'Sources',      icon: Database },
@@ -87,7 +88,7 @@ export default function Sidebar() {
         borderTop: '1px solid rgba(255,255,255,.06)',
         display: 'flex', justifyContent: 'space-between',
       }}>
-        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>v0.10.0</span>
+        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>v{APP_VERSION}</span>
         <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>© Benoît Le Goff</span>
       </div>
     </nav>
