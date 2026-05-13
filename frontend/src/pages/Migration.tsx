@@ -612,6 +612,17 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
       doneLabel: `LOC · ${scopeLbl}${path ? ` / ${path}` : ''} (par ${groupBy})`,
     }
   }
+  if (name === 'inspect_studio') {
+    const sections = (args?.sections as string[]) ?? ['all']
+    const sectLabel = sections.includes('all') ? 'tout' : sections.join(', ')
+    const modelFilter = (args?.model_filter as string) ?? ''
+    return {
+      icon: '🎨', appName: null, color: '#7C3AED',
+      loadingLabel: `Inspection Studio — ${sectLabel}${modelFilter ? ` (${modelFilter})` : ''}…`,
+      doneLabel: `Studio · ${sectLabel}`,
+      liveDb: true,
+    }
+  }
   return {
     icon: '🔧', appName: null, color: '#64748b',
     loadingLabel: `${name}…`, doneLabel: name,

@@ -60,6 +60,10 @@ def load_context_for_prompt(odoo_version: Optional[str] = None, migration: bool 
         sections.append(("Modèle compte-rendu", read_file("meeting-minute.md")))
     except FileNotFoundError:
         pass
+    try:
+        sections.append(("Inspection Studio", read_file("studio.md")))
+    except FileNotFoundError:
+        pass
     if odoo_version:
         try:
             sections.append((f"Notes de version Odoo {odoo_version}", read_file(f"odoo-{odoo_version}.md")))
@@ -84,6 +88,8 @@ def _default_content(name: str) -> Optional[str]:
         return _MEETING_MINUTE_MD
     if name == "migration.md":
         return _MIGRATION_MD
+    if name == "studio.md":
+        return _STUDIO_MD
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
     if m:
         return _VERSION_NOTES.get(m.group(1))
@@ -769,6 +775,74 @@ trois dimensions :
 - **Snippets de code** uniquement en perspective technique
 - **Captures de navigation** (`Ventes → Configuration → ...`) en perspective fonctionnelle
 - Toujours terminer par les **prochaines étapes recommandées** (3 actions max)
+"""
+
+_STUDIO_MD = """\
+# Inspection Studio — Guide pour l'assistant
+
+## Rôle de l'outil `inspect_studio`
+
+Quand l'utilisateur demande ce qui a été fait via Studio, quels champs/modèles/vues existent,
+ou veut comprendre les personnalisations de l'instance, utilise **toujours** `inspect_studio`
+avant de répondre. Ne suppose jamais ce qui a été personnalisé sans interroger l'instance.
+
+## Conventions de nommage Odoo Studio
+
+| Élément            | Convention technique                            | Exemples                                          |
+|--------------------|-------------------------------------------------|---------------------------------------------------|
+| Modèles custom     | `x_<nom_snake>` (state='manual')                | `x_projet_chantier`, `x_devis_complementaire`    |
+| Champs custom      | `x_<nom>` ou `x_studio_<nom>` (state='manual') | `x_garantie`, `x_studio_ref_interne`             |
+| Vues Studio        | clé `studio_customization.<hash>`               | overlay sur une vue standard                     |
+| Menus Studio       | module `studio_customization` dans ir.model.data | —                                               |
+| Actions serveur    | liées à un binding_model, binding_type='action' | bouton dans la vue                               |
+| Automatisations    | `base.automation`, trigger: record_write, etc.  | calcul auto, notification, changement d'état     |
+
+## Méthode d'inspection recommandée
+
+1. **Inventaire complet** → `inspect_studio(sections=['all'])` — vue d'ensemble rapide
+2. **Focus données** → `inspect_studio(sections=['models', 'fields'])` — objets métier créés
+3. **Focus interface** → `inspect_studio(sections=['views', 'menus'])` — écrans modifiés
+4. **Focus logique** → `inspect_studio(sections=['server_actions', 'cron', 'automations'])` — automatisations
+5. **Filtrer par app** → `inspect_studio(sections=['fields'], model_filter='sale.')` — champs custom sur les ventes
+
+## Format de restitution conseillé
+
+```
+## Personnalisations Studio détectées
+
+### Modèles custom (N)
+| Modèle technique  | Nom fonctionnel | Transitoire |
+|-------------------|-----------------|-------------|
+| x_projet_chantier | Projet chantier | Non         |
+
+### Champs custom par modèle (N total)
+#### sale.order (N champs)
+| Champ technique   | Libellé         | Type    | Stocké | Requis |
+|-------------------|-----------------|---------|--------|--------|
+| x_garantie        | Garantie (mois) | integer | Oui    | Non    |
+
+### Vues modifiées (N)
+| Nom | Modèle | Type |
+
+### Actions serveur (N) / Actions planifiées (N) / Automatisations (N)
+...
+```
+
+## Impact migration — points d'attention
+
+- **Modèles custom** (`state='manual'`) : à recréer en version cible — évaluer si un modèle standard couvre le besoin
+- **Champs custom** : réévaluer pertinence (certains peuvent devenir standard en vX+)
+- **Vues Studio** : souvent **incompatibles** entre versions majeures — à retester intégralement
+- **Automatisations** : les triggers ont changé entre v15→v16 (renommage), v16→v17 — à vérifier
+- **Actions serveur** : compatibilité du code Python embarqué avec la nouvelle version ORM
+- **Règles d'accès** : les groupes peuvent avoir changé de nom ou disparu
+
+## Signaux d'alerte à mentionner
+
+- Modèles custom avec `transient=True` → wizards temporaires, impact performance si mal gérés
+- Champs `compute` sans `store=True` → recalcul à chaque accès, potentiel goulot d'étranglement
+- Vues overlay sur des vues core Odoo (sale, account…) → risque de régression après mise à jour
+- Crons actifs avec fréquence élevée (toutes les heures) → vérifier l'utilité et l'impact
 """
 
 _VERSION_NOTES: dict = {

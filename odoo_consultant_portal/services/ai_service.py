@@ -62,6 +62,28 @@ _TOOL_READ_REPO = {
     ),
 }
 
+_TOOL_INSPECT_STUDIO = {
+    "name": "inspect_studio",
+    "description": (
+        "Inspecter les personnalisations Odoo Studio de l'instance connectée : "
+        "modèles custom (x_*), champs custom (x_*), vues modifiées, menus, actions serveur, "
+        "actions planifiées (ir.cron), automatisations métier (base.automation) et règles d'accès.\n"
+        "Utilise cet outil quand l'utilisateur demande :\n"
+        "- Ce qui a été fait / configuré via Studio\n"
+        "- Quels modèles, champs, vues ou menus ont été créés\n"
+        "- L'inventaire des personnalisations de l'instance\n"
+        "- L'impact Studio avant une migration de version\n"
+        "Paramètres :\n"
+        "- sections : liste parmi ['models','fields','views','menus','server_actions','cron','automations','rules','all'] — défaut ['all']\n"
+        "- model_filter : filtre optionnel sur le nom de modèle (ex: 'x_' pour les modèles Studio, 'sale.' pour filtrer par app)\n"
+        "Exemples :\n"
+        "- Tout inspecter : inspect_studio(sections=['all'])\n"
+        "- Seulement les champs custom : inspect_studio(sections=['fields'])\n"
+        "- Modèles + vues : inspect_studio(sections=['models','views'])\n"
+        "- Filtrer par modèle : inspect_studio(sections=['fields'], model_filter='sale.')"
+    ),
+}
+
 _TOOL_COUNT_LINES = {
     "name": "count_source_lines",
     "description": (
@@ -328,6 +350,26 @@ COUNT_FUNCTION_DECLARATIONS = [
      "parameters": {"type": "object", "required": ["scope"], "properties": {
          "scope": {"type": "string"}, "path": {"type": "string"},
          "file_types": {"type": "array"}, "group_by": {"type": "string"},
+     }}},
+]
+
+# ── Studio inspection tool schemas ───────────────────────────────
+
+_STUDIO_PROPS = {
+    "sections":     {"type": "array",  "items": {"type": "string"}, "description": "Sections : models, fields, views, menus, server_actions, cron, automations, rules, all", "default": ["all"]},
+    "model_filter": {"type": "string", "description": "Filtre sur le nom de modèle, ex: 'x_' ou 'sale.'", "default": ""},
+}
+
+STUDIO_TOOLS_CLAUDE = [
+    {**_TOOL_INSPECT_STUDIO, "input_schema": {"type": "object", "properties": _STUDIO_PROPS}},
+]
+STUDIO_TOOLS_OPENAI = [
+    {"type": "function", "function": {**_TOOL_INSPECT_STUDIO, "parameters": {"type": "object", "properties": _STUDIO_PROPS}}},
+]
+STUDIO_FUNCTION_DECLARATIONS = [
+    {"name": "inspect_studio", "description": _TOOL_INSPECT_STUDIO["description"],
+     "parameters": {"type": "object", "properties": {
+         "sections": {"type": "array"}, "model_filter": {"type": "string"},
      }}},
 ]
 
@@ -810,6 +852,186 @@ async def _count_lines(args: dict, base_dir: str) -> dict:
     }
 
 
+# ── Studio inspection tool ────────────────────────────────────────
+
+async def _inspect_studio(args: dict, odoo: "OdooClient") -> dict:
+    """Query the connected Odoo instance for all Studio customizations."""
+    sections_req = [s.lower() for s in (args.get("sections") or ["all"])]
+    model_filter = (args.get("model_filter") or "").strip()
+    do_all = "all" in sections_req
+
+    loop = asyncio.get_event_loop()
+    result: dict = {"ok": True}
+
+    # Helper: fetch res_ids created by Studio in ir.model.data
+    async def _xids(model_name: str) -> list:
+        xids = await loop.run_in_executor(None, lambda: odoo.search_read(
+            "ir.model.data",
+            [["module", "in", ["studio_customization", "web_studio"]], ["model", "=", model_name]],
+            ["res_id"],
+            limit=500,
+        ))
+        return [x["res_id"] for x in xids if x.get("res_id")]
+
+    # ── Custom models ──────────────────────────────────────────────
+    if do_all or "models" in sections_req:
+        try:
+            domain: list = [["state", "=", "manual"]]
+            if model_filter:
+                domain.append(["model", "ilike", model_filter])
+            models = await loop.run_in_executor(None, lambda: odoo.search_read(
+                "ir.model", domain,
+                ["name", "model", "transient", "info"],
+                limit=300,
+            ))
+            result["custom_models"] = {"count": len(models), "items": models}
+        except Exception as exc:
+            result["custom_models"] = {"count": 0, "error": str(exc)}
+
+    # ── Custom fields ──────────────────────────────────────────────
+    if do_all or "fields" in sections_req:
+        try:
+            domain_f: list = [["state", "=", "manual"]]
+            if model_filter:
+                domain_f.append(["model", "ilike", model_filter])
+            fields = await loop.run_in_executor(None, lambda: odoo.search_read(
+                "ir.model.fields", domain_f,
+                ["name", "field_description", "ttype", "model_id", "required",
+                 "store", "index", "compute", "related", "selection"],
+                limit=1000,
+            ))
+            # Group by model
+            by_model: dict = {}
+            for f in fields:
+                mid = f.get("model_id")
+                m_label = mid[1] if isinstance(mid, list) and len(mid) > 1 else str(mid or "?")
+                if m_label not in by_model:
+                    by_model[m_label] = []
+                by_model[m_label].append({
+                    "name": f.get("name"), "label": f.get("field_description"),
+                    "type": f.get("ttype"), "required": f.get("required"),
+                    "store": f.get("store"), "index": f.get("index"),
+                    "compute": f.get("compute") or None, "related": f.get("related") or None,
+                })
+            result["custom_fields"] = {"count": len(fields), "by_model": by_model}
+        except Exception as exc:
+            result["custom_fields"] = {"count": 0, "error": str(exc)}
+
+    # ── Studio views ───────────────────────────────────────────────
+    if do_all or "views" in sections_req:
+        try:
+            view_ids = await _xids("ir.ui.view")
+            views = []
+            if view_ids:
+                dom_v: list = [["id", "in", view_ids]]
+                if model_filter:
+                    dom_v.append(["model", "ilike", model_filter])
+                views = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.ui.view", dom_v,
+                    ["name", "model", "type", "key", "priority", "active"],
+                    limit=500,
+                ))
+            result["studio_views"] = {"count": len(views), "items": views}
+        except Exception as exc:
+            result["studio_views"] = {"count": 0, "error": str(exc)}
+
+    # ── Studio menus ───────────────────────────────────────────────
+    if do_all or "menus" in sections_req:
+        try:
+            menu_ids = await _xids("ir.ui.menu")
+            menus = []
+            if menu_ids:
+                menus = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.ui.menu", [["id", "in", menu_ids]],
+                    ["name", "complete_name", "active", "sequence"],
+                    limit=200,
+                ))
+            result["studio_menus"] = {"count": len(menus), "items": menus}
+        except Exception as exc:
+            result["studio_menus"] = {"count": 0, "error": str(exc)}
+
+    # ── Server actions ─────────────────────────────────────────────
+    if do_all or "server_actions" in sections_req:
+        try:
+            sa_ids = await _xids("ir.actions.server")
+            actions = []
+            if sa_ids:
+                actions = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.actions.server", [["id", "in", sa_ids]],
+                    ["name", "model_id", "state", "binding_model_id", "binding_type"],
+                    limit=200,
+                ))
+            result["studio_server_actions"] = {"count": len(actions), "items": actions}
+        except Exception as exc:
+            result["studio_server_actions"] = {"count": 0, "error": str(exc)}
+
+    # ── Scheduled actions (ir.cron) ────────────────────────────────
+    if do_all or "cron" in sections_req:
+        try:
+            cron_ids = await _xids("ir.cron")
+            if cron_ids:
+                crons = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.cron", [["id", "in", cron_ids]],
+                    ["name", "model_id", "active", "interval_number", "interval_type", "nextcall"],
+                    limit=100,
+                ))
+            else:
+                # Fallback: all crons (no Studio filter possible)
+                crons = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.cron", [],
+                    ["name", "model_id", "active", "interval_number", "interval_type", "nextcall"],
+                    limit=100,
+                ))
+            result["cron_actions"] = {"count": len(crons), "items": crons}
+        except Exception as exc:
+            result["cron_actions"] = {"count": 0, "error": str(exc)}
+
+    # ── Automated actions (base.automation) ───────────────────────
+    if do_all or "automations" in sections_req:
+        try:
+            dom_a: list = []
+            if model_filter:
+                dom_a.append(["model_id.model", "ilike", model_filter])
+            automations = await loop.run_in_executor(None, lambda: odoo.search_read(
+                "base.automation", dom_a,
+                ["name", "model_id", "trigger", "active"],
+                limit=200,
+            ))
+            result["automated_actions"] = {"count": len(automations), "items": automations}
+        except Exception:
+            result["automated_actions"] = {"count": 0, "note": "Module d'automatisation non disponible sur cette instance"}
+
+    # ── Access & record rules ──────────────────────────────────────
+    if do_all or "rules" in sections_req:
+        try:
+            access_ids = await _xids("ir.model.access")
+            accesses = []
+            if access_ids:
+                accesses = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.model.access", [["id", "in", access_ids]],
+                    ["name", "model_id", "group_id", "perm_read", "perm_write", "perm_create", "perm_unlink"],
+                    limit=200,
+                ))
+            result["studio_access_rules"] = {"count": len(accesses), "items": accesses}
+        except Exception as exc:
+            result["studio_access_rules"] = {"count": 0, "error": str(exc)}
+
+        try:
+            rule_ids = await _xids("ir.rule")
+            rules = []
+            if rule_ids:
+                rules = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.rule", [["id", "in", rule_ids]],
+                    ["name", "model_id", "global", "groups", "domain_force"],
+                    limit=200,
+                ))
+            result["studio_record_rules"] = {"count": len(rules), "items": rules}
+        except Exception as exc:
+            result["studio_record_rules"] = {"count": 0, "error": str(exc)}
+
+    return result
+
+
 # ── Tool executor ────────────────────────────────────────────────
 
 async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None, repo_path: Optional[str] = None, target_path: Optional[str] = None) -> dict:
@@ -880,6 +1102,11 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
                 labels = {"odoo": "Sources Odoo", "target": "Sources de la version cible", "project": "Repo projet client"}
                 return {"ok": False, "error": f"{labels[scope]} non disponible"}
             return await _count_lines(args, base)
+
+        elif name == "inspect_studio":
+            if odoo is None:
+                return {"ok": False, "error": "Connexion Odoo requise pour inspecter Studio — ouvrez un projet depuis la page Projets"}
+            return await _inspect_studio(args, odoo)
 
         return {"ok": False, "error": f"Outil inconnu: {name}"}
     except Exception as exc:
@@ -1145,6 +1372,12 @@ async def stream_chat(
         tools_c = tools_c + COUNT_TOOLS_CLAUDE
         tools_o = tools_o + COUNT_TOOLS_OPENAI
         tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + COUNT_FUNCTION_DECLARATIONS}]
+
+    # Append Studio inspection tool when a live Odoo connection is available (profile mode)
+    if profile is not None and not migration_mode:
+        tools_c = tools_c + STUDIO_TOOLS_CLAUDE
+        tools_o = tools_o + STUDIO_TOOLS_OPENAI
+        tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + STUDIO_FUNCTION_DECLARATIONS}]
 
     if provider == "claude":
         async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path, target_path):
