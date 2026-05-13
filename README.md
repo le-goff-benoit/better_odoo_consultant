@@ -1,8 +1,34 @@
 # Odoo Consultant Portal
 
-Portail local pour consultants Odoo — assistant IA, exploration des sources, gestion multi-projets et multi-environnements.
+**Votre portail local pour travailler avec Odoo au quotidien.**
 
-> **v0.13.0** — Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.
+L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
+
+> Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
+> Version actuelle : **0.13.0**
+
+---
+
+## Table des matières
+
+- [Installation](#installation)
+- [Démarrage rapide](#démarrage-rapide)
+- [Guide d'utilisation](#guide-dutilisation)
+  - [1. Configurer les sources Odoo](#1-configurer-les-sources-odoo)
+  - [2. Ajouter un projet client](#2-ajouter-un-projet-client)
+  - [3. Gérer les environnements](#3-gérer-les-environnements)
+  - [4. Connecter un dépôt GitHub](#4-connecter-un-dépôt-github)
+  - [5. Configurer l'assistant IA](#5-configurer-lassistant-ia)
+  - [6. Utiliser l'assistant IA](#6-utiliser-lassistant-ia)
+- [Qualité des réponses IA — Sources & contexte](#qualité-des-réponses-ia--sources--contexte)
+  - [Pourquoi les sources comptent](#pourquoi-les-sources-comptent)
+  - [Les trois couches de contexte](#les-trois-couches-de-contexte)
+  - [Sources Odoo standard](#sources-odoo-standard)
+  - [Dépôt custom GitHub](#dépôt-custom-github)
+  - [Contexte projet](#contexte-projet)
+  - [Données live Odoo](#données-live-odoo)
+  - [Checklist — obtenir les meilleures réponses](#checklist--obtenir-les-meilleures-réponses)
+- [Architecture & développement](#architecture--développement)
 
 ---
 
@@ -10,121 +36,439 @@ Portail local pour consultants Odoo — assistant IA, exploration des sources, g
 
 ### Prérequis
 
-| Outil | Version | Rôle |
-|---|---|---|
-| Python | 3.11+ | Backend (obligatoire) |
-| Node.js | 18+ | Interface web (obligatoire) |
-| Git | récent | Sources Odoo, dépôts projets |
+| Outil | Version minimum |
+|---|---|
+| Python | 3.11+ |
+| Node.js | 18+ |
+| Git | toute version récente |
 
-### Première installation
-
+**Téléchargement :**
 ```bash
 git clone https://github.com/le-goff-benoit/better_odoo_consultant.git
 cd better_odoo_consultant
+```
+
+**Installation (une seule fois) :**
+```bash
 bash install.sh
 ```
 
-Le script installe l'environnement Python, les dépendances, et compile l'interface web.
+Le script installe automatiquement l'environnement Python, les dépendances backend, et compile l'interface web.
 
-### Démarrage
-
+**Démarrage :**
 ```bash
 bash start.sh
 ```
 
-Le portail s'ouvre à **http://localhost:8765**.
+Le portail s'ouvre dans votre navigateur à **http://localhost:8765**.
 
 ---
 
-## Fonctionnalités
+## Démarrage rapide
 
-### Sources Odoo
+Voici le flux typique pour commencer à travailler sur un nouveau projet client :
 
-Téléchargez et maintenez à jour les sources Odoo Community et Enterprise (v15 à v19+) en local.
-
-- Détection automatique de l'accès GitHub SSH (Enterprise)
-- Génération de clé SSH guidée si nécessaire
-- Mise à jour incrémentale avec barre de progression
-- Versions intermédiaires (saas) supportées
-
-### Projets & Environnements
-
-Gérez vos connexions aux instances Odoo de vos clients.
-
-**Wizard de création en 3 étapes :**
-1. Nom du projet + URL de l'instance
-2. Identifiants + test de connexion automatique (détecte la version, les modules, la société)
-3. Récapitulatif
-
-**Par projet :**
-- Plusieurs **environnements** (production, staging, dev…) avec identifiants indépendants, version Odoo propre et dépôt GitHub dédié
-- Sélection de la **société active** (multi-société Odoo)
-- Vérification des **droits d'accès** (admin système, admin ERP détectés avec avertissement)
-- **Contexte projet** : notes libres injectées dans les prompts IA, avec auto-complétion par l'IA
-
-### Sources complémentaires (dépôts custom)
-
-Chaque environnement peut avoir un **dépôt GitHub** associé (modules custom du client).
-
-- Clone et mise à jour via SSH (réutilise les clés SSH existantes)
-- Stocké dans `~/.odoo-consultant/repos/{projet}/{env}/`
-- Badge `✓ ⎇ {repo}` dans la barre de contexte de l'assistant quand actif
-- L'IA explore le code custom via `search_project_source` et `read_project_file`
-- L'auto-complétion du contexte projet lit automatiquement les `__manifest__.py`
-
-### Assistant IA
-
-Posez des questions sur vos données Odoo et votre code source en langage naturel.
-
-**Providers supportés :**
-| Provider | Modèles |
-|---|---|
-| Anthropic Claude | Sonnet 4.6, Opus 4.7, Haiku 4.5 |
-| OpenAI | GPT-4o, GPT-4o mini, o1 mini |
-| Google Gemini | 2.0 Flash, 1.5 Pro, 1.5 Flash |
-| GitHub Models | GPT-4o, Claude 3.5/3.7, Llama… |
-| GitHub Copilot Business | GPT-5.x, Claude 4.x, Gemini 3.x, Grok… |
-
-**Outils disponibles pour l'IA (selon le contexte) :**
-| Outil | Description |
-|---|---|
-| `query_odoo` | Recherche d'enregistrements (search_read) |
-| `count_odoo` | Comptage d'enregistrements |
-| `get_odoo_fields` | Liste des champs d'un modèle |
-| `search_odoo_source` | Grep dans les sources Odoo standard |
-| `read_odoo_file` | Lecture d'un fichier source Odoo |
-| `search_project_source` | Grep dans le dépôt custom du projet |
-| `read_project_file` | Lecture d'un fichier du dépôt custom |
-
-**Barre de contexte :**
-- Onglets par projet + mode général
-- Sélecteur provider/modèle unifié
-- Sélecteur d'environnement par conversation (override temporaire)
-- Badge sources Odoo installées (C / E / C+E)
-- Badge dépôt custom actif
-
-### Requêtes
-
-Explorateur de données Odoo avec domaine, champs et pagination.
-Export en Markdown, CSV ou Excel.
-
-### Paramètres
-
-- Clés API par provider avec bouton de test
-- Connexion Copilot Business via OAuth Device Flow (sans clé API)
-- Préférences de modèles par provider
-- Profil consultant (nom, titre, équipe) injecté dans les prompts
+```
+1. Sources      →  Téléchargez les sources Odoo de la version du client
+2. Paramètres   →  Ajoutez une clé API pour un modèle IA (Claude, GPT…)
+3. Mes projets  →  Créez un projet avec l'URL et les identifiants du client
+4. Assistant IA →  Posez vos premières questions sur les données du client
+```
 
 ---
 
-## Développement
+## Guide d'utilisation
+
+### 1. Configurer les sources Odoo
+
+La page **Sources** vous permet de télécharger les sources Odoo en local. L'assistant IA les utilise pour répondre avec précision sur les modèles, champs et méthodes — sans halluciner.
+
+<!-- docs/screenshots/sources-page.png : vue de la page Sources avec les cartes de version -->
+
+**Comment télécharger :**
+1. Allez dans **Sources** dans le menu
+2. Choisissez la version (ex: 17.0) et cochez Community et/ou Enterprise
+3. Cliquez **Télécharger** — une barre de progression s'affiche en temps réel
+
+> **Enterprise** nécessite un accès SSH GitHub. Si vous n'avez pas encore de clé SSH, le portail vous guide pour en créer une et l'ajouter à votre compte GitHub.
+
+**Où sont stockées les sources ?**  
+Dans `~/odoo-sources/{version}/` pour Community et `~/odoo-sources/{version}-enterprise/` pour Enterprise.
+
+---
+
+### 2. Ajouter un projet client
+
+La page **Mes projets** liste toutes vos connexions Odoo. Chaque projet correspond à un client.
+
+<!-- docs/screenshots/projects-cards.png : vue des cartes projets avec logo, badges, environnements -->
+
+**Créer un projet :**
+
+Cliquez **+ Nouveau projet** et suivez le wizard en 3 étapes :
+
+**Étape 1 — Identification du projet**
+- Donnez un nom au projet (ex : "Acme Corp — Production")
+- Collez l'URL de l'instance Odoo
+
+**Étape 2 — Connexion**
+- Renseignez le nom de base de données, votre login et votre [clé API Odoo](https://www.odoo.com/documentation/17.0/developer/reference/external_api.html#api-keys)
+- Cliquez **▶ Tester** : le portail détecte automatiquement la version Odoo, les modules installés et les informations société
+
+<!-- docs/screenshots/wizard-step2-diagnose.png : étape 2 du wizard avec le test de connexion réussi -->
+
+**Étape 3 — Récapitulatif**
+- Vérifiez et enregistrez
+
+Une fois créé, le projet apparaît sous forme de carte avec le logo de la société, la version Odoo, et les modules installés.
+
+---
+
+### 3. Gérer les environnements
+
+Chaque projet peut avoir plusieurs **environnements** : production, staging, développement, migration… Chacun a ses propres identifiants, sa propre version Odoo et son propre dépôt GitHub.
+
+<!-- docs/screenshots/env-modal.png : modal d'ajout d'environnement avec le test de connexion -->
+
+**Ajouter un environnement :**
+1. Sur la carte projet, cliquez **+** à côté de la section Environnements
+2. Renseignez l'identifiant (ex: `staging`), le nom affiché, l'URL, la base, le login et la clé API
+3. Cliquez **▶ Tester** pour valider la connexion et détecter automatiquement la version
+
+**Activer un environnement :**
+Cliquez sur la pilule d'un environnement pour ouvrir sa configuration, puis **✓ Activer**. L'environnement actif est mis en évidence sur la carte.
+
+**Changer d'environnement dans l'assistant :**  
+Dans la barre de contexte de l'assistant, un sélecteur permet de choisir l'environnement pour la conversation en cours — sans modifier l'environnement par défaut du projet.
+
+<!-- docs/screenshots/assistant-env-selector.png : barre de contexte avec le sélecteur d'environnement -->
+
+---
+
+### 4. Connecter un dépôt GitHub
+
+Si votre client a des modules custom, connectez son dépôt GitHub à l'environnement concerné. L'IA pourra alors explorer le code custom exactement comme elle explore les sources Odoo standard.
+
+<!-- docs/screenshots/env-modal-repo.png : section "Source complémentaire" dans la modal d'environnement -->
+
+**Prérequis :** une clé SSH GitHub configurée (la même que pour les sources Enterprise).
+
+**Comment connecter :**
+1. Ouvrez la modal d'un environnement (cliquez sur sa pilule)
+2. Dans la section **Source complémentaire**, renseignez :
+   - **Dépôt** : `organisation/nom-du-repo` (ex: `acme/odoo-custom`)
+   - **Branche** : `main`, `16.0`, etc.
+3. Cliquez **⬇ Cloner** — le clone s'effectue en temps réel via SSH
+4. Les mises à jour se font avec **↑ Mettre à jour** (pull)
+
+Une fois cloné, le badge **✓ ⎇ nom-du-repo** apparaît dans la barre de contexte de l'assistant quand cet environnement est actif.
+
+```
+Barre de contexte avec repo actif :
+┌────────────────────────────────────────────────────────────────────────┐
+│  Copilot · GPT-5.4 ▼  │  Production ▼  │  ✓ Sources v17.0 · C+E  │  ✓ ⎇ acme-custom  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 5. Configurer l'assistant IA
+
+Allez dans **Paramètres** pour configurer vos accès aux modèles IA.
+
+<!-- docs/screenshots/settings-ai-keys.png : page paramètres avec les clés API configurées -->
+
+**Providers disponibles :**
+
+| Provider | Comment obtenir une clé |
+|---|---|
+| **Claude** (Anthropic) | [console.anthropic.com](https://console.anthropic.com) |
+| **GPT** (OpenAI) | [platform.openai.com](https://platform.openai.com) |
+| **Gemini** (Google) | [aistudio.google.com](https://aistudio.google.com) |
+| **GitHub Models** | Token GitHub classique |
+| **GitHub Copilot Business** | Connexion OAuth — pas de clé à copier |
+
+Pour Copilot Business, cliquez **Se connecter via GitHub** et suivez le flux d'autorisation (aucune clé API à gérer).
+
+**Choisir un modèle :**  
+Dans les Paramètres, cochez les modèles que vous voulez voir apparaître dans l'assistant. Les modèles recommandés sont présélectionnés par défaut.
+
+---
+
+### 6. Utiliser l'assistant IA
+
+L'assistant IA est la fonctionnalité centrale du portail. Il combine trois sources de connaissance :
+
+```
+┌──────────────────────────────────────────────────────┐
+│                   Assistant IA                        │
+│                                                       │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐  │
+│  │  Données    │  │  Sources     │  │  Code       │  │
+│  │  Odoo live  │  │  Odoo std    │  │  custom     │  │
+│  │  (XML-RPC)  │  │  (fichiers)  │  │  (repo git) │  │
+│  └─────────────┘  └──────────────┘  └─────────────┘  │
+└──────────────────────────────────────────────────────┘
+```
+
+**Mode projet** (onglet d'un client) — l'IA a accès aux trois sources :
+- Elle interroge directement Odoo via XML-RPC pour répondre avec de vraies données
+- Elle explore les sources Odoo standard pour vérifier les noms de modèles et champs
+- Elle explore le code custom pour comprendre les overrides et modules spécifiques
+
+**Mode général** (onglet Odoo Général) — l'IA répond à des questions sur Odoo sans connexion client, en s'appuyant uniquement sur les sources locales.
+
+<!-- docs/screenshots/assistant-chat.png : exemple de conversation avec un appel d'outil visible -->
+
+**Exemples de questions utiles :**
+
+En mode projet :
+```
+"Combien de factures clients sont en statut brouillon ?"
+"Quels sont les 10 derniers bons de commande avec leur montant total ?"
+"Est-ce que ce client a le module MRP installé ?"
+"Cherche si le modèle sale.order a été surchargé dans les modules custom"
+```
+
+En mode général :
+```
+"Comment fonctionne le calcul de prix dans Odoo 17 ?"
+"Quelle est la différence entre stock.move et stock.quant ?"
+"Montre-moi l'implémentation de action_confirm sur sale.order"
+```
+
+**Contexte projet :**  
+Sur chaque carte projet, le bouton **📋 Contexte** ouvre un éditeur de notes libre. Ce texte est injecté dans tous les prompts de ce projet. Utilisez **✨ Auto-compléter** pour générer automatiquement un contexte à partir des données du projet (modules installés, société, dépôts custom).
+
+---
+
+## Qualité des réponses IA — Sources & contexte
+
+La qualité des réponses de l'assistant dépend directement des sources que vous avez configurées. Plus le contexte est riche et précis, moins l'IA hallucine, plus ses réponses sont exploitables directement sur le projet.
+
+### Pourquoi les sources comptent
+
+Un modèle IA comme Claude ou GPT-4 connaît Odoo de manière générale — mais **pas votre version exacte, pas vos modules custom, pas vos données**. Sans sources locales, il invente des noms de champs, suppose des comportements ou donne des réponses valables pour une autre version.
+
+Avec les bonnes sources configurées, l'IA ne "sait" plus — elle **lit le code réel** avant de répondre, exactement comme vous le feriez vous-même dans un terminal.
+
+```
+Sans sources              Avec sources complètes
+─────────────────         ───────────────────────────────────────────────────
+"Je crois que             "J'ai vérifié dans sale.order (v17.0 enterprise) :
+ le champ est             le champ s'appelle amount_untaxed (Float).
+ amount_subtotal"         Dans votre module custom, il est surchargé dans
+                          neca_sale/models/sale_order.py ligne 42."
+```
+
+### Les trois couches de contexte
+
+L'assistant combine trois sources indépendantes. Elles sont **cumulatives** : chacune apporte quelque chose que les autres ne peuvent pas fournir.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          CONTEXTE INJECTÉ DANS L'IA                         │
+├──────────────────────┬───────────────────────────┬────────────────────────── ┤
+│  Données live        │  Sources Odoo standard    │  Code custom              │
+│  (XML-RPC)           │  (sources locales)        │  (dépôt GitHub cloné)     │
+│                      │                           │                           │
+│  • Vrais enregistre- │  • Code source Odoo       │  • Modules spécifiques    │
+│    ments de la base  │    Community / Enterprise  │    au client              │
+│  • Modules installés │  • Modèles, champs,       │  • Overrides et héritages │
+│  • Société active    │    méthodes exacts        │  • Vues, wizards custom   │
+│  • Config instance   │  • Toutes les versions    │  • Logique métier propre  │
+│                      │    téléchargées           │    au projet              │
+├──────────────────────┴───────────────────────────┴───────────────────────────┤
+│  + Contexte projet (notes libres injectées dans chaque prompt)               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Sources Odoo standard
+
+**Rôle :** fournir le code source exact d'Odoo pour la version du client, y compris Enterprise si applicable.
+
+L'IA dispose d'outils pour **grep et lire des fichiers** dans les sources téléchargées. Quand vous posez une question sur un modèle, elle commence par chercher sa définition dans les sources, puis répond avec les vrais noms de champs et méthodes.
+
+**Règle :** téléchargez **toujours la même version** que celle de l'environnement client. Si le client est en 16.0 Community, téléchargez 16.0 Community. Une réponse basée sur la 17.0 peut être incorrecte.
+
+**Ce que l'IA peut faire avec les sources :**
+- Trouver la définition complète d'un modèle (`sale.order`, `account.move`…)
+- Lister tous les champs d'un modèle avec leur type et leur description
+- Lire l'implémentation d'une méthode Python
+- Comparer la logique entre deux versions (si les deux sont téléchargées)
+- Vérifier si un champ est compute, store, related ou standard
+
+> **Conseil :** pour les clients Enterprise, assurez-vous que votre clé SSH GitHub a accès à `odoo/enterprise`. Sans Enterprise, l'IA répondra à côté sur tout ce qui est comptabilité, abonnements, eLearning, etc.
+
+---
+
+### Dépôt custom GitHub
+
+**Rôle :** permettre à l'IA d'explorer les modules développés spécifiquement pour le client, qui n'existent nulle part ailleurs.
+
+C'est la source la plus impactante pour les projets en production avec des développements spécifiques. Sans elle, l'IA ignore tout de ce qui a été codé sur mesure : elle ne peut pas voir les héritages, les champs ajoutés, les overrides de méthodes.
+
+**Ce que l'IA peut faire avec le dépôt custom :**
+- Lister tous les modules custom installés (lecture des `__manifest__.py`)
+- Trouver où un modèle Odoo a été étendu (`_inherit`)
+- Lire le code d'une méthode override pour comprendre un comportement spécifique
+- Chercher comment un champ custom a été défini
+- Identifier des dépendances entre modules custom
+
+**Comment le connecter :**  
+Dans la modal de l'environnement → section "Source complémentaire" → `organisation/repo` + branche → **Cloner**.
+
+**Bonne pratique — branche :**  
+Pointez sur la **branche de production** (pas develop). L'IA lit ce qui tourne réellement chez le client, pas ce qui est en cours de développement.
+
+**Maintenir à jour :**  
+Après chaque déploiement de nouveaux modules, revenez dans la modal et cliquez **Mettre à jour** (git pull). Une IA qui lit du code obsolète répond sur une réalité passée.
+
+**Indicateur visuel :**  
+Quand un dépôt est cloné et actif, le badge **✓ ⎇ nom-du-repo** s'affiche dans la barre de contexte de l'assistant.
+
+---
+
+### Contexte projet
+
+**Rôle :** transmettre à l'IA des informations métier et structurelles qui ne se déduisent pas du code.
+
+Le **contexte projet** est un champ texte libre sur chaque projet, injecté dans **tous les prompts** de ce projet. C'est l'endroit pour documenter ce que l'IA ne peut pas découvrir seule.
+
+**Utiliser l'auto-complétion :**  
+Le bouton **✨ Auto-compléter** génère un contexte de base à partir des données du projet :
+- Version Odoo et modules installés
+- Nom de la société
+- Modules custom détectés dans le dépôt cloné (noms et descriptions des `__manifest__.py`)
+
+Ce contexte auto-généré est un **point de départ** — enrichissez-le avec ce que vous savez du projet.
+
+**Ce qui vaut la peine d'être ajouté manuellement :**
+
+```
+Exemple de contexte projet enrichi :
+─────────────────────────────────────
+Client : Acme SA — Distribution industrielle, ~80 utilisateurs
+Secteur : négoce B2B, cycles de vente longs, remises clients complexes
+Version : 16.0 Enterprise
+
+Modules custom actifs :
+- acme_sale : override du calcul de remise (logique en cascade par famille produit)
+- acme_stock : règles de réservation personnalisées (priorité par client Gold/Silver)
+- acme_account : génération automatique de factures proforma
+
+Points d'attention :
+- Le champ x_priorite sur sale.order est utilisé pour le dispatch logistique
+- Les remises ne passent PAS par pricelist, elles sont calculées dans acme_sale
+- L'environnement staging est une copie de prod du 2024-01 — les données récentes n'y sont pas
+```
+
+**Ce que l'IA fait avec ce contexte :**  
+Elle ne cherche pas dans les sources si elle sait déjà. Un contexte bien rédigé évite des appels d'outils inutiles et oriente directement la réponse vers la réalité du projet.
+
+---
+
+### Données live Odoo
+
+**Rôle :** interroger directement la base de données du client via XML-RPC pour obtenir de vraies valeurs.
+
+L'IA peut exécuter des recherches sur n'importe quel modèle Odoo, lire des enregistrements, compter des résultats, lire la configuration. Elle ne modifie jamais de données — elle est en lecture seule.
+
+**Ce que l'IA peut faire avec les données live :**
+- Compter des enregistrements avec des filtres (`[('state','=','draft')]`)
+- Lire les champs d'un ou plusieurs enregistrements
+- Vérifier la configuration d'un module (ex: `stock.warehouse`, `account.journal`)
+- Détecter des anomalies dans des volumes de données
+
+**Prérequis :** une [clé API Odoo](https://www.odoo.com/documentation/17.0/developer/reference/external_api.html#api-keys) avec les droits suffisants. Une clé en lecture seule est conseillée en production.
+
+**Ce que l'IA ne peut pas faire :**  
+Écrire, modifier ou supprimer des enregistrements. Elle ne peut pas non plus exécuter du SQL direct ni appeler des méthodes qui modifient l'état.
+
+---
+
+### Checklist — obtenir les meilleures réponses
+
+Avant de commencer à travailler sur un projet, vérifiez que chaque source est configurée :
+
+```
+Sources IA — checklist par environnement
+─────────────────────────────────────────────────────────────
+[ ] Sources Odoo téléchargées      → page Sources, même version que le client
+[ ] Enterprise téléchargée         → si le client a Odoo Enterprise
+[ ] Dépôt custom cloné             → si le client a des modules spécifiques
+[ ] Branche du dépôt = production  → pas develop/staging
+[ ] Dépôt à jour (pull récent)     → après chaque déploiement
+[ ] Contexte projet renseigné      → au moins les modules custom et leurs rôles
+[ ] Clé API Odoo testée            → ✓ vert dans la modal d'environnement
+```
+
+**Indicateurs visuels dans l'assistant :**
+
+```
+Barre de contexte — ce que vous devriez voir sur un projet bien configuré :
+┌───────────────────────────────────────────────────────────────────────┐
+│  Claude · Sonnet ▼  │  Production ▼  │  ✓ Sources v16.0 · C+E  │  ✓ ⎇ acme-custom  │
+└───────────────────────────────────────────────────────────────────────┘
+                                           ↑                       ↑
+                               Sources standard OK         Dépôt custom actif
+```
+
+**Si une source est absente :**  
+L'IA le signale elle-même dans sa réponse ("Je n'ai pas accès aux sources…") et vous pouvez l'ignorer en connaissance de cause ou aller la configurer avant de continuer.
+
+---
+
+## Architecture & développement
+
+### Structure du projet
+
+```
+better_odoo_consultant/
+├── odoo_consultant_portal/
+│   ├── api/
+│   │   └── routes/          # Endpoints FastAPI
+│   │       ├── profiles.py  # Projets, environnements, repos
+│   │       ├── ai.py        # Chat IA (SSE streaming)
+│   │       ├── sources.py   # Sources Odoo (clone/pull)
+│   │       ├── queries.py   # Requêtes Odoo
+│   │       └── settings.py  # Profil utilisateur
+│   ├── core/
+│   │   ├── models.py        # Modèles SQLModel (Profile, Project…)
+│   │   ├── database.py      # SQLite async + migrations
+│   │   └── config.py        # Configuration
+│   └── services/
+│       ├── ai_service.py    # Outils IA, system prompts, providers
+│       ├── odoo_client.py   # XML-RPC Odoo
+│       ├── profile_manager.py # Keyring, résolution d'environnement
+│       └── source_manager.py  # Gestion sources git
+├── frontend/
+│   └── src/
+│       ├── pages/           # React pages (Assistant, Profiles, Sources…)
+│       ├── api/client.ts    # Appels API axios
+│       └── theme.ts         # Design tokens (couleurs, rayons, ombres)
+├── install.sh               # Installation automatique
+└── start.sh                 # Lancement
+```
+
+### Stack technique
+
+| Couche | Technologie |
+|---|---|
+| Backend | FastAPI, SQLModel, SQLite (async) |
+| Frontend | React, TanStack Query, Vite |
+| Secrets | Keyring système (Keychain macOS / Secret Service Linux) |
+| IA | Anthropic SDK, OpenAI SDK, Google GenerativeAI |
+| Sources | GitPython, subprocess git |
+
+### Lancer en mode développement
 
 ```bash
-# Backend — API FastAPI avec rechargement automatique
+# Terminal 1 — Backend avec rechargement automatique
 source .venv/bin/activate
 odoo-portal serve --reload
 
-# Frontend — Vite dev server
+# Terminal 2 — Frontend Vite
 cd frontend
 npm run dev
 # → http://localhost:5173 (proxy vers :8765)
@@ -134,10 +478,8 @@ npm run dev
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-consultant` | Dossier de données (DB, exports, repos) |
+| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-consultant` | Dossier données (DB, exports, repos clonés) |
 | `ODOO_PORTAL_API_PORT` | `8765` | Port de l'API |
-
-Créez un fichier `.env` à la racine pour les surcharger.
 
 ### Tests
 
@@ -147,33 +489,12 @@ pip install -e ".[dev]"
 pytest
 ```
 
-### Stockage des secrets
+### Sécurité & données
 
-Les clés API (Odoo, IA) sont stockées dans le **keyring système** (Keychain macOS, Secret Service Linux) — jamais en clair dans la base de données.
-
----
-
-## Architecture
-
-```
-better_odoo_consultant/
-├── odoo_consultant_portal/
-│   ├── api/routes/         # Endpoints FastAPI (profiles, ai, sources, queries…)
-│   ├── core/               # Modèles SQLModel, base SQLite, config
-│   └── services/           # OdooClient (XML-RPC), ai_service, keyring, source_manager
-├── frontend/
-│   └── src/
-│       ├── pages/          # Assistant, Profiles, Sources, Settings, About…
-│       ├── api/client.ts   # Appels API axios
-│       └── theme.ts        # Design tokens
-├── install.sh              # Installateur automatique
-└── start.sh                # Lanceur
-```
-
-**Stack :**
-- Backend : FastAPI + SQLModel + SQLite (async)
-- Frontend : React + TanStack Query + Vite
-- Secrets : keyring système (pas de .env pour les credentials)
+- Les **clés API Odoo et IA** sont stockées dans le keyring système — jamais en clair dans la base de données
+- La **base SQLite** ne contient que les métadonnées (noms, URLs, préférences) — pas de données Odoo
+- Les **sources Odoo** et **dépôts custom** sont clonés localement — aucun code ne transite par un serveur tiers
+- Seuls les **messages envoyés à l'IA** transitent par internet, vers le provider que vous avez choisi
 
 ---
 
