@@ -1,102 +1,145 @@
 # Odoo Consultant Portal
 
-Votre portail local pour travailler avec Odoo au quotidien — sans configuration technique complexe.
+Portail local pour consultants Odoo — assistant IA, exploration des sources, gestion multi-projets et multi-environnements.
+
+> **v0.13.0** — Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.
 
 ---
 
-## Installation rapide
+## Installation
 
-### Étape 1 — Téléchargez le portail
+### Prérequis
+
+| Outil | Version | Rôle |
+|---|---|---|
+| Python | 3.11+ | Backend (obligatoire) |
+| Node.js | 18+ | Interface web (obligatoire) |
+| Git | récent | Sources Odoo, dépôts projets |
+
+### Première installation
 
 ```bash
 git clone https://github.com/le-goff-benoit/better_odoo_consultant.git
 cd better_odoo_consultant
-```
-
-### Étape 2 — Lancez l'installation (une seule fois)
-
-```bash
 bash install.sh
 ```
 
-Le script installe tout automatiquement : Python, les dépendances, et l'interface web.
+Le script installe l'environnement Python, les dépendances, et compile l'interface web.
 
-### Étape 3 — Démarrez le portail
+### Démarrage
 
 ```bash
 bash start.sh
 ```
 
-Le portail s'ouvre automatiquement dans votre navigateur à l'adresse **http://localhost:8765**.
+Le portail s'ouvre à **http://localhost:8765**.
 
 ---
 
-## Ce que vous pouvez faire
+## Fonctionnalités
 
-### 📥 Télécharger les sources Odoo
-Allez dans **Sources** pour télécharger les versions 15 à 19 d'Odoo en un clic.  
-Si vous avez accès à GitHub Enterprise (SSH), le portail le détecte automatiquement.  
-Pas de clé SSH ? Le portail vous guide pas à pas pour en créer une et l'ajouter à GitHub.
+### Sources Odoo
 
-### 🏢 Gérer vos projets Odoo.sh
-Allez dans **Mes projets** pour ajouter une instance Odoo cliente.  
-Un assistant en 3 étapes vous guide :
-1. Donnez un nom au projet et collez l'URL Odoo
-2. Entrez vos identifiants — le portail **détecte automatiquement** la version et les modules installés
-3. Ajoutez optionnellement le dépôt GitHub du projet
+Téléchargez et maintenez à jour les sources Odoo Community et Enterprise (v15 à v19+) en local.
 
-Depuis chaque projet, accédez directement à **Odoo**, **Odoo.sh** et **GitHub** en un clic.
+- Détection automatique de l'accès GitHub SSH (Enterprise)
+- Génération de clé SSH guidée si nécessaire
+- Mise à jour incrémentale avec barre de progression
+- Versions intermédiaires (saas) supportées
 
-### 🔍 Requêter une base Odoo
-Allez dans **Requêtes** pour chercher et lire des données depuis n'importe quelle instance Odoo.  
-Exportez les résultats en Markdown, CSV ou Excel.
+### Projets & Environnements
 
-### 📁 Gérer vos dépôts locaux
-Allez dans **Dépôts** pour cloner, mettre à jour et consulter vos modules personnalisés.
+Gérez vos connexions aux instances Odoo de vos clients.
+
+**Wizard de création en 3 étapes :**
+1. Nom du projet + URL de l'instance
+2. Identifiants + test de connexion automatique (détecte la version, les modules, la société)
+3. Récapitulatif
+
+**Par projet :**
+- Plusieurs **environnements** (production, staging, dev…) avec identifiants indépendants, version Odoo propre et dépôt GitHub dédié
+- Sélection de la **société active** (multi-société Odoo)
+- Vérification des **droits d'accès** (admin système, admin ERP détectés avec avertissement)
+- **Contexte projet** : notes libres injectées dans les prompts IA, avec auto-complétion par l'IA
+
+### Sources complémentaires (dépôts custom)
+
+Chaque environnement peut avoir un **dépôt GitHub** associé (modules custom du client).
+
+- Clone et mise à jour via SSH (réutilise les clés SSH existantes)
+- Stocké dans `~/.odoo-consultant/repos/{projet}/{env}/`
+- Badge `✓ ⎇ {repo}` dans la barre de contexte de l'assistant quand actif
+- L'IA explore le code custom via `search_project_source` et `read_project_file`
+- L'auto-complétion du contexte projet lit automatiquement les `__manifest__.py`
+
+### Assistant IA
+
+Posez des questions sur vos données Odoo et votre code source en langage naturel.
+
+**Providers supportés :**
+| Provider | Modèles |
+|---|---|
+| Anthropic Claude | Sonnet 4.6, Opus 4.7, Haiku 4.5 |
+| OpenAI | GPT-4o, GPT-4o mini, o1 mini |
+| Google Gemini | 2.0 Flash, 1.5 Pro, 1.5 Flash |
+| GitHub Models | GPT-4o, Claude 3.5/3.7, Llama… |
+| GitHub Copilot Business | GPT-5.x, Claude 4.x, Gemini 3.x, Grok… |
+
+**Outils disponibles pour l'IA (selon le contexte) :**
+| Outil | Description |
+|---|---|
+| `query_odoo` | Recherche d'enregistrements (search_read) |
+| `count_odoo` | Comptage d'enregistrements |
+| `get_odoo_fields` | Liste des champs d'un modèle |
+| `search_odoo_source` | Grep dans les sources Odoo standard |
+| `read_odoo_file` | Lecture d'un fichier source Odoo |
+| `search_project_source` | Grep dans le dépôt custom du projet |
+| `read_project_file` | Lecture d'un fichier du dépôt custom |
+
+**Barre de contexte :**
+- Onglets par projet + mode général
+- Sélecteur provider/modèle unifié
+- Sélecteur d'environnement par conversation (override temporaire)
+- Badge sources Odoo installées (C / E / C+E)
+- Badge dépôt custom actif
+
+### Requêtes
+
+Explorateur de données Odoo avec domaine, champs et pagination.
+Export en Markdown, CSV ou Excel.
+
+### Paramètres
+
+- Clés API par provider avec bouton de test
+- Connexion Copilot Business via OAuth Device Flow (sans clé API)
+- Préférences de modèles par provider
+- Profil consultant (nom, titre, équipe) injecté dans les prompts
 
 ---
 
-## Prérequis
-
-| Outil | Version minimum | Pour quoi |
-|---|---|---|
-| Python | 3.11+ | Obligatoire |
-| Node.js | 18+ | Interface web (optionnel, mais recommandé) |
-| Git | Toute version récente | Pour les sources et dépôts |
-
-**Python** : https://www.python.org/downloads/  
-**Node.js** : https://nodejs.org/
-
----
-
-## Démarrage développeur
+## Développement
 
 ```bash
-# Backend (API)
+# Backend — API FastAPI avec rechargement automatique
 source .venv/bin/activate
 odoo-portal serve --reload
 
-# Frontend (interface web en développement)
+# Frontend — Vite dev server
 cd frontend
-npm install
 npm run dev
-# → http://localhost:5173
+# → http://localhost:5173 (proxy vers :8765)
 ```
 
----
-
-## Variables d'environnement (optionnel)
+### Variables d'environnement
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-portal` | Dossier de données |
+| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-consultant` | Dossier de données (DB, exports, repos) |
 | `ODOO_PORTAL_API_PORT` | `8765` | Port de l'API |
 
-Créez un fichier `.env` à la racine du projet pour les personnaliser.
+Créez un fichier `.env` à la racine pour les surcharger.
 
----
-
-## Lancer les tests
+### Tests
 
 ```bash
 source .venv/bin/activate
@@ -104,15 +147,33 @@ pip install -e ".[dev]"
 pytest
 ```
 
+### Stockage des secrets
+
+Les clés API (Odoo, IA) sont stockées dans le **keyring système** (Keychain macOS, Secret Service Linux) — jamais en clair dans la base de données.
+
 ---
 
-## Serveur MCP (pour Claude)
+## Architecture
 
-```bash
-odoo-portal mcp
+```
+better_odoo_consultant/
+├── odoo_consultant_portal/
+│   ├── api/routes/         # Endpoints FastAPI (profiles, ai, sources, queries…)
+│   ├── core/               # Modèles SQLModel, base SQLite, config
+│   └── services/           # OdooClient (XML-RPC), ai_service, keyring, source_manager
+├── frontend/
+│   └── src/
+│       ├── pages/          # Assistant, Profiles, Sources, Settings, About…
+│       ├── api/client.ts   # Appels API axios
+│       └── theme.ts        # Design tokens
+├── install.sh              # Installateur automatique
+└── start.sh                # Lanceur
 ```
 
-Expose des outils de lecture Odoo pour les clients MCP (Claude Desktop, etc.).
+**Stack :**
+- Backend : FastAPI + SQLModel + SQLite (async)
+- Frontend : React + TanStack Query + Vite
+- Secrets : keyring système (pas de .env pour les credentials)
 
 ---
 
