@@ -1364,33 +1364,103 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   )
 }
 
+// Human-readable French labels for common Odoo models
+const ODOO_MODEL_LABELS: Record<string, string> = {
+  // Accounting
+  'account.move':              'Factures',
+  'account.move.line':         'Lignes de facture',
+  'account.payment':           'Paiements',
+  'account.payment.term':      'Conditions de paiement',
+  'account.analytic.line':     'Lignes analytiques',
+  'account.journal':           'Journaux comptables',
+  'account.account':           'Plan comptable',
+  'account.tax':               'Taxes',
+  // Sales
+  'sale.order':                'Commandes clients',
+  'sale.order.line':           'Lignes de commande',
+  'sale.report':               'Analyse des ventes',
+  'crm.lead':                  'Opportunités CRM',
+  'crm.stage':                 'Étapes CRM',
+  // Purchase
+  'purchase.order':            'Commandes fournisseurs',
+  'purchase.order.line':       'Lignes d\'achat',
+  // Inventory / Stock
+  'stock.picking':             'Transferts de stock',
+  'stock.move':                'Mouvements de stock',
+  'stock.quant':               'Niveaux de stock',
+  'stock.warehouse':           'Entrepôts',
+  'stock.location':            'Emplacements',
+  'stock.route':               'Routes de stock',
+  'stock.warehouse.orderpoint':'Règles de réapprovisionnement',
+  'stock.lot':                 'Lots / Numéros de série',
+  // Products
+  'product.template':          'Produits',
+  'product.product':           'Variantes de produit',
+  'product.category':          'Catégories de produit',
+  'product.pricelist':         'Listes de prix',
+  // Partners
+  'res.partner':               'Contacts',
+  'res.company':               'Sociétés',
+  'res.users':                 'Utilisateurs',
+  // HR
+  'hr.employee':               'Employés',
+  'hr.leave':                  'Congés',
+  'hr.leave.allocation':       'Allocations de congés',
+  'hr.payslip':                'Bulletins de salaire',
+  'hr.contract':               'Contrats',
+  // Project
+  'project.project':           'Projets',
+  'project.task':              'Tâches',
+  'project.task.type':         'Étapes des tâches',
+  // Manufacturing
+  'mrp.production':            'Ordres de fabrication',
+  'mrp.bom':                   'Nomenclatures',
+  'mrp.workcenter':            'Postes de travail',
+  // Other
+  'ir.rule':                   'Règles d\'accès',
+  'ir.model':                  'Modèles techniques',
+  'ir.model.fields':           'Champs techniques',
+  'res.currency':              'Devises',
+  'res.country':               'Pays',
+  'uom.uom':                   'Unités de mesure',
+  'mail.message':              'Messages',
+  'mail.activity':             'Activités',
+}
+
+function humanModel(model: string): string {
+  return ODOO_MODEL_LABELS[model] ?? model
+}
+
 function getToolMeta(name: string, args?: Record<string, unknown>) {
   if (name === 'query_odoo') {
     const model = (args?.model as string) ?? ''
     const prefix = model.split('.')[0]
     const app = ODOO_APPS[prefix]
+    const label = humanModel(model)
     return {
       icon: app ? app.icon : '🗄️',
       appName: app ? prefix : null,
       color: app ? app.color : '#64748b',
-      loadingLabel: model ? `Interrogation de ${model}…` : 'Interrogation Odoo…',
-      doneLabel: model || 'Odoo',
+      loadingLabel: model ? `Interrogation — ${label}…` : 'Interrogation Odoo…',
+      doneLabel: label || 'Odoo',
     }
   }
   if (name === 'count_odoo') {
     const model = (args?.model as string) ?? ''
+    const label = humanModel(model)
     return {
       icon: '🔢', appName: null, color: '#0891b2',
-      loadingLabel: model ? `Comptage de ${model}…` : 'Comptage…',
-      doneLabel: model ? `Comptage ${model}` : 'Comptage',
+      loadingLabel: model ? `Comptage — ${label}…` : 'Comptage…',
+      doneLabel: model ? `Comptage · ${label}` : 'Comptage',
     }
   }
   if (name === 'get_odoo_fields') {
     const model = (args?.model as string) ?? ''
+    const label = humanModel(model)
     return {
       icon: '🔬', appName: null, color: '#059669',
-      loadingLabel: model ? `Découverte des champs de ${model}…` : 'Découverte des champs…',
-      doneLabel: model ? `Champs ${model}` : 'Champs',
+      loadingLabel: model ? `Découverte des champs — ${label}…` : 'Découverte des champs…',
+      doneLabel: model ? `Champs · ${label}` : 'Champs',
     }
   }
   if (name === 'search_odoo_source') {
@@ -1561,6 +1631,75 @@ function RecordsTable({ records }: { records: Record<string, unknown>[] }) {
   )
 }
 
+// ── Markdown table with CSV export ────────────────────────────
+
+function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: string[][] }) {
+  const [hovered, setHovered] = useState(false)
+
+  const downloadCsv = () => {
+    const escape = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+    const lines = [
+      headers.map(escape).join(','),
+      ...dataRows.map(row => row.map(escape).join(',')),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'export.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div
+      style={{ overflowX: 'auto', margin: '8px 0', position: 'relative' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {hovered && (
+        <button
+          onClick={downloadCsv}
+          title="Exporter en CSV"
+          style={{
+            position: 'absolute', top: 4, right: 4, zIndex: 10,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '3px 9px', fontSize: 11, fontWeight: 600,
+            background: t.bgCard, color: t.action,
+            border: `1px solid ${t.brand40}`, borderRadius: t.radius,
+            cursor: 'pointer', boxShadow: t.shadow,
+            transition: 'opacity .15s',
+          }}
+        >
+          ↓ CSV
+        </button>
+      )}
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+        <thead>
+          <tr>
+            {headers.map((h, j) => (
+              <th key={j} style={{ padding: '6px 12px', textAlign: 'left', background: t.bgMuted, borderBottom: `2px solid ${t.border}`, fontWeight: 600, color: t.textSub }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {dataRows.map((row, ri) => (
+            <tr key={ri} style={{ background: ri % 2 === 0 ? t.bgCard : t.bgMuted }}>
+              {row.map((cell, ci) => (
+                <td key={ci} style={{ padding: '5px 12px', borderBottom: `1px solid ${t.border}`, fontSize: 13 }}>
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Markdown renderer ─────────────────────────────────────────
 
 function Markdown({ text }: { text: string }) {
@@ -1589,23 +1728,10 @@ function Markdown({ text }: { text: string }) {
       const rows = tableLines.filter(l => !l.match(/^\|[-| :]+\|$/))
       if (rows.length) {
         const headers = rows[0].split('|').filter(Boolean).map(s => s.trim())
+        const dataRows = rows.slice(1).map(row => row.split('|').filter(Boolean).map(c => c.trim()))
+        const tableKey = i
         result.push(
-          <div key={i} style={{ overflowX: 'auto', margin: '8px 0' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-              <thead>
-                <tr>{headers.map((h, j) => <th key={j} style={{ padding: '6px 12px', textAlign: 'left', background: t.bgMuted, borderBottom: `2px solid ${t.border}`, fontWeight: 600, color: t.textSub }}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {rows.slice(1).map((row, ri) => (
-                  <tr key={ri} style={{ background: ri % 2 === 0 ? t.bgCard : t.bgMuted }}>
-                    {row.split('|').filter(Boolean).map((cell, ci) => (
-                      <td key={ci} style={{ padding: '5px 12px', borderBottom: `1px solid ${t.border}`, fontSize: 13 }}>{cell.trim()}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <MarkdownTable key={tableKey} headers={headers} dataRows={dataRows} />
         )
       }
       continue
