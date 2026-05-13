@@ -6,6 +6,7 @@ import { listProfiles, getAiProviders, checkAllSources, getModelConfig } from '.
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import PerspectiveToggle, { Perspective, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
+import RobotThinking from '../components/RobotThinking'
 
 import { ODOO_APPS } from '../constants/odooApps'
 
@@ -1658,24 +1659,13 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
             marginTop: toolEvents.length > 0 ? 10 : 0,
-            padding: '10px 16px',
+            padding: '8px 14px 8px 8px',
             background: t.bgMuted,
             border: `1px solid ${t.border}`,
             borderRadius: t.radiusLg,
             fontSize: 13, color: t.textSub,
           }}>
-            {/* Animated dots */}
-            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-              {[0, 1, 2].map(i => (
-                <span key={i} style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: t.brand,
-                  display: 'inline-block',
-                  animation: `toolPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-                  opacity: 0.7,
-                }} />
-              ))}
-            </span>
+            <RobotThinking size={44} />
             <span style={{ fontWeight: 500 }}>
               {toolEvents.length > 0 ? 'Analyse des résultats et rédaction de la réponse…' : 'Réflexion en cours…'}
             </span>
