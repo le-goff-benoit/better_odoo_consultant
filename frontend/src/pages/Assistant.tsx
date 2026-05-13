@@ -1489,8 +1489,9 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
       icon: app ? app.icon : '🗄️',
       appName: app ? prefix : null,
       color: app ? app.color : '#64748b',
-      loadingLabel: model ? `Interrogation — ${label}…` : 'Interrogation Odoo…',
+      loadingLabel: model ? `Requête base client — ${label}…` : 'Requête base client…',
       doneLabel: label || 'Odoo',
+      liveDb: true,
     }
   }
   if (name === 'count_odoo') {
@@ -1498,8 +1499,9 @@ function getToolMeta(name: string, args?: Record<string, unknown>) {
     const label = humanModel(model)
     return {
       icon: '🔢', appName: null, color: '#0891b2',
-      loadingLabel: model ? `Comptage — ${label}…` : 'Comptage…',
+      loadingLabel: model ? `Comptage base client — ${label}…` : 'Comptage base client…',
       doneLabel: model ? `Comptage · ${label}` : 'Comptage',
+      liveDb: true,
     }
   }
   if (name === 'get_odoo_fields') {
@@ -1598,6 +1600,16 @@ function ToolCallGroup({ events }: { events: AiEvent[] }) {
                   border: `2px solid ${meta.color}`, borderTopColor: 'transparent',
                   animation: 'toolSpin .6s linear infinite',
                 }} />
+              )}
+
+              {/* Live DB badge */}
+              {'liveDb' in meta && meta.liveDb && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                  borderRadius: 3, flexShrink: 0,
+                  background: '#f97316', color: '#fff',
+                  letterSpacing: '0.02em',
+                }}>BD</span>
               )}
 
               {/* App icon when done */}
