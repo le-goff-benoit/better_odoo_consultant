@@ -1,14 +1,33 @@
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 
-const VERSION = '0.10.0'
+const VERSION = '0.13.0'
 
 const CHANGELOG = [
   {
-    version: '0.12.0',
+    version: '0.13.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Sources complémentaires par environnement : chaque env peut avoir un dépôt GitHub associé (cloné en local via SSH)',
+      'Clone / pull du dépôt depuis la modal d\'environnement avec flux SSE en temps réel',
+      'L\'IA peut explorer le code custom via les outils search_project_source et read_project_file',
+      'Badge ✓ ⎇ dans la barre de contexte de l\'assistant quand un repo est actif',
+      'Auto-complétion du contexte projet enrichie avec les manifests des modules custom clonés',
+      'Multi-environnements complets : chaque env a ses propres identifiants, version Odoo et repo',
+      'Sélecteur d\'environnement dans la barre de contexte de l\'assistant (override par conversation)',
+      'AiSelector unifié : provider + modèle en un seul sélecteur groupé',
+      'Labels de sections sur les cartes projets (Applications, Société active, Environnements, Actions)',
+      'Correctif : sélecteur de version Odoo (mode général) ne passe plus derrière le bloc messages',
+      'Correctif : tous les dropdowns de la barre de contexte ne sont plus clippés par overflow',
+    ],
+  },
+  {
+    version: '0.12.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Vérification des droits Odoo : détection admin système / admin ERP avec avertissement',
       'Sociétés inaccessibles grisées (🔒) sur les cartes projets et dans l\'assistant',
