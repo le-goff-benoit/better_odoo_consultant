@@ -37,7 +37,7 @@ interface RepoInfo {
   recent_commits?: RecentCommit[]; error?: string
 }
 
-const defaultPath = (v: string) => `~/odoo-sources/${v}`
+const defaultPath = (v: string) => `~/.odoo-consultant/sources/${v}`
 
 function relativeDate(iso?: string): string {
   if (!iso) return ''

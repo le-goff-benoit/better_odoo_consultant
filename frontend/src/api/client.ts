@@ -76,3 +76,5 @@ export const deleteContextFile = (name: string) => api.delete(`/context/file/${n
 // User profile / settings
 export const getUserProfile = () => api.get('/settings/user-profile')
 export const saveUserProfile = (data: object) => api.post('/settings/user-profile', data)
+export const getDataDir = () => api.get('/settings/data-dir')
+export const openDataFolder = () => api.post('/settings/open-folder')

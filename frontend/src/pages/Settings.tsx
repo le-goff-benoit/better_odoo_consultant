@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { applyBrandColor, applyThemeMode } from '../App'
@@ -84,7 +84,7 @@ interface CopilotFlowState {
   error?: string
 }
 
-type SettingsTab = 'profile' | 'api' | 'context' | 'interface'
+type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage'
 
 export default function Settings() {
   const [tab, setTab] = useState<SettingsTab>('profile')
@@ -94,6 +94,7 @@ export default function Settings() {
     { id: 'api',       label: 'Clés API',    icon: '🔑' },
     { id: 'context',   label: 'Contexte IA', icon: '📚' },
     { id: 'interface', label: 'Interface',   icon: '🖥' },
+    { id: 'storage',   label: 'Stockage',    icon: '🗂' },
   ]
 
   return (
@@ -139,8 +140,100 @@ export default function Settings() {
 
       {tab === 'interface' && <InterfaceSection />}
 
+      {tab === 'storage' && <StorageSection />}
+
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
     </div>
+  )
+}
+
+// ── Storage section ───────────────────────────────────────────────
+
+function StorageSection() {
+  const { data } = useQuery({ queryKey: ['data-dir'], queryFn: getDataDir })
+  const dataDir: string = data?.data?.path ?? '~/.odoo-consultant'
+
+  const rows: { label: string; path: string; description: string }[] = [
+    {
+      label: 'Dossier principal',
+      path: dataDir,
+      description: 'Base de données, configuration, clés de chiffrement.',
+    },
+    {
+      label: 'Sources Odoo',
+      path: `${dataDir}/sources/`,
+      description: 'Dépôts git des sources Community et Enterprise clonés localement.',
+    },
+    {
+      label: 'Dépôts custom clients',
+      path: `${dataDir}/repos/`,
+      description: 'Dépôts GitHub des modules custom, un dossier par projet et environnement.',
+    },
+    {
+      label: 'Contexte IA',
+      path: `${dataDir}/context/`,
+      description: 'Fichiers Markdown injectés dans le prompt système de l\'assistant.',
+    },
+    {
+      label: 'Configuration modèles',
+      path: `${dataDir}/model-config.json`,
+      description: 'Modèles IA activés et préférences de sélection.',
+    },
+  ]
+
+  return (
+    <section>
+      <p style={{ fontSize: 13, color: t.muted, marginBottom: 24, lineHeight: 1.6 }}>
+        Toutes les données locales sont centralisées dans un seul dossier. Vous pouvez le sauvegarder, le déplacer ou le supprimer sans toucher à l'application.
+      </p>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: t.text }}>Contenu du dossier de données</div>
+        <button
+          onClick={() => openDataFolder()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 16px',
+            background: `var(--brand-10, ${t.brand}15)`,
+            color: `var(--brand, ${t.brand})`,
+            border: `1px solid var(--brand-40, ${t.brand}40)`,
+            borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            transition: 'filter .15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(0.93)')}
+          onMouseLeave={e => (e.currentTarget.style.filter = '')}
+        >
+          <span style={{ fontSize: 16 }}>📂</span> Ouvrir dans l'explorateur
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map(row => (
+          <div key={row.label} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 14,
+            padding: '12px 16px', background: t.bgCard,
+            border: `1px solid ${t.border}`, borderRadius: t.radius,
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: t.text, marginBottom: 2 }}>{row.label}</div>
+              <div style={{ fontSize: 12, color: t.muted, marginBottom: 4 }}>{row.description}</div>
+              <code style={{
+                fontSize: 11, color: t.muted, background: t.bgMuted,
+                padding: '2px 7px', borderRadius: 4, display: 'inline-block',
+                maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{row.path}</code>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        marginTop: 20, padding: '12px 16px', background: t.bgMuted,
+        borderRadius: t.radius, fontSize: 12, color: t.muted, lineHeight: 1.6,
+      }}>
+        <strong style={{ color: t.text }}>Sécurité :</strong> Les clés API (Odoo et IA) sont stockées dans le keyring système (Keychain sur macOS, Secret Service sur Linux) — jamais dans ce dossier. La base de données ne contient que des métadonnées non sensibles.
+      </div>
+    </section>
   )
 }
 

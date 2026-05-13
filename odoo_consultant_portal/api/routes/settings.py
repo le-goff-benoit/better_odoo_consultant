@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Body
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 router = APIRouter()
@@ -20,3 +22,16 @@ def save_user_profile(data: dict = Body(...)):
     SETTINGS_DIR.mkdir(exist_ok=True)
     USER_PROFILE_FILE.write_text(json.dumps(data, ensure_ascii=False))
     return data
+
+
+@router.get('/data-dir')
+def get_data_dir():
+    return {"path": str(SETTINGS_DIR)}
+
+
+@router.post('/open-folder')
+def open_data_folder():
+    SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+    opener = "open" if sys.platform == "darwin" else "xdg-open"
+    subprocess.Popen([opener, str(SETTINGS_DIR)])
+    return {"opened": str(SETTINGS_DIR)}

@@ -277,7 +277,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     if req.profile_id is None:
         version = req.version or "?"
         source_path: Optional[str] = None
-        candidate = _os.path.expanduser(f"~/odoo-sources/{version}")
+        candidate = str(Path.home() / ".odoo-consultant" / "sources" / version)
         if _os.path.isdir(candidate):
             source_path = candidate
         context_md = load_context_for_prompt(version)
@@ -331,12 +331,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     source_path = None
     _version_to_use = _active_env.get("odoo_version") or profile.odoo_version
-    candidate = _os.path.expanduser(f"~/odoo-sources/{_version_to_use}") if _version_to_use else ""
+    candidate = str(Path.home() / ".odoo-consultant" / "sources" / _version_to_use) if _version_to_use else ""
     if _version_to_use and _os.path.isdir(candidate):
         source_path = candidate
     elif not source_path:
         # Fallback : chercher la version la plus récente installée
-        sources_base = _os.path.expanduser("~/odoo-sources")
+        sources_base = str(Path.home() / ".odoo-consultant" / "sources")
         if _os.path.isdir(sources_base):
             import re as _re
             _ver_re = _re.compile(r'^\d+\.\d+$')

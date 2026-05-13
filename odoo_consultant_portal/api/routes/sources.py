@@ -13,6 +13,17 @@ from ...services.source_manager import (
 
 router = APIRouter()
 
+SOURCES_BASE = Path.home() / ".odoo-consultant" / "sources"
+
+
+def _migrate_sources_dir() -> None:
+    """Move ~/odoo-sources/ → ~/.odoo-consultant/sources/ once if needed."""
+    old = SOURCES_BASE
+    if old.exists() and not SOURCES_BASE.exists():
+        import shutil
+        SOURCES_BASE.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(old), str(SOURCES_BASE))
+
 
 def _branch_for_version(version: str) -> str:
     """Return the Git branch name for a given Odoo version string.
@@ -91,8 +102,9 @@ def _repo_status(path: Path) -> dict:
 async def check_all():
     """Check installation status for all versions at default paths (no network).
     Includes SUPPORTED_VERSIONS plus any additional version directories found on disk."""
+    _migrate_sources_dir()
     loop = asyncio.get_event_loop()
-    base = Path.home() / "odoo-sources"
+    base = SOURCES_BASE
     # Collect all versions to check: base list + any extra dirs found on disk
     versions_to_check = list(SUPPORTED_VERSIONS)
     if base.exists():
@@ -112,7 +124,8 @@ async def check_all():
 async def check_updates(version: str, path: str = ""):
     """Fetch remote then return behind count (requires network)."""
     loop = asyncio.get_event_loop()
-    resolved = Path(path).expanduser() if path else Path.home() / "odoo-sources" / version
+    _migrate_sources_dir()
+    resolved = Path(path).expanduser() if path else SOURCES_BASE / version
     if not (resolved / ".git").exists():
         return {"error": "Dépôt non trouvé", "behind": None}
 
@@ -240,7 +253,7 @@ async def check_version(version: str):
     if not VERSION_RE.match(version):
         raise HTTPException(400, f"Version invalide : {version}")
     loop = asyncio.get_event_loop()
-    base = Path.home() / "odoo-sources" / version
+    base = SOURCES_BASE / version
     comm = await loop.run_in_executor(None, _repo_status, base)
     ent  = await loop.run_in_executor(None, _repo_status, base.parent / f"{version}-enterprise")
     return {version: comm, f"{version}-enterprise": ent}
