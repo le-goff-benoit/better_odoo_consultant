@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv } from '../api/client'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl } from '../api/client'
 import { t, btn } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
@@ -45,6 +45,8 @@ interface EnvEntry {
   login: string
   odoo_version?: string
   branch?: string
+  github_repo?: string
+  repo_branch?: string
 }
 interface AccessInfo {
   is_system: boolean; is_admin: boolean
@@ -700,7 +702,7 @@ const sectionLabel: React.CSSProperties = {
 }
 
 type EnvModalState = { mode: 'add' } | { mode: 'edit'; env: EnvEntry }
-const EMPTY_ENV_FORM = { id: '', name: '', db_url: '', db_name: '', login: '', api_key: '', odoo_version: '', branch: '' }
+const EMPTY_ENV_FORM = { id: '', name: '', db_url: '', db_name: '', login: '', api_key: '', odoo_version: '', branch: '', github_repo: '', repo_branch: '' }
 
 function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onCheckAccess, checkingAccess, onContext, onRefresh }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
@@ -718,6 +720,10 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   const [envDiag, setEnvDiag] = useState<DiagResult | null>(null)
   const [envDiagPending, setEnvDiagPending] = useState(false)
   const [envSaving, setEnvSaving] = useState(false)
+  const [repoStatus, setRepoStatus] = useState<{ cloned: boolean; github_repo?: string | null; head?: string; message?: string; date?: string; error?: string } | null>(null)
+  const [repoSyncing, setRepoSyncing] = useState(false)
+  const [repoLogs, setRepoLogs] = useState<string[]>([])
+  const repoAbortRef = useRef<AbortController | null>(null)
   const activeEnvId = profile.active_env_id || envs[0]?.id
 
   const { data: appsData } = useQuery({
@@ -737,7 +743,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
     setEnvModal({ mode: 'add' })
   }
   const openEditEnv = (env: EnvEntry) => {
-    setEnvForm({ id: env.id, name: env.name, db_url: env.db_url, db_name: env.db_name, login: env.login, api_key: '', odoo_version: env.odoo_version ?? '', branch: env.branch ?? '' })
+    setEnvForm({ id: env.id, name: env.name, db_url: env.db_url, db_name: env.db_name, login: env.login, api_key: '', odoo_version: env.odoo_version ?? '', branch: env.branch ?? '', github_repo: env.github_repo ?? '', repo_branch: env.repo_branch ?? '' })
     setEnvDiag(null)
     setEnvModal({ mode: 'edit', env })
   }
@@ -754,6 +760,59 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
       if (d.db_name_suggestion && !envForm.db_name) setEnvForm(p => ({ ...p, db_name: d.db_name_suggestion }))
     } catch { /* ignore */ } finally { setEnvDiagPending(false) }
   }
+
+  const fetchRepoStatus = async (envId: string) => {
+    try {
+      const res = await getEnvRepoStatus(profile.id, envId)
+      setRepoStatus(res.data)
+    } catch { setRepoStatus(null) }
+  }
+
+  const syncRepo = async (envId: string) => {
+    repoAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    repoAbortRef.current = ctrl
+    setRepoSyncing(true)
+    setRepoLogs([])
+    try {
+      const res = await fetch(syncEnvRepoUrl(profile.id, envId), {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok || !res.body) { setRepoSyncing(false); return }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n'); buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const evt = JSON.parse(line.slice(6))
+            if (evt.msg) setRepoLogs(p => [...p.slice(-20), evt.msg])
+            if (evt.type === 'done' || evt.type === 'end') { fetchRepoStatus(envId) }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError')
+        setRepoLogs(p => [...p, String(err)])
+    } finally { setRepoSyncing(false) }
+  }
+
+  // Fetch repo status when env modal opens on an env with a github_repo
+  useEffect(() => {
+    if (envModal?.mode === 'edit' && envModal.env.github_repo) {
+      fetchRepoStatus(envModal.env.id)
+    } else {
+      setRepoStatus(null)
+      setRepoLogs([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envModal])
 
   const saveEnvModal = async () => {
     setEnvSaving(true)
@@ -973,6 +1032,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                       v{env.odoo_version.split('.')[0]}
                     </span>
                   )}
+                  {env.github_repo && (
+                    <span title={`Dépôt : ${env.github_repo}`} style={{ fontSize: 10, opacity: isActive ? 0.8 : 0.6 }}>🐙</span>
+                  )}
                 </button>
               )
             })}
@@ -1108,7 +1170,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               </div>
 
               {/* Version + Branch */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
                 <div>
                   <label style={styles.label}>Version Odoo <span style={{ color: t.muted, fontWeight: 400 }}>(auto-détectée)</span></label>
                   <select style={styles.input} value={envForm.odoo_version} onChange={setEnv('odoo_version')}>
@@ -1117,9 +1179,59 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                   </select>
                 </div>
                 <div>
-                  <label style={styles.label}>Branche GitHub <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
+                  <label style={styles.label}>Branche Odoo.sh <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
                   <input style={styles.input} value={envForm.branch} onChange={setEnv('branch')} placeholder="staging" />
                 </div>
+              </div>
+
+              {/* ── Repo section ── */}
+              <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 14, marginBottom: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: 10 }}>
+                  Source complémentaire (dépôt GitHub)
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={styles.label}>Dépôt <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
+                    <input style={styles.input} value={envForm.github_repo} onChange={setEnv('github_repo')} placeholder="org/mon-projet-odoo" />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Branche</label>
+                    <input style={styles.input} value={envForm.repo_branch} onChange={setEnv('repo_branch')} placeholder="main" />
+                  </div>
+                </div>
+
+                {/* Repo status + sync button — edit mode only, when github_repo is set */}
+                {envModal?.mode === 'edit' && (envForm.github_repo || repoStatus) && (
+                  <div style={{ background: t.bg, borderRadius: t.radius, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                        {repoStatus?.cloned ? (
+                          <>
+                            <span style={{ color: t.success, fontWeight: 700 }}>✓ Cloné</span>
+                            {repoStatus.head && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 11 }}>{repoStatus.head}</span>}
+                            {repoStatus.message && <span style={{ color: t.textSub }} title={repoStatus.date ?? ''}>{repoStatus.message.slice(0, 40)}</span>}
+                          </>
+                        ) : repoStatus?.github_repo ? (
+                          <span style={{ color: '#b45309', fontWeight: 600 }}>⚠ Non cloné</span>
+                        ) : null}
+                      </div>
+                      <button
+                        onClick={() => syncRepo(envModal.env.id)}
+                        disabled={repoSyncing || !envForm.github_repo}
+                        style={{
+                          padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: t.radius, cursor: 'pointer',
+                          background: repoSyncing ? t.borderLight : t.action, color: repoSyncing ? t.muted : '#fff',
+                        }}>
+                        {repoSyncing ? '⟳ En cours…' : repoStatus?.cloned ? '↑ Mettre à jour' : '⬇ Cloner'}
+                      </button>
+                    </div>
+                    {repoLogs.length > 0 && (
+                      <div style={{ fontFamily: 'monospace', fontSize: 10, color: t.muted, maxHeight: 60, overflowY: 'auto', lineHeight: 1.4 }}>
+                        {repoLogs.map((l, i) => <div key={i}>{l}</div>)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Footer */}

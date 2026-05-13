@@ -349,11 +349,20 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
                 if not _version_to_use:
                     _version_to_use = available[0]
 
+    # Detect per-environment cloned repo
+    repo_path = None
+    _env_github_repo = _active_env.get("github_repo")
+    if _env_github_repo:
+        from pathlib import Path as _Path
+        _repo_local = _Path.home() / ".odoo-consultant" / "repos" / profile.name / _active_env.get("id", "prod")
+        if _repo_local.is_dir() and (_repo_local / ".git").exists():
+            repo_path = str(_repo_local)
+
     context_md = load_context_for_prompt(_version_to_use)
 
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

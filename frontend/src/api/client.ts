@@ -37,6 +37,8 @@ export const updateProfileEnv  = (id: number, envId: string, data: object) => ap
 export const deleteProfileEnv  = (id: number, envId: string) => api.delete(`/profiles/${id}/environments/${envId}`)
 export const activateProfileEnv = (id: number, envId: string) => api.post(`/profiles/${id}/environments/${envId}/activate`)
 export const testProfileEnv    = (id: number, envId: string) => api.post(`/profiles/${id}/environments/${envId}/test`)
+export const getEnvRepoStatus  = (id: number, envId: string) => api.get(`/profiles/${id}/environments/${envId}/repo`)
+export const syncEnvRepoUrl    = (id: number, envId: string) => `/api/profiles/${id}/environments/${envId}/repo/sync`
 
 // Projects
 export const listProjects = () => api.get('/projects/')

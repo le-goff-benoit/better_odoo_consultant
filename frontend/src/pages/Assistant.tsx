@@ -57,7 +57,7 @@ function AppBadgesAsst({ apps, max = 6 }: { apps: { name: string; shortdesc: str
 // ── Types ─────────────────────────────────────────────────────
 
 interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string }
-interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string }
+interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string; github_repo?: string; repo_branch?: string }
 interface CompanyOption { id: number; name: string }
 
 interface AiEvent {
@@ -405,6 +405,15 @@ export default function Assistant() {
     : false
   const enterpriseInstalled = activeVersion ? sourcesStatus[`${activeVersion}-enterprise`]?.installed === true : false
   const communityInstalled  = activeVersion ? sourcesStatus[activeVersion]?.installed === true : false
+
+  // Active env repo detection
+  const activeEnvObj = (() => {
+    if (!selectedProfile) return null
+    const envs: EnvEntry[] = (() => { try { return JSON.parse(selectedProfile.environments ?? '[]') as EnvEntry[] } catch { return [] } })()
+    const effectiveId = activeEnvId ?? selectedProfile.active_env_id ?? envs[0]?.id
+    return envs.find(e => e.id === effectiveId) ?? envs[0] ?? null
+  })()
+  const activeEnvRepo = activeEnvObj?.github_repo ?? null
 
   // Deduplicate versions: strip -enterprise suffix, keep one entry per base version
   // Show community + enterprise availability indicators in the dropdown
@@ -818,6 +827,20 @@ export default function Assistant() {
                   {sourcesInstalled
                     ? `✓ Sources v${activeVersion}${communityInstalled && enterpriseInstalled ? ' · C+E' : communityInstalled ? ' · C' : ' · E'}`
                     : `⚠ Sources v${activeVersion}`}
+                </span>
+              )}
+
+              {/* Repo badge — shown when active env has a linked GitHub repo */}
+              {selectedProfile && !isGeneralMode && activeEnvRepo && (
+                <span
+                  title={`Dépôt projet : ${activeEnvRepo} — source complémentaire active`}
+                  style={{
+                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
+                    background: `${t.brand}12`, color: t.brand,
+                    border: `1px solid ${t.brand40}`,
+                    cursor: 'help', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                  🐙 {activeEnvRepo.split('/')[1] ?? activeEnvRepo}
                 </span>
               )}
 

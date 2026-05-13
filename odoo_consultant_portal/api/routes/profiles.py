@@ -1,9 +1,12 @@
 import asyncio
 import json
 import logging
+import os as _os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +73,8 @@ class EnvCreate(BaseModel):
     api_key: str
     odoo_version: Optional[str] = None
     branch: Optional[str] = None
+    github_repo: Optional[str] = None
+    repo_branch: Optional[str] = None
 
 
 class EnvUpdate(BaseModel):
@@ -80,6 +85,8 @@ class EnvUpdate(BaseModel):
     api_key: Optional[str] = None
     odoo_version: Optional[str] = None
     branch: Optional[str] = None
+    github_repo: Optional[str] = None
+    repo_branch: Optional[str] = None
 
 
 class ContextAutoFillRequest(BaseModel):
@@ -562,6 +569,35 @@ async def auto_fill_context(profile_id: int, session: AsyncSession = Depends(get
         except Exception:
             pass
 
+    # Scan cloned repos for this profile — collect manifest summaries
+    repo_info = ""
+    try:
+        envs_list = json.loads(profile.environments or "[]")
+        repo_snippets: list[str] = []
+        for env in envs_list:
+            env_id = env.get("id", "")
+            github_repo = env.get("github_repo")
+            if not github_repo:
+                continue
+            repo_path = _repo_local_path(profile.name, env_id)
+            if not (repo_path / ".git").exists():
+                continue
+            # Collect __manifest__.py files (max 10)
+            manifest_contents: list[str] = []
+            for manifest in list(repo_path.rglob("__manifest__.py"))[:10]:
+                try:
+                    text = manifest.read_text(encoding="utf-8", errors="replace")
+                    rel = manifest.relative_to(repo_path)
+                    manifest_contents.append(f"# {rel}\n{text[:800]}")
+                except Exception:
+                    pass
+            if manifest_contents:
+                repo_snippets.append(f"Dépôt {github_repo} (env: {env.get('name', env_id)}) :\n" + "\n\n".join(manifest_contents))
+        if repo_snippets:
+            repo_info = "\n\nCode source du projet (manifests des modules custom) :\n" + "\n\n---\n".join(repo_snippets)
+    except Exception:
+        pass
+
     prompt = f"""Tu es un assistant expert Odoo. Génère un fichier de contexte concis pour ce projet client.
 
 Données du projet :
@@ -570,13 +606,14 @@ Données du projet :
 - URL : {profile.db_url}
 - Version Odoo : {profile.odoo_version or "inconnue"}
 - Sociétés détectées : {companies_str or "inconnue"}
-- Modules installés : {apps_list or "inconnus"}
+- Modules installés : {apps_list or "inconnus"}{repo_info}
 
 Génère un contexte structuré avec les sections suivantes (en français, concis, bulletpoints) :
 1. **Présentation du client** — 2-3 lignes sur l'activité probable de l'entreprise (base-toi sur le nom, la ville, les modules)
-2. **Modules clés** — liste les modules principaux et leur usage probable chez ce client
-3. **Points d'attention** — risques, particularités, ou points à vérifier pour ce type de client
-4. **Notes consultant** — section vide à compléter manuellement
+2. **Modules clés** — liste les modules principaux et leur usage probable chez ce client{", en incluant les modules custom du dépôt" if repo_info else ""}
+3. **Modules custom** — {"décris brièvement chaque module custom trouvé dans le dépôt (nom, rôle probable d'après le manifest)" if repo_info else "section vide — aucun dépôt cloné"}
+4. **Points d'attention** — risques, particularités, ou points à vérifier pour ce type de client
+5. **Notes consultant** — section vide à compléter manuellement
 
 Sois factuel. Si tu ne sais pas, indique-le clairement. Ne pas inventer."""
 
@@ -725,3 +762,102 @@ async def test_environment(profile_id: int, env_id: str, session: AsyncSession =
         return {"ok": True, "uid": uid}
     except Exception as exc:
         raise HTTPException(400, str(exc))
+
+
+# ── Repository (per-environment) ──────────────────────────────────
+
+def _repo_local_path(profile_name: str, env_id: str) -> Path:
+    return Path.home() / ".odoo-consultant" / "repos" / profile_name / env_id
+
+
+@router.get("/{profile_id}/environments/{env_id}/repo")
+async def get_env_repo_status(profile_id: int, env_id: str, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    env = next((e for e in envs if e.get("id") == env_id), None)
+    if not env:
+        raise HTTPException(404, f"Environnement '{env_id}' introuvable")
+
+    github_repo = env.get("github_repo")
+    if not github_repo:
+        return {"github_repo": None, "cloned": False}
+
+    repo_path = _repo_local_path(profile.name, env_id)
+    if not (repo_path / ".git").exists():
+        return {"github_repo": github_repo, "cloned": False, "local_path": str(repo_path)}
+
+    try:
+        import git as gitlib
+        repo = gitlib.Repo(repo_path)
+        head = repo.head.commit
+        return {
+            "github_repo": github_repo,
+            "cloned": True,
+            "local_path": str(repo_path),
+            "head": head.hexsha[:8],
+            "message": head.message.strip().split("\n")[0][:80],
+            "date": head.committed_datetime.isoformat(),
+        }
+    except Exception as exc:
+        return {"github_repo": github_repo, "cloned": True, "local_path": str(repo_path), "error": str(exc)}
+
+
+@router.post("/{profile_id}/environments/{env_id}/repo/sync")
+async def sync_env_repo(profile_id: int, env_id: str, session: AsyncSession = Depends(get_session)):
+    """Clone or pull the GitHub repo for this environment — returns SSE stream."""
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    env = next((e for e in envs if e.get("id") == env_id), None)
+    if not env:
+        raise HTTPException(404, f"Environnement '{env_id}' introuvable")
+
+    github_repo = env.get("github_repo")
+    if not github_repo:
+        raise HTTPException(400, "Aucun dépôt GitHub configuré pour cet environnement")
+
+    repo_branch = env.get("repo_branch") or "main"
+    repo_url = f"git@github.com:{github_repo}.git"
+    repo_path = _repo_local_path(profile.name, env_id)
+    is_clone = not (repo_path / ".git").exists()
+
+    async def generate():
+        if is_clone:
+            repo_path.mkdir(parents=True, exist_ok=True)
+            cmd = ["git", "clone", "--progress", "--depth=1", "--branch", repo_branch, repo_url, str(repo_path)]
+            label = f"Clonage de {github_repo} (branche {repo_branch})"
+        else:
+            cmd = ["git", "-C", str(repo_path), "pull", "--progress"]
+            label = f"Mise à jour de {github_repo}"
+
+        yield f"data: {json.dumps({'type': 'start', 'msg': f'⟳ {label}'}, ensure_ascii=False)}\n\n"
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env={**_os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+        async for raw in proc.stdout:
+            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line:
+                yield f"data: {json.dumps({'type': 'log', 'msg': line}, ensure_ascii=False)}\n\n"
+        await proc.wait()
+        if proc.returncode == 0:
+            yield f"data: {json.dumps({'type': 'done', 'msg': '✓ Terminé'}, ensure_ascii=False)}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'error', 'msg': f'Erreur git (code {proc.returncode})'}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'type': 'end'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

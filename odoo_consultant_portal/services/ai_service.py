@@ -39,6 +39,21 @@ _TOOL_READ_SRC = {
         "Utilise après search_odoo_source pour voir l'implémentation complète."
     ),
 }
+_TOOL_SEARCH_REPO = {
+    "name": "search_project_source",
+    "description": (
+        "Rechercher dans le code source du projet client (modules custom, overrides, configurations). "
+        "Utilise pour trouver des modèles custom, des surcharges de méthodes Odoo, des vues modifiées, ou toute logique métier spécifique au client. "
+        "Retourne les lignes correspondantes avec fichier et numéro de ligne."
+    ),
+}
+_TOOL_READ_REPO = {
+    "name": "read_project_file",
+    "description": (
+        "Lire le contenu d'un fichier du code source du projet client (module custom). "
+        "Utilise après search_project_source pour voir l'implémentation complète d'un override ou d'un module custom."
+    ),
+}
 
 # ── Claude tool schemas ───────────────────────────────────────────
 
@@ -180,6 +195,43 @@ TOOLS_GEMINI_SRC = [
     }
 ]
 
+# ── Repository tool schemas (appended when repo_path is set) ─────
+
+_REPO_INPUT_SCHEMA_SEARCH = {"type": "object", "required": ["pattern"], "properties": {
+    "pattern":    {"type": "string", "description": "Texte ou regex à chercher"},
+    "path":       {"type": "string", "description": "Sous-dossier optionnel (ex: 'addons/mon_module')", "default": ""},
+    "file_types": {"type": "array",  "items": {"type": "string"}, "description": "Extensions, ex: ['*.py'] ou ['*.xml']", "default": ["*.py"]},
+}}
+_REPO_INPUT_SCHEMA_READ = {"type": "object", "required": ["path"], "properties": {
+    "path":       {"type": "string",  "description": "Chemin relatif depuis la racine du dépôt"},
+    "start_line": {"type": "integer", "description": "Première ligne à lire", "default": 1},
+    "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + 150)", "default": 0},
+}}
+
+REPO_TOOLS_CLAUDE = [
+    {**_TOOL_SEARCH_REPO, "input_schema": _REPO_INPUT_SCHEMA_SEARCH},
+    {**_TOOL_READ_REPO,   "input_schema": _REPO_INPUT_SCHEMA_READ},
+]
+REPO_TOOLS_OPENAI = [
+    {"type": "function", "function": {**_TOOL_SEARCH_REPO, "parameters": {"type": "object", "required": ["pattern"], "properties": {
+        "pattern": {"type": "string"}, "path": {"type": "string", "default": ""},
+        "file_types": {"type": "array", "items": {"type": "string"}, "default": ["*.py"]},
+    }}}},
+    {"type": "function", "function": {**_TOOL_READ_REPO, "parameters": {"type": "object", "required": ["path"], "properties": {
+        "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0},
+    }}}},
+]
+REPO_FUNCTION_DECLARATIONS = [
+    {"name": "search_project_source", "description": _TOOL_SEARCH_REPO["description"],
+     "parameters": {"type": "object", "required": ["pattern"], "properties": {
+         "pattern": {"type": "string"}, "path": {"type": "string"}, "file_types": {"type": "array"},
+     }}},
+    {"name": "read_project_file", "description": _TOOL_READ_REPO["description"],
+     "parameters": {"type": "object", "required": ["path"], "properties": {
+         "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"},
+     }}},
+]
+
 DEFAULT_MODELS = {
     "claude":   "claude-sonnet-4-6",
     "openai":   "gpt-4o",
@@ -208,7 +260,7 @@ def _trim_context(ctx: str) -> str:
     return ctx[:_MAX_CONTEXT_CHARS] + "\n\n[...contexte tronqué — trop long pour le modèle...]"
 
 
-def build_system(profile, source_path: Optional[str] = None, context_md: str = "") -> str:
+def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None) -> str:
     source_section = ""
     if source_path:
         source_section = f"""
@@ -222,6 +274,13 @@ Exemples d'utilisation :
     else:
         source_section = "\nCode source non disponible (sources non installées pour cette version).\n"
 
+    repo_section = ""
+    if repo_path:
+        repo_section = f"""
+Code source du projet client disponible localement : {repo_path}
+IMPORTANT : Ce dépôt contient les modules custom et configurations spécifiques à ce client. Utilise search_project_source et read_project_file pour explorer les overrides, modèles custom, vues modifiées, et toute logique métier particulière.
+"""
+
     return f"""Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
 
 Instance connectée :
@@ -229,7 +288,7 @@ Instance connectée :
 - Version : {profile.odoo_version or "inconnue"}
 - Base : {profile.db_name}
 - Société : {profile.company_name or "inconnue"}
-{source_section}
+{source_section}{repo_section}
 Instructions :
 - Utilise les outils pour interroger Odoo directement et répondre avec des données réelles
 - Quand un modèle n'existe pas sur l'instance, cherche son nom correct dans le code source avant d'abandonner
@@ -259,7 +318,7 @@ Modèles Odoo fréquents (noms peuvent varier selon la version) :
 """
 
 
-def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "") -> str:
+def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None) -> str:
     source_section = (
         f"Code source Odoo disponible localement : {source_path}\n"
         "IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
@@ -375,7 +434,7 @@ async def _read_odoo_file(args: dict, source_path: str) -> dict:
 
 # ── Tool executor ────────────────────────────────────────────────
 
-async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None) -> dict:
+async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None, repo_path: Optional[str] = None) -> dict:
     loop = asyncio.get_event_loop()
     try:
         if name == "query_odoo":
@@ -413,6 +472,16 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
                 return {"ok": False, "error": "Code source non disponible"}
             return await _read_odoo_file(args, source_path)
 
+        elif name == "search_project_source":
+            if not repo_path:
+                return {"ok": False, "error": "Code source du projet non disponible — clonez le dépôt depuis la fiche projet"}
+            return await _search_odoo_source(args, repo_path)
+
+        elif name == "read_project_file":
+            if not repo_path:
+                return {"ok": False, "error": "Code source du projet non disponible"}
+            return await _read_odoo_file(args, repo_path)
+
         return {"ok": False, "error": f"Outil inconnu: {name}"}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
@@ -420,7 +489,7 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
 
 # ── Claude ───────────────────────────────────────────────────────
 
-async def _chat_claude(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None) -> AsyncIterator[dict]:
+async def _chat_claude(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
     try:
         import anthropic
     except ImportError:
@@ -450,7 +519,7 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
             for block in response.content:
                 if block.type == "tool_use":
                     yield {"type": "tool_call", "name": block.name, "args": block.input}
-                    result = await _run_tool(block.name, block.input, odoo, source_path)
+                    result = await _run_tool(block.name, block.input, odoo, source_path, repo_path)
                     yield {"type": "tool_result", "name": block.name, **result}
                     tool_results.append({
                         "type": "tool_result",
@@ -470,7 +539,7 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
 
 # ── OpenAI (shared logic for OpenAI + GitHub Models + Copilot) ───
 
-async def _chat_openai_client(client, model_id: str, system: str, messages: list, odoo, source_path, tools=None) -> AsyncIterator[dict]:
+async def _chat_openai_client(client, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
     if tools is None:
         tools = TOOLS_OPENAI
     oai_msgs = [{"role": "system", "content": system}] + messages
@@ -488,7 +557,7 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
             for tc in choice.message.tool_calls:
                 args = json.loads(tc.function.arguments)
                 yield {"type": "tool_call", "name": tc.function.name, "args": args}
-                result = await _run_tool(tc.function.name, args, odoo, source_path)
+                result = await _run_tool(tc.function.name, args, odoo, source_path, repo_path)
                 yield {"type": "tool_result", "name": tc.function.name, **result}
                 oai_msgs.append({
                     "role": "tool", "tool_call_id": tc.id,
@@ -501,29 +570,29 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
 
 
-async def _chat_openai(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None) -> AsyncIterator[dict]:
+async def _chat_openai(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
     try:
         import openai
     except ImportError:
         yield {"type": "error", "msg": "Package 'openai' non installé. Lancez : pip install openai"}
         return
     client = openai.AsyncOpenAI(api_key=api_key)
-    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools):
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path):
         yield evt
 
 
-async def _chat_github(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None) -> AsyncIterator[dict]:
+async def _chat_github(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
     try:
         import openai
     except ImportError:
         yield {"type": "error", "msg": "Package 'openai' non installé."}
         return
     client = openai.AsyncOpenAI(api_key=api_key, base_url=GITHUB_MODELS_BASE_URL)
-    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools):
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path):
         yield evt
 
 
-async def _chat_copilot(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None) -> AsyncIterator[dict]:
+async def _chat_copilot(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
     try:
         import openai
     except ImportError:
@@ -534,13 +603,13 @@ async def _chat_copilot(api_key: str, model_id: str, system: str, messages: list
         base_url=COPILOT_BASE_URL,
         default_headers=COPILOT_HEADERS,
     )
-    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools):
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path):
         yield evt
 
 
 # ── Gemini ───────────────────────────────────────────────────────
 
-async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None) -> AsyncIterator[dict]:
+async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
     try:
         import google.generativeai as genai
     except ImportError:
@@ -577,7 +646,7 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
             fc = part.function_call
             args = dict(fc.args)
             yield {"type": "tool_call", "name": fc.name, "args": args}
-            result = await _run_tool(fc.name, args, odoo, source_path)
+            result = await _run_tool(fc.name, args, odoo, source_path, repo_path)
             yield {"type": "tool_result", "name": fc.name, **result}
             last_msg = genai.protos.Content(parts=[genai.protos.Part(
                 function_response=genai.protos.FunctionResponse(
@@ -608,6 +677,7 @@ async def stream_chat(
     version: Optional[str] = None,  # used when profile is None
     user_profile: Optional[dict] = None,
     active_company_name: Optional[str] = None,
+    repo_path: Optional[str] = None,
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
 
@@ -624,7 +694,7 @@ async def stream_chat(
             user_ctx = "\n".join(parts) + "\n"
 
     if profile is not None:
-        system   = build_system(profile, source_path, context_md)
+        system   = build_system(profile, source_path, context_md, repo_path)
         if active_company_name:
             system = system.replace(
                 f"- Société : {profile.company_name or 'inconnue'}",
@@ -638,27 +708,33 @@ async def stream_chat(
         tools_o  = TOOLS_OPENAI
         tools_g  = TOOLS_GEMINI
     else:
-        system   = build_system_general(version or "?", source_path, context_md)
+        system   = build_system_general(version or "?", source_path, context_md, repo_path)
         if user_ctx:
             system = user_ctx + system
         tools_c  = TOOLS_CLAUDE_SRC
         tools_o  = TOOLS_OPENAI_SRC
         tools_g  = TOOLS_GEMINI_SRC
 
+    # Append repo tools when a cloned repo is available
+    if repo_path:
+        tools_c = tools_c + REPO_TOOLS_CLAUDE
+        tools_o = tools_o + REPO_TOOLS_OPENAI
+        tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + REPO_FUNCTION_DECLARATIONS}]
+
     if provider == "claude":
-        async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c):
+        async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path):
             yield evt
     elif provider == "openai":
-        async for evt in _chat_openai(api_key, model, system, messages, odoo, source_path, tools_o):
+        async for evt in _chat_openai(api_key, model, system, messages, odoo, source_path, tools_o, repo_path):
             yield evt
     elif provider == "gemini":
-        async for evt in _chat_gemini(api_key, model, system, messages, odoo, source_path, tools_g):
+        async for evt in _chat_gemini(api_key, model, system, messages, odoo, source_path, tools_g, repo_path):
             yield evt
     elif provider == "github":
-        async for evt in _chat_github(api_key, model, system, messages, odoo, source_path, tools_o):
+        async for evt in _chat_github(api_key, model, system, messages, odoo, source_path, tools_o, repo_path):
             yield evt
     elif provider == "copilot":
-        async for evt in _chat_copilot(api_key, model, system, messages, odoo, source_path, tools_o):
+        async for evt in _chat_copilot(api_key, model, system, messages, odoo, source_path, tools_o, repo_path):
             yield evt
     else:
         yield {"type": "error", "msg": f"Fournisseur inconnu : {provider}"}
