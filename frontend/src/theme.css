@@ -1146,7 +1146,7 @@
   box-sizing: border-box;
   min-height: 86px;
   max-height: 180px;
-  padding: 13px 58px 13px 54px;
+  padding: 13px 110px 13px 54px;
   border: 0;
   border-radius: 8px;
   font-size: 14px;
@@ -1156,6 +1156,14 @@
   outline: none;
   font-family: inherit;
   line-height: 1.55;
+}
+
+.assistant-perspective-slot {
+  position: absolute;
+  bottom: 13px;
+  right: 56px;
+  display: flex;
+  align-items: center;
 }
 
 .assistant-textarea:focus {

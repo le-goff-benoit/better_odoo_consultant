@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, ChevronDown, Check, TriangleAlert } from 'lucide-react'
+import { ArrowRightLeft, ArrowUp, ChevronDown, Check, Square, TriangleAlert } from 'lucide-react'
 import { listProfiles, checkAllSources, getAiProviders, getModelConfig } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
+import PerspectiveToggle, { Perspective, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
 
@@ -58,12 +59,20 @@ interface Message {
 }
 
 
-const SUGGESTIONS_MIGRATION = [
+const SUGGESTIONS_MIGRATION_TECHNICAL = [
   'Quels champs ont changé sur sale.order entre les deux versions ?',
   'Comment migrer les vues XML avec attrs= ?',
   'Quels modules custom risquent d\'être incompatibles ?',
   'Quelles API Python ont été supprimées ou renommées ?',
   'Analyse les différences de stock.move entre les deux versions',
+]
+
+const SUGGESTIONS_MIGRATION_FUNCTIONAL = [
+  'Quelles nouvelles fonctionnalités standard sont disponibles dans la version cible ?',
+  'Quels modules nouveaux pourraient remplacer nos modules custom ?',
+  'Quels changements UX/menus impactent les key users ?',
+  'Quel est l\'impact formation pour les commerciaux ?',
+  'Y a-t-il des modules dépréciés ou remplacés entre ces deux versions ?',
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -860,6 +869,9 @@ export default function Migration() {
   const [source, setSource] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
   const [target, setTarget] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
 
+  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('migration', 'technical'))
+  const setPerspective = (p: Perspective) => { setPerspectiveState(p); savePerspective('migration', p) }
+
   const [messages, setMessages] = useState<Message[]>([])
   const [input,     setInput]   = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -920,6 +932,7 @@ export default function Migration() {
       messages: history,
       migration_mode: true,
       version: sourceVersion || undefined,
+      perspective,
     }
 
     if (source.mode === 'environment' && source.profileId) {
@@ -983,8 +996,11 @@ export default function Migration() {
 
   const send = () => { if (input.trim()) sendWithText(input.trim()) }
 
+  const showSuggestions = messages.length === 0 && ready && !input.trim()
+  const suggestionList = perspective === 'functional' ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+    <div className="assistant-shell" style={{ gap: 0 }}>
       <PageHeader
         title="Migration"
         description="Analysez et planifiez vos migrations Odoo en comparant deux versions ou environnements."
@@ -1079,7 +1095,7 @@ export default function Migration() {
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 4, marginBottom: 12 }}>
+      <div className="assistant-message-list">
         {messages.length === 0 && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
             <div style={{ textAlign: 'center', color: t.muted, maxWidth: 520 }}>
@@ -1092,29 +1108,6 @@ export default function Migration() {
                 puis posez votre question sur la migration.
               </div>
             </div>
-            {ready && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 600 }}>
-                {SUGGESTIONS_MIGRATION.map(s => (
-                  <button key={s} onClick={() => sendWithText(s)} style={{
-                    padding: '7px 14px', borderRadius: t.radiusFull,
-                    background: t.bgCard, border: `1px solid ${t.border}`,
-                    color: t.text, fontSize: 12, cursor: 'pointer',
-                    transition: 'border-color .15s, background .15s',
-                  }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = `var(--brand, ${t.brand})`
-                      e.currentTarget.style.background = `var(--brand, ${t.brand})10`
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = t.border
-                      e.currentTarget.style.background = t.bgCard
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -1138,8 +1131,17 @@ export default function Migration() {
       </div>
 
       {/* Input */}
-      <div style={{ flexShrink: 0, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
-        <div style={{ position: 'relative' }}>
+      <div className="assistant-composer">
+        <div className="assistant-composer-inner">
+          {showSuggestions && (
+            <div className="assistant-composer-suggestions">
+              {suggestionList.map(s => (
+                <button key={s} type="button" onClick={() => setInput(s)} className="assistant-composer-suggestion">
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -1153,33 +1155,31 @@ export default function Migration() {
             }
             disabled={!ready || streaming}
             rows={3}
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              padding: '12px 56px 12px 16px', border: `1px solid ${t.border}`,
-              borderRadius: t.radiusLg, fontSize: 14, resize: 'none',
-              color: t.text, background: t.bgCard, outline: 'none',
-              fontFamily: t.font, lineHeight: 1.6, transition: 'border-color .15s',
-            }}
-            onFocus={e => (e.currentTarget.style.borderColor = `var(--brand, ${t.brand})`)}
-            onBlur={e => (e.currentTarget.style.borderColor = t.border)}
+            className="assistant-textarea"
+            style={{ paddingLeft: 16 }}
           />
+          <div className="assistant-perspective-slot">
+            <PerspectiveToggle
+              value={perspective}
+              onChange={setPerspective}
+              size="sm"
+              disabled={streaming}
+            />
+          </div>
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
             disabled={!streaming && (!input.trim() || !ready)}
             title={streaming ? 'Arrêter la génération' : 'Envoyer (Entrée)'}
-            style={{
-              position: 'absolute', bottom: 10, right: 10,
-              width: 36, height: 36,
-              background: streaming ? t.danger : `var(--brand, ${t.brand})`,
-              color: '#fff', border: 'none', borderRadius: '50%',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, fontWeight: 700,
-              opacity: (!streaming && (!input.trim() || !ready)) ? 0.35 : 1,
-              transition: 'background .15s, opacity .15s',
-            }}
+            className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
           >
-            {streaming ? '⏹' : '↑'}
+            {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
           </button>
+        </div>
+        <div className="assistant-composer-meta">
+          <span>Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne</span>
+          {(sourceVersion || targetVersion) && (
+            <span>{sourceLabel} → {targetLabel}</span>
+          )}
         </div>
       </div>
     </div>

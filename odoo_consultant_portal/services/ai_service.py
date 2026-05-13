@@ -318,7 +318,92 @@ def _trim_context(ctx: str) -> str:
     return ctx[:_MAX_CONTEXT_CHARS] + "\n\n[...contexte tronqué — trop long pour le modèle...]"
 
 
-def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None) -> str:
+# ── Perspective (functional / technical) ─────────────────────────
+
+PERSPECTIVE_TECHNICAL = "technical"
+PERSPECTIVE_FUNCTIONAL = "functional"
+_VALID_PERSPECTIVES = {PERSPECTIVE_TECHNICAL, PERSPECTIVE_FUNCTIONAL}
+
+
+def _normalize_perspective(p: Optional[str]) -> str:
+    if p in _VALID_PERSPECTIVES:
+        return p  # type: ignore[return-value]
+    return PERSPECTIVE_TECHNICAL
+
+
+def _perspective_block(perspective: str, *, migration: bool = False) -> str:
+    """Return a markdown block injected at the top of the system prompt
+    to bias the assistant's reasoning, vocabulary and output format."""
+    perspective = _normalize_perspective(perspective)
+
+    if perspective == PERSPECTIVE_FUNCTIONAL:
+        common = """## Perspective : FONCTIONNELLE (AM / Business Analyst)
+
+Tu réponds comme un **Application Manager / Business Analyst Odoo**, pas comme un développeur.
+
+### Public cible de tes réponses
+- Consultants fonctionnels, key users, sponsors métier, chefs de projet.
+- Ils ne lisent pas de code Python ni de XML brut.
+
+### Ce sur quoi tu dois te concentrer
+- **Parcours utilisateur** : qui clique où, dans quel écran, pour obtenir quoi.
+- **Processus métier** : ventes, achats, stock, finance, RH, projet… end-to-end.
+- **Configuration fonctionnelle** : modules à activer, paramètres clés, règles, automatisations standard.
+- **Impact sur les rôles** (commercial, comptable, magasinier, manager…) et sur les KPI.
+- **Cas d'usage et limites** du standard avant de parler personnalisation.
+
+### Ce que tu dois éviter
+- Détails d'implémentation (ORM, compute, decorators, héritage de classes Python).
+- Diff de code ligne à ligne, signatures de méthodes internes.
+- Jargon framework (`_inherit`, `api.depends`, `super()`, ir.model…) sauf si absolument nécessaire pour expliquer un comportement métier.
+
+### Comment utiliser les outils de recherche
+- Cherche d'abord dans **les vues, menus, wizards, rapports et données de démo** (`*.xml`, `views/`, `wizard/`, `report/`, `data/`).
+- Lis les **`__manifest__.py`** pour comprendre la promesse fonctionnelle d'un module (description, category, dépendances).
+- Le code Python ne sert qu'à **valider** un comportement métier, pas à le décrire.
+
+### Format de sortie
+- Tableaux Markdown orientés métier : `Cas d'usage | Avant | Après | Bénéfice utilisateur | Effort`.
+- Listes à puces courtes, vocabulaire métier (workflow, processus, écran, rôle, validation).
+- Captures de la navigation type : *Ventes → Configuration → Équipes commerciales*.
+"""
+        if migration:
+            common += """
+### Spécifique migration (mode fonctionnel)
+- Mets en avant les **nouvelles fonctionnalités du standard** dans la version cible : qu'est-ce qui rend le client plus efficace ?
+- Identifie les **modules à activer/désactiver/remplacer** (ex : remplacement de `account_*` par `accountant`, etc.).
+- Signale les **changements UX visibles** : menus déplacés, écrans refondus, wizards remplacés.
+- Évalue l'**impact formation** des key users (faible / moyen / fort) et propose les sujets à couvrir.
+- Format de comparaison conseillé :
+  `Domaine fonctionnel | Avant (vSource) | Après (vCible) | Impact utilisateur | Action AM`
+"""
+        return common.strip() + "\n\n---\n"
+
+    # Technical perspective (default)
+    common = """## Perspective : TECHNIQUE (Architecte / Développeur)
+
+Tu réponds comme un **architecte ou développeur Odoo senior**.
+
+### Public cible de tes réponses
+- Développeurs, tech leads, intégrateurs.
+- Ils lisent du Python, de l'XML, des migrations SQL et savent ce qu'est l'ORM.
+
+### Ce sur quoi tu dois te concentrer
+- Modèles, champs, méthodes, héritage, decorators, contraintes, index.
+- Vues XML, hooks, wizards, ACL, record rules, security.
+- Performance, transactions, ORM, SQL généré, compatibilité de version.
+- Impact sur les **modules custom** et stratégie de refactor.
+
+### Format de sortie
+- Tableaux techniques : `Élément | Avant | Après | Action requise`.
+- Extraits de code Python / XML avec chemins de fichiers et numéros de ligne quand possible.
+- Vocabulaire : `_inherit`, `compute`, `depends`, `api.model_create_multi`, override, etc.
+"""
+    return common.strip() + "\n\n---\n"
+
+
+def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL) -> str:
+    perspective_md = _perspective_block(perspective, migration=False)
     source_section = ""
     if source_path:
         source_section = f"""
@@ -344,7 +429,7 @@ Ensuite utilise read_project_file pour lire les fichiers pertinents.
 Ne cherche PAS "__manifest__.py" comme pattern — c'est un nom de fichier, pas du contenu.
 """
 
-    return f"""Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
+    return f"""{perspective_md}Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
 
 Instance connectée :
 - URL : {profile.db_url}
@@ -388,7 +473,9 @@ def build_system_migration(
     target_path: Optional[str] = None,
     context_md: str = "",
     repo_path: Optional[str] = None,
+    perspective: str = PERSPECTIVE_TECHNICAL,
 ) -> str:
+    perspective_md = _perspective_block(perspective, migration=True)
     src_section = (
         f"Sources Odoo VERSION SOURCE ({source_version}) disponibles : {source_path}\n"
         "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source."
@@ -405,7 +492,7 @@ def build_system_migration(
         "Pour lister les modules custom : search_project_source(pattern='name', file_types=['__manifest__.py'])\n"
     ) if repo_path else ""
 
-    return f"""Tu es un expert Odoo spécialisé dans les migrations de version. Tu aides le consultant à préparer, analyser et exécuter une migration Odoo.
+    return f"""{perspective_md}Tu es un expert Odoo spécialisé dans les migrations de version. Tu aides le consultant à préparer, analyser et exécuter une migration Odoo.
 
 ## Contexte de migration
 - Version SOURCE : {source_version}
@@ -438,7 +525,8 @@ def build_system_migration(
 """
 
 
-def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None) -> str:
+def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL) -> str:
+    perspective_md = _perspective_block(perspective, migration=False)
     source_section = (
         f"Code source Odoo disponible localement : {source_path}\n"
         "IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
@@ -448,7 +536,7 @@ def build_system_general(version: str, source_path: Optional[str] = None, contex
         "- Lire un fichier : read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)\n"
     ) if source_path else "Code source non disponible pour cette version.\n"
 
-    return f"""Tu es un expert Odoo qui répond à des questions générales sur l'ERP, indépendamment de tout projet client.
+    return f"""{perspective_md}Tu es un expert Odoo qui répond à des questions générales sur l'ERP, indépendamment de tout projet client.
 
 Version Odoo : {version}
 {source_section}
@@ -811,8 +899,10 @@ async def stream_chat(
     target_path: Optional[str] = None,
     migration_mode: bool = False,
     target_version: Optional[str] = None,
+    perspective: str = PERSPECTIVE_TECHNICAL,
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
+    perspective = _normalize_perspective(perspective)
 
     user_ctx = ""
     if user_profile:
@@ -829,14 +919,14 @@ async def stream_chat(
     if migration_mode:
         src_ver = version or (profile.odoo_version if profile else "?")
         tgt_ver = target_version or "?"
-        system  = build_system_migration(src_ver, tgt_ver, source_path, target_path, context_md, repo_path)
+        system  = build_system_migration(src_ver, tgt_ver, source_path, target_path, context_md, repo_path, perspective)
         if user_ctx:
             system = user_ctx + system
         tools_c = TOOLS_CLAUDE_SRC
         tools_o = TOOLS_OPENAI_SRC
         tools_g = TOOLS_GEMINI_SRC
     elif profile is not None:
-        system   = build_system(profile, source_path, context_md, repo_path)
+        system   = build_system(profile, source_path, context_md, repo_path, perspective)
         if active_company_name:
             system = system.replace(
                 f"- Société : {profile.company_name or 'inconnue'}",
@@ -850,7 +940,7 @@ async def stream_chat(
         tools_o  = TOOLS_OPENAI
         tools_g  = TOOLS_GEMINI
     else:
-        system   = build_system_general(version or "?", source_path, context_md, repo_path)
+        system   = build_system_general(version or "?", source_path, context_md, repo_path, perspective)
         if user_ctx:
             system = user_ctx + system
         tools_c  = TOOLS_CLAUDE_SRC

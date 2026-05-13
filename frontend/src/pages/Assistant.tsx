@@ -5,6 +5,7 @@ import { ArrowUp, Bot, Building2, Check, ChevronDown, FileText, FolderCode, Glob
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
+import PerspectiveToggle, { Perspective, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 
 import { ODOO_APPS } from '../constants/odooApps'
 
@@ -363,6 +364,9 @@ export default function Assistant() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
 
+  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('assistant', 'technical'))
+  const setPerspective = (p: Perspective) => { setPerspectiveState(p); savePerspective('assistant', p) }
+
   // Init provider when providers load
   useEffect(() => {
     if (configuredProviders.length && !provider) {
@@ -564,8 +568,8 @@ export default function Assistant() {
     abortRef.current = ctrl
     try {
       const body = isGeneralMode
-        ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId }
-        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId }
+        ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId, perspective }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective }
       const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal })
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
@@ -634,8 +638,8 @@ export default function Assistant() {
     try {
       const cleanAttachments = attached.map(({ id: _id, status: _status, error: _error, ...payload }) => payload)
       const body = useGeneral
-        ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId }
-        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId }
+        ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId, perspective }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective }
       if (cleanAttachments.length > 0) {
         Object.assign(body, { attachments: cleanAttachments })
       }
@@ -1077,6 +1081,14 @@ export default function Assistant() {
           >
             <Paperclip size={16} />
           </button>
+          <div className="assistant-perspective-slot">
+            <PerspectiveToggle
+              value={perspective}
+              onChange={setPerspective}
+              size="sm"
+              disabled={streaming}
+            />
+          </div>
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
             disabled={configuredProviders.length === 0 || profileId === null || (!streaming && ((!input.trim() && readyAttachments.length === 0) || companyAccessBlocked))}

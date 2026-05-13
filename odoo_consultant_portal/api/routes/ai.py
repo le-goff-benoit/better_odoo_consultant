@@ -259,6 +259,8 @@ class ChatRequest(BaseModel):
     target_version: Optional[str] = None      # standalone target version
     target_profile_id: Optional[int] = None   # target from a project environment
     target_env_id: Optional[str] = None
+    # Reasoning perspective: "technical" (default) or "functional"
+    perspective: Optional[str] = "technical"
 
 
 _ATTACHMENT_MAX_FILES = 5
@@ -414,7 +416,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
         async def generate_general():
             try:
-                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver):
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, req.perspective or "technical"):
                     yield _sse(evt)
             except Exception as exc:
                 yield _sse({"type": "error", "msg": str(exc)})
@@ -513,7 +515,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, req.perspective or "technical"):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

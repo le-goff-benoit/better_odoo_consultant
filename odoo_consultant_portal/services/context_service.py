@@ -574,76 +574,199 @@ Adapte les sections au contenu réel de la conversation — supprime les section
 _MIGRATION_MD = """\
 # Méthodologie de migration Odoo
 
+> Ce document sert de **référentiel commun** pour répondre à toute question de migration,
+> que la perspective soit **fonctionnelle (AM/BA)** ou **technique (Archi/Dev)**.
+> Adapte la profondeur et le vocabulaire à la perspective active : reste sur le métier
+> (parcours, processus, modules, conduite du changement) en mode fonctionnel ; descends
+> dans le code (ORM, vues, hooks) en mode technique. Mais raisonne **toujours** sur les
+> deux dimensions avant de répondre.
+
 ## Rôle de l'assistant en mode migration
-Tu es un expert en migration Odoo. Tu analyses les différences entre deux versions (ou deux environnements) pour identifier les breaking changes, les risques de compatibilité et les actions de migration nécessaires.
+Aider le consultant à **cadrer, sécuriser et exécuter** une migration Odoo en couvrant
+trois dimensions :
+1. **Métier / fonctionnel** : ce que les utilisateurs vont gagner, perdre, refaire ou réapprendre.
+2. **Applicatif / paramétrage** : modules à activer, désactiver, remplacer ; configurations à reprendre.
+3. **Technique** : modules custom, données, performance, infrastructure, breaking changes du framework.
 
-## Principes d'analyse comparative
-1. **Comparer le code source** des deux versions pour détecter les changements de signature, les renommages, les suppressions
-2. **Identifier les breaking changes** : champs supprimés, méthodes renommées, modules déplacés, API modifiées
-3. **Évaluer l'impact des modules custom** : adapter les héritages, les vues, les méthodes surchargées
-4. **Prioriser les risques** : classer par criticité (bloquant / important / mineur)
-5. **Proposer des actions concrètes** : migration step-by-step avec les changements de code nécessaires
+---
 
-## Breaking changes majeurs par version
+## 1. Cadrage de la migration (questions à se poser systématiquement)
 
-### v16 → v17 (le plus impactant)
+### Côté métier
+- Quels processus métier sont **critiques** pour ce client (ventes, achats, stock, finance, RH, projet, MRP) ?
+- Quels **modules standard** sont activés aujourd'hui ? Lesquels sont **fortement personnalisés** ?
+- Quelles sont les **intégrations** externes (paiement, marketplace, EDI, banque, BI, e-commerce, IoT) ?
+- Quels sont les **utilisateurs clés** (key users) à embarquer ? Combien d'utilisateurs au total ?
+- Y a-t-il des **contraintes calendaires** (clôture comptable, saison commerciale, fin d'exercice, paie) ?
+
+### Côté technique
+- Version source / version cible exactes (pas seulement la majeure : 17.2, 17.5, etc.).
+- Modules custom : développés en interne, par un partenaire, par OCA, modules tiers payants.
+- Volume de données : factures, commandes, stock, historique → impact sur durée de migration.
+- Infrastructure : on-premise / Odoo.sh / Odoo Online — chacun a ses contraintes.
+- Prérequis techniques de la version cible (PostgreSQL, Python) — voir tableau breaking changes.
+
+### Côté projet
+- Budget et délai disponibles.
+- Stratégie de bascule : **big bang** vs **migration progressive par société/module**.
+- Disponibilité des key users pour la recette.
+- Engagement de la direction (sponsor) — indispensable.
+
+---
+
+## 2. Phases de migration (cycle complet)
+
+| Phase | Livrable principal | Qui contribue |
+|---|---|---|
+| **Audit** | Cartographie modules + customs + intégrations + volumes | AM + Dev |
+| **Cadrage** | Périmètre, scénarios cibles, estimation, planning | AM + chef de projet |
+| **Migration technique** | Base de données et modules custom migrés sur env de test | Dev / DBA |
+| **Recette fonctionnelle** | PV de recette par processus métier | AM + key users |
+| **Conduite du changement** | Formation, communication, FAQ, supports | AM + RH |
+| **Bascule production** | Cutover plan, gel des données, go/no-go | Tous |
+| **Hypercare** | Support renforcé J+1 à J+30 | AM + Dev |
+
+---
+
+## 3. Analyse fonctionnelle d'une migration (perspective AM / BA)
+
+### Ce qu'il faut produire
+- **Liste des nouvelles fonctionnalités standard** apportées par la version cible (par domaine métier).
+- **Liste des fonctionnalités dépréciées ou remplacées** (ex : Membership → Partnership en v19).
+- **Liste des modules custom potentiellement obsolètes** : un module standard de la cible répond-il déjà au besoin ?
+- **Impact UX** : menus déplacés, écrans refondus, terminologie qui change.
+- **Impact processus** : workflow modifié, étapes en plus / en moins, automatisations standard supplémentaires.
+- **Impact rôles** : qui doit être formé, sur quoi, à quel niveau.
+
+### Format de restitution recommandé (fonctionnel)
+| Domaine | Fonctionnalité | vSource | vCible | Bénéfice utilisateur | Action AM | Effort |
+|---|---|---|---|---|---|---|
+| Ventes | Produits combo | manquant | natif | Vente packs guidée | Refondre articles "menu" | M |
+| RH | Pay Runs | lots de fiches | interface guidée | Paie plus rapide | Reformer paie | F |
+
+### Indicateurs d'effort à proposer
+- **F (Faible)** : config simple, peu de formation
+- **M (Moyen)** : reprise de paramétrage, formation key users
+- **É (Élevé)** : refonte de processus, formation large, communication structurée
+
+### Conduite du changement (à ne jamais oublier)
+- **Communication** : annonce, calendrier, bénéfices attendus
+- **Formation** : key users d'abord, puis cascade utilisateurs finaux
+- **Documentation** : FAQ, captures d'écran "avant/après", procédures rejouables
+- **Sponsor** : un leader métier visible et engagé
+- **Hypercare** : canal dédié post go-live, daily debrief les 2 premières semaines
+
+---
+
+## 4. Analyse technique d'une migration (perspective Archi / Dev)
+
+### Ce qu'il faut produire
+- Liste des modules custom et leur compatibilité (à porter / à réécrire / à abandonner).
+- Liste des breaking changes du framework qui touchent les customs (ORM, vues, hooks).
+- Stratégie de migration des données (scripts, mapping, jeux de tests).
+- Plan d'infrastructure (PostgreSQL, Python, dépendances système).
+- Plan de tests automatisés (pytest, tour, hoot).
+
+### Inventaire technique à dresser systématiquement
+- [ ] Modules custom : `ir.module.module` filtré par auteur ≠ Odoo
+- [ ] Champs custom : `ir.model.fields` avec `state='manual'`
+- [ ] Vues custom : `ir.ui.view` rattachées à des modules custom
+- [ ] Actions serveur custom : `ir.actions.server`
+- [ ] Règles d'accès custom : `ir.rule`
+- [ ] Crons custom : `ir.cron`
+- [ ] Webhooks et endpoints custom (contrôleurs)
+- [ ] Données de référence custom (`noupdate=1`)
+
+### Format de restitution recommandé (technique)
+| Élément | vSource | vCible | Action requise | Risque |
+|---|---|---|---|---|
+| `attrs="..."` dans vues | OK v16 | supprimé v17 | Réécrire en `invisible="..."` | Bloquant |
+| `name_get()` | OK v16 | déprécié v17, supprimé v18 | Migrer vers `_compute_display_name` | Important |
+
+### Breaking changes majeurs par version
+
+#### v16 → v17 (le plus impactant)
 - `attrs="{'invisible': [...]}"` → `invisible="state == 'draft'"` (toutes les vues XML)
-- `name_get()` → `_compute_display_name()` (tous les modèles qui le surchargent)
-- `(0,0,{...})` → `Command.create({...})` (toutes les manipulations O2M/M2M)
+- `name_get()` → `_compute_display_name()`
+- `(0, 0, {...})` → `Command.create({...})` (manipulations O2M/M2M)
 - `read_group()` retourne des tuples, non des dicts
 - `<tree>` → `<list>` dans toutes les vues liste
 - `stock.location.route` → `stock.route`
 - `post_init_hook(cr, registry)` → `post_init_hook(env)`
 - SCSS `@import` → `@use` / `@forward`
 
-### v17 → v18
-- `name_get()` officiellement dépréciée → utiliser `display_name`
+#### v17 → v18
+- `name_get()` officiellement dépréciée (utiliser `display_name`)
 - Nouvelles méthodes contrôle d'accès : `check_access()`, `has_access()`, `_filtered_access()`
-- URLs lisibles : `/odoo/model/id` (routing des contrôleurs custom à vérifier)
+- URLs lisibles : `/odoo/model/id` (impacte les contrôleurs custom)
 - `datetime.utcnow()` → `datetime.now(timezone.utc)` (Python 3.12)
+- CSP renforcée : pas de scripts inline, pas de CDN externe sans whitelist
 
-### v18 → v19
-- PostgreSQL 13 minimum strict (blocker si PG 12)
-- Module Membership → Partnership
+#### v18 → v19
+- **PostgreSQL 13 minimum strict** (bloquant si PG 12)
+- Module **Membership** → **Partnership** (toute personnalisation à porter)
 - Python 3.11 minimum pour certains modules
+- Module Equity, ESG, AI, 40+ packs industrie disponibles
 
-## Checklist de migration standard
+---
 
-### Analyse préalable
-- [ ] Identifier la version source exacte (`ir.module.module` où `name='base'`)
-- [ ] Lister tous les modules tiers installés (auteurs non-Odoo)
-- [ ] Lister les modules custom développés en interne
-- [ ] Identifier les champs custom (`ir.model.fields` avec `state='manual'`)
-- [ ] Vérifier les vues custom (`ir.ui.view` avec modules custom)
+## 5. Stratégie de bascule (cutover)
 
-### Analyse du code custom
-- [ ] Vérifier les héritages de classes (`_inherit`)
-- [ ] Identifier les méthodes surchargées (`def action_confirm`, etc.)
-- [ ] Rechercher les `attrs=` dans les vues XML (breaking en v17)
-- [ ] Vérifier les `name_get()` surchargés
-- [ ] Vérifier les `(0,0,{})` dans le code Python
-- [ ] Identifier les dépendances vers des champs supprimés
+### Big bang (tout d'un coup)
+- ✅ Plus simple à orchestrer, communication unique
+- ❌ Risque concentré sur un weekend, rollback complexe
+- Recommandé pour PME / mono-société / volumes raisonnables
 
-### Actions de migration
-- [ ] Mettre à jour les vues XML (attrs, tree→list, etc.)
-- [ ] Adapter les méthodes Python surchargées
-- [ ] Mettre à jour les hooks de module
-- [ ] Tester les règles d'accès et les groupes
-- [ ] Vérifier la compatibilité des assets (SCSS, JS)
+### Progressif (par société, par module, par site)
+- ✅ Risque réparti, retour d'expérience exploitable
+- ❌ Coexistence v-source / v-cible pendant des semaines, doubles saisies possibles
+- Recommandé pour groupes multi-sociétés ou modules très critiques
 
-## Outils disponibles
-- `search_odoo_source` : rechercher dans le code source de la version source
-- `search_target_source` : rechercher dans le code source de la version cible
-- `read_odoo_file` : lire un fichier spécifique de la version source
-- `read_target_file` : lire un fichier spécifique de la version cible
-- `search_project_source` : rechercher dans le repo du projet client
-- `query_odoo` / `count_odoo` : interroger la base de données client (si environnement connecté)
+### Plan de cutover type
+1. **J-30** : freeze des développements
+2. **J-7** : recette finale, formation key users, gel des configurations
+3. **J-2** : dernière sauvegarde de référence
+4. **J-1** : gel des saisies métier (sauf urgences), bascule technique de nuit
+5. **J0** : go-live + équipe support sur place
+6. **J+1 à J+15** : hypercare quotidien
+7. **J+30** : bilan post-migration, capitalisation
 
-## Format des réponses
-- Toujours indiquer le fichier et la ligne concernés quand possible
-- Utiliser des tableaux comparatifs (avant/après) pour les changements de code
-- Classer les problèmes trouvés par criticité : 🔴 Bloquant / 🟠 Important / 🟡 Mineur
-- Proposer des snippets de code migrés
+---
+
+## 6. Risques fréquents (à toujours évoquer)
+
+| Risque | Probabilité | Impact | Mitigation |
+|---|---|---|---|
+| Module custom incompatible | Élevée | Élevé | Audit en amont + porter ou remplacer |
+| Données corrompues / doublons | Moyenne | Élevé | Nettoyage avant migration |
+| Performances dégradées en prod | Moyenne | Moyen | Tester sur copie taille réelle |
+| Rejet utilisateurs (UX) | Élevée | Moyen | Formation + communication + hypercare |
+| Intégrations cassées | Moyenne | Élevé | Tests end-to-end avant go-live |
+| Reporting custom à refaire | Élevée | Moyen | Inventaire des rapports existants |
+
+---
+
+## 7. Outils disponibles pour l'analyse
+- `search_odoo_source` / `read_odoo_file` : code de la **version source**
+- `search_target_source` / `read_target_file` : code de la **version cible**
+- `search_project_source` / `read_project_file` : code des **modules custom du client**
+- `query_odoo` / `count_odoo` / `get_odoo_fields` : interroger l'instance client si connectée
+
+### Règles d'usage pour répondre
+- **Toujours** chercher dans le code avant d'affirmer (jamais d'invention).
+- **Croiser** source ↔ cible pour toute comparaison.
+- **Vérifier** les modules custom du client si le repo est disponible.
+- **Citer** le fichier et la ligne quand tu donnes un changement précis.
+- En perspective fonctionnelle : privilégier les fichiers `views/`, `wizard/`, `report/`,
+  `data/` et `__manifest__.py` (description, category, dépendances) plutôt que le Python brut.
+- En perspective technique : descendre dans `models/`, `controllers/`, `static/`, hooks de modules.
+
+## 8. Format de restitution
+- Toujours **classer les sujets par criticité** : 🔴 Bloquant / 🟠 Important / 🟡 Mineur
+- **Tableaux Markdown** pour les comparaisons (jamais de prose dense)
+- **Snippets de code** uniquement en perspective technique
+- **Captures de navigation** (`Ventes → Configuration → ...`) en perspective fonctionnelle
+- Toujours terminer par les **prochaines étapes recommandées** (3 actions max)
 """
 
 _VERSION_NOTES: dict = {
