@@ -520,51 +520,22 @@ export default function Profiles() {
             {/* ── Step 3 ── */}
             {step === 3 && (
               <div>
-                <h2 style={styles.stepTitle}>Dépôt GitHub (optionnel)</h2>
+                <h2 style={styles.stepTitle}>Récapitulatif</h2>
                 <p style={{ fontSize: 13, color: t.muted, marginBottom: 18 }}>
-                  Ajoutez le dépôt GitHub de ce projet pour accéder directement au code depuis le portail.
+                  Vérifiez les informations avant d'enregistrer. Les environnements supplémentaires (staging, dev…) et les dépôts GitHub se configurent depuis la fiche projet après enregistrement.
                 </p>
-                <Field label="Dépôt GitHub" hint="Ex : mon-org/mon-projet-odoo" optional>
-                  <input style={styles.input} value={form.github_repo} onChange={set('github_repo')}
-                    placeholder="organisation/projet" />
-                </Field>
-                <Field label="Branche par défaut" hint="" optional>
-                  <input style={styles.input} value={form.default_branch} onChange={set('default_branch')}
-                    placeholder="main" />
-                </Field>
-
-                {/* Environments — info only in wizard, managed from card after creation */}
-                {envs.length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: t.text, marginBottom: 8 }}>
-                      Environnements configurés
-                    </div>
-                    {envs.map((env, i) => (
-                      <div key={i} style={{
-                        display: 'flex', gap: 8, alignItems: 'center',
-                        padding: '6px 10px', background: t.bg, borderRadius: t.radius, marginBottom: 6,
-                        border: `1px solid ${t.border}`,
-                      }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: t.brand, minWidth: 60 }}>{env.name}</span>
-                        <span style={{ fontSize: 11, color: t.muted, flex: 1 }}>{env.db_url}</span>
-                        {env.odoo_version && <span style={{ fontSize: 11, color: t.muted }}>{env.odoo_version}</span>}
-                        {env.branch && <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{env.branch}</span>}
-                      </div>
-                    ))}
-                    <p style={{ fontSize: 12, color: t.muted, marginTop: 6 }}>
-                      Les environnements supplémentaires (staging, dev…) se gèrent depuis la fiche projet après enregistrement.
-                    </p>
-                  </div>
-                )}
 
                 {/* Summary */}
-                <div style={{ background: t.bg, borderRadius: t.radiusLg, padding: '16px 18px', marginTop: 8 }}>
+                <div style={{ background: t.bg, borderRadius: t.radiusLg, padding: '16px 18px', marginBottom: 16 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: t.text }}>Récapitulatif</div>
                   <SummaryRow label="Projet"  value={form.name} />
                   <SummaryRow label="URL"     value={form.db_url} />
                   <SummaryRow label="Base"    value={form.db_name} />
                   <SummaryRow label="Version" value={form.odoo_version} />
-                  {form.github_repo && <SummaryRow label="GitHub" value={form.github_repo} />}
+                </div>
+
+                <div style={{ background: `${t.brand}08`, border: `1px solid ${t.brand20}`, borderRadius: t.radius, padding: '12px 16px', fontSize: 12, color: t.textSub, lineHeight: 1.5 }}>
+                  💡 Après enregistrement, cliquez sur les pilules d'environnement pour configurer les dépôts GitHub et les sources complémentaires pour l'IA.
                 </div>
               </div>
             )}
@@ -710,8 +681,12 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   onCheckAccess: () => void; checkingAccess: boolean
   onContext: () => void; onRefresh: () => void
 }) {
-  const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
   const [envs, setEnvs] = useState<EnvEntry[]>(() => { try { return JSON.parse(profile.environments ?? '[]') as EnvEntry[] } catch { return [] } })
+  // Use first env with a github_repo for the GitHub quick link
+  const ghUrl = (() => {
+    const envWithRepo = envs.find(e => e.github_repo)
+    return envWithRepo?.github_repo ? `https://github.com/${envWithRepo.github_repo}` : null
+  })()
   const companies: CompanyOption[] = (() => { try { return JSON.parse(profile.company_ids ?? '[]') } catch { return [] } })()
   const accessInfo: AccessInfo | null = (() => { try { return profile.user_access_info ? JSON.parse(profile.user_access_info) : null } catch { return null } })()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -778,6 +753,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
       const res = await fetch(syncEnvRepoUrl(profile.id, envId), {
         method: 'POST', signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json' },
+        // Pass current form values so it works before the env is saved
+        body: JSON.stringify({ github_repo: envForm.github_repo || undefined, repo_branch: envForm.repo_branch || undefined }),
       })
       if (!res.ok || !res.body) { setRepoSyncing(false); return }
       const reader = res.body.getReader()
@@ -1200,7 +1177,12 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                   </div>
                 </div>
 
-                {/* Repo status + sync button — edit mode only, when github_repo is set */}
+                {/* Repo status + sync button */}
+                {envModal?.mode === 'add' && envForm.github_repo && (
+                  <div style={{ fontSize: 11, color: t.muted, fontStyle: 'italic' }}>
+                    Enregistrez l'environnement pour pouvoir cloner le dépôt.
+                  </div>
+                )}
                 {envModal?.mode === 'edit' && (envForm.github_repo || repoStatus) && (
                   <div style={{ background: t.bg, borderRadius: t.radius, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

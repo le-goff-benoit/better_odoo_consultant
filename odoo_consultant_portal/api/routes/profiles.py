@@ -807,8 +807,13 @@ async def get_env_repo_status(profile_id: int, env_id: str, session: AsyncSessio
         return {"github_repo": github_repo, "cloned": True, "local_path": str(repo_path), "error": str(exc)}
 
 
+class RepoSyncRequest(BaseModel):
+    github_repo: Optional[str] = None   # overrides stored value (used before saving env)
+    repo_branch: Optional[str] = None
+
+
 @router.post("/{profile_id}/environments/{env_id}/repo/sync")
-async def sync_env_repo(profile_id: int, env_id: str, session: AsyncSession = Depends(get_session)):
+async def sync_env_repo(profile_id: int, env_id: str, body: RepoSyncRequest = RepoSyncRequest(), session: AsyncSession = Depends(get_session)):
     """Clone or pull the GitHub repo for this environment — returns SSE stream."""
     profile = await session.get(Profile, profile_id)
     if not profile:
@@ -821,11 +826,12 @@ async def sync_env_repo(profile_id: int, env_id: str, session: AsyncSession = De
     if not env:
         raise HTTPException(404, f"Environnement '{env_id}' introuvable")
 
-    github_repo = env.get("github_repo")
+    # Body values take priority (allows syncing before saving env changes)
+    github_repo = body.github_repo or env.get("github_repo")
     if not github_repo:
         raise HTTPException(400, "Aucun dépôt GitHub configuré pour cet environnement")
 
-    repo_branch = env.get("repo_branch") or "main"
+    repo_branch = body.repo_branch or env.get("repo_branch") or "main"
     repo_url = f"git@github.com:{github_repo}.git"
     repo_path = _repo_local_path(profile.name, env_id)
     is_clone = not (repo_path / ".git").exists()
