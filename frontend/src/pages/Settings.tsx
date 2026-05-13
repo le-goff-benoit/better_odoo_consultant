@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, Database, Eye, EyeOff, FileText, FolderOpen, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, UserRound, X } from 'lucide-react'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
+import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import RobotThinking from '../components/RobotThinking'
 import CatThinking from '../components/CatThinking'
 import DogThinking from '../components/DogThinking'
@@ -591,56 +592,12 @@ function ApiSection() {
 
 // ── Model config editor ──────────────────────────────────────────
 
-const ALL_MODELS: { provider: string; label: string; color: string; models: { id: string; label: string }[] }[] = [
-  { provider: 'claude', label: 'Claude (Anthropic)', color: '#D97706', models: [
-    { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6' },
-    { id: 'claude-opus-4-7',           label: 'Opus 4.7' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-  ]},
-  { provider: 'openai', label: 'GPT-4o (OpenAI)', color: '#16A34A', models: [
-    { id: 'gpt-4o',      label: 'GPT-4o' },
-    { id: 'gpt-4o-mini', label: 'GPT-4o mini' },
-    { id: 'o1-mini',     label: 'o1 mini' },
-  ]},
-  { provider: 'gemini', label: 'Gemini (Google)', color: '#2563EB', models: [
-    { id: 'gemini-2.0-flash', label: '2.0 Flash' },
-    { id: 'gemini-1.5-pro',   label: '1.5 Pro' },
-    { id: 'gemini-1.5-flash', label: '1.5 Flash' },
-  ]},
-  { provider: 'copilot', label: 'Copilot (GitHub)', color: '#6e40c9', models: [
-    { id: 'gpt-4o',                     label: 'GPT-4o' },
-    { id: 'gpt-4o-mini',                label: 'GPT-4o mini' },
-    { id: 'gpt-5-mini',                 label: 'GPT-5 mini' },
-    { id: 'gpt-5.2',                    label: 'GPT-5.2' },
-    { id: 'gpt-5.4',                    label: 'GPT-5.4' },
-    { id: 'gpt-5.2-codex',              label: 'GPT-5.2 Codex' },
-    { id: 'gpt-5.3-codex',              label: 'GPT-5.3 Codex' },
-    { id: 'o1-mini',                    label: 'o1 mini' },
-    { id: 'o3-mini',                    label: 'o3 mini' },
-    { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-    { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
-    { id: 'claude-sonnet-4-5',          label: 'Claude Sonnet 4.5' },
-    { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6' },
-    { id: 'claude-opus-4-5',            label: 'Claude Opus 4.5' },
-    { id: 'claude-opus-4-6',            label: 'Claude Opus 4.6' },
-    { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7' },
-    { id: 'claude-haiku-4-5',           label: 'Claude Haiku 4.5' },
-    { id: 'gemini-2.5-pro',             label: 'Gemini 2.5 Pro' },
-    { id: 'gemini-3.1-pro',             label: 'Gemini 3.1 Pro' },
-    { id: 'gemini-3-flash',             label: 'Gemini 3 Flash' },
-    { id: 'grok-code-fast-1',           label: 'Grok Code Fast' },
-  ]},
-  { provider: 'github', label: 'GitHub Models', color: '#24292f', models: [
-    { id: 'gpt-4o',                        label: 'GPT-4o' },
-    { id: 'gpt-4o-mini',                   label: 'GPT-4o mini' },
-    { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5' },
-    { id: 'claude-3-7-sonnet-20250219',    label: 'Claude 3.7' },
-    { id: 'Llama-3.2-90B-Vision-Instruct', label: 'Llama 3.2 90B' },
-    { id: 'Llama-3.1-405B-Instruct',       label: 'Llama 3.1 405B' },
-    { id: 'mistral-large-2407',            label: 'Mistral Large' },
-    { id: 'Phi-3.5-mini-instruct',         label: 'Phi-3.5 mini' },
-  ]},
-]
+const ALL_MODELS = AI_PROVIDERS.map(p => ({
+  provider: p.id,
+  label: `${p.label} (${p.id === 'claude' ? 'Anthropic' : p.id === 'openai' ? 'OpenAI' : p.id === 'gemini' ? 'Google' : p.id === 'copilot' ? 'GitHub' : p.id === 'github' ? 'GitHub Models' : p.id})`,
+  color: p.color,
+  models: p.models.map((m: { id: string; label: string }) => ({ id: m.id, label: m.label })),
+}))
 
 function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: string[] }) {
   const qc = useQueryClient()
