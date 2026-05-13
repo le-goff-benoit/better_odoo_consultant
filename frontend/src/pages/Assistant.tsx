@@ -665,7 +665,7 @@ export default function Assistant() {
         borderRadius: t.radiusLg,
         marginBottom: 12, flexShrink: 0,
         boxShadow: t.shadow,
-        overflow: 'hidden',
+        overflow: 'visible',
       }}>
 
         {/* ── Row 1 : Project tabs ── */}
@@ -674,6 +674,7 @@ export default function Assistant() {
           padding: '0 12px',
           background: t.bg,
           borderBottom: `1px solid ${t.border}`,
+          borderRadius: `${t.radiusLg} ${t.radiusLg} 0 0`,
           overflowX: 'auto',
         }}>
           {/* General tab */}
@@ -759,7 +760,11 @@ export default function Assistant() {
                 background: t.brand20, border: `1px solid ${t.brand40}`, color: t.brand,
               }}>
                 Odoo {activeVersion}
-                <span style={{ fontSize: 10, color: t.muted, fontWeight: 400 }}>projet</span>
+                {(communityInstalled || enterpriseInstalled) && (
+                  <span style={{ fontSize: 10, color: t.muted, fontWeight: 400 }}>
+                    {communityInstalled && enterpriseInstalled ? 'C+E' : communityInstalled ? 'C' : 'E'}
+                  </span>
+                )}
               </span>
             ) : null}
           </div>
@@ -774,23 +779,13 @@ export default function Assistant() {
             </div>
           ) : (
             <>
-              {/* Provider segmented control */}
-              <div style={{ display: 'flex', gap: 2, background: t.bgMuted, borderRadius: t.radius, padding: 2 }}>
-                {configuredProviders.map(p => (
-                  <button key={p.id} onClick={() => switchProvider(p.id)} style={{
-                    padding: '4px 12px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    border: 'none',
-                    background: provider === p.id ? t.bgCard : 'transparent',
-                    color: provider === p.id ? p.color : t.muted,
-                    boxShadow: provider === p.id ? t.shadow : 'none',
-                    transition: 'all .15s',
-                  }}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-
-              {currentProv && <ModelDropdown provider={currentProv} selected={modelId} onChange={setModelId} />}
+              <AiSelector
+                providers={configuredProviders}
+                provider={provider}
+                modelId={modelId}
+                switchProvider={switchProvider}
+                setModelId={setModelId}
+              />
 
               <div style={{ flex: 1 }} />
 
@@ -1121,6 +1116,110 @@ export default function Assistant() {
 }
 
 // ── Model dropdown ─────────────────────────────────────────────
+
+// ── Unified AI provider + model selector ──────────────────────────
+
+function AiSelector({ providers, provider, modelId, switchProvider, setModelId }: {
+  providers: typeof PROVIDERS
+  provider: string
+  modelId: string
+  switchProvider: (id: string) => void
+  setModelId: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const currentProv = providers.find(p => p.id === provider)
+  const currentModel = currentProv?.models.find(m => m.id === modelId) ?? currentProv?.models[0]
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  if (!currentProv) return null
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: 'flex', alignItems: 'center', gap: 7,
+        padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
+        background: t.bgCard, border: `1px solid ${t.border}`,
+        transition: 'border-color .15s',
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: currentProv.color }}>{currentProv.label}</span>
+        <span style={{ color: t.border, fontSize: 13 }}>·</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{currentModel?.label}</span>
+        {currentModel?.recommended && (
+          <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>
+        )}
+        <span style={{ fontSize: 9, color: t.muted, marginLeft: 1 }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 300,
+          background: t.bgCard, border: `1px solid ${t.border}`,
+          borderRadius: t.radiusLg, boxShadow: t.shadowMd,
+          minWidth: 300, maxHeight: 420, overflowY: 'auto',
+        }}>
+          {providers.map((prov, pi) => (
+            <div key={prov.id}>
+              {pi > 0 && <div style={{ height: 1, background: t.border }} />}
+              <div style={{
+                padding: '8px 14px 4px', fontSize: 10, fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.08em',
+                color: prov.color, background: `${prov.color}08`,
+              }}>
+                {prov.label}
+              </div>
+              {prov.models.map(m => {
+                const isSelected = provider === prov.id && modelId === m.id
+                return (
+                  <button key={m.id}
+                    onClick={() => { if (provider !== prov.id) switchProvider(prov.id); setModelId(m.id); setOpen(false) }}
+                    style={{
+                      width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2,
+                      padding: '9px 14px', border: 'none', cursor: 'pointer',
+                      background: isSelected ? `${prov.color}10` : 'transparent',
+                      borderLeft: isSelected ? `3px solid ${prov.color}` : '3px solid transparent',
+                      transition: 'background .1s',
+                    }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = t.bgMuted }}
+                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 600, fontSize: 12, color: isSelected ? prov.color : t.text }}>{m.label}</span>
+                      {m.recommended && (
+                        <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>Recommandé</span>
+                      )}
+                    </div>
+                    {m.desc && <div style={{ fontSize: 11, color: t.muted }}>{m.desc}</div>}
+                    {m.tags && m.tags.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                        {m.tags.map(tag => (
+                          <span key={tag} style={{
+                            fontSize: 9, padding: '1px 6px', borderRadius: 10,
+                            background: `${prov.color}18`, color: prov.color,
+                            border: `1px solid ${prov.color}30`, fontWeight: 600,
+                          }}>{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 function ModelDropdown({ provider, selected, onChange }: {
   provider: typeof PROVIDERS[0]; selected: string; onChange: (id: string) => void
