@@ -56,7 +56,8 @@ function AppBadgesAsst({ apps, max = 6 }: { apps: { name: string; shortdesc: str
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string }
+interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string }
+interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string }
 interface CompanyOption { id: number; name: string }
 
 interface AiEvent {
@@ -308,6 +309,7 @@ export default function Assistant() {
   // profileId: number = project tab, GENERAL_KEY = general tab, null = not yet selected
   const [profileId, setProfileId] = useState<number | typeof GENERAL_KEY | null>(null)
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
+  const [activeEnvId, setActiveEnvId] = useState<string | null>(null)   // null = use profile default
   const [generalVersion, setGeneralVersion] = useState('19.0')
 
   // Conversations keyed by string (profile id as string, or 'general')
@@ -348,6 +350,7 @@ export default function Assistant() {
   useEffect(() => {
     const p = profiles.find(p => p.id === profileId)
     setSelectedCompanyId(p?.selected_company_id ?? null)
+    setActiveEnvId(null)  // reset env override when switching profiles
   }, [profileId, profiles])
 
   // Pending auto-send: text to send once provider/mode are ready
@@ -459,7 +462,7 @@ export default function Assistant() {
     try {
       const body = isGeneralMode
         ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId }
-        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, messages: history, model: modelId }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId }
       const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal })
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
@@ -527,7 +530,7 @@ export default function Assistant() {
     try {
       const body = useGeneral
         ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId }
-        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, messages: history, model: modelId }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId }
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
@@ -787,6 +790,15 @@ export default function Assistant() {
                 switchProvider={switchProvider}
                 setModelId={setModelId}
               />
+
+              {/* Env selector — project mode only */}
+              {selectedProfile && !isGeneralMode && (
+                <EnvSelector
+                  profile={selectedProfile}
+                  activeEnvId={activeEnvId}
+                  onChange={setActiveEnvId}
+                />
+              )}
 
               <div style={{ flex: 1 }} />
 
@@ -1117,6 +1129,118 @@ export default function Assistant() {
 }
 
 // ── Model dropdown ─────────────────────────────────────────────
+
+// ── Environment selector (per-conversation override) ─────────────
+
+function EnvSelector({ profile, activeEnvId, onChange }: {
+  profile: Profile
+  activeEnvId: string | null
+  onChange: (id: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const envs: EnvEntry[] = (() => { try { return JSON.parse(profile.environments ?? '[]') as EnvEntry[] } catch { return [] } })()
+  if (envs.length === 0) return null
+
+  const defaultId = profile.active_env_id ?? envs[0]?.id
+  const currentId = activeEnvId ?? defaultId
+  const currentEnv = envs.find(e => e.id === currentId) ?? envs[0]
+  const isOverridden = activeEnvId !== null && activeEnvId !== defaultId
+  const isProd = currentEnv.id === envs[0]?.id
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  if (envs.length === 1) {
+    return (
+      <span style={{
+        fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
+        background: t.bgMuted, border: `1px solid ${t.border}`, color: t.textSub,
+      }}>
+        {currentEnv.name}
+      </span>
+    )
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 10px', borderRadius: t.radiusFull, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+        background: isOverridden ? '#fff8ed' : isProd ? t.bgMuted : '#fff8ed',
+        border: `1px solid ${isOverridden ? '#f59e0b' : isProd ? t.border : '#f59e0b'}`,
+        color: isOverridden ? '#b45309' : isProd ? t.textSub : '#b45309',
+        transition: 'all .15s',
+      }}>
+        {isOverridden && <span style={{ fontSize: 9 }}>⚡</span>}
+        {currentEnv.name}
+        {currentEnv.odoo_version && (
+          <span style={{ fontSize: 9, opacity: 0.7 }}>v{currentEnv.odoo_version.split('.')[0]}</span>
+        )}
+        <span style={{ fontSize: 9, opacity: 0.6 }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 300,
+          background: t.bgCard, border: `1px solid ${t.border}`,
+          borderRadius: t.radiusLg, boxShadow: t.shadowMd, minWidth: 200,
+        }}>
+          <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: t.muted }}>
+            Environnement actif
+          </div>
+          {envs.map(env => {
+            const isActive = env.id === currentId
+            const isDefault = env.id === defaultId
+            return (
+              <button key={env.id}
+                onClick={() => { onChange(env.id === defaultId ? null : env.id); setOpen(false) }}
+                style={{
+                  width: '100%', textAlign: 'left', padding: '8px 12px',
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                  background: isActive ? `${t.brand}10` : 'transparent',
+                  borderLeft: isActive ? `3px solid ${t.brand}` : '3px solid transparent',
+                  transition: 'background .1s',
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = t.bgMuted }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? t.brand : t.text }}>
+                      {env.name}
+                    </span>
+                    {isDefault && (
+                      <span style={{ fontSize: 9, color: t.muted, background: t.bgMuted, padding: '1px 5px', borderRadius: 3 }}>
+                        défaut
+                      </span>
+                    )}
+                    {isActive && !isDefault && (
+                      <span style={{ fontSize: 9, color: '#b45309', background: '#fff8ed', padding: '1px 5px', borderRadius: 3, border: '1px solid #f59e0b' }}>
+                        override
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 10, color: t.muted, marginTop: 1 }}>
+                    {env.db_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                    {env.odoo_version && ` · Odoo ${env.odoo_version}`}
+                  </div>
+                </div>
+                {isActive && <span style={{ fontSize: 11, color: t.brand }}>✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 // ── Unified AI provider + model selector ──────────────────────────
 
