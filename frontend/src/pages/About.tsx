@@ -6,10 +6,25 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.14.0',
+    version: '0.15.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Page Migration : toggle de perspective fonctionnelle (AM/BA) / technique (ARCHI/DEV) pour adapter le ton des analyses',
+      'Page Migration : sélecteur de version cible limité aux versions strictement supérieures à la source (migration ascendante uniquement)',
+      'Page Migration : label « Projet » dans le sélecteur latéral, environnements filtrés selon la contrainte de version',
+      'Outil IA count_source_lines : comptage exhaustif des lignes de code par extension / module / répertoire, utilisable via prompt',
+      'Ancrage de défilement : le viewport se positionne automatiquement au début de chaque nouvelle réponse IA (Migration & Assistant)',
+      'Suggestions de l\'assistant intégrées dans le composeur (chip cliquable → remplit la zone de saisie)',
+      'Contexte migration.md enrichi : sections fonctionnelles, tableau de phases, stratégie de bascule, risques fréquents',
+    ],
+  },
+  {
+    version: '0.14.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Refonte ciblée UI/UX : design system frontend, boutons, cartes, badges, modales, états hover/focus/loading cohérents',
       'Assistant IA retravaillé : barre de contexte stabilisée, sélecteurs provider / modèle / version / environnement clarifiés',
