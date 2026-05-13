@@ -681,15 +681,16 @@ export default function Assistant() {
         position: 'relative', zIndex: 50,
       }}>
 
-        {/* ── Row 1 : Project tabs ── */}
+        {/* ── Row 1 : Project tabs + version selector ── */}
+        {/* Outer wrapper keeps the version dropdown OUTSIDE the overflow:auto tabs area */}
         <div style={{
-          display: 'flex', alignItems: 'stretch', gap: 0,
-          padding: '0 12px',
+          display: 'flex', alignItems: 'stretch',
           background: t.bg,
           borderBottom: `1px solid ${t.border}`,
           borderRadius: `${t.radiusLg} ${t.radiusLg} 0 0`,
-          overflowX: 'auto',
         }}>
+          {/* Scrollable tabs area */}
+          <div style={{ display: 'flex', alignItems: 'stretch', flex: 1, padding: '0 12px', overflowX: 'auto' }}>
           {/* General tab */}
           {(() => {
             const isActive = isGeneralMode
@@ -754,11 +755,10 @@ export default function Assistant() {
               </button>
             )
           })}
+          </div>{/* end scrollable tabs */}
 
-          <div style={{ flex: 1 }} />
-
-          {/* Version badge / dropdown — right-aligned, vertically centered */}
-          <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
+          {/* Version badge / dropdown — outside overflow:auto so its dropdown isn't clipped */}
+          <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0, position: 'relative' }}>
             {isGeneralMode ? (
               <VersionDropdown
                 value={generalVersion}
@@ -780,8 +780,8 @@ export default function Assistant() {
                 )}
               </span>
             ) : null}
-          </div>
-        </div>
+          </div>{/* end version dropdown container */}
+        </div>{/* end row 1 outer wrapper */}
 
         {/* ── Row 2 : AI config + conversation actions ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', flexWrap: 'wrap' }}>
