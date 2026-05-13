@@ -7,17 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.database import get_session
 from ...core.models import Profile
 from ...services.odoo_client import OdooClient
-from ...services.profile_manager import get_profile_api_key
+from ...services.profile_manager import get_active_env_from_json, get_active_api_key
 from ...services import history_service
 
 router = APIRouter()
 
 
 def _get_client(profile: Profile) -> OdooClient:
-    api_key = get_profile_api_key(profile.name)
+    fallback = {"db_url": profile.db_url, "db_name": profile.db_name, "login": profile.login}
+    env = get_active_env_from_json(profile.environments, profile.active_env_id, fallback)
+    api_key = get_active_api_key(profile.name, env.get("id", "prod"))
     if not api_key:
         raise HTTPException(400, "Aucune clé API enregistrée pour ce profil")
-    return OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
+    return OdooClient(env.get("db_url") or profile.db_url, env.get("db_name") or profile.db_name, env.get("login") or profile.login, api_key)
 
 
 class SearchRequest(BaseModel):

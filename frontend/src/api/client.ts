@@ -31,6 +31,13 @@ export const getProfileContext = (id: number) => api.get(`/profiles/${id}/contex
 export const saveProfileContext = (id: number, content: string) => api.put(`/profiles/${id}/context`, { content })
 export const autoFillContext = (id: number) => api.post(`/profiles/${id}/context/auto-fill`)
 
+// Environments
+export const addProfileEnv     = (id: number, data: object) => api.post(`/profiles/${id}/environments`, data)
+export const updateProfileEnv  = (id: number, envId: string, data: object) => api.patch(`/profiles/${id}/environments/${envId}`, data)
+export const deleteProfileEnv  = (id: number, envId: string) => api.delete(`/profiles/${id}/environments/${envId}`)
+export const activateProfileEnv = (id: number, envId: string) => api.post(`/profiles/${id}/environments/${envId}/activate`)
+export const testProfileEnv    = (id: number, envId: string) => api.post(`/profiles/${id}/environments/${envId}/test`)
+
 // Projects
 export const listProjects = () => api.get('/projects/')
 export const createProject = (data: object) => api.post('/projects/', data)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext } from '../api/client'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv } from '../api/client'
 import { t, btn } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
@@ -37,7 +37,15 @@ function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string 
   )
 }
 
-interface Env { name: string; db_url: string; branch: string }
+interface EnvEntry {
+  id: string
+  name: string
+  db_url: string
+  db_name: string
+  login: string
+  odoo_version?: string
+  branch?: string
+}
 interface AccessInfo {
   is_system: boolean; is_admin: boolean
   user_name: string; accessible_company_ids: number[]
@@ -46,7 +54,7 @@ interface AccessInfo {
 interface Profile {
   id: number; name: string; db_url: string; db_name: string
   login: string; odoo_version?: string; odoo_sh_url?: string; github_repo?: string
-  default_branch?: string; environments?: string
+  default_branch?: string; environments?: string; active_env_id?: string
   company_name?: string; company_city?: string; company_logo?: string
   company_ids?: string; selected_company_id?: number; api_key_expires?: string
   user_access_info?: string; project_context?: string
@@ -89,8 +97,8 @@ export default function Profiles() {
   const [form,       setForm]       = useState<FormState>(EMPTY)
   const [diag,       setDiag]       = useState<DiagResult | null>(null)
   const [toast,      setToast]      = useState<{ msg: string; ok: boolean } | null>(null)
-  const [envs,       setEnvs]       = useState<Env[]>([])
-  const [newEnv,     setNewEnv]     = useState<Env | null>(null)
+  const [envs,       setEnvs]       = useState<EnvEntry[]>([])
+  const [_newEnv,    _setNewEnv]    = useState<EnvEntry | null>(null)  // unused after migration to card flow
 
   const notify = (msg: string, ok = true) => {
     setToast({ msg, ok })
@@ -177,7 +185,7 @@ export default function Profiles() {
       github_repo: p.github_repo ?? '',
       default_branch: p.default_branch ?? 'main',
     })
-    try { setEnvs(JSON.parse(p.environments ?? '[]')) } catch { setEnvs([]) }
+    try { setEnvs(JSON.parse(p.environments ?? '[]') as EnvEntry[]) } catch { setEnvs([]) }
     setCompanyInfo(p.company_name ? { name: p.company_name, city: p.company_city ?? undefined, logo: p.company_logo ?? undefined } : null)
     setDiag(null)
     setStep(1)
@@ -523,53 +531,29 @@ export default function Profiles() {
                     placeholder="main" />
                 </Field>
 
-                {/* Environments */}
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: t.text, marginBottom: 8 }}>
-                    Environnements de staging
-                    <span style={{ color: t.muted, fontWeight: 400 }}> (optionnel)</span>
+                {/* Environments — info only in wizard, managed from card after creation */}
+                {envs.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: t.text, marginBottom: 8 }}>
+                      Environnements configurés
+                    </div>
+                    {envs.map((env, i) => (
+                      <div key={i} style={{
+                        display: 'flex', gap: 8, alignItems: 'center',
+                        padding: '6px 10px', background: t.bg, borderRadius: t.radius, marginBottom: 6,
+                        border: `1px solid ${t.border}`,
+                      }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: t.brand, minWidth: 60 }}>{env.name}</span>
+                        <span style={{ fontSize: 11, color: t.muted, flex: 1 }}>{env.db_url}</span>
+                        {env.odoo_version && <span style={{ fontSize: 11, color: t.muted }}>{env.odoo_version}</span>}
+                        {env.branch && <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{env.branch}</span>}
+                      </div>
+                    ))}
+                    <p style={{ fontSize: 12, color: t.muted, marginTop: 6 }}>
+                      Les environnements supplémentaires (staging, dev…) se gèrent depuis la fiche projet après enregistrement.
+                    </p>
                   </div>
-                  {envs.map((env, i) => (
-                    <div key={i} style={{
-                      display: 'flex', gap: 8, alignItems: 'center',
-                      padding: '6px 10px', background: t.bg, borderRadius: t.radius, marginBottom: 6,
-                      border: `1px solid ${t.border}`,
-                    }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: t.brand, minWidth: 60 }}>{env.name}</span>
-                      <span style={{ fontSize: 11, color: t.muted, flex: 1 }}>{env.db_url}</span>
-                      {env.branch && <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{env.branch}</span>}
-                      <button onClick={() => setEnvs(p => p.filter((_, j) => j !== i))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.danger, fontSize: 14, padding: '0 4px' }}>×</button>
-                    </div>
-                  ))}
-                  {newEnv ? (
-                    <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '12px 14px', marginBottom: 8 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 8, marginBottom: 10 }}>
-                        <input placeholder="Nom (ex: staging)" value={newEnv.name}
-                          onChange={e => setNewEnv(p => p && ({ ...p, name: e.target.value }))}
-                          style={{ ...styles.input, fontSize: 12, padding: '6px 8px' }} />
-                        <input placeholder="URL" value={newEnv.db_url}
-                          onChange={e => setNewEnv(p => p && ({ ...p, db_url: e.target.value }))}
-                          style={{ ...styles.input, fontSize: 12, padding: '6px 8px' }} />
-                        <input placeholder="Branche" value={newEnv.branch}
-                          onChange={e => setNewEnv(p => p && ({ ...p, branch: e.target.value }))}
-                          style={{ ...styles.input, fontSize: 12, padding: '6px 8px' }} />
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-primary" disabled={!newEnv.name || !newEnv.db_url}
-                          onClick={() => { if (newEnv.name && newEnv.db_url) { setEnvs(p => [...p, newEnv]); setNewEnv(null) } }}>
-                          Ajouter
-                        </button>
-                        <button className="btn btn-secondary" onClick={() => setNewEnv(null)}>Annuler</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button onClick={() => setNewEnv({ name: '', db_url: '', branch: '' })}
-                      style={{ fontSize: 12, color: t.action, background: 'none', border: `1px dashed ${t.border}`, borderRadius: t.radius, padding: '6px 14px', cursor: 'pointer', width: '100%' }}>
-                      + Ajouter un environnement
-                    </button>
-                  )}
-                </div>
+                )}
 
                 {/* Summary */}
                 <div style={{ background: t.bg, borderRadius: t.radiusLg, padding: '16px 18px', marginTop: 8 }}>
@@ -672,13 +656,12 @@ export default function Profiles() {
               onTest={() => testConn.mutate(p.id)}
               onDelete={() => del.mutate(p.id)}
               onEdit={() => openEdit(p)}
-              onUpdateEnvs={(envs) => updateProfile(p.id, { environments: JSON.stringify(envs) })
-                .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
               onSelectCompany={(companyId) => updateProfile(p.id, { selected_company_id: companyId })
                 .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
               onCheckAccess={() => checkAccess(p.id)}
               checkingAccess={checkingAccessId === p.id}
-              onContext={() => openContext(p.id)} />
+              onContext={() => openContext(p.id)}
+              onRefresh={() => qc.invalidateQueries({ queryKey: ['profiles'] })} />
           ))}
         </div>
       )}
@@ -711,20 +694,26 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelectCompany, onCheckAccess, checkingAccess, onContext }: {
+type EnvModalState = { mode: 'add' } | { mode: 'edit'; env: EnvEntry }
+const EMPTY_ENV_FORM = { id: '', name: '', db_url: '', db_name: '', login: '', api_key: '', odoo_version: '', branch: '' }
+
+function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onCheckAccess, checkingAccess, onContext, onRefresh }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
-  onUpdateEnvs: (envs: Env[]) => void
   onSelectCompany: (companyId: number) => void
   onCheckAccess: () => void; checkingAccess: boolean
-  onContext: () => void
+  onContext: () => void; onRefresh: () => void
 }) {
   const ghUrl = profile.github_repo ? `https://github.com/${profile.github_repo}` : null
-  const [envs, setEnvs] = useState<Env[]>(() => { try { return JSON.parse(profile.environments ?? '[]') } catch { return [] } })
+  const [envs, setEnvs] = useState<EnvEntry[]>(() => { try { return JSON.parse(profile.environments ?? '[]') as EnvEntry[] } catch { return [] } })
   const companies: CompanyOption[] = (() => { try { return JSON.parse(profile.company_ids ?? '[]') } catch { return [] } })()
   const accessInfo: AccessInfo | null = (() => { try { return profile.user_access_info ? JSON.parse(profile.user_access_info) : null } catch { return null } })()
-  const [addingEnv, setAddingEnv] = useState(false)
-  const [newEnv, setNewEnv] = useState<Env>({ name: '', db_url: '', branch: '' })
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [envModal, setEnvModal] = useState<EnvModalState | null>(null)
+  const [envForm, setEnvForm] = useState(EMPTY_ENV_FORM)
+  const [envTesting, setEnvTesting] = useState(false)
+  const [envTestResult, setEnvTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [envSaving, setEnvSaving] = useState(false)
+  const activeEnvId = profile.active_env_id || envs[0]?.id
 
   const { data: appsData } = useQuery({
     queryKey: ['profile-apps', profile.id],
@@ -734,19 +723,63 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
   })
   const apps: { name: string; shortdesc: string }[] = appsData?.data?.apps ?? []
 
-  const saveEnv = () => {
-    if (!newEnv.name || !newEnv.db_url) return
-    const updated = [...envs, newEnv]
-    setEnvs(updated)
-    onUpdateEnvs(updated)
-    setNewEnv({ name: '', db_url: '', branch: '' })
-    setAddingEnv(false)
+  const setEnv = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setEnvForm(p => ({ ...p, [k]: e.target.value }))
+
+  const openAddEnv = () => {
+    setEnvForm(EMPTY_ENV_FORM)
+    setEnvTestResult(null)
+    setEnvModal({ mode: 'add' })
+  }
+  const openEditEnv = (env: EnvEntry) => {
+    setEnvForm({ id: env.id, name: env.name, db_url: env.db_url, db_name: env.db_name, login: env.login, api_key: '', odoo_version: env.odoo_version ?? '', branch: env.branch ?? '' })
+    setEnvTestResult(null)
+    setEnvModal({ mode: 'edit', env })
   }
 
-  const removeEnv = (i: number) => {
-    const updated = envs.filter((_, j) => j !== i)
-    setEnvs(updated)
-    onUpdateEnvs(updated)
+  const testEnvModal = async () => {
+    if (envModal?.mode === 'edit') {
+      setEnvTesting(true)
+      try {
+        await testProfileEnv(profile.id, envModal.env.id)
+        setEnvTestResult({ ok: true, msg: 'Connexion réussie ✓' })
+      } catch (e: any) {
+        setEnvTestResult({ ok: false, msg: e.response?.data?.detail ?? e.message })
+      } finally { setEnvTesting(false) }
+    }
+  }
+
+  const saveEnvModal = async () => {
+    setEnvSaving(true)
+    try {
+      if (envModal?.mode === 'add') {
+        const res = await addProfileEnv(profile.id, { ...envForm, id: envForm.id || envForm.name.toLowerCase().replace(/\s+/g, '-') })
+        setEnvs((res.data as Profile).environments ? JSON.parse((res.data as Profile).environments!) : envs)
+      } else if (envModal?.mode === 'edit') {
+        const res = await updateProfileEnv(profile.id, envModal.env.id, envForm)
+        setEnvs((res.data as Profile).environments ? JSON.parse((res.data as Profile).environments!) : envs)
+      }
+      onRefresh()
+      setEnvModal(null)
+    } catch { /* ignore */ } finally { setEnvSaving(false) }
+  }
+
+  const removeEnv = async (envId: string) => {
+    try {
+      await deleteProfileEnv(profile.id, envId)
+      setEnvs(p => p.filter(e => e.id !== envId))
+      onRefresh()
+    } catch { /* ignore */ }
+  }
+
+  const activateEnv = async (envId: string) => {
+    try {
+      const res = await activateProfileEnv(profile.id, envId)
+      onRefresh()
+      // update local active env display immediately
+      const updated = (res.data as Profile).environments ? JSON.parse((res.data as Profile).environments!) : envs
+      setEnvs(updated)
+    } catch { /* ignore */ }
   }
 
   const keyExpiry = (() => {
@@ -866,11 +899,15 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
       <div style={{ padding: '12px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
 
         {/* ── App badges ── */}
-        {apps.length > 0 && <AppBadges apps={apps} max={6} />}
+        {apps.length > 0 && (
+          <div style={{ paddingTop: 12, borderTop: `1px solid ${t.borderLight}` }}>
+            <AppBadges apps={apps} max={6} />
+          </div>
+        )}
 
         {/* ── Multi-company selector ── */}
         {companies.length > 1 && (
-          <div>
+          <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: t.muted, marginBottom: 6 }}>
               Société active dans l'assistant
             </div>
@@ -879,20 +916,14 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
                 const isActive = (profile.selected_company_id ?? companies[0]?.id) === c.id
                 const isAccessible = !accessInfo || accessInfo.accessible_company_ids.includes(c.id)
                 return (
-                  <button
-                    key={c.id}
-                    onClick={() => isAccessible && onSelectCompany(c.id)}
-                    disabled={!isAccessible}
+                  <button key={c.id} onClick={() => isAccessible && onSelectCompany(c.id)} disabled={!isAccessible}
                     title={!isAccessible ? `${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
                     style={{
-                      fontSize: 11, fontWeight: 600, padding: '3px 10px',
-                      borderRadius: t.radiusFull,
+                      fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: t.radiusFull,
                       border: `1px solid ${!isAccessible ? t.border : isActive ? t.brand : t.border}`,
                       background: !isAccessible ? t.bgMuted : isActive ? t.brand : t.bgCard,
                       color: !isAccessible ? t.muted : isActive ? '#fff' : t.textSub,
-                      cursor: !isAccessible ? 'not-allowed' : 'pointer',
-                      opacity: !isAccessible ? 0.5 : 1,
-                      transition: 'all .15s',
+                      cursor: !isAccessible ? 'not-allowed' : 'pointer', opacity: !isAccessible ? 0.5 : 1, transition: 'all .15s',
                     }}>
                     {!isAccessible ? '🔒 ' : isActive ? '✓ ' : ''}{c.name}
                   </button>
@@ -903,51 +934,54 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
         )}
 
         {/* ── Environments ── */}
-        {(envs.length > 0 || addingEnv) && (
-          <div>
-            {envs.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: addingEnv ? 8 : 0 }}>
-                {envs.map((env, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
-                    <a href={env.db_url} target="_blank" rel="noreferrer" style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '3px 8px', borderRadius: '4px 0 0 4px',
-                      border: `1px solid ${t.border}`, background: t.bgMuted,
-                      color: t.textSub, fontSize: 11, fontWeight: 600, textDecoration: 'none',
-                    }}>
-                      🌿 {env.name}
-                      {env.branch && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 10 }}>({env.branch})</span>}
-                    </a>
-                    <button onClick={() => removeEnv(i)} style={{
-                      padding: '3px 6px', fontSize: 12, background: t.bgMuted,
-                      border: `1px solid ${t.border}`, borderLeft: 'none',
-                      borderRadius: '0 4px 4px 0', cursor: 'pointer', color: t.muted, lineHeight: 1,
-                    }}>×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {addingEnv && (
-              <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '10px 12px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 6, marginBottom: 8 }}>
-                  <input placeholder="Nom" value={newEnv.name}
-                    onChange={e => setNewEnv(p => ({ ...p, name: e.target.value }))}
-                    style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
-                  <input placeholder="URL" value={newEnv.db_url}
-                    onChange={e => setNewEnv(p => ({ ...p, db_url: e.target.value }))}
-                    style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
-                  <input placeholder="Branche" value={newEnv.branch}
-                    onChange={e => setNewEnv(p => ({ ...p, branch: e.target.value }))}
-                    style={{ ...styles.input, fontSize: 12, padding: '5px 8px' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-primary" onClick={saveEnv} disabled={!newEnv.name || !newEnv.db_url}>Ajouter</button>
-                  <button className="btn btn-secondary" onClick={() => setAddingEnv(false)}>Annuler</button>
-                </div>
-              </div>
-            )}
+        <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: t.muted }}>
+              Environnements
+            </span>
+            <button onClick={openAddEnv} title="Ajouter un environnement"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.action, fontSize: 13, padding: '0 2px', lineHeight: 1, fontWeight: 700 }}>
+              +
+            </button>
           </div>
-        )}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {envs.map(env => {
+              const isActive = env.id === activeEnvId
+              return (
+                <div key={env.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
+                  <button
+                    onClick={() => !isActive && activateEnv(env.id)}
+                    title={isActive ? 'Environnement actif' : `Activer ${env.name}`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '4px 10px', borderRadius: '6px 0 0 6px',
+                      border: `1px solid ${isActive ? t.brand : t.border}`,
+                      background: isActive ? t.brand : t.bgMuted,
+                      color: isActive ? '#fff' : t.textSub,
+                      fontSize: 12, fontWeight: 600, cursor: isActive ? 'default' : 'pointer',
+                      transition: 'all .15s',
+                    }}>
+                    {isActive && <span style={{ fontSize: 10 }}>✓</span>}
+                    {env.name}
+                    {env.odoo_version && (
+                      <span style={{ fontSize: 10, opacity: 0.75 }}>v{env.odoo_version.split('.')[0]}</span>
+                    )}
+                  </button>
+                  <button onClick={() => openEditEnv(env)} title={`Configurer ${env.name}`}
+                    style={{
+                      padding: '4px 6px', borderRadius: '0 6px 6px 0',
+                      border: `1px solid ${isActive ? t.brand : t.border}`, borderLeft: 'none',
+                      background: isActive ? t.brand : t.bgMuted,
+                      color: isActive ? 'rgba(255,255,255,.7)' : t.muted,
+                      fontSize: 11, cursor: 'pointer', lineHeight: 1, transition: 'all .15s',
+                    }}>
+                    ✎
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
 
         {/* ── Footer ── */}
         <div style={{ marginTop: 'auto', paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
@@ -962,36 +996,120 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onUpdateEnvs, onSelect
           <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-outline btn-sm" onClick={onEdit} title="Modifier ce projet">✏ Modifier</button>
             <button className="btn btn-outline btn-sm" onClick={onTest} title="Tester la connexion">▶ Tester</button>
-            <button className="btn btn-outline btn-sm" onClick={onCheckAccess} disabled={checkingAccess}
-              title="Vérifier les droits d'accès">
+            <button className="btn btn-outline btn-sm" onClick={onCheckAccess} disabled={checkingAccess} title="Vérifier les droits d'accès">
               {checkingAccess ? '⟳' : '🔍'} Accès
             </button>
-            <button className="btn btn-outline btn-sm" onClick={onContext}
-              title="Fichier de contexte de ce projet"
+            <button className="btn btn-outline btn-sm" onClick={onContext} title="Fichier de contexte de ce projet"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               📋 Contexte
               {profile.project_context && (
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.success, display: 'inline-block', flexShrink: 0 }} />
               )}
             </button>
-            <button className="btn btn-outline btn-sm" onClick={() => setAddingEnv(a => !a)}
-              title="Ajouter un environnement de staging">
-              + env
-            </button>
             <div style={{ flex: 1 }} />
-            <button
-              onClick={() => setConfirmDelete(true)}
-              title="Supprimer ce projet"
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: t.muted, fontSize: 15, padding: '2px 4px',
-                lineHeight: 1, transition: 'color .15s',
-              }}
+            <button onClick={() => setConfirmDelete(true)} title="Supprimer ce projet"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 15, padding: '2px 4px', lineHeight: 1, transition: 'color .15s' }}
               onMouseEnter={e => { e.currentTarget.style.color = t.danger }}
-              onMouseLeave={e => { e.currentTarget.style.color = t.muted }}
-            >🗑</button>
+              onMouseLeave={e => { e.currentTarget.style.color = t.muted }}>🗑</button>
           </div>
         </div>
+
+        {/* ── Env modal (add / edit) ── */}
+        {envModal && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div style={{ background: t.white, borderRadius: t.radiusLg, padding: '28px 32px', maxWidth: 500, width: '100%', boxShadow: t.shadowLg }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, margin: 0 }}>
+                  {envModal.mode === 'add' ? '+ Nouvel environnement' : `Configurer — ${envModal.env.name}`}
+                </h3>
+                <button onClick={() => setEnvModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, padding: '0 4px' }}>×</button>
+              </div>
+
+              <div style={{ display: 'grid', gap: 12 }}>
+                {envModal.mode === 'add' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+                    <div>
+                      <label style={styles.label}>Identifiant</label>
+                      <input style={styles.input} value={envForm.id} onChange={setEnv('id')} placeholder="staging" />
+                      <div style={{ fontSize: 11, color: t.muted, marginTop: 3 }}>Lettres, chiffres, tirets</div>
+                    </div>
+                    <div>
+                      <label style={styles.label}>Nom affiché</label>
+                      <input style={styles.input} value={envForm.name} onChange={setEnv('name')} placeholder="Staging" autoFocus />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label style={styles.label}>URL de l'instance</label>
+                  <input style={styles.input} value={envForm.db_url} onChange={setEnv('db_url')} placeholder="https://mon-projet-staging.odoo.com" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={styles.label}>Nom de la base</label>
+                    <input style={styles.input} value={envForm.db_name} onChange={setEnv('db_name')} placeholder="mon-projet-staging" />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Login</label>
+                    <input style={styles.input} value={envForm.login} onChange={setEnv('login')} placeholder="admin@client.com" />
+                  </div>
+                </div>
+                <div>
+                  <label style={styles.label}>{envModal.mode === 'edit' ? 'Clé API (laisser vide = inchangée)' : 'Clé API'}</label>
+                  <input style={styles.input} type="password" value={envForm.api_key} onChange={setEnv('api_key')} placeholder={envModal.mode === 'edit' ? '(inchangée)' : '••••••••••••••••••'} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={styles.label}>Version Odoo</label>
+                    <select style={styles.input} value={envForm.odoo_version} onChange={setEnv('odoo_version')}>
+                      <option value="">— même que prod —</option>
+                      {VERSIONS.map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>Branche GitHub</label>
+                    <input style={styles.input} value={envForm.branch} onChange={setEnv('branch')} placeholder="staging" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Test result */}
+              {envTestResult && (
+                <div style={{
+                  marginTop: 12, padding: '8px 12px', borderRadius: t.radius, fontSize: 12, fontWeight: 600,
+                  background: envTestResult.ok ? t.successBg : t.dangerBg,
+                  border: `1px solid ${envTestResult.ok ? t.success : t.danger}40`,
+                  color: envTestResult.ok ? t.success : t.danger,
+                }}>
+                  {envTestResult.msg}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${t.border}` }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-secondary" onClick={() => setEnvModal(null)}>Annuler</button>
+                  {envModal.mode === 'edit' && (
+                    <button className="btn btn-outline btn-sm" onClick={testEnvModal} disabled={envTesting}
+                      style={{ color: t.action, borderColor: t.action }}>
+                      {envTesting ? '⟳ Test…' : '▶ Tester'}
+                    </button>
+                  )}
+                  {envModal.mode === 'edit' && (
+                    <button onClick={() => { removeEnv(envModal.env.id); setEnvModal(null) }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 13, padding: '4px 8px' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = t.danger }}
+                      onMouseLeave={e => { e.currentTarget.style.color = t.muted }}>
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+                <button className="btn btn-primary" onClick={saveEnvModal} disabled={envSaving || !envForm.name || !envForm.db_url || !envForm.db_name || !envForm.login || (envModal.mode === 'add' && !envForm.api_key)}>
+                  {envSaving ? '⟳ Enregistrement…' : '✓ Enregistrer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Confirm delete modal ── */}
         {confirmDelete && (
@@ -1079,6 +1197,7 @@ const styles = {
   h1: { fontSize: 22, fontWeight: 700, color: t.text, marginBottom: 4 } as React.CSSProperties,
   sub: { fontSize: 14, color: t.muted } as React.CSSProperties,
   stepTitle: { fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 20 } as React.CSSProperties,
+  label: { display: 'block', fontWeight: 600, fontSize: 12, color: t.textSub, marginBottom: 4 } as React.CSSProperties,
   input: {
     width: '100%', padding: '9px 12px',
     border: `1px solid ${t.border}`, borderRadius: t.radius,

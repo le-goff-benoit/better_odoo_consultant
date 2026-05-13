@@ -9,7 +9,11 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.database import get_session
 from ...core.models import Profile
-from ...services.profile_manager import store_profile_secrets, get_profile_api_key, delete_profile_secrets
+from ...services.profile_manager import (
+    store_profile_secrets, get_profile_api_key, delete_profile_secrets,
+    store_env_api_key, get_env_api_key, delete_env_api_key,
+    get_active_env_from_json, get_active_api_key,
+)
 from ...services.odoo_client import OdooClient
 
 log = logging.getLogger(__name__)
@@ -46,6 +50,7 @@ class ProfileUpdate(BaseModel):
     default_branch: Optional[str] = None
     odoo_version: Optional[str] = None
     environments: Optional[str] = None
+    active_env_id: Optional[str] = None
     company_name: Optional[str] = None
     company_city: Optional[str] = None
     company_logo: Optional[str] = None
@@ -54,6 +59,27 @@ class ProfileUpdate(BaseModel):
     selected_company_id: Optional[int] = None
     user_access_info: Optional[str] = None
     project_context: Optional[str] = None
+
+
+class EnvCreate(BaseModel):
+    id: str
+    name: str
+    db_url: str
+    db_name: str
+    login: str
+    api_key: str
+    odoo_version: Optional[str] = None
+    branch: Optional[str] = None
+
+
+class EnvUpdate(BaseModel):
+    name: Optional[str] = None
+    db_url: Optional[str] = None
+    db_name: Optional[str] = None
+    login: Optional[str] = None
+    api_key: Optional[str] = None
+    odoo_version: Optional[str] = None
+    branch: Optional[str] = None
 
 
 class ContextAutoFillRequest(BaseModel):
@@ -92,10 +118,42 @@ def _suggest_db_name(url: str) -> str:
 
 # ── Routes ─────────────────────────────────────────────────────
 
+def _auto_migrate_environments(profile: Profile) -> bool:
+    """Populate environments JSON from legacy fields if missing. Returns True if changed."""
+    try:
+        envs = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    if envs:
+        return False
+    envs = [{
+        "id": "prod",
+        "name": "Production",
+        "db_url": profile.db_url,
+        "db_name": profile.db_name,
+        "login": profile.login,
+        "odoo_version": profile.odoo_version,
+        "branch": profile.default_branch,
+    }]
+    profile.environments = json.dumps(envs)
+    if not profile.active_env_id:
+        profile.active_env_id = "prod"
+    return True
+
+
 @router.get("/")
 async def list_profiles(session: AsyncSession = Depends(get_session)):
     result = await session.execute(select(Profile))
-    return result.scalars().all()
+    profiles = list(result.scalars().all())
+    changed = [p for p in profiles if _auto_migrate_environments(p)]
+    if changed:
+        for p in changed:
+            p.updated_at = datetime.utcnow()
+            session.add(p)
+        await session.commit()
+        for p in changed:
+            await session.refresh(p)
+    return profiles
 
 
 @router.post("/diagnose")
@@ -367,12 +425,22 @@ async def _check_user_access(client: OdooClient, loop) -> dict:
     }
 
 
-def _get_client_from_profile(profile: Profile) -> OdooClient:
-    from ...services.profile_manager import get_profile_api_key
-    api_key = get_profile_api_key(profile.name)
+def _get_client_from_profile(profile: Profile, env_id: str | None = None) -> OdooClient:
+    fallback = {"db_url": profile.db_url, "db_name": profile.db_name, "login": profile.login, "odoo_version": profile.odoo_version}
+    if env_id:
+        try:
+            envs = json.loads(profile.environments or "[]")
+            env = next((e for e in envs if e.get("id") == env_id), None) or get_active_env_from_json(profile.environments, profile.active_env_id, fallback)
+        except Exception:
+            env = get_active_env_from_json(profile.environments, profile.active_env_id, fallback)
+    else:
+        env = get_active_env_from_json(profile.environments, profile.active_env_id, fallback)
+    actual_env_id = env.get("id", "prod")
+    api_key = get_active_api_key(profile.name, actual_env_id)
     if not api_key:
         raise HTTPException(400, "Aucune clé API enregistrée pour ce profil")
-    return OdooClient(profile.db_url, profile.db_name, profile.login, api_key)
+    url = _normalise_url(env.get("db_url") or profile.db_url)
+    return OdooClient(url, env.get("db_name") or profile.db_name, env.get("login") or profile.login, api_key)
 
 
 @router.get("/{profile_id}/apps")
@@ -542,3 +610,118 @@ Sois factuel. Si tu ne sais pas, indique-le clairement. Ne pas inventer."""
             continue
 
     raise HTTPException(503, "Aucun fournisseur IA disponible — configurez une clé API dans les Paramètres.")
+
+
+# ── Environment CRUD ───────────────────────────────────────────────
+
+@router.post("/{profile_id}/environments")
+async def add_environment(profile_id: int, body: EnvCreate, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    if any(e.get("id") == body.id for e in envs):
+        raise HTTPException(409, f"Un environnement '{body.id}' existe déjà")
+    entry = {k: v for k, v in body.model_dump().items() if k != "api_key" and v is not None}
+    entry["db_url"] = _normalise_url(entry["db_url"])
+    envs.append(entry)
+    profile.environments = json.dumps(envs)
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+    store_env_api_key(profile.name, body.id, body.api_key)
+    return profile
+
+
+@router.patch("/{profile_id}/environments/{env_id}")
+async def update_environment(profile_id: int, env_id: str, body: EnvUpdate, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    idx = next((i for i, e in enumerate(envs) if e.get("id") == env_id), None)
+    if idx is None:
+        raise HTTPException(404, f"Environnement '{env_id}' introuvable")
+    updates = {k: v for k, v in body.model_dump(exclude_none=True).items() if k != "api_key"}
+    if "db_url" in updates:
+        updates["db_url"] = _normalise_url(updates["db_url"])
+    envs[idx].update(updates)
+    profile.environments = json.dumps(envs)
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+    if body.api_key:
+        store_env_api_key(profile.name, env_id, body.api_key)
+    return profile
+
+
+@router.delete("/{profile_id}/environments/{env_id}")
+async def delete_environment(profile_id: int, env_id: str, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    envs = [e for e in envs if e.get("id") != env_id]
+    profile.environments = json.dumps(envs)
+    if profile.active_env_id == env_id:
+        profile.active_env_id = envs[0]["id"] if envs else None
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    delete_env_api_key(profile.name, env_id)
+    return {"ok": True}
+
+
+@router.post("/{profile_id}/environments/{env_id}/activate")
+async def activate_environment(profile_id: int, env_id: str, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    if not any(e.get("id") == env_id for e in envs):
+        raise HTTPException(404, f"Environnement '{env_id}' introuvable")
+    profile.active_env_id = env_id
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+    return profile
+
+
+@router.post("/{profile_id}/environments/{env_id}/test")
+async def test_environment(profile_id: int, env_id: str, session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    env = next((e for e in envs if e.get("id") == env_id), None)
+    if not env:
+        raise HTTPException(404, f"Environnement '{env_id}' introuvable")
+    api_key = get_active_api_key(profile.name, env_id)
+    if not api_key:
+        raise HTTPException(400, "Aucune clé API pour cet environnement")
+    url = _normalise_url(env["db_url"])
+    client = OdooClient(url, env["db_name"], env["login"], api_key)
+    loop = asyncio.get_event_loop()
+    try:
+        uid = await loop.run_in_executor(None, client.authenticate)
+        return {"ok": True, "uid": uid}
+    except Exception as exc:
+        raise HTTPException(400, str(exc))

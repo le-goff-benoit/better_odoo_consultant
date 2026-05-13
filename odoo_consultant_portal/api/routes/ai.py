@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.database import get_session
 from ...core.models import Profile
 from ...services.keyring_service import store_secret, get_secret, delete_secret
-from ...services.profile_manager import get_profile_api_key
+from ...services.profile_manager import get_profile_api_key  # kept for copilot/legacy use
 from ...services.odoo_client import OdooClient
 from ...services.ai_service import (
     stream_chat, DEFAULT_MODELS,
@@ -238,6 +238,7 @@ class ChatRequest(BaseModel):
     provider: str
     profile_id: Optional[int] = None   # None → general mode
     company_id: Optional[int] = None   # restrict queries to this company
+    active_env_id: Optional[str] = None  # per-conversation env override
     version: Optional[str] = None      # Odoo version for general mode
     messages: list[ChatMessage]
     model: Optional[str] = None
@@ -300,7 +301,10 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     if not profile:
         raise HTTPException(404, "Projet introuvable")
 
-    odoo_key = get_profile_api_key(profile.name)
+    from ...services.profile_manager import get_active_env_from_json, get_active_api_key
+    _fallback = {"db_url": profile.db_url, "db_name": profile.db_name, "login": profile.login, "odoo_version": profile.odoo_version}
+    _active_env = get_active_env_from_json(profile.environments, req.active_env_id or profile.active_env_id, _fallback)
+    odoo_key = get_active_api_key(profile.name, _active_env.get("id", "prod"))
     if not odoo_key:
         raise HTTPException(400, "Clé API Odoo introuvable pour ce projet")
 
@@ -318,10 +322,15 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         except Exception:
             pass
 
-    odoo = OdooClient(profile.db_url, profile.db_name, profile.login, odoo_key, company_id=active_company_id)
+    odoo = OdooClient(
+        _active_env.get("db_url") or profile.db_url,
+        _active_env.get("db_name") or profile.db_name,
+        _active_env.get("login") or profile.login,
+        odoo_key, company_id=active_company_id
+    )
 
     source_path = None
-    _version_to_use = profile.odoo_version
+    _version_to_use = _active_env.get("odoo_version") or profile.odoo_version
     candidate = _os.path.expanduser(f"~/odoo-sources/{_version_to_use}") if _version_to_use else ""
     if _version_to_use and _os.path.isdir(candidate):
         source_path = candidate
