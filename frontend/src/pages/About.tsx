@@ -11,9 +11,9 @@ const CHANGELOG = [
     badge: 'Actuel',
     badgeColor: t.brand,
     items: [
-      'Mascotte de réflexion personnalisable : choix entre Robot, Chat ou Chien animé affiché pendant les réponses IA (8 modes d'animation aléatoires : idle, thinking, excited, searching, found, working, surprised, sleepy)',
+      "Mascotte de réflexion personnalisable : choix entre Robot, Chat ou Chien animé affiché pendant les réponses IA (8 modes d'animation aléatoires : idle, thinking, excited, searching, found, working, surprised, sleepy)",
       'Couleur de la mascotte configurable : 8 presets + color picker libre depuis le profil utilisateur',
-      'La mascotte s'applique simultanément sur les pages Assistant et Migration',
+      "La mascotte s'applique simultanément sur les pages Assistant et Migration",
     ],
   },
   {
