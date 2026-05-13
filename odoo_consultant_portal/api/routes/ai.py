@@ -402,7 +402,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         candidate = str(Path.home() / ".odoo-consultant" / "sources" / version)
         if _os.path.isdir(candidate):
             source_path = candidate
-        context_md = load_context_for_prompt(version)
+        context_md = load_context_for_prompt(version, migration=req.migration_mode)
 
         # Migration target resolution
         _gen_target_path = None
@@ -411,11 +411,6 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             _tgt_c = str(Path.home() / ".odoo-consultant" / "sources" / _gen_target_ver)
             if _os.path.isdir(_tgt_c):
                 _gen_target_path = _tgt_c
-        if req.migration_mode:
-            from ...services.context_service import load_context_for_prompt as _lcfp2
-            _migration_ctx2 = _lcfp2("migration")
-            if _migration_ctx2:
-                context_md = (_migration_ctx2 + "\n\n---\n\n" + context_md).strip()
 
         async def generate_general():
             try:
@@ -514,12 +509,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
                     if _os.path.isdir(_tgt_c):
                         target_path = _tgt_c
 
-    context_md = load_context_for_prompt(_version_to_use)
-    if req.migration_mode:
-        from ...services.context_service import load_context_for_prompt as _lcfp
-        _migration_ctx = _lcfp("migration")
-        if _migration_ctx:
-            context_md = (_migration_ctx + "\n\n---\n\n" + context_md).strip()
+    context_md = load_context_for_prompt(_version_to_use, migration=req.migration_mode)
 
     async def generate():
         try:

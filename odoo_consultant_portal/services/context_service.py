@@ -49,7 +49,7 @@ def delete_file(name: str) -> None:
         path.unlink()
 
 
-def load_context_for_prompt(odoo_version: Optional[str] = None) -> str:
+def load_context_for_prompt(odoo_version: Optional[str] = None, migration: bool = False) -> str:
     """Return combined context string to inject into AI system prompt."""
     sections = []
     try:
@@ -65,6 +65,11 @@ def load_context_for_prompt(odoo_version: Optional[str] = None) -> str:
             sections.append((f"Notes de version Odoo {odoo_version}", read_file(f"odoo-{odoo_version}.md")))
         except FileNotFoundError:
             pass
+    if migration:
+        try:
+            sections.append(("Méthodologie de migration", read_file("migration.md")))
+        except FileNotFoundError:
+            pass
     if not sections:
         return ""
     return "\n\n---\n\n".join(f"## {title}\n\n{content.strip()}" for title, content in sections)
@@ -77,6 +82,8 @@ def _default_content(name: str) -> Optional[str]:
         return _SKILLS_MD
     if name == "meeting-minute.md":
         return _MEETING_MINUTE_MD
+    if name == "migration.md":
+        return _MIGRATION_MD
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
     if m:
         return _VERSION_NOTES.get(m.group(1))
@@ -562,6 +569,81 @@ Adapte les sections au contenu réel de la conversation — supprime les section
 ---
 
 *Compte-rendu généré par Odoo Consultant Portal*
+"""
+
+_MIGRATION_MD = """\
+# Méthodologie de migration Odoo
+
+## Rôle de l'assistant en mode migration
+Tu es un expert en migration Odoo. Tu analyses les différences entre deux versions (ou deux environnements) pour identifier les breaking changes, les risques de compatibilité et les actions de migration nécessaires.
+
+## Principes d'analyse comparative
+1. **Comparer le code source** des deux versions pour détecter les changements de signature, les renommages, les suppressions
+2. **Identifier les breaking changes** : champs supprimés, méthodes renommées, modules déplacés, API modifiées
+3. **Évaluer l'impact des modules custom** : adapter les héritages, les vues, les méthodes surchargées
+4. **Prioriser les risques** : classer par criticité (bloquant / important / mineur)
+5. **Proposer des actions concrètes** : migration step-by-step avec les changements de code nécessaires
+
+## Breaking changes majeurs par version
+
+### v16 → v17 (le plus impactant)
+- `attrs="{'invisible': [...]}"` → `invisible="state == 'draft'"` (toutes les vues XML)
+- `name_get()` → `_compute_display_name()` (tous les modèles qui le surchargent)
+- `(0,0,{...})` → `Command.create({...})` (toutes les manipulations O2M/M2M)
+- `read_group()` retourne des tuples, non des dicts
+- `<tree>` → `<list>` dans toutes les vues liste
+- `stock.location.route` → `stock.route`
+- `post_init_hook(cr, registry)` → `post_init_hook(env)`
+- SCSS `@import` → `@use` / `@forward`
+
+### v17 → v18
+- `name_get()` officiellement dépréciée → utiliser `display_name`
+- Nouvelles méthodes contrôle d'accès : `check_access()`, `has_access()`, `_filtered_access()`
+- URLs lisibles : `/odoo/model/id` (routing des contrôleurs custom à vérifier)
+- `datetime.utcnow()` → `datetime.now(timezone.utc)` (Python 3.12)
+
+### v18 → v19
+- PostgreSQL 13 minimum strict (blocker si PG 12)
+- Module Membership → Partnership
+- Python 3.11 minimum pour certains modules
+
+## Checklist de migration standard
+
+### Analyse préalable
+- [ ] Identifier la version source exacte (`ir.module.module` où `name='base'`)
+- [ ] Lister tous les modules tiers installés (auteurs non-Odoo)
+- [ ] Lister les modules custom développés en interne
+- [ ] Identifier les champs custom (`ir.model.fields` avec `state='manual'`)
+- [ ] Vérifier les vues custom (`ir.ui.view` avec modules custom)
+
+### Analyse du code custom
+- [ ] Vérifier les héritages de classes (`_inherit`)
+- [ ] Identifier les méthodes surchargées (`def action_confirm`, etc.)
+- [ ] Rechercher les `attrs=` dans les vues XML (breaking en v17)
+- [ ] Vérifier les `name_get()` surchargés
+- [ ] Vérifier les `(0,0,{})` dans le code Python
+- [ ] Identifier les dépendances vers des champs supprimés
+
+### Actions de migration
+- [ ] Mettre à jour les vues XML (attrs, tree→list, etc.)
+- [ ] Adapter les méthodes Python surchargées
+- [ ] Mettre à jour les hooks de module
+- [ ] Tester les règles d'accès et les groupes
+- [ ] Vérifier la compatibilité des assets (SCSS, JS)
+
+## Outils disponibles
+- `search_odoo_source` : rechercher dans le code source de la version source
+- `search_target_source` : rechercher dans le code source de la version cible
+- `read_odoo_file` : lire un fichier spécifique de la version source
+- `read_target_file` : lire un fichier spécifique de la version cible
+- `search_project_source` : rechercher dans le repo du projet client
+- `query_odoo` / `count_odoo` : interroger la base de données client (si environnement connecté)
+
+## Format des réponses
+- Toujours indiquer le fichier et la ligne concernés quand possible
+- Utiliser des tableaux comparatifs (avant/après) pour les changements de code
+- Classer les problèmes trouvés par criticité : 🔴 Bloquant / 🟠 Important / 🟡 Mineur
+- Proposer des snippets de code migrés
 """
 
 _VERSION_NOTES: dict = {
