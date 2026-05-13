@@ -710,8 +710,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [envModal, setEnvModal] = useState<EnvModalState | null>(null)
   const [envForm, setEnvForm] = useState(EMPTY_ENV_FORM)
-  const [envTesting, setEnvTesting] = useState(false)
-  const [envTestResult, setEnvTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [envDiag, setEnvDiag] = useState<DiagResult | null>(null)
+  const [envDiagPending, setEnvDiagPending] = useState(false)
   const [envSaving, setEnvSaving] = useState(false)
   const activeEnvId = profile.active_env_id || envs[0]?.id
 
@@ -728,25 +728,26 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
 
   const openAddEnv = () => {
     setEnvForm(EMPTY_ENV_FORM)
-    setEnvTestResult(null)
+    setEnvDiag(null)
     setEnvModal({ mode: 'add' })
   }
   const openEditEnv = (env: EnvEntry) => {
     setEnvForm({ id: env.id, name: env.name, db_url: env.db_url, db_name: env.db_name, login: env.login, api_key: '', odoo_version: env.odoo_version ?? '', branch: env.branch ?? '' })
-    setEnvTestResult(null)
+    setEnvDiag(null)
     setEnvModal({ mode: 'edit', env })
   }
 
-  const testEnvModal = async () => {
-    if (envModal?.mode === 'edit') {
-      setEnvTesting(true)
-      try {
-        await testProfileEnv(profile.id, envModal.env.id)
-        setEnvTestResult({ ok: true, msg: 'Connexion réussie ✓' })
-      } catch (e: any) {
-        setEnvTestResult({ ok: false, msg: e.response?.data?.detail ?? e.message })
-      } finally { setEnvTesting(false) }
-    }
+  const runEnvDiagnose = async () => {
+    if (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) return
+    setEnvDiagPending(true)
+    setEnvDiag(null)
+    try {
+      const res = await diagnoseOdoo({ db_url: envForm.db_url, db_name: envForm.db_name, login: envForm.login, api_key: envForm.api_key })
+      const d: DiagResult = res.data
+      setEnvDiag(d)
+      if (d.odoo_version) setEnvForm(p => ({ ...p, odoo_version: d.odoo_version! }))
+      if (d.db_name_suggestion && !envForm.db_name) setEnvForm(p => ({ ...p, db_name: d.db_name_suggestion }))
+    } catch { /* ignore */ } finally { setEnvDiagPending(false) }
   }
 
   const saveEnvModal = async () => {
@@ -761,6 +762,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
       }
       onRefresh()
       setEnvModal(null)
+      setEnvDiag(null)
     } catch { /* ignore */ } finally { setEnvSaving(false) }
   }
 
@@ -944,40 +946,32 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               +
             </button>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {envs.map(env => {
               const isActive = env.id === activeEnvId
               return (
-                <div key={env.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
-                  <button
-                    onClick={() => !isActive && activateEnv(env.id)}
-                    title={isActive ? 'Environnement actif' : `Activer ${env.name}`}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      padding: '4px 10px', borderRadius: '6px 0 0 6px',
-                      border: `1px solid ${isActive ? t.brand : t.border}`,
-                      background: isActive ? t.brand : t.bgMuted,
-                      color: isActive ? '#fff' : t.textSub,
-                      fontSize: 12, fontWeight: 600, cursor: isActive ? 'default' : 'pointer',
-                      transition: 'all .15s',
+                <button key={env.id} onClick={() => openEditEnv(env)} title={`Configurer ${env.name}${!isActive ? ' · Cliquer pour activer' : ''}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '5px 12px', borderRadius: t.radiusFull,
+                    border: `1px solid ${isActive ? t.brand : t.border}`,
+                    background: isActive ? t.brand : t.bgCard,
+                    color: isActive ? '#fff' : t.textSub,
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    transition: 'all .15s', boxShadow: isActive ? `0 0 0 3px ${t.brand15}` : 'none',
+                  }}>
+                  {isActive && <span style={{ fontSize: 10, opacity: 0.85 }}>✓</span>}
+                  {env.name}
+                  {env.odoo_version && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 500, padding: '1px 5px', borderRadius: 3,
+                      background: isActive ? 'rgba(255,255,255,.2)' : t.bgMuted,
+                      color: isActive ? '#fff' : t.muted,
                     }}>
-                    {isActive && <span style={{ fontSize: 10 }}>✓</span>}
-                    {env.name}
-                    {env.odoo_version && (
-                      <span style={{ fontSize: 10, opacity: 0.75 }}>v{env.odoo_version.split('.')[0]}</span>
-                    )}
-                  </button>
-                  <button onClick={() => openEditEnv(env)} title={`Configurer ${env.name}`}
-                    style={{
-                      padding: '4px 6px', borderRadius: '0 6px 6px 0',
-                      border: `1px solid ${isActive ? t.brand : t.border}`, borderLeft: 'none',
-                      background: isActive ? t.brand : t.bgMuted,
-                      color: isActive ? 'rgba(255,255,255,.7)' : t.muted,
-                      fontSize: 11, cursor: 'pointer', lineHeight: 1, transition: 'all .15s',
-                    }}>
-                    ✎
-                  </button>
-                </div>
+                      v{env.odoo_version.split('.')[0]}
+                    </span>
+                  )}
+                </button>
               )
             })}
           </div>
@@ -1017,93 +1011,133 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
         {/* ── Env modal (add / edit) ── */}
         {envModal && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div style={{ background: t.white, borderRadius: t.radiusLg, padding: '28px 32px', maxWidth: 500, width: '100%', boxShadow: t.shadowLg }}>
+            <div style={{ background: t.white, borderRadius: t.radiusLg, padding: '28px 32px', maxWidth: 560, width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: t.shadowLg }}>
+
+              {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, margin: 0 }}>
-                  {envModal.mode === 'add' ? '+ Nouvel environnement' : `Configurer — ${envModal.env.name}`}
+                  {envModal.mode === 'add' ? '+ Nouvel environnement' : `Environnement — ${envModal.env.name}`}
                 </h3>
                 <button onClick={() => setEnvModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, padding: '0 4px' }}>×</button>
               </div>
 
-              <div style={{ display: 'grid', gap: 12 }}>
-                {envModal.mode === 'add' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
-                    <div>
-                      <label style={styles.label}>Identifiant</label>
-                      <input style={styles.input} value={envForm.id} onChange={setEnv('id')} placeholder="staging" />
-                      <div style={{ fontSize: 11, color: t.muted, marginTop: 3 }}>Lettres, chiffres, tirets</div>
-                    </div>
-                    <div>
-                      <label style={styles.label}>Nom affiché</label>
-                      <input style={styles.input} value={envForm.name} onChange={setEnv('name')} placeholder="Staging" autoFocus />
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label style={styles.label}>URL de l'instance</label>
-                  <input style={styles.input} value={envForm.db_url} onChange={setEnv('db_url')} placeholder="https://mon-projet-staging.odoo.com" />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {/* Nom + identifiant (add only) */}
+              {envModal.mode === 'add' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, marginBottom: 14 }}>
                   <div>
-                    <label style={styles.label}>Nom de la base</label>
-                    <input style={styles.input} value={envForm.db_name} onChange={setEnv('db_name')} placeholder="mon-projet-staging" />
+                    <label style={styles.label}>Identifiant</label>
+                    <input style={styles.input} value={envForm.id} onChange={setEnv('id')} placeholder="staging" autoFocus />
+                    <div style={{ fontSize: 11, color: t.muted, marginTop: 3 }}>ex : staging, dev-v18</div>
                   </div>
                   <div>
-                    <label style={styles.label}>Login</label>
-                    <input style={styles.input} value={envForm.login} onChange={setEnv('login')} placeholder="admin@client.com" />
+                    <label style={styles.label}>Nom affiché</label>
+                    <input style={styles.input} value={envForm.name} onChange={setEnv('name')} placeholder="Staging" />
                   </div>
-                </div>
-                <div>
-                  <label style={styles.label}>{envModal.mode === 'edit' ? 'Clé API (laisser vide = inchangée)' : 'Clé API'}</label>
-                  <input style={styles.input} type="password" value={envForm.api_key} onChange={setEnv('api_key')} placeholder={envModal.mode === 'edit' ? '(inchangée)' : '••••••••••••••••••'} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={styles.label}>Version Odoo</label>
-                    <select style={styles.input} value={envForm.odoo_version} onChange={setEnv('odoo_version')}>
-                      <option value="">— même que prod —</option>
-                      {VERSIONS.map(v => <option key={v}>{v}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={styles.label}>Branche GitHub</label>
-                    <input style={styles.input} value={envForm.branch} onChange={setEnv('branch')} placeholder="staging" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Test result */}
-              {envTestResult && (
-                <div style={{
-                  marginTop: 12, padding: '8px 12px', borderRadius: t.radius, fontSize: 12, fontWeight: 600,
-                  background: envTestResult.ok ? t.successBg : t.dangerBg,
-                  border: `1px solid ${envTestResult.ok ? t.success : t.danger}40`,
-                  color: envTestResult.ok ? t.success : t.danger,
-                }}>
-                  {envTestResult.msg}
                 </div>
               )}
 
+              {/* URL */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={styles.label}>URL de l'instance</label>
+                <input style={styles.input} value={envForm.db_url} onChange={e => {
+                  setEnv('db_url')(e)
+                  if (!envForm.db_name) {
+                    const m = e.target.value.match(/https?:\/\/([^./]+)/)
+                    if (m) setEnvForm(p => ({ ...p, db_name: m[1] }))
+                  }
+                }} placeholder="https://mon-projet-staging.odoo.com" />
+              </div>
+
+              {/* DB + Login */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                <div>
+                  <label style={styles.label}>Nom de la base</label>
+                  <input style={styles.input} value={envForm.db_name} onChange={setEnv('db_name')} placeholder="mon-projet-staging" />
+                </div>
+                <div>
+                  <label style={styles.label}>Login</label>
+                  <input style={styles.input} value={envForm.login} onChange={setEnv('login')} placeholder="admin@client.com" />
+                </div>
+              </div>
+
+              {/* API key */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={styles.label}>{envModal.mode === 'edit' ? 'Clé API (laisser vide = inchangée)' : 'Clé API'}</label>
+                <input style={styles.input} type="password" value={envForm.api_key} onChange={setEnv('api_key')} placeholder={envModal.mode === 'edit' ? '(inchangée)' : '••••••••••••••••••'} />
+              </div>
+
+              {/* Diagnose box */}
+              <div style={{ background: t.bg, borderRadius: t.radiusLg, padding: '14px 16px', marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: envDiag ? 12 : 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Test de connexion</span>
+                  <button onClick={runEnvDiagnose}
+                    disabled={envDiagPending || !envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key}
+                    style={{
+                      padding: '5px 12px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: t.radius, cursor: 'pointer',
+                      background: (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) ? t.borderLight : t.action,
+                      color: (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) ? t.muted : '#fff',
+                    }}>
+                    {envDiagPending ? '⟳ Test en cours…' : '▶ Tester'}
+                  </button>
+                </div>
+                {envDiag && (
+                  <>
+                    {envDiag.steps.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 0', borderTop: i > 0 ? `1px solid ${t.border}` : 'none' }}>
+                        <span style={{ fontSize: 14, flexShrink: 0, color: s.ok ? t.success : t.danger }}>{s.ok ? '✓' : '✗'}</span>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{s.name}</div>
+                          <div style={{ fontSize: 11, color: s.ok ? t.muted : t.danger, marginTop: 1, whiteSpace: 'pre-line' }}>{s.detail}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {envDiag.uid !== null && (
+                      <div style={{ marginTop: 10, padding: '8px 12px', background: `${t.success}18`, border: `1px solid ${t.success}40`, borderRadius: t.radius }}>
+                        <span style={{ fontSize: 12, color: t.success, fontWeight: 600 }}>
+                          ✓ Connexion réussie — Odoo {envDiag.odoo_version} · {envDiag.module_count} modules
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Version + Branch */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 6 }}>
+                <div>
+                  <label style={styles.label}>Version Odoo <span style={{ color: t.muted, fontWeight: 400 }}>(auto-détectée)</span></label>
+                  <select style={styles.input} value={envForm.odoo_version} onChange={setEnv('odoo_version')}>
+                    <option value="">— idem projet —</option>
+                    {VERSIONS.map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={styles.label}>Branche GitHub <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
+                  <input style={styles.input} value={envForm.branch} onChange={setEnv('branch')} placeholder="staging" />
+                </div>
+              </div>
+
+              {/* Footer */}
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${t.border}` }}>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <button className="btn btn-secondary" onClick={() => setEnvModal(null)}>Annuler</button>
-                  {envModal.mode === 'edit' && (
-                    <button className="btn btn-outline btn-sm" onClick={testEnvModal} disabled={envTesting}
+                  {envModal.mode === 'edit' && envModal.env.id !== activeEnvId && (
+                    <button className="btn btn-outline btn-sm" onClick={() => { activateEnv(envModal.env.id); setEnvModal(null) }}
                       style={{ color: t.action, borderColor: t.action }}>
-                      {envTesting ? '⟳ Test…' : '▶ Tester'}
+                      ✓ Activer
                     </button>
                   )}
                   {envModal.mode === 'edit' && (
                     <button onClick={() => { removeEnv(envModal.env.id); setEnvModal(null) }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 13, padding: '4px 8px' }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 12, padding: '4px 6px' }}
                       onMouseEnter={e => { e.currentTarget.style.color = t.danger }}
                       onMouseLeave={e => { e.currentTarget.style.color = t.muted }}>
                       Supprimer
                     </button>
                   )}
                 </div>
-                <button className="btn btn-primary" onClick={saveEnvModal} disabled={envSaving || !envForm.name || !envForm.db_url || !envForm.db_name || !envForm.login || (envModal.mode === 'add' && !envForm.api_key)}>
+                <button className="btn btn-primary" onClick={saveEnvModal}
+                  disabled={envSaving || !envForm.name || !envForm.db_url || !envForm.db_name || !envForm.login || (envModal.mode === 'add' && !envForm.api_key)}>
                   {envSaving ? '⟳ Enregistrement…' : '✓ Enregistrer'}
                 </button>
               </div>
