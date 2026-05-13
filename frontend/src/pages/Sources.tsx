@@ -262,7 +262,7 @@ export default function Sources() {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div className="page-stack">
       <PageHeader
         title="Sources Odoo"
         description="Téléchargez et maintenez les sources Odoo localement pour consultation et analyse."
@@ -320,7 +320,7 @@ export default function Sources() {
       )}
 
       {/* Unified version cards grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+      <div className="page-grid page-grid-sources">
         {allVersionDefs.map(({ version, label, badge, badgeColor, isMajor }) => {
           const card     = cards[version]
           const status   = card?.status ?? 'idle'
@@ -345,23 +345,16 @@ export default function Sources() {
               : '100%'
 
           return (
-            <Card key={version} interactive style={{
-              background: t.white,
+            <Card key={version} className="source-card" style={{
               border: `1px solid ${
                 status === 'error' ? t.danger
                 : status === 'done' ? t.success
                 : isInstalled ? `${t.success}40`
                 : t.border
               }`,
-              borderRadius: t.radiusLg,
-              boxShadow: t.shadow,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              transition: 'border-color .2s',
             }}>
               {/* Progress stripe — always visible at top */}
-              <div style={{ height: 4, background: t.borderLight, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+              <div className="source-card-progress">
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
                   background: stripeColor,
@@ -371,12 +364,12 @@ export default function Sources() {
                 }} />
               </div>
 
-              <div style={{ padding: 18, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="source-card-body">
                 {/* Header row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div className="source-card-header">
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <div style={{ fontSize: 17, fontWeight: 700, color: t.text }}>{label}</div>
+                    <div className="source-title">
+                      <div className="source-title-text">{label}</div>
                       {!isMajor && (
                         <span style={{
                           fontSize: 10, fontWeight: 700, color: '#8B5CF6',

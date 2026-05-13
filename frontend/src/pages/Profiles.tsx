@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, Building2, Check, ClipboardList, Cloud, ExternalLink, GitBranch, Loader2, Pencil, Play, Plus, Search, Trash2, TriangleAlert, X } from 'lucide-react'
+import { Bot, Building2, Check, ClipboardList, Cloud, ExternalLink, GitBranch, Globe2, Loader2, Pencil, Play, Plus, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -283,7 +283,7 @@ export default function Profiles() {
   const diagOk = diag !== null && diag.uid !== null
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div className="page-stack">
       <PageHeader
         title="Mes projets Odoo.sh"
         description="Gérez vos connexions aux instances Odoo de vos clients."
@@ -628,7 +628,7 @@ export default function Profiles() {
       {profiles.length === 0 ? (
         <EmptyState onAdd={() => setShowWizard(true)} />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 16 }}>
+        <div className="page-grid page-grid-profiles">
           {profiles.map(p => (
             <ProjectCard key={p.id} profile={p}
               onTest={() => testConn.mutate(p.id)}
@@ -670,11 +670,6 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <span style={{ color: t.text, fontWeight: 500, fontSize: 12 }}>{value}</span>
     </div>
   )
-}
-
-const sectionLabel: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-  letterSpacing: '0.06em', color: '#64748b', marginBottom: 7,
 }
 
 type EnvModalState = { mode: 'add' } | { mode: 'edit'; env: EnvEntry }
@@ -841,135 +836,85 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   })()
 
   return (
-    <div className="ui-card ui-card-interactive" style={{
-      background: t.white,
-      borderRadius: 8,
-      overflow: 'hidden',
-      display: 'flex', flexDirection: 'column',
-      transition: 'box-shadow .2s, border-color .2s',
-    }}
-      onMouseEnter={e => {
-        const el = e.currentTarget as HTMLDivElement
-        el.style.boxShadow = t.shadowMd
-        el.style.borderColor = t.brand40
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget as HTMLDivElement
-        el.style.boxShadow = t.shadow
-        el.style.borderColor = t.border
-      }}
-    >
+    <div className="project-card">
       {/* ── Header ── */}
-      <div style={{ padding: '18px 20px 14px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+      <div className="project-card-header">
         {/* Logo */}
-        <div style={{ flexShrink: 0 }}>
+        <div className="project-logo">
           {profile.company_logo
-            ? <img src={profile.company_logo} alt="logo" style={{
-                width: 52, height: 52, objectFit: 'contain', borderRadius: 10,
-                background: t.bgMuted, border: `1px solid ${t.border}`, padding: 5,
-              }} />
-            : <div style={{
-                width: 52, height: 52, borderRadius: 10,
-                background: t.brand20, border: `1px solid ${t.brand40}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.brand,
-              }}><Building2 size={24} /></div>
+            ? <img src={profile.company_logo} alt="logo" />
+            : <Building2 size={24} />
           }
         </div>
 
         {/* Name + meta */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, color: t.text, lineHeight: 1.2, marginBottom: 2 }}>
-            {profile.name}
-          </div>
-          {profile.company_name && (
-            <div style={{ fontSize: 12, color: t.muted, marginBottom: 7 }}>
-              {profile.company_name}{profile.company_city ? ` · ${profile.company_city}` : ''}
+        <div className="project-title-block">
+          <div className="project-title-row">
+            <div className="project-title-block">
+              <div className="project-title">{profile.name}</div>
+              {profile.company_name && (
+                <div className="project-subtitle">
+                  {profile.company_name}{profile.company_city ? ` · ${profile.company_city}` : ''}
+                </div>
+              )}
             </div>
-          )}
+          </div>
           {/* Badges row */}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="project-badges">
             {profile.odoo_version && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: '#fff',
-                background: t.brand, borderRadius: t.radiusFull, padding: '2px 9px',
-              }}>
+              <span className="project-pill project-pill-brand">
                 Odoo {profile.odoo_version}
               </span>
             )}
             {keyExpiry && (
-              <span title={profile.api_key_expires} style={{
-                fontSize: 11, fontWeight: 600, color: '#fff', background: keyExpiry.color,
-                borderRadius: t.radiusFull, padding: '2px 9px',
-              }}>{keyExpiry.label}</span>
+              <span title={profile.api_key_expires} className={`project-pill ${keyExpiry.color === t.danger ? 'project-pill-danger' : 'project-pill-warning'}`}>
+                {keyExpiry.label}
+              </span>
             )}
             {accessInfo?.is_system && (
-              <span title="Utilisateur administrateur système" style={{
-                fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626',
-                borderRadius: t.radiusFull, padding: '2px 9px', cursor: 'help',
-              }}><TriangleAlert size={11} /> Admin système</span>
+              <span title="Utilisateur administrateur système" className="project-pill project-pill-danger"><TriangleAlert size={11} /> Admin système</span>
             )}
             {!accessInfo?.is_system && accessInfo?.is_admin && (
-              <span title="Utilisateur avec droits d'administration" style={{
-                fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7',
-                border: '1px solid #fcd34d', borderRadius: t.radiusFull, padding: '2px 9px', cursor: 'help',
-              }}><TriangleAlert size={11} /> Admin</span>
+              <span title="Utilisateur avec droits d'administration" className="project-pill project-pill-warning"><TriangleAlert size={11} /> Admin</span>
             )}
           </div>
         </div>
       </div>
 
       {/* ── Connection info (slim) ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 0,
-        padding: '7px 20px', background: t.bgMuted,
-        borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`,
-        fontSize: 11, color: t.muted,
-      }}>
-        <a href={profile.db_url} target="_blank" rel="noreferrer" style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          color: t.action, textDecoration: 'none', fontWeight: 600,
-          overflow: 'hidden', flex: 1,
-        }}>
-          <span>🌐</span>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {profile.db_url.replace(/^https?:\/\//, '')}
-          </span>
+      <div className="project-connection">
+        <a href={profile.db_url} target="_blank" rel="noreferrer" className="project-connection-item" style={{ color: t.action, textDecoration: 'none' }}>
+          <Globe2 size={13} />
+          <span>{profile.db_url.replace(/^https?:\/\//, '')}</span>
         </a>
-        <span style={{ color: t.borderLight, margin: '0 8px' }}>│</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-          <span>👤</span>
-          <span style={{ color: t.textSub, fontWeight: 500 }}>{profile.login}</span>
+        <span className="project-connection-item">
+          <UserRound size={13} />
+          <span>{profile.login}</span>
         </span>
       </div>
 
-      <div style={{ padding: '12px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="project-card-body">
 
         {/* ── App badges ── */}
         {apps.length > 0 && (
-          <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
-            <div style={sectionLabel}>Applications</div>
+          <div className="project-section">
+            <div className="project-section-title">Applications</div>
             <AppBadges apps={apps} max={6} />
           </div>
         )}
 
         {/* ── Multi-company selector ── */}
         {companies.length > 1 && (
-          <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
-            <div style={sectionLabel}>Société active</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          <div className="project-section">
+            <div className="project-section-title">Société active</div>
+            <div className="project-company-list">
               {companies.map(c => {
                 const isActive = (profile.selected_company_id ?? companies[0]?.id) === c.id
                 const isAccessible = !accessInfo || accessInfo.accessible_company_ids.includes(c.id)
                 return (
                   <button key={c.id} onClick={() => isAccessible && onSelectCompany(c.id)} disabled={!isAccessible}
                     title={!isAccessible ? `${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
-                    style={{
-                      fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: t.radiusFull,
-                      border: `1px solid ${!isAccessible ? t.border : isActive ? t.brand : t.border}`,
-                      background: !isAccessible ? t.bgMuted : isActive ? t.brand : t.bgCard,
-                      color: !isAccessible ? t.muted : isActive ? '#fff' : t.textSub,
-                      cursor: !isAccessible ? 'not-allowed' : 'pointer', opacity: !isAccessible ? 0.5 : 1, transition: 'all .15s',
-                    }}>
+                    className={`project-company-pill${isActive ? ' is-active' : ''}`}>
                     {!isAccessible ? 'Verrouillé - ' : isActive ? 'Actif - ' : ''}{c.name}
                   </button>
                 )
@@ -979,36 +924,24 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
         )}
 
         {/* ── Environments ── */}
-        <div style={{ paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
-            <span style={sectionLabel as React.CSSProperties}>Environnements</span>
+        <div className="project-section">
+          <div className="project-section-header">
+            <span className="project-section-title">Environnements</span>
             <button onClick={openAddEnv} title="Ajouter un environnement"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.action, fontSize: 13, padding: '0 2px', lineHeight: 1, fontWeight: 700 }}>
-              +
+              className="project-add-env">
+              <Plus size={14} />
             </button>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className="project-env-list">
             {envs.map(env => {
               const isActive = env.id === activeEnvId
               return (
                 <button key={env.id} onClick={() => openEditEnv(env)} title={`Configurer ${env.name}${!isActive ? ' · Cliquer pour activer' : ''}`}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '5px 12px', borderRadius: t.radiusFull,
-                    border: `1px solid ${isActive ? t.brand : t.border}`,
-                    background: isActive ? t.brand : t.bgCard,
-                    color: isActive ? '#fff' : t.textSub,
-                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    transition: 'all .15s', boxShadow: isActive ? `0 0 0 3px ${t.brand15}` : 'none',
-                  }}>
+                  className={`project-env-pill${isActive ? ' is-active' : ''}`}>
                   {isActive && <Check size={11} style={{ opacity: 0.85 }} />}
                   {env.name}
                   {env.odoo_version && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 500, padding: '1px 5px', borderRadius: 3,
-                      background: isActive ? 'rgba(255,255,255,.2)' : t.bgMuted,
-                      color: isActive ? '#fff' : t.muted,
-                    }}>
+                    <span className="project-env-version">
                       v{env.odoo_version.split('.')[0]}
                     </span>
                   )}
@@ -1024,19 +957,19 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
         </div>
 
         {/* ── Footer ── */}
-        <div style={{ marginTop: 'auto', paddingTop: 10, borderTop: `1px solid ${t.borderLight}` }}>
-          <div style={sectionLabel}>
+        <div className="project-card-footer">
+          <div className="project-section-title" style={{ marginBottom: 8 }}>
             {(profile.odoo_sh_url || ghUrl) ? 'Liens & actions' : 'Actions'}
           </div>
           {/* External links */}
           {(profile.odoo_sh_url || ghUrl) && (
-            <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
+            <div className="project-link-list" style={{ marginBottom: 8 }}>
               {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon={<Cloud size={12} />} color={t.brand} />}
               {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon={<GitBranch size={12} />} color="#24292f" />}
             </div>
           )}
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="project-action-list">
             <button className="btn btn-outline btn-sm" onClick={onEdit} title="Modifier ce projet"><Pencil size={13} /> Modifier</button>
             <button className="btn btn-outline btn-sm" onClick={onTest} title="Tester la connexion"><Play size={13} /> Tester</button>
             <button className="btn btn-outline btn-sm" onClick={onCheckAccess} disabled={checkingAccess} title="Vérifier les droits d'accès">
@@ -1051,9 +984,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
             </button>
             <div style={{ flex: 1 }} />
             <button onClick={() => setConfirmDelete(true)} title="Supprimer ce projet"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 15, padding: '2px 4px', lineHeight: 1, transition: 'color .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.color = t.danger }}
-              onMouseLeave={e => { e.currentTarget.style.color = t.muted }}><Trash2 size={15} /></button>
+              className="project-delete-action"><Trash2 size={15} /></button>
           </div>
         </div>
 

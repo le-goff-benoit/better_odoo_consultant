@@ -12,8 +12,17 @@ export const WIDTH_OPTIONS = [
 export type ContentWidth = typeof WIDTH_OPTIONS[number]['id']
 export const WIDTH_KEY = 'app-content-width'
 
-function getStoredWidth(): ContentWidth {
-  try { return (localStorage.getItem(WIDTH_KEY) as ContentWidth) ?? 'medium' } catch { return 'medium' }
+export function isContentWidth(value: string | null): value is ContentWidth {
+  return WIDTH_OPTIONS.some(option => option.id === value)
+}
+
+export function getStoredWidth(): ContentWidth {
+  try {
+    const value = localStorage.getItem(WIDTH_KEY)
+    return isContentWidth(value) ? value : 'medium'
+  } catch {
+    return 'medium'
+  }
 }
 
 export default function Layout({ children }: { children: ReactNode }) {

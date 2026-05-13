@@ -197,7 +197,7 @@ const CHANGELOG = [
 
 export default function About() {
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div className="page-stack">
       <PageHeader title="À propos" description="Odoo Consultant Portal — outil de productivité pour consultants Odoo." />
 
       {/* Author card */}

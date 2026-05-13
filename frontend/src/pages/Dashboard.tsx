@@ -12,7 +12,7 @@ export default function Dashboard() {
   const profiles = profRes?.data?.length ?? 0
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div className="page-stack">
       {/* Page title */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: t.text, letterSpacing: '-0.3px' }}>

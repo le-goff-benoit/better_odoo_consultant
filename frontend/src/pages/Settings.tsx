@@ -5,7 +5,7 @@ import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilo
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { applyBrandColor, applyThemeMode } from '../App'
-import { WIDTH_OPTIONS, WIDTH_KEY, type ContentWidth } from '../components/Layout'
+import { WIDTH_OPTIONS, WIDTH_KEY, getStoredWidth, type ContentWidth } from '../components/Layout'
 import { Tabs } from '../components/ui'
 
 interface ProviderDef {
@@ -100,25 +100,25 @@ export default function Settings() {
   ]
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div className="page-stack">
       <PageHeader title="Paramètres" />
 
       <Tabs items={tabs} value={tab} onChange={setTab} />
 
       {tab === 'profile' && (
-        <section>
-          <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+        <section className="settings-panel">
+          <p className="settings-intro">
             Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.
           </p>
           <UserProfileEditor />
         </section>
       )}
 
-      {tab === 'api' && <ApiSection />}
+      {tab === 'api' && <div className="settings-panel settings-panel-plain"><ApiSection /></div>}
 
       {tab === 'context' && (
-        <section>
-          <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
+        <section className="settings-panel settings-panel-plain">
+          <p className="settings-intro">
             Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier.
           </p>
           <ContextEditor />
@@ -169,7 +169,7 @@ function StorageSection() {
   ]
 
   return (
-    <section>
+    <section className="settings-panel">
       <p style={{ fontSize: 13, color: t.muted, marginBottom: 24, lineHeight: 1.6 }}>
         Toutes les données locales sont centralisées dans un seul dossier. Vous pouvez le sauvegarder, le déplacer ou le supprimer sans toucher à l'application.
       </p>
@@ -227,9 +227,7 @@ function StorageSection() {
 // ── Interface settings ────────────────────────────────────────────
 
 function InterfaceSection() {
-  const [currentWidth, setCurrentWidth] = useState<ContentWidth>(() => {
-    try { return (localStorage.getItem(WIDTH_KEY) as ContentWidth) ?? 'medium' } catch { return 'medium' }
-  })
+  const [currentWidth, setCurrentWidth] = useState<ContentWidth>(() => getStoredWidth())
 
   const applyWidth = (id: ContentWidth) => {
     localStorage.setItem(WIDTH_KEY, id)
@@ -238,37 +236,26 @@ function InterfaceSection() {
   }
 
   return (
-    <section>
-      <p style={{ fontSize: 13, color: t.muted, marginBottom: 28, lineHeight: 1.6 }}>
+    <section className="settings-panel">
+      <p className="settings-intro">
         Ajustez la largeur du contenu selon votre écran et vos préférences de lecture.
       </p>
 
       <div style={{ fontWeight: 700, fontSize: 14, color: t.text, marginBottom: 14 }}>Largeur du contenu</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+      <div className="settings-width-grid">
         {WIDTH_OPTIONS.map(opt => {
           const isActive = currentWidth === opt.id
           return (
             <button
               key={opt.id}
               onClick={() => applyWidth(opt.id)}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-                padding: '18px 16px',
-                background: isActive ? `var(--brand-10)` : t.bgCard,
-                border: `2px solid ${isActive ? `var(--brand, ${t.brand})` : t.border}`,
-                borderRadius: t.radiusLg, cursor: 'pointer', transition: 'all .15s',
-              }}
+              className={`settings-width-option${isActive ? ' is-active' : ''}`}
             >
               {/* Width visualisation */}
-              <div style={{ width: '100%', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{
-                  height: 28,
+              <div className="settings-width-preview">
+                <div className="settings-width-preview-inner" style={{
                   width: opt.id === 'narrow' ? '55%' : opt.id === 'medium' ? '70%' : opt.id === 'wide' ? '85%' : '100%',
-                  background: isActive ? `var(--brand-20)` : t.bgMuted,
-                  border: `1px solid ${isActive ? `var(--brand-40)` : t.border}`,
-                  borderRadius: 4,
-                  transition: 'all .15s',
                 }} />
               </div>
               <div style={{ textAlign: 'center' }}>
