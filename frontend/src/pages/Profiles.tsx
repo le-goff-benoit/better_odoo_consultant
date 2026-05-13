@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Bot, Building2, Check, ClipboardList, Cloud, ExternalLink, GitBranch, Loader2, Pencil, Play, Plus, Search, Trash2, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl } from '../api/client'
-import { t, btn } from '../theme'
+import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
 
@@ -288,7 +289,7 @@ export default function Profiles() {
         description="Gérez vos connexions aux instances Odoo de vos clients."
         action={
           <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(EMPTY); setShowWizard(true); setStep(1) }}>
-            + Nouveau projet
+            <Plus size={15} /> Nouveau projet
           </button>
         }
       />
@@ -302,7 +303,7 @@ export default function Profiles() {
           boxShadow: '0 4px 16px rgba(0,0,0,.2)', fontSize: 13, fontWeight: 600,
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          {toast.ok ? '✓' : '⚠'} {toast.msg}
+          {toast.ok ? <Check size={15} /> : <TriangleAlert size={15} />} {toast.msg}
         </div>
       )}
 
@@ -318,7 +319,7 @@ export default function Profiles() {
               </h2>
               <button onClick={() => { setShowWizard(false); setEditingId(null); setDiag(null) }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, lineHeight: 1, padding: '2px 6px' }}>
-                ×
+                <X size={18} />
               </button>
             </div>
 
@@ -334,7 +335,7 @@ export default function Profiles() {
                       color: s.n <= step ? '#fff' : t.muted,
                       transition: 'all .25s',
                     }}>
-                      {s.n < step ? '✓' : s.n}
+                      {s.n < step ? <Check size={15} /> : s.n}
                     </div>
                     <span style={{ fontSize: 11, color: s.n === step ? t.brand : t.muted, fontWeight: s.n === step ? 600 : 400 }}>
                       {s.label}
@@ -414,7 +415,8 @@ export default function Profiles() {
                         border: 'none', borderRadius: t.radius, cursor: 'pointer',
                       }}
                     >
-                      {diagnose.isPending ? '⟳ Test en cours…' : '▶ Tester'}
+                    {diagnose.isPending ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Play size={14} />}
+                    {diagnose.isPending ? 'Test en cours…' : 'Tester'}
                     </button>
                   </div>
 
@@ -428,7 +430,7 @@ export default function Profiles() {
                         fontSize: 15, flexShrink: 0, marginTop: 1,
                         color: s.ok ? t.success : t.danger,
                       }}>
-                        {s.ok ? '✓' : '✗'}
+                        {s.ok ? <Check size={14} /> : <X size={14} />}
                       </span>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{s.name}</div>
@@ -446,7 +448,7 @@ export default function Profiles() {
                       borderRadius: t.radius,
                     }}>
                       <div style={{ fontSize: 13, color: t.success, fontWeight: 600, marginBottom: companyInfo ? 10 : 0 }}>
-                        ✓ Connexion réussie — Odoo {diag!.odoo_version} · {diag!.module_count} modules
+                        <Check size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} /> Connexion réussie — Odoo {diag!.odoo_version} · {diag!.module_count} modules
                       </div>
                       {companyInfo && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -554,7 +556,8 @@ export default function Profiles() {
                 <button className="btn btn-primary" style={{ background: t.success }}
                   disabled={editingId !== null ? update.isPending : create.isPending}
                   onClick={() => editingId !== null ? update.mutate() : create.mutate()}>
-                  {(editingId !== null ? update.isPending : create.isPending) ? '⟳ Enregistrement…' : '✓ Enregistrer'}
+                  {(editingId !== null ? update.isPending : create.isPending) ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Check size={14} />}
+                  {(editingId !== null ? update.isPending : create.isPending) ? 'Enregistrement…' : 'Enregistrer'}
                 </button>
               )}
             </div>
@@ -568,11 +571,11 @@ export default function Profiles() {
           <div style={{ ...styles.modal, maxWidth: 600 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 16, fontWeight: 700, color: t.text, margin: 0 }}>
-                📋 Contexte projet — {profiles.find(p => p.id === contextProfileId)?.name}
+                <ClipboardList size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} /> Contexte projet — {profiles.find(p => p.id === contextProfileId)?.name}
               </h2>
               <button onClick={() => setContextProfileId(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, lineHeight: 1, padding: '2px 6px' }}>
-                ×
+                <X size={18} />
               </button>
             </div>
 
@@ -592,7 +595,8 @@ export default function Profiles() {
                   color: contextAutoFilling ? t.muted : t.action,
                   border: `1px solid ${t.action}40`, borderRadius: t.radius, cursor: 'pointer',
                 }}>
-                {contextAutoFilling ? '⟳ Génération en cours…' : '✨ Auto-compléter avec l\'IA'}
+                {contextAutoFilling ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Bot size={14} />}
+                {contextAutoFilling ? 'Génération en cours…' : 'Auto-compléter avec l\'IA'}
               </button>
             </div>
 
@@ -612,7 +616,8 @@ export default function Profiles() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: `1px solid ${t.border}` }}>
               <button className="btn btn-secondary" onClick={() => setContextProfileId(null)}>Annuler</button>
               <button className="btn btn-primary" onClick={saveContext} disabled={contextSaving}>
-                {contextSaving ? '⟳ Enregistrement…' : '✓ Enregistrer'}
+                  {contextSaving ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Check size={14} />}
+                  {contextSaving ? 'Enregistrement…' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -836,11 +841,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   })()
 
   return (
-    <div style={{
+    <div className="ui-card ui-card-interactive" style={{
       background: t.white,
-      borderRadius: t.radiusXl,
-      border: `1px solid ${t.border}`,
-      boxShadow: t.shadow,
+      borderRadius: 8,
       overflow: 'hidden',
       display: 'flex', flexDirection: 'column',
       transition: 'box-shadow .2s, border-color .2s',
@@ -868,8 +871,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
             : <div style={{
                 width: 52, height: 52, borderRadius: 10,
                 background: t.brand20, border: `1px solid ${t.brand40}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
-              }}>🏢</div>
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.brand,
+              }}><Building2 size={24} /></div>
           }
         </div>
 
@@ -903,13 +906,13 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               <span title="Utilisateur administrateur système" style={{
                 fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626',
                 borderRadius: t.radiusFull, padding: '2px 9px', cursor: 'help',
-              }}>⚠ Admin système</span>
+              }}><TriangleAlert size={11} /> Admin système</span>
             )}
             {!accessInfo?.is_system && accessInfo?.is_admin && (
               <span title="Utilisateur avec droits d'administration" style={{
                 fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7',
                 border: '1px solid #fcd34d', borderRadius: t.radiusFull, padding: '2px 9px', cursor: 'help',
-              }}>⚠ Admin</span>
+              }}><TriangleAlert size={11} /> Admin</span>
             )}
           </div>
         </div>
@@ -967,7 +970,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                       color: !isAccessible ? t.muted : isActive ? '#fff' : t.textSub,
                       cursor: !isAccessible ? 'not-allowed' : 'pointer', opacity: !isAccessible ? 0.5 : 1, transition: 'all .15s',
                     }}>
-                    {!isAccessible ? '🔒 ' : isActive ? '✓ ' : ''}{c.name}
+                    {!isAccessible ? 'Verrouillé - ' : isActive ? 'Actif - ' : ''}{c.name}
                   </button>
                 )
               })}
@@ -998,7 +1001,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                     fontSize: 12, fontWeight: 600, cursor: 'pointer',
                     transition: 'all .15s', boxShadow: isActive ? `0 0 0 3px ${t.brand15}` : 'none',
                   }}>
-                  {isActive && <span style={{ fontSize: 10, opacity: 0.85 }}>✓</span>}
+                  {isActive && <Check size={11} style={{ opacity: 0.85 }} />}
                   {env.name}
                   {env.odoo_version && (
                     <span style={{
@@ -1010,7 +1013,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                     </span>
                   )}
                   {env.github_repo && (
-                    <span title={`Dépôt : ${env.github_repo}`} style={{ fontSize: 10, opacity: isActive ? 0.8 : 0.6 }}>⎇</span>
+                    <span title={`Dépôt : ${env.github_repo}`} style={{ display: 'inline-flex', opacity: isActive ? 0.8 : 0.6 }}>
+                      <GitBranch size={11} />
+                    </span>
                   )}
                 </button>
               )
@@ -1026,20 +1031,20 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
           {/* External links */}
           {(profile.odoo_sh_url || ghUrl) && (
             <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
-              {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon="☁" color={t.brand} />}
-              {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon="⎇" color="#24292f" />}
+              {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon={<Cloud size={12} />} color={t.brand} />}
+              {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon={<GitBranch size={12} />} color="#24292f" />}
             </div>
           )}
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-outline btn-sm" onClick={onEdit} title="Modifier ce projet">✏ Modifier</button>
-            <button className="btn btn-outline btn-sm" onClick={onTest} title="Tester la connexion">▶ Tester</button>
+            <button className="btn btn-outline btn-sm" onClick={onEdit} title="Modifier ce projet"><Pencil size={13} /> Modifier</button>
+            <button className="btn btn-outline btn-sm" onClick={onTest} title="Tester la connexion"><Play size={13} /> Tester</button>
             <button className="btn btn-outline btn-sm" onClick={onCheckAccess} disabled={checkingAccess} title="Vérifier les droits d'accès">
-              {checkingAccess ? '⟳' : '🔍'} Accès
+              {checkingAccess ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Search size={13} />} Accès
             </button>
             <button className="btn btn-outline btn-sm" onClick={onContext} title="Fichier de contexte de ce projet"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              📋 Contexte
+              <ClipboardList size={13} /> Contexte
               {profile.project_context && (
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.success, display: 'inline-block', flexShrink: 0 }} />
               )}
@@ -1048,7 +1053,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
             <button onClick={() => setConfirmDelete(true)} title="Supprimer ce projet"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 15, padding: '2px 4px', lineHeight: 1, transition: 'color .15s' }}
               onMouseEnter={e => { e.currentTarget.style.color = t.danger }}
-              onMouseLeave={e => { e.currentTarget.style.color = t.muted }}>🗑</button>
+              onMouseLeave={e => { e.currentTarget.style.color = t.muted }}><Trash2 size={15} /></button>
           </div>
         </div>
 
@@ -1062,7 +1067,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, margin: 0 }}>
                   {envModal.mode === 'add' ? '+ Nouvel environnement' : `Environnement — ${envModal.env.name}`}
                 </h3>
-                <button onClick={() => setEnvModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, padding: '0 4px' }}>×</button>
+                <button onClick={() => setEnvModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, padding: '0 4px' }}><X size={18} /></button>
               </div>
 
               {/* Nom + identifiant (add only) */}
@@ -1121,14 +1126,15 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                       background: (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) ? t.borderLight : t.action,
                       color: (!envForm.db_url || !envForm.db_name || !envForm.login || !envForm.api_key) ? t.muted : '#fff',
                     }}>
-                    {envDiagPending ? '⟳ Test en cours…' : '▶ Tester'}
+                    {envDiagPending ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Play size={13} />}
+                    {envDiagPending ? 'Test en cours…' : 'Tester'}
                   </button>
                 </div>
                 {envDiag && (
                   <>
                     {envDiag.steps.map((s, i) => (
                       <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 0', borderTop: i > 0 ? `1px solid ${t.border}` : 'none' }}>
-                        <span style={{ fontSize: 14, flexShrink: 0, color: s.ok ? t.success : t.danger }}>{s.ok ? '✓' : '✗'}</span>
+                        <span style={{ fontSize: 14, flexShrink: 0, color: s.ok ? t.success : t.danger }}>{s.ok ? <Check size={14} /> : <X size={14} />}</span>
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{s.name}</div>
                           <div style={{ fontSize: 11, color: s.ok ? t.muted : t.danger, marginTop: 1, whiteSpace: 'pre-line' }}>{s.detail}</div>
@@ -1138,7 +1144,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                     {envDiag.uid !== null && (
                       <div style={{ marginTop: 10, padding: '8px 12px', background: `${t.success}18`, border: `1px solid ${t.success}40`, borderRadius: t.radius }}>
                         <span style={{ fontSize: 12, color: t.success, fontWeight: 600 }}>
-                          ✓ Connexion réussie — Odoo {envDiag.odoo_version} · {envDiag.module_count} modules
+                          <Check size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} /> Connexion réussie — Odoo {envDiag.odoo_version} · {envDiag.module_count} modules
                         </span>
                       </div>
                     )}
@@ -1189,12 +1195,12 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                         {repoStatus?.cloned ? (
                           <>
-                            <span style={{ color: t.success, fontWeight: 700 }}>✓ Cloné</span>
+                            <span style={{ color: t.success, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} /> Cloné</span>
                             {repoStatus.head && <span style={{ color: t.muted, fontFamily: 'monospace', fontSize: 11 }}>{repoStatus.head}</span>}
                             {repoStatus.message && <span style={{ color: t.textSub }} title={repoStatus.date ?? ''}>{repoStatus.message.slice(0, 40)}</span>}
                           </>
                         ) : repoStatus?.github_repo ? (
-                          <span style={{ color: '#b45309', fontWeight: 600 }}>⚠ Non cloné</span>
+                          <span style={{ color: '#b45309', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><TriangleAlert size={13} /> Non cloné</span>
                         ) : null}
                       </div>
                       <button
@@ -1204,7 +1210,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                           padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: t.radius, cursor: 'pointer',
                           background: repoSyncing ? t.borderLight : t.action, color: repoSyncing ? t.muted : '#fff',
                         }}>
-                        {repoSyncing ? '⟳ En cours…' : repoStatus?.cloned ? '↑ Mettre à jour' : '⬇ Cloner'}
+                        {repoSyncing ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <GitBranch size={13} />}
+                        {repoSyncing ? 'En cours…' : repoStatus?.cloned ? 'Mettre à jour' : 'Cloner'}
                       </button>
                     </div>
                     {repoLogs.length > 0 && (
@@ -1223,7 +1230,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                   {envModal.mode === 'edit' && envModal.env.id !== activeEnvId && (
                     <button className="btn btn-outline btn-sm" onClick={() => { activateEnv(envModal.env.id); setEnvModal(null) }}
                       style={{ color: t.action, borderColor: t.action }}>
-                      ✓ Activer
+                      <Check size={13} /> Activer
                     </button>
                   )}
                   {envModal.mode === 'edit' && (
@@ -1237,7 +1244,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                 </div>
                 <button className="btn btn-primary" onClick={saveEnvModal}
                   disabled={envSaving || !envForm.name || !envForm.db_url || !envForm.db_name || !envForm.login || (envModal.mode === 'add' && !envForm.api_key)}>
-                  {envSaving ? '⟳ Enregistrement…' : '✓ Enregistrer'}
+                  {envSaving ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Check size={14} />}
+                  {envSaving ? 'Enregistrement…' : 'Enregistrer'}
                 </button>
               </div>
             </div>
@@ -1255,7 +1263,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               background: t.white, borderRadius: t.radiusLg, padding: '28px 32px',
               maxWidth: 400, width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,.2)',
             }}>
-              <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⚠️</div>
+              <div style={{ textAlign: 'center', marginBottom: 12, color: t.danger }}><TriangleAlert size={34} /></div>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: t.text, textAlign: 'center', margin: '0 0 8px' }}>
                 Supprimer ce projet ?
               </h3>
@@ -1293,7 +1301,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   )
 }
 
-function QuickLink({ href, label, icon, color }: { href: string; label: string; icon: string; color: string }) {
+function QuickLink({ href, label, icon, color }: { href: string; label: string; icon: React.ReactNode; color: string }) {
   return (
     <a href={href} target="_blank" rel="noreferrer" style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -1301,23 +1309,20 @@ function QuickLink({ href, label, icon, color }: { href: string; label: string; 
       border: `1px solid ${t.brand40}`, background: t.brand10,
       color: t.action, fontSize: 11, fontWeight: 600, textDecoration: 'none',
     }}>
-      {icon} {label}
+      {icon} {label} <ExternalLink size={10} style={{ opacity: .65 }} />
     </a>
   )
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
-    <div style={{
-      background: t.white, border: `2px dashed ${t.border}`,
-      borderRadius: t.radiusLg, padding: '60px 24px', textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
+    <div className="ui-empty">
+      <div className="ui-empty-icon"><Building2 size={26} /></div>
       <div style={{ fontWeight: 700, fontSize: 16, color: t.text, marginBottom: 8 }}>Aucun projet configuré</div>
       <div style={{ fontSize: 14, color: t.muted, marginBottom: 24 }}>
         Ajoutez votre premier projet Odoo.sh pour commencer.
       </div>
-      <button className="btn btn-primary" onClick={onAdd}>+ Nouveau projet</button>
+      <button className="btn btn-primary" onClick={onAdd}><Plus size={15} /> Nouveau projet</button>
     </div>
   )
 }

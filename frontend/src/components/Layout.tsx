@@ -30,15 +30,10 @@ export default function Layout({ children }: { children: ReactNode }) {
   const maxW = opt.px > 0 ? opt.px : undefined
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: t.bg }}>
+    <div className="app-shell">
       <Sidebar />
-      <main style={{
-        flex: 1, padding: '32px 36px',
-        overflowY: 'auto', minWidth: 0,
-        display: 'flex', flexDirection: 'column',
-        animation: 'fadeIn .2s ease',
-      }}>
-        <div style={{ maxWidth: maxW, width: '100%' }}>
+      <main className="app-main">
+        <div className="app-page" style={{ maxWidth: maxW }}>
           {children}
         </div>
       </main>

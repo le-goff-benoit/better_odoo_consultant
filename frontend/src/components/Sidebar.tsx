@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink } from 'react-router-dom'
+import { Bot, Database, FolderKanban, Info, Settings } from 'lucide-react'
 import { t } from '../theme'
-import Icon, { IconName } from './Icon'
 import { getUserProfile } from '../api/client'
 
-const links: { to: string; label: string; icon: IconName }[] = [
-  { to: '/sources',   label: 'Sources',      icon: 'download'  },
-  { to: '/profiles',  label: 'Mes projets',  icon: 'building'  },
-  { to: '/assistant', label: 'Assistant IA', icon: 'zap'       },
-  { to: '/settings',  label: 'Paramètres',   icon: 'settings'  },
-  { to: '/about',     label: 'À propos',     icon: 'info'      },
+const links = [
+  { to: '/sources',   label: 'Sources',      icon: Database },
+  { to: '/profiles',  label: 'Mes projets',  icon: FolderKanban },
+  { to: '/assistant', label: 'Assistant IA', icon: Bot },
+  { to: '/settings',  label: 'Paramètres',   icon: Settings },
+  { to: '/about',     label: 'À propos',     icon: Info },
 ]
 
 export default function Sidebar() {
@@ -66,31 +66,19 @@ export default function Sidebar() {
 
       {/* Nav */}
       <div style={{ flex: 1, padding: '4px 10px' }}>
-        {links.map(l => (
+        {links.map(l => {
+          const Icon = l.icon
+          return (
           <NavLink
             key={l.to}
             to={l.to}
-            style={({ isActive }) => ({
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '8px 12px', borderRadius: 6, marginBottom: 2,
-              color: isActive ? t.sidebarTextActive : t.sidebarText,
-              background: isActive ? 'rgba(255,255,255,.1)' : 'transparent',
-              textDecoration: 'none', fontWeight: isActive ? 600 : 400,
-              fontSize: 13, transition: 'background .12s, color .12s',
-            })}
+            className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
           >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  name={l.icon}
-                  size={15}
-                  color={isActive ? `var(--brand, #017e84)` : 'rgba(255,255,255,.5)'}
-                />
-                {l.label}
-              </>
-            )}
+            <Icon size={16} aria-hidden />
+            {l.label}
           </NavLink>
-        ))}
+          )
+        })}
       </div>
 
       {/* Footer — version only */}

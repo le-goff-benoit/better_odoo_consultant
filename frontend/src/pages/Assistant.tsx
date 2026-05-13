@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
+import { ArrowUp, Bot, Building2, Check, ChevronDown, Database, FileText, FolderCode, Globe2, History, Lock, Settings, Square, TriangleAlert } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getProfileApps } from '../api/client'
-import { t, btn } from '../theme'
+import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 
 import { ODOO_APPS } from '../constants/odooApps'
@@ -662,12 +663,12 @@ export default function Assistant() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxWidth: 900 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxWidth: 1000 }}>
 
       <PageHeader
         title="Assistant IA"
         description="Posez des questions sur vos données Odoo en langage naturel."
-        action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}>⚙ Paramètres</Link>}
+        action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}><Settings size={15} /> Paramètres</Link>}
       />
 
       {/* ── Context bar ── */}
@@ -706,7 +707,7 @@ export default function Assistant() {
                 cursor: 'pointer', transition: 'color .15s, border-color .15s',
                 whiteSpace: 'nowrap', flexShrink: 0,
               }}>
-                🌐 Odoo Général
+                <Globe2 size={14} /> Odoo Général
                 {msgCount > 0 && (
                   <span style={{
                     background: isActive ? '#6366f1' : t.border,
@@ -741,7 +742,7 @@ export default function Assistant() {
               }}>
                 {p.company_logo
                   ? <img src={p.company_logo} alt="" style={{ width: 15, height: 15, objectFit: 'contain', borderRadius: 2 }} />
-                  : <span style={{ fontSize: 12 }}>🏢</span>
+                  : <Building2 size={14} />
                 }
                 {p.name}
                 {msgCount > 0 && (
@@ -825,8 +826,8 @@ export default function Assistant() {
                     cursor: 'help',
                   }}>
                   {sourcesInstalled
-                    ? `✓ Sources v${activeVersion}${communityInstalled && enterpriseInstalled ? ' · C+E' : communityInstalled ? ' · C' : ' · E'}`
-                    : `⚠ Sources v${activeVersion}`}
+                    ? <><Check size={12} /> Sources v{activeVersion}{communityInstalled && enterpriseInstalled ? ' · C+E' : communityInstalled ? ' · C' : ' · E'}</>
+                    : <><TriangleAlert size={12} /> Sources v{activeVersion}</>}
                 </span>
               )}
 
@@ -840,7 +841,7 @@ export default function Assistant() {
                     border: `1px solid ${t.brand40}`,
                     cursor: 'help', display: 'inline-flex', alignItems: 'center', gap: 4,
                   }}>
-                  ✓ ⎇ {activeEnvRepo.split('/')[1] ?? activeEnvRepo}
+                  <Check size={12} /> <FolderCode size={12} /> {activeEnvRepo.split('/')[1] ?? activeEnvRepo}
                 </span>
               )}
 
@@ -857,13 +858,13 @@ export default function Assistant() {
                         onClick={makeMeetingMinute} disabled={streaming}
                         title="Générer un compte-rendu structuré de cette conversation"
                         style={convActionStyle}>
-                        📝 <span>Compte-rendu</span>
+                        <FileText size={13} /> <span>Compte-rendu</span>
                       </button>
                       <button
                         onClick={resetCurrentConversation}
                         title="Démarrer une nouvelle conversation (sauvegarde automatique de l'actuelle)"
                         style={convActionStyle}>
-                        🗒️ <span>Nouvelle conv.</span>
+                        <Bot size={13} /> <span>Nouvelle conv.</span>
                       </button>
                     </>
                   )}
@@ -875,7 +876,7 @@ export default function Assistant() {
                         ...convActionStyle,
                         ...(showHistory ? { background: t.brand20, borderColor: t.brand40, color: t.brand } : {}),
                       }}>
-                      🕐 <span>Historique ({(savedConvs[convKey] ?? []).length})</span>
+                      <History size={13} /> <span>Historique ({(savedConvs[convKey] ?? []).length})</span>
                     </button>
                   )}
                 </div>
@@ -892,7 +893,7 @@ export default function Assistant() {
           background: '#fef3c7', border: '1px solid #f59e0b',
           borderRadius: t.radius, marginBottom: 8, flexShrink: 0,
         }}>
-          <span style={{ fontSize: 16 }}>⚠️</span>
+          <TriangleAlert size={17} />
           <div style={{ fontSize: 12, color: '#92400e', flex: 1 }}>
             <strong>Code source Odoo {activeVersion} non installé</strong> — les questions sur le code source ne fonctionneront pas.{' '}
             <Link to="/sources" style={{ color: '#b45309', fontWeight: 600 }}>Installer les sources →</Link>
@@ -909,7 +910,7 @@ export default function Assistant() {
         {messages.length === 0 && isGeneralMode && (
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '10px 14px', background: t.bgCard, border: '1px solid #6366f130', borderRadius: t.radiusLg }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#6366f115', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🌐</div>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#6366f115', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}><Globe2 size={18} /></div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Mode général — Odoo {generalVersion}</div>
                 {currentProv && (
@@ -941,7 +942,7 @@ export default function Assistant() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 {selectedProfile.company_logo
                   ? <img src={selectedProfile.company_logo} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, background: t.bgMuted, padding: 4, border: `1px solid ${t.border}`, flexShrink: 0 }} />
-                  : <div style={{ width: 40, height: 40, borderRadius: 8, background: t.brand20, border: `1px solid ${t.brand40}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🏢</div>
+                  : <div style={{ width: 40, height: 40, borderRadius: 8, background: t.brand20, border: `1px solid ${t.brand40}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.brand, flexShrink: 0 }}><Building2 size={20} /></div>
                 }
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 2 }}>{selectedProfile.name}</div>
@@ -962,7 +963,7 @@ export default function Assistant() {
                         color: sourcesInstalled ? t.success : '#b45309',
                         border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
                       }}>
-                        {sourcesInstalled ? `📁 Sources v${activeVersion} ✓` : `⚠ Sources v${activeVersion} manquantes`}
+                        {sourcesInstalled ? <><Database size={11} /> Sources v{activeVersion}</> : <><TriangleAlert size={11} /> Sources v{activeVersion} manquantes</>}
                       </span>
                     )}
                   </div>
@@ -1032,7 +1033,7 @@ export default function Assistant() {
                 </div>
                 <button className="btn btn-primary" onClick={() => resumeConv(conv)}
                   style={{ marginTop: 2, fontSize: 11, padding: '4px 10px' }}>
-                  ↩ Reprendre
+                  <History size={12} /> Reprendre
                 </button>
               </div>
             ))
@@ -1069,7 +1070,7 @@ export default function Assistant() {
                       cursor: !isAccessible ? 'not-allowed' : 'pointer',
                       opacity: !isAccessible ? 0.5 : 1,
                     }}>
-                    {!isAccessible ? '🔒 ' : ''}{c.name}
+                    {!isAccessible && <Lock size={11} />}{c.name}
                   </button>
                 )
               })}
@@ -1080,7 +1081,7 @@ export default function Assistant() {
                 background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: t.radius,
                 display: 'flex', alignItems: 'center', gap: 10,
               }}>
-                <span style={{ fontSize: 18 }}>🔒</span>
+                <Lock size={18} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>
                     Société inaccessible pour cet utilisateur
@@ -1143,7 +1144,7 @@ export default function Assistant() {
             onMouseEnter={e => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.12)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.filter = '' }}
           >
-            {streaming ? '⏹' : '↑'}
+            {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
           </button>
         </div>
       </div>
@@ -1205,7 +1206,7 @@ function EnvSelector({ profile, activeEnvId, onChange }: {
         {currentEnv.odoo_version && (
           <span style={{ fontSize: 9, opacity: 0.7 }}>v{currentEnv.odoo_version.split('.')[0]}</span>
         )}
-        <span style={{ fontSize: 9, opacity: 0.6 }}>▼</span>
+        <ChevronDown size={12} style={{ opacity: 0.6 }} />
       </button>
 
       {open && (
@@ -1254,7 +1255,7 @@ function EnvSelector({ profile, activeEnvId, onChange }: {
                     {env.odoo_version && ` · Odoo ${env.odoo_version}`}
                   </div>
                 </div>
-                {isActive && <span style={{ fontSize: 11, color: t.brand }}>✓</span>}
+                {isActive && <Check size={12} color={t.brand} />}
               </button>
             )
           })}
@@ -1304,7 +1305,7 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
         {currentModel?.recommended && (
           <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>
         )}
-        <span style={{ fontSize: 9, color: t.muted, marginLeft: 1 }}>▼</span>
+        <ChevronDown size={12} color={t.muted} style={{ marginLeft: 1 }} />
       </button>
 
       {open && (
@@ -1395,7 +1396,7 @@ function ModelDropdown({ provider, selected, onChange }: {
       }}>
         <span>{current.label}</span>
         {current.recommended && <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>}
-        <span style={{ fontSize: 9, color: t.muted, marginLeft: 2 }}>▼</span>
+        <ChevronDown size={12} color={t.muted} style={{ marginLeft: 2 }} />
       </button>
 
       {open && (
@@ -1483,7 +1484,7 @@ function VersionDropdown({ value, onChange, versions, sourcesStatus = {} }: {
             {currentC && currentE ? 'C+E' : currentC ? 'C' : 'E'}
           </span>
         )}
-        <span style={{ fontSize: 9, opacity: .6 }}>▼</span>
+        <ChevronDown size={12} style={{ opacity: .6 }} />
       </button>
       {open && (
         <div style={{

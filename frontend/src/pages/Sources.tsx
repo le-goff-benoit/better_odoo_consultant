@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Bot, CheckCircle2, ChevronDown, ChevronUp, Copy, Download, KeyRound, Loader2, Plus, RefreshCw, Square, Trash2, TriangleAlert } from 'lucide-react'
 import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates, checkSingleVersion } from '../api/client'
-import { t, btn } from '../theme'
+import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
+import { Badge, Card, StatusPill } from '../components/ui'
 
 // ── Version definitions ─────────────────────────────────────────
 
@@ -282,7 +284,7 @@ export default function Sources() {
           </div>
         ) : (
           <button className="btn btn-secondary" onClick={() => setShowAddForm(true)}>
-            + Version intermédiaire
+            <Plus size={15} /> Version intermédiaire
           </button>
         )}
       />
@@ -290,7 +292,7 @@ export default function Sources() {
       {/* SSH banner */}
       {sshLoading ? (
         <div style={{ ...bannerStyle(t.border), color: t.muted }}>
-          <span style={{ fontSize: 18, opacity: .5 }}>🔑</span>
+          <Loader2 size={18} style={{ animation: 'spin .9s linear infinite', opacity: .7 }} />
           <div>
             <strong style={{ color: t.muted }}>Vérification de la clé SSH…</strong>
             <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
@@ -300,7 +302,7 @@ export default function Sources() {
         </div>
       ) : sshOk ? (
         <div style={bannerStyle(t.success)}>
-          <span style={{ fontSize: 18 }}>🔑</span>
+          <KeyRound size={18} color={t.success} />
           <div>
             <strong style={{ color: t.text }}>Accès SSH GitHub disponible</strong>
             <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
@@ -343,7 +345,7 @@ export default function Sources() {
               : '100%'
 
           return (
-            <div key={version} style={{
+            <Card key={version} interactive style={{
               background: t.white,
               border: `1px solid ${
                 status === 'error' ? t.danger
@@ -385,10 +387,9 @@ export default function Sources() {
                     </div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {badge && (
-                        <span style={{
-                          fontSize: 11, fontWeight: 600, color: '#fff',
-                          background: badgeColor, borderRadius: 3, padding: '2px 8px',
-                        }}>{badge}</span>
+                        <Badge tone={badge === 'Stable' || badge === 'LTS' ? 'success' : 'brand'} style={{ color: badgeColor }}>
+                          {badge}
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -397,7 +398,7 @@ export default function Sources() {
                       <button onClick={() => removeCustomVersion(version)} style={{
                         background: 'none', border: 'none', color: t.muted, fontSize: 16,
                         cursor: 'pointer', padding: '2px 4px', lineHeight: 1,
-                      }} title="Retirer cette version">×</button>
+                      }} title="Retirer cette version"><Trash2 size={14} /></button>
                     )}
                     <StatusBadge status={status} isInstalled={isInstalled} loading={statusLoading} />
                   </div>
@@ -410,7 +411,7 @@ export default function Sources() {
                     color: status === 'error' ? t.danger : status === 'done' ? t.success : t.muted,
                     fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
-                    {status === 'running' ? `⟳ ${card.currentLabel}` : status === 'done' ? `✓ ${card.currentLabel}` : `✗ ${card.currentLabel}`}
+                    {status === 'running' ? card.currentLabel : status === 'done' ? card.currentLabel : card.currentLabel}
                   </div>
                 )}
 
@@ -447,8 +448,9 @@ export default function Sources() {
 
                 {/* Advanced toggle */}
                 <button onClick={() => setAdvanced(isOpen ? null : version)}
-                  style={{ background: 'none', border: 'none', color: t.action, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
-                  {isOpen ? '▲ Masquer options' : '▼ Options avancées'}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: t.action, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
+                  {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  {isOpen ? 'Masquer options' : 'Options avancées'}
                 </button>
 
                 {isOpen && (
@@ -463,8 +465,9 @@ export default function Sources() {
                 {/* Logs */}
                 {(card?.logs?.length ?? 0) > 0 && (
                   <button onClick={() => setCards(p => ({ ...p, [version]: { ...p[version], showLogs: !p[version]?.showLogs } }))}
-                    style={{ background: 'none', border: 'none', color: t.muted, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
-                    {card?.showLogs ? '▲ Masquer les logs' : `▼ Voir les logs (${card?.logs.length})`}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: t.muted, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
+                    {card?.showLogs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    {card?.showLogs ? 'Masquer les logs' : `Voir les logs (${card?.logs.length})`}
                   </button>
                 )}
                 {card?.showLogs && <LogBox logs={card.logs} />}
@@ -475,12 +478,15 @@ export default function Sources() {
                   onClick={() => status === 'running' ? abortRefs.current[version]?.abort() : startSync(version)}
                   style={btnDownload(status, isInstalled)}
                 >
-                  {status === 'running' ? '⏹ Annuler'
-                    : isInstalled ? '↺ Mettre à jour'
-                    : '⬇ Télécharger'}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginRight: 7, verticalAlign: '-2px' }}>
+                    {status === 'running' ? <Square size={13} /> : isInstalled ? <RefreshCw size={14} /> : <Download size={14} />}
+                  </span>
+                  {status === 'running' ? 'Annuler'
+                    : isInstalled ? 'Mettre à jour'
+                    : 'Télécharger'}
                 </button>
               </div>
-            </div>
+            </Card>
           )
         })}
       </div>
@@ -526,7 +532,9 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
     <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${t.border}` }}>
       {info.installed && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: entInfo?.installed ? 3 : 0 }}>
-          <span style={{ fontSize: 11, color: t.success, fontWeight: 600 }}>✓ Community</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: t.success, fontWeight: 700 }}>
+            <CheckCircle2 size={12} /> Community
+          </span>
           <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{info.head}</span>
           <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(info.date)}</span>
           {(info.behind ?? 0) > 0 && (
@@ -539,7 +547,9 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
       )}
       {entInfo?.installed && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'var(--brand, #017e84)', fontWeight: 600 }}>✓ Enterprise</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--brand, #017e84)', fontWeight: 700 }}>
+            <CheckCircle2 size={12} /> Enterprise
+          </span>
           <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{entInfo.head}</span>
           <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(entInfo.date)}</span>
           {(entInfo.behind ?? 0) > 0 && (
@@ -553,16 +563,18 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
         {(info.recent_commits?.length ?? 0) > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={onToggleCommits}>
-            {showCommits ? '▲ Masquer' : `▼ ${info.recent_commits!.length} commits`}
+            {showCommits ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            {showCommits ? 'Masquer' : `${info.recent_commits!.length} commits`}
           </button>
         )}
         {hasAiData && (
           <button className="btn btn-outline btn-sm" onClick={() => onAiSummary(buildPrefill())}>
-            ✦ IA — Résumé 30 j
+            <Bot size={13} /> Résumé 30 j
           </button>
         )}
         <button className="btn btn-ghost btn-sm" onClick={onCheckUpdates} disabled={checking} style={{ marginLeft: 'auto' }}>
-          {checking ? '⟳ Vérif…' : '↻ Vérifier'}
+          <RefreshCw size={13} style={checking ? { animation: 'spin .9s linear infinite' } : undefined} />
+          {checking ? 'Vérif…' : 'Vérifier'}
         </button>
       </div>
       {showCommits && info.recent_commits && (
@@ -605,21 +617,15 @@ function LogBox({ logs }: { logs: string[] }) {
 }
 
 function StatusBadge({ status, isInstalled, loading }: { status: CardState; isInstalled?: boolean; loading?: boolean }) {
-  if (loading) return (
-    <div style={{ width: 26, height: 26, borderRadius: '50%', background: t.borderLight, color: t.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, animation: 'spin .9s linear infinite', flexShrink: 0 }}>⟳</div>
-  )
-  const cfg: Record<CardState, { icon: string; bg: string; color: string }> = {
-    idle:    isInstalled ? { icon: '✓', bg: `${t.success}20`, color: t.success } : { icon: '○', bg: t.borderLight, color: t.muted },
-    running: { icon: '⟳',  bg: t.brand20, color: t.action },
-    done:    { icon: '✓',  bg: `${t.success}20`, color: t.success },
-    error:   { icon: '✗',  bg: `${t.danger}20`,  color: t.danger },
+  if (loading) return <StatusPill tone="running">Statut</StatusPill>
+  const cfg: Record<CardState, { tone: 'ok' | 'warning' | 'error' | 'idle' | 'running'; label: string }> = {
+    idle:    isInstalled ? { tone: 'ok', label: 'Installé' } : { tone: 'idle', label: 'Absent' },
+    running: { tone: 'running', label: 'En cours' },
+    done:    { tone: 'ok', label: 'À jour' },
+    error:   { tone: 'error', label: 'Erreur' },
   }
-  const { icon, bg, color } = cfg[status]
-  return (
-    <div style={{ width: 26, height: 26, borderRadius: '50%', background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0, animation: status === 'running' ? 'spin .9s linear infinite' : 'none' }}>
-      {icon}
-    </div>
-  )
+  const item = cfg[status]
+  return <StatusPill tone={item.tone}>{item.label}</StatusPill>
 }
 
 function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onRecheck }: {
@@ -629,7 +635,7 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
   return (
     <div style={{ ...bannerStyle(t.warning), flexDirection: 'column', gap: 0, marginBottom: 24 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        <span style={{ fontSize: 18, flexShrink: 0 }}>⚠</span>
+        <TriangleAlert size={19} color={t.warning} style={{ flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <strong style={{ color: t.text }}>Pas d'accès SSH GitHub</strong>
           <div style={{ fontSize: 12, color: t.muted, marginTop: 3 }}>
@@ -637,10 +643,16 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
           </div>
         </div>
         {sshStep === 'idle' && (
-          <button className="btn btn-primary" onClick={onGenerate}>{hasKeys ? 'Voir ma clé' : '+ Créer une clé SSH'}</button>
+          <button className="btn btn-primary" onClick={onGenerate}>
+            <KeyRound size={15} /> {hasKeys ? 'Voir ma clé' : 'Créer une clé SSH'}
+          </button>
         )}
       </div>
-      {sshStep === 'generating' && <div style={{ marginTop: 14, fontSize: 13, color: t.muted }}>⟳ Génération en cours…</div>}
+      {sshStep === 'generating' && (
+        <div style={{ marginTop: 14, fontSize: 13, color: t.muted, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Loader2 size={15} style={{ animation: 'spin .9s linear infinite' }} /> Génération en cours…
+        </div>
+      )}
       {sshStep === 'done' && (
         <div style={{ marginTop: 18, background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: '18px 20px' }}>
           <div style={{ fontWeight: 700, marginBottom: 16, color: t.text }}>Ajoutez la clé SSH à GitHub — 3 étapes</div>
@@ -649,7 +661,8 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
               <textarea readOnly value={publicKey} style={{ width: '100%', height: 70, resize: 'none', fontFamily: 'monospace', fontSize: 11, padding: '8px 10px', background: t.bgMuted, border: `1px solid ${t.border}`, borderRadius: t.radiusSm, color: t.text, boxSizing: 'border-box' }} />
               <button className="btn btn-primary btn-sm" onClick={onCopy}
                 style={{ position: 'absolute', top: 8, right: 8, background: copied ? t.success : undefined }}>
-                {copied ? '✓ Copié !' : 'Copier'}
+                {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+                {copied ? 'Copié' : 'Copier'}
               </button>
             </div>
           </SshStep>
@@ -659,7 +672,9 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
           <SshStep n={3} title={`Collez la clé et cliquez "Add SSH key"`}>
             <div style={{ fontSize: 12, color: t.muted, marginTop: 5 }}>Champ <strong>Title</strong> : <em>"Odoo Portal"</em> — champ <strong>Key</strong> : collez la clé copiée.</div>
           </SshStep>
-          <button className="btn btn-primary" onClick={onRecheck} style={{ marginTop: 6 }}>{"J'ai ajouté la clé — vérifier l'accès →"}</button>
+          <button className="btn btn-primary" onClick={onRecheck} style={{ marginTop: 6 }}>
+            <RefreshCw size={15} /> {"J'ai ajouté la clé - vérifier l'accès"}
+          </button>
         </div>
       )}
     </div>
@@ -696,4 +711,3 @@ function btnDownload(status: CardState, installed?: boolean): React.CSSPropertie
     borderRadius: t.radius, fontWeight: 600, fontSize: 13, cursor: 'pointer',
   }
 }
-

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Check, Database, Eye, EyeOff, FileText, FolderOpen, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, UserRound, X } from 'lucide-react'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { applyBrandColor, applyThemeMode } from '../App'
 import { WIDTH_OPTIONS, WIDTH_KEY, type ContentWidth } from '../components/Layout'
+import { Tabs } from '../components/ui'
 
 interface ProviderDef {
   id: string
@@ -89,34 +91,19 @@ type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage'
 export default function Settings() {
   const [tab, setTab] = useState<SettingsTab>('profile')
 
-  const tabs: { id: SettingsTab; label: string; icon: string }[] = [
-    { id: 'profile',   label: 'Profil',      icon: '👤' },
-    { id: 'api',       label: 'Clés API',    icon: '🔑' },
-    { id: 'context',   label: 'Contexte IA', icon: '📚' },
-    { id: 'interface', label: 'Interface',   icon: '🖥' },
-    { id: 'storage',   label: 'Stockage',    icon: '🗂' },
+  const tabs = [
+    { id: 'profile' as const,   label: 'Profil',      icon: <UserRound size={15} /> },
+    { id: 'api' as const,       label: 'Clés API',    icon: <KeyRound size={15} /> },
+    { id: 'context' as const,   label: 'Contexte IA', icon: <FileText size={15} /> },
+    { id: 'interface' as const, label: 'Interface',   icon: <LayoutPanelTop size={15} /> },
+    { id: 'storage' as const,   label: 'Stockage',    icon: <Database size={15} /> },
   ]
 
   return (
     <div style={{ maxWidth: 900 }}>
       <PageHeader title="Paramètres" />
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 28, borderBottom: `2px solid ${t.border}` }}>
-        {tabs.map(tb => (
-          <button key={tb.id} onClick={() => setTab(tb.id)} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '8px 16px', background: 'none', border: 'none',
-            borderBottom: `2px solid ${tab === tb.id ? `var(--brand, ${t.brand})` : 'transparent'}`,
-            marginBottom: -2, cursor: 'pointer',
-            fontSize: 13, fontWeight: tab === tb.id ? 700 : 400,
-            color: tab === tb.id ? `var(--brand, ${t.brand})` : t.muted,
-            transition: 'color .15s',
-          }}>
-            <span>{tb.icon}</span> {tb.label}
-          </button>
-        ))}
-      </div>
+      <Tabs items={tabs} value={tab} onChange={setTab} />
 
       {tab === 'profile' && (
         <section>
@@ -203,7 +190,7 @@ function StorageSection() {
           onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(0.93)')}
           onMouseLeave={e => (e.currentTarget.style.filter = '')}
         >
-          <span style={{ fontSize: 16 }}>📂</span> Ouvrir dans l'explorateur
+          <FolderOpen size={16} /> Ouvrir dans l'explorateur
         </button>
       </div>
 
@@ -395,7 +382,7 @@ function ApiSection() {
       {configuredList.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: t.success, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
-            ✓ Configurés ({configuredList.length})
+            Configurés ({configuredList.length})
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {configuredList.map(p => renderProvider(p, true))}
@@ -453,7 +440,7 @@ function ApiSection() {
                             background: t.warningBg, border: `1px solid ${t.warning}30`,
                             borderRadius: t.radiusSm, padding: '3px 8px', display: 'inline-block',
                           }}>
-                            ℹ {p.note}
+                            {p.note}
                           </div>
                         )}
                       </div>
@@ -469,17 +456,18 @@ function ApiSection() {
                           onClick={() => runTest(p.id)}
                           disabled={testing[p.id]}
                           style={{ ...btnOutline(p.color), background: testing[p.id] ? `${p.color}10` : 'transparent' }}>
-                          {testing[p.id] ? '⟳ Test en cours…' : '▶ Tester la connexion'}
+                          {testing[p.id] ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Settings2 size={13} />}
+                          {testing[p.id] ? 'Test en cours…' : 'Tester la connexion'}
                         </button>
                         {p.oauthFlow ? (
                           <button onClick={() => { startCopilotLogin(); setEditing(e => ({ ...e, [p.id]: true })) }}
                             style={btnOutline(t.brand)}>
-                            ↺ Reconnecter
+                            <RefreshCw size={13} /> Reconnecter
                           </button>
                         ) : (
                           <button onClick={() => setEditing(e => ({ ...e, [p.id]: true }))}
                             style={btnOutline(t.brand)}>
-                            ↺ Remplacer
+                            <RefreshCw size={13} /> Remplacer
                           </button>
                         )}
                         <button onClick={() => { del.mutate(p.id); setTestResult(r => ({ ...r, [p.id]: null })) }}
@@ -495,7 +483,7 @@ function ApiSection() {
                           color: testResult[p.id]!.ok ? t.success : t.danger,
                           fontWeight: 500,
                         }}>
-                          {testResult[p.id]!.ok ? '✓' : '✗'} {testResult[p.id]!.msg}
+                          {testResult[p.id]!.ok ? <Check size={13} /> : <X size={13} />} {testResult[p.id]!.msg}
                         </div>
                       )}
                     </div>
@@ -519,7 +507,7 @@ function ApiSection() {
                       ) : copilotFlow.status === 'error' ? (
                         <div>
                           <div style={{ padding: '8px 12px', borderRadius: t.radius, fontSize: 12, background: `${t.danger}10`, border: `1px solid ${t.danger}30`, color: t.danger, marginBottom: 8 }}>
-                            ✗ {copilotFlow.error}
+                            <X size={13} /> {copilotFlow.error}
                           </div>
                           <button onClick={() => { setCopilotFlow(null); setEditing(e => ({ ...e, [p.id]: false })) }}
                             style={btnOutline(t.muted)}>
@@ -577,7 +565,7 @@ function ApiSection() {
                           />
                           <button onClick={() => setShowKey(s => ({ ...s, [p.id]: !s[p.id] }))}
                             style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 12 }}>
-                            {showKey[p.id] ? '🙈' : '👁'}
+                            {showKey[p.id] ? <EyeOff size={14} /> : <Eye size={14} />}
                           </button>
                         </div>
                         <button
@@ -717,7 +705,7 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
                   color: on ? prov.color : t.muted,
                   cursor: 'pointer', transition: 'all .15s',
                 }}>
-                  <span style={{ fontSize: 10 }}>{on ? '✓' : '○'}</span>
+                  <span style={{ fontSize: 10 }}>{on ? <Check size={11} /> : null}</span>
                   {m.label}
                 </button>
               )
@@ -730,7 +718,8 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
           padding: '7px 18px', background: `var(--brand, ${t.brand})`, color: '#fff', border: 'none',
           borderRadius: t.radius, fontSize: 12, fontWeight: 600, cursor: 'pointer',
         }}>
-          {saved ? '✓ Enregistré' : 'Enregistrer'}
+          {saved ? <Check size={13} /> : null}
+          {saved ? 'Enregistré' : 'Enregistrer'}
         </button>
       </div>
     </div>
@@ -1103,7 +1092,7 @@ function StatusBadge({ configured }: { configured: boolean }) {
       border: `1px solid ${configured ? `${t.success}40` : t.border}`,
       flexShrink: 0,
     }}>
-      <span>{configured ? '✓' : '○'}</span>
+      <span>{configured ? <Check size={12} /> : null}</span>
       {configured ? 'Configurée' : 'Non configurée'}
     </div>
   )
@@ -1111,6 +1100,7 @@ function StatusBadge({ configured }: { configured: boolean }) {
 
 function btnOutline(color: string): React.CSSProperties {
   return {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
     padding: '5px 12px', background: 'transparent',
     border: `1px solid ${color}`, color,
     borderRadius: t.radius, fontSize: 12, cursor: 'pointer', fontWeight: 600,
