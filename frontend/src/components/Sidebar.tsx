@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink } from 'react-router-dom'
-import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings } from 'lucide-react'
+import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow } from 'lucide-react'
 import { t } from '../theme'
 import { getUserProfile } from '../api/client'
 import { APP_VERSION } from '../version'
@@ -10,6 +10,7 @@ const links = [
   { to: '/profiles',  label: 'Mes projets',  icon: FolderKanban },
   { to: '/assistant', label: 'Assistant IA', icon: Bot },
   { to: '/migration', label: 'Migration',    icon: ArrowRightLeft },
+  { to: '/how-it-works', label: 'Fonctionnement', icon: Workflow },
   { to: '/settings',  label: 'Paramètres',   icon: Settings },
   { to: '/about',     label: 'À propos',     icon: Info },
 ]

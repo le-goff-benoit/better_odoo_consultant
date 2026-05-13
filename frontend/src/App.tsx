@@ -12,6 +12,7 @@ const Query     = lazy(() => import('./pages/Query'))
 const History   = lazy(() => import('./pages/History'))
 const Settings  = lazy(() => import('./pages/Settings'))
 const About     = lazy(() => import('./pages/About'))
+const HowItWorks = lazy(() => import('./pages/HowItWorks'))
 
 export function applyBrandColor(color: string) {
   document.documentElement.style.setProperty('--brand', color)
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/query" element={<Query />} />
         <Route path="/history" element={<History />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/about" element={<About />} />
       </Routes>
       </Suspense>

@@ -5,7 +5,7 @@
 L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.18.0**
+> Version actuelle : **0.19.0**
 
 ---
 
@@ -13,6 +13,7 @@ L'Odoo Consultant Portal est une application web qui tourne sur votre machine. E
 
 - [Installation](#installation)
 - [Démarrage rapide](#démarrage-rapide)
+- [Comprendre le fonctionnement](#comprendre-le-fonctionnement)
 - [Guide d'utilisation](#guide-dutilisation)
   - [1. Configurer les sources Odoo](#1-configurer-les-sources-odoo)
   - [2. Ajouter un projet client](#2-ajouter-un-projet-client)
@@ -75,6 +76,24 @@ Voici le flux typique pour commencer à travailler sur un nouveau projet client 
 3. Mes projets  →  Créez un projet avec l'URL et les identifiants du client
 4. Assistant IA →  Posez vos premières questions sur les données du client
 ```
+
+---
+
+## Comprendre le fonctionnement
+
+La page **Fonctionnement** explique le flux complet de l'application sous forme d'un diagramme vertical, du haut vers le bas.
+
+Elle détaille comment le portail combine :
+- la **configuration utilisateur** : nom, poste, équipe, thème, couleur primaire et préférences d'interface ;
+- la **configuration des providers IA** : clés API, provider actif, modèle choisi et modèles activés/désactivés ;
+- la **perspective de réponse** : AM/BA pour une réponse métier, Archi/Dev pour une réponse technique ;
+- les **fichiers Markdown de contexte** : `skills.md`, `studio.md`, `migration.md`, `meeting-minute.md`, `odoo-*.md` ;
+- le **projet client** : environnement actif, société active, contexte projet et auto-complétion ;
+- les **sources Odoo locales** et le **repo custom client** ;
+- le **routeur de contexte**, qui sélectionne les sections utiles avant d'appeler le modèle IA ;
+- les **outils IA** : données live Odoo, lecture du code source, inspection Studio, comptage de lignes, etc.
+
+Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
 
 ---
 
@@ -270,7 +289,7 @@ Sans sources              Avec sources complètes
 
 ### Les trois couches de contexte
 
-L'assistant combine trois sources indépendantes. Elles sont **cumulatives** : chacune apporte quelque chose que les autres ne peuvent pas fournir.
+L'assistant combine plusieurs sources indépendantes. Elles sont **cumulatives** : chacune apporte quelque chose que les autres ne peuvent pas fournir.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -287,8 +306,18 @@ L'assistant combine trois sources indépendantes. Elles sont **cumulatives** : c
 │                      │    téléchargées           │    au projet              │
 ├──────────────────────┴───────────────────────────┴───────────────────────────┤
 │  + Contexte projet (notes libres injectées dans chaque prompt)               │
+│  + Fichiers Markdown routés selon la question                                │
+│  + Profil consultant et configuration provider / modèle IA                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+Le **routeur de contexte** évite d'envoyer tous les fichiers Markdown à chaque question. Il sélectionne les sections utiles selon le dernier message utilisateur, la perspective active, la version Odoo et le mode migration.
+
+Exemples :
+- une question sur les factures charge les sections comptabilité et diagnostics ;
+- une demande de compte-rendu charge `meeting-minute.md` ;
+- une question Studio charge `studio.md` ;
+- une question de migration charge `migration.md` et les notes de version pertinentes.
 
 ### Sources Odoo standard
 
@@ -342,11 +371,15 @@ Quand un dépôt est cloné et actif, le badge **✓ ⎇ nom-du-repo** s'affiche
 
 Le **contexte projet** est un champ texte libre sur chaque projet, injecté dans **tous les prompts** de ce projet. C'est l'endroit pour documenter ce que l'IA ne peut pas découvrir seule.
 
+Pour éviter qu'un contexte projet trop long écrase les autres sources, il dispose d'un budget dédié dans le prompt. Gardez-le structuré et centré sur ce qui est vrai pour le client.
+
 **Utiliser l'auto-complétion :**  
 Le bouton **✨ Auto-compléter** génère un contexte de base à partir des données du projet :
 - Version Odoo et modules installés
 - Nom de la société
 - Modules custom détectés dans le dépôt cloné (noms et descriptions des `__manifest__.py`)
+
+Le contexte généré distingue maintenant les **faits observés**, les **hypothèses raisonnables**, les **périmètres à prioriser**, les **customisations / intégrations**, les **risques** et les **questions ouvertes**.
 
 Ce contexte auto-généré est un **point de départ** — enrichissez-le avec ce que vous savez du projet.
 
@@ -425,6 +458,8 @@ Sources IA — checklist par environnement
 ─────────────────────────────────────────────────────────────
 [ ] Sources Odoo téléchargées      → page Sources, même version que le client
 [ ] Enterprise téléchargée         → si le client a Odoo Enterprise
+[ ] Profil consultant complété     → nom, poste, équipe, préférences utiles
+[ ] Providers IA configurés        → clés API, modèles pertinents activés
 [ ] Dépôt custom cloné             → si le client a des modules spécifiques
 [ ] Branche du dépôt = production  → pas develop/staging
 [ ] Dépôt à jour (pull récent)     → après chaque déploiement

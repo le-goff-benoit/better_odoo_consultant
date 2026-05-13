@@ -89,7 +89,9 @@ def _markdown_sections(content: str) -> list[tuple[str, str, int]]:
     """Split a markdown document by level-2/level-3 headings.
 
     Returns (heading, markdown_chunk, level). Text before the first level-2 heading is
-    attached to the first section so the document title is preserved.
+    attached to the first section so the document title is preserved. A section keeps
+    its nested lower-level headings, so selecting a level-2 heading also keeps its
+    level-3 operational details.
     """
     matches = list(_HEADING_RE.finditer(content))
     if not matches:
@@ -98,9 +100,14 @@ def _markdown_sections(content: str) -> list[tuple[str, str, int]]:
     sections: list[tuple[str, str, int]] = []
     preamble = content[:matches[0].start()].strip()
     for idx, match in enumerate(matches):
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(content)
         heading = match.group(2).strip()
         level = len(match.group(1))
+        end = len(content)
+        for next_match in matches[idx + 1:]:
+            next_level = len(next_match.group(1))
+            if next_level <= level:
+                end = next_match.start()
+                break
         chunk = content[match.start():end].strip()
         if idx == 0 and preamble:
             chunk = f"{preamble}\n\n{chunk}"

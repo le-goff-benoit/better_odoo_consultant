@@ -601,7 +601,12 @@ async def auto_fill_context(profile_id: int, session: AsyncSession = Depends(get
     except Exception:
         pass
 
-    prompt = f"""Tu es un assistant expert Odoo. Génère un fichier de contexte concis pour ce projet client.
+    prompt = f"""Tu es un assistant expert Odoo. Génère un fichier de contexte projet concis, structuré et directement exploitable par un autre assistant IA.
+
+Objectif du contexte :
+- Orienter les futures réponses IA vers la réalité du projet client.
+- Éviter les hallucinations en distinguant faits observés, hypothèses et informations manquantes.
+- Donner assez de contexte métier pour choisir entre standard Odoo, configuration, Studio et développement custom.
 
 Données du projet :
 - Nom du projet : {profile.name}
@@ -611,14 +616,45 @@ Données du projet :
 - Sociétés détectées : {companies_str or "inconnue"}
 - Modules installés : {apps_list or "inconnus"}{repo_info}
 
-Génère un contexte structuré avec les sections suivantes (en français, concis, bulletpoints) :
-1. **Présentation du client** — 2-3 lignes sur l'activité probable de l'entreprise (base-toi sur le nom, la ville, les modules)
-2. **Modules clés** — liste les modules principaux et leur usage probable chez ce client{", en incluant les modules custom du dépôt" if repo_info else ""}
-3. **Modules custom** — {"décris brièvement chaque module custom trouvé dans le dépôt (nom, rôle probable d'après le manifest)" if repo_info else "section vide — aucun dépôt cloné"}
-4. **Points d'attention** — risques, particularités, ou points à vérifier pour ce type de client
-5. **Notes consultant** — section vide à compléter manuellement
+Format obligatoire (Markdown, français, bulletpoints courts) :
+## Faits observés
+- Client / société :
+- Version / environnement :
+- Sociétés détectées :
+- Modules installés significatifs :
+- Dépôts ou modules custom détectés :
 
-Sois factuel. Si tu ne sais pas, indique-le clairement. Ne pas inventer."""
+## Hypothèses raisonnables
+- Activité probable :
+- Processus métier probablement critiques :
+- Rôles utilisateurs probablement concernés :
+
+## Modules et périmètres à prioriser
+| Domaine | Modules / indices | Pourquoi c'est prioritaire | À vérifier |
+|---|---|---|---|
+
+## Customisations et intégrations
+- Modules custom :
+- Champs / modèles / vues Studio à rechercher :
+- Intégrations externes à confirmer :
+
+## Risques et points d'attention
+- Données :
+- Sécurité / droits :
+- Performance :
+- Migration / montée de version :
+
+## Questions ouvertes pour le consultant
+- [ ] ...
+
+## Notes consultant
+- À compléter manuellement.
+
+Règles :
+- Ne pas inventer de fait. Si tu déduis quelque chose, mets-le dans **Hypothèses raisonnables**.
+- Si une information manque, écris `À vérifier` ou `Inconnu`.
+- Ne mentionne pas de module custom qui n'apparaît pas dans les manifests fournis.
+- Garde le contexte court : environ 80 lignes maximum."""
 
     # Find a working AI key
     from ..routes.ai import _ai_key, _exchange_copilot_token

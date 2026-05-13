@@ -6,10 +6,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.18.0',
+    version: '0.19.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Nouvelle page Fonctionnement : diagramme vertical du flux complet entre config utilisateur, providers IA, Markdown, sources Odoo, repos client, routeur de contexte, outils et réponse finale',
+      'Menu latéral : nouvelle entrée Fonctionnement pour expliquer l’architecture d’usage sans mélanger avec le changelog À propos',
+      'Routeur de contexte IA : sélection plus fine des sections Markdown utiles selon la demande, avec conservation des sous-sections opérationnelles',
+      'Contexte projet : auto-complétion restructurée en faits observés, hypothèses, périmètres prioritaires, risques et questions ouvertes',
+      'Qualité prompt : troncature dédiée du contexte projet pour éviter qu’il écrase les autres sources dans les prompts IA',
+    ],
+  },
+  {
+    version: '0.18.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Assistant IA & Migration : liste des modèles synchronisée avec les préférences des Paramètres — les modèles désactivés disparaissent du sélecteur en temps réel',
       'Refactorisation : PROVIDERS importé depuis constants/providers dans Assistant.tsx, suppression de la liste locale obsolète (−136 lignes)',

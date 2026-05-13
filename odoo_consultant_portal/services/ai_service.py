@@ -393,12 +393,19 @@ COPILOT_HEADERS         = {
 # ── System prompt ────────────────────────────────────────────────
 
 _MAX_CONTEXT_CHARS = 40_000  # ~10k tokens — prevents hitting model limits
+_MAX_PROJECT_CONTEXT_CHARS = 12_000
 
 
 def _trim_context(ctx: str) -> str:
     if len(ctx) <= _MAX_CONTEXT_CHARS:
         return ctx
     return ctx[:_MAX_CONTEXT_CHARS] + "\n\n[...contexte tronqué — trop long pour le modèle...]"
+
+
+def _trim_project_context(ctx: str) -> str:
+    if len(ctx) <= _MAX_PROJECT_CONTEXT_CHARS:
+        return ctx
+    return ctx[:_MAX_PROJECT_CONTEXT_CHARS] + "\n\n[...contexte projet tronqué — trop long pour le modèle...]"
 
 
 # ── Perspective (functional / technical) ─────────────────────────
@@ -1355,7 +1362,7 @@ async def stream_chat(
                 f"- Société : {profile.company_name or 'inconnue'}\n- Société active (filtre) : {active_company_name}"
             )
         if getattr(profile, "project_context", None):
-            system += f"\n\n---\n## Contexte projet\n{profile.project_context}\n"
+            system += f"\n\n---\n## Contexte projet\n{_trim_project_context(profile.project_context.strip())}\n"
         if user_ctx:
             system = user_ctx + system
         tools_c  = TOOLS_CLAUDE
