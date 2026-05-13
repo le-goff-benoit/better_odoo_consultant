@@ -6,14 +6,28 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.17.0',
+    version: '0.18.0',
     date: '2026-05-13',
     badge: 'Actuel',
     badgeColor: t.brand,
     items: [
+      'Assistant IA & Migration : liste des modèles synchronisée avec les préférences des Paramètres — les modèles désactivés disparaissent du sélecteur en temps réel',
+      'Refactorisation : PROVIDERS importé depuis constants/providers dans Assistant.tsx, suppression de la liste locale obsolète (−136 lignes)',
+    ],
+  },
+  {
+    version: '0.17.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
       "Mascotte de réflexion personnalisable : choix entre Robot, Chat ou Chien animé affiché pendant les réponses IA (8 modes d'animation aléatoires : idle, thinking, excited, searching, found, working, surprised, sleepy)",
       'Couleur de la mascotte configurable : 8 presets + color picker libre depuis le profil utilisateur',
       "La mascotte s'applique simultanément sur les pages Assistant et Migration",
+      'Gamme OpenAI complète : GPT-5.5, GPT-5.5 Pro, GPT-5.4, GPT-5.4 Pro, GPT-5.4 mini, GPT-5.4 nano, GPT-5.3 Codex, GPT-4.1, GPT-4.1 mini, o4-mini, o3, o3-mini (13 modèles)',
+      'GitHub Models : 20 modèles — GPT-5, o3/o4-mini, Llama 4, Grok-3, DeepSeek R1, Phi-4 et plus',
+      'Paramètres : la liste ALL_MODELS dérivée dynamiquement depuis providers.ts (plus de doublon figé)',
+      'Code splitting : pages chargées en lazy + manualChunks vendor (chunk max 163 kB contre 534 kB avant)',
     ],
   },
   {
