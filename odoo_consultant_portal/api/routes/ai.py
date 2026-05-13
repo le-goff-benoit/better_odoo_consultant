@@ -250,10 +250,15 @@ class ChatRequest(BaseModel):
     profile_id: Optional[int] = None   # None → general mode
     company_id: Optional[int] = None   # restrict queries to this company
     active_env_id: Optional[str] = None  # per-conversation env override
-    version: Optional[str] = None      # Odoo version for general mode
+    version: Optional[str] = None      # Odoo version for general mode / migration source
     messages: list[ChatMessage]
     attachments: list[ChatAttachment] = Field(default_factory=list)
     model: Optional[str] = None
+    # Migration mode
+    migration_mode: bool = False
+    target_version: Optional[str] = None      # standalone target version
+    target_profile_id: Optional[int] = None   # target from a project environment
+    target_env_id: Optional[str] = None
 
 
 _ATTACHMENT_MAX_FILES = 5
@@ -390,7 +395,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     except Exception:
         pass
 
-    # ── General mode (no profile) ──────────────────────────────────
+    # ── General / Migration mode (no profile) ─────────────────────
     if req.profile_id is None:
         version = req.version or "?"
         source_path: Optional[str] = None
@@ -399,9 +404,22 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             source_path = candidate
         context_md = load_context_for_prompt(version)
 
+        # Migration target resolution
+        _gen_target_path = None
+        _gen_target_ver = req.target_version
+        if req.migration_mode and _gen_target_ver:
+            _tgt_c = str(Path.home() / ".odoo-consultant" / "sources" / _gen_target_ver)
+            if _os.path.isdir(_tgt_c):
+                _gen_target_path = _tgt_c
+        if req.migration_mode:
+            from ...services.context_service import load_context_for_prompt as _lcfp2
+            _migration_ctx2 = _lcfp2("migration")
+            if _migration_ctx2:
+                context_md = (_migration_ctx2 + "\n\n---\n\n" + context_md).strip()
+
         async def generate_general():
             try:
-                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile):
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver):
                     yield _sse(evt)
             except Exception as exc:
                 yield _sse({"type": "error", "msg": str(exc)})
@@ -475,11 +493,37 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         if _repo_local.is_dir() and (_repo_local / ".git").exists():
             repo_path = str(_repo_local)
 
+    # Resolve migration target path
+    target_path = None
+    _target_version = req.target_version
+    if req.migration_mode:
+        if _target_version:
+            _tgt_candidate = str(Path.home() / ".odoo-consultant" / "sources" / _target_version)
+            if _os.path.isdir(_tgt_candidate):
+                target_path = _tgt_candidate
+        elif req.target_profile_id:
+            _tgt_profile = await session.get(Profile, req.target_profile_id)
+            if _tgt_profile:
+                from ...services.profile_manager import get_active_env_from_json as _gaej
+                _tgt_fallback = {"odoo_version": _tgt_profile.odoo_version}
+                _tgt_env = _gaej(_tgt_profile.environments, req.target_env_id or _tgt_profile.active_env_id, _tgt_fallback)
+                _tgt_ver = _tgt_env.get("odoo_version") or _tgt_profile.odoo_version
+                if _tgt_ver:
+                    _target_version = _tgt_ver
+                    _tgt_c = str(Path.home() / ".odoo-consultant" / "sources" / _tgt_ver)
+                    if _os.path.isdir(_tgt_c):
+                        target_path = _tgt_c
+
     context_md = load_context_for_prompt(_version_to_use)
+    if req.migration_mode:
+        from ...services.context_service import load_context_for_prompt as _lcfp
+        _migration_ctx = _lcfp("migration")
+        if _migration_ctx:
+            context_md = (_migration_ctx + "\n\n---\n\n" + context_md).strip()
 
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

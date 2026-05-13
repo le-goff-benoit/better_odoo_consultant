@@ -239,6 +239,57 @@ REPO_FUNCTION_DECLARATIONS = [
      }}},
 ]
 
+# ── Migration target tool schemas ─────────────────────────────────
+
+_TOOL_SEARCH_TARGET = {
+    "name": "search_target_source",
+    "description": (
+        "Rechercher dans le code source Odoo de la VERSION CIBLE de la migration. "
+        "Utilise cet outil pour comparer l'implémentation dans la version d'arrivée : "
+        "vérifier si un modèle/champ/méthode a changé, été supprimé ou renommé. "
+        "Retourne les lignes correspondantes avec fichier et numéro de ligne."
+    ),
+}
+_TOOL_READ_TARGET = {
+    "name": "read_target_file",
+    "description": (
+        "Lire le contenu d'un fichier du code source de la VERSION CIBLE de la migration. "
+        "Utilise après search_target_source pour voir l'implémentation complète dans la version d'arrivée."
+    ),
+}
+
+TARGET_TOOLS_CLAUDE = [
+    {**_TOOL_SEARCH_TARGET, "input_schema": {"type": "object", "required": ["pattern"], "properties": {
+        "pattern":    {"type": "string", "description": "Texte ou regex à chercher dans la version cible"},
+        "path":       {"type": "string", "description": "Sous-dossier optionnel", "default": ""},
+        "file_types": {"type": "array",  "items": {"type": "string"}, "default": ["*.py"]},
+    }}},
+    {**_TOOL_READ_TARGET, "input_schema": {"type": "object", "required": ["path"], "properties": {
+        "path":       {"type": "string",  "description": "Chemin relatif depuis la racine des sources cibles"},
+        "start_line": {"type": "integer", "default": 1},
+        "end_line":   {"type": "integer", "default": 0},
+    }}},
+]
+TARGET_TOOLS_OPENAI = [
+    {"type": "function", "function": {**_TOOL_SEARCH_TARGET, "parameters": {"type": "object", "required": ["pattern"], "properties": {
+        "pattern": {"type": "string"}, "path": {"type": "string", "default": ""},
+        "file_types": {"type": "array", "items": {"type": "string"}, "default": ["*.py"]},
+    }}}},
+    {"type": "function", "function": {**_TOOL_READ_TARGET, "parameters": {"type": "object", "required": ["path"], "properties": {
+        "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0},
+    }}}},
+]
+TARGET_FUNCTION_DECLARATIONS = [
+    {"name": "search_target_source", "description": _TOOL_SEARCH_TARGET["description"],
+     "parameters": {"type": "object", "required": ["pattern"], "properties": {
+         "pattern": {"type": "string"}, "path": {"type": "string"}, "file_types": {"type": "array"},
+     }}},
+    {"name": "read_target_file", "description": _TOOL_READ_TARGET["description"],
+     "parameters": {"type": "object", "required": ["path"], "properties": {
+         "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"},
+     }}},
+]
+
 DEFAULT_MODELS = {
     "claude":   "claude-sonnet-4-6",
     "openai":   "gpt-4o",
@@ -326,6 +377,63 @@ Modèles Odoo fréquents (noms peuvent varier selon la version) :
 - Routes stock         : stock.route (anciennement stock.location.route avant v16)
 - Règles de réapprovisionnement : stock.warehouse.orderpoint
 - Mouvements de stock  : stock.move
+{chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
+"""
+
+
+def build_system_migration(
+    source_version: str,
+    target_version: str,
+    source_path: Optional[str] = None,
+    target_path: Optional[str] = None,
+    context_md: str = "",
+    repo_path: Optional[str] = None,
+) -> str:
+    src_section = (
+        f"Sources Odoo VERSION SOURCE ({source_version}) disponibles : {source_path}\n"
+        "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source."
+    ) if source_path else f"Sources Odoo VERSION SOURCE ({source_version}) : non disponibles (téléchargez-les depuis la page Sources)."
+
+    tgt_section = (
+        f"Sources Odoo VERSION CIBLE ({target_version}) disponibles : {target_path}\n"
+        "→ Utilise search_target_source / read_target_file pour explorer le code de la version cible."
+    ) if target_path else f"Sources Odoo VERSION CIBLE ({target_version}) : non disponibles (téléchargez-les depuis la page Sources)."
+
+    repo_section = (
+        f"\nCode source du projet client disponible : {repo_path}\n"
+        "→ Utilise search_project_source / read_project_file pour explorer les modules custom.\n"
+        "Pour lister les modules custom : search_project_source(pattern='name', file_types=['__manifest__.py'])\n"
+    ) if repo_path else ""
+
+    return f"""Tu es un expert Odoo spécialisé dans les migrations de version. Tu aides le consultant à préparer, analyser et exécuter une migration Odoo.
+
+## Contexte de migration
+- Version SOURCE : {source_version}
+- Version CIBLE  : {target_version}
+
+## Sources disponibles
+{src_section}
+
+{tgt_section}
+{repo_section}
+## Ton rôle
+- Comparer les implémentations source et cible pour identifier les changements breaking
+- Analyser l'impact sur les modules custom du projet (si fournis)
+- Identifier les champs, méthodes et modèles supprimés, renommés ou modifiés entre les deux versions
+- Proposer les adaptations nécessaires (scripts de migration, modifications de code)
+- Expliquer les nouvelles fonctionnalités disponibles dans la version cible
+
+## Méthode de travail
+1. Pour chaque point analysé, cherche d'abord dans la VERSION SOURCE avec search_odoo_source
+2. Cherche ensuite le même élément dans la VERSION CIBLE avec search_target_source
+3. Compare et explique les différences
+4. Si des modules custom sont disponibles, vérifie leur compatibilité avec la version cible
+
+## Instructions
+- Utilise SYSTÉMATIQUEMENT les outils de recherche avant de répondre — ne suppose jamais un comportement
+- Présente les comparaisons sous forme de tableaux (Source | Cible | Impact)
+- Signale clairement les breaking changes avec ⚠️
+- Réponds dans la langue de l'utilisateur (français si l'utilisateur écrit en français)
 {chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
 """
 
@@ -446,7 +554,7 @@ async def _read_odoo_file(args: dict, source_path: str) -> dict:
 
 # ── Tool executor ────────────────────────────────────────────────
 
-async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None, repo_path: Optional[str] = None) -> dict:
+async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None, repo_path: Optional[str] = None, target_path: Optional[str] = None) -> dict:
     loop = asyncio.get_event_loop()
     try:
         if name == "query_odoo":
@@ -494,6 +602,16 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
                 return {"ok": False, "error": "Code source du projet non disponible"}
             return await _read_odoo_file(args, repo_path)
 
+        elif name == "search_target_source":
+            if not target_path:
+                return {"ok": False, "error": "Sources de la version cible non disponibles — téléchargez-les depuis la page Sources"}
+            return await _search_odoo_source(args, target_path)
+
+        elif name == "read_target_file":
+            if not target_path:
+                return {"ok": False, "error": "Sources de la version cible non disponibles"}
+            return await _read_odoo_file(args, target_path)
+
         return {"ok": False, "error": f"Outil inconnu: {name}"}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
@@ -501,7 +619,7 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
 
 # ── Claude ───────────────────────────────────────────────────────
 
-async def _chat_claude(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
+async def _chat_claude(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
     try:
         import anthropic
     except ImportError:
@@ -531,7 +649,7 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
             for block in response.content:
                 if block.type == "tool_use":
                     yield {"type": "tool_call", "name": block.name, "args": block.input}
-                    result = await _run_tool(block.name, block.input, odoo, source_path, repo_path)
+                    result = await _run_tool(block.name, block.input, odoo, source_path, repo_path, target_path)
                     yield {"type": "tool_result", "name": block.name, **result}
                     tool_results.append({
                         "type": "tool_result",
@@ -551,7 +669,7 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
 
 # ── OpenAI (shared logic for OpenAI + GitHub Models + Copilot) ───
 
-async def _chat_openai_client(client, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
+async def _chat_openai_client(client, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
     if tools is None:
         tools = TOOLS_OPENAI
     oai_msgs = [{"role": "system", "content": system}] + messages
@@ -569,7 +687,7 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
             for tc in choice.message.tool_calls:
                 args = json.loads(tc.function.arguments)
                 yield {"type": "tool_call", "name": tc.function.name, "args": args}
-                result = await _run_tool(tc.function.name, args, odoo, source_path, repo_path)
+                result = await _run_tool(tc.function.name, args, odoo, source_path, repo_path, target_path)
                 yield {"type": "tool_result", "name": tc.function.name, **result}
                 oai_msgs.append({
                     "role": "tool", "tool_call_id": tc.id,
@@ -582,29 +700,29 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
 
 
-async def _chat_openai(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
+async def _chat_openai(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
     try:
         import openai
     except ImportError:
         yield {"type": "error", "msg": "Package 'openai' non installé. Lancez : pip install openai"}
         return
     client = openai.AsyncOpenAI(api_key=api_key)
-    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path):
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path, target_path):
         yield evt
 
 
-async def _chat_github(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
+async def _chat_github(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
     try:
         import openai
     except ImportError:
         yield {"type": "error", "msg": "Package 'openai' non installé."}
         return
     client = openai.AsyncOpenAI(api_key=api_key, base_url=GITHUB_MODELS_BASE_URL)
-    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path):
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path, target_path):
         yield evt
 
 
-async def _chat_copilot(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
+async def _chat_copilot(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
     try:
         import openai
     except ImportError:
@@ -615,13 +733,13 @@ async def _chat_copilot(api_key: str, model_id: str, system: str, messages: list
         base_url=COPILOT_BASE_URL,
         default_headers=COPILOT_HEADERS,
     )
-    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path):
+    async for evt in _chat_openai_client(client, model_id, system, messages, odoo, source_path, tools, repo_path, target_path):
         yield evt
 
 
 # ── Gemini ───────────────────────────────────────────────────────
 
-async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None) -> AsyncIterator[dict]:
+async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
     try:
         import google.generativeai as genai
     except ImportError:
@@ -658,7 +776,7 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
             fc = part.function_call
             args = dict(fc.args)
             yield {"type": "tool_call", "name": fc.name, "args": args}
-            result = await _run_tool(fc.name, args, odoo, source_path, repo_path)
+            result = await _run_tool(fc.name, args, odoo, source_path, repo_path, target_path)
             yield {"type": "tool_result", "name": fc.name, **result}
             last_msg = genai.protos.Content(parts=[genai.protos.Part(
                 function_response=genai.protos.FunctionResponse(
@@ -690,6 +808,9 @@ async def stream_chat(
     user_profile: Optional[dict] = None,
     active_company_name: Optional[str] = None,
     repo_path: Optional[str] = None,
+    target_path: Optional[str] = None,
+    migration_mode: bool = False,
+    target_version: Optional[str] = None,
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
 
@@ -705,7 +826,16 @@ async def stream_chat(
         if parts:
             user_ctx = "\n".join(parts) + "\n"
 
-    if profile is not None:
+    if migration_mode:
+        src_ver = version or (profile.odoo_version if profile else "?")
+        tgt_ver = target_version or "?"
+        system  = build_system_migration(src_ver, tgt_ver, source_path, target_path, context_md, repo_path)
+        if user_ctx:
+            system = user_ctx + system
+        tools_c = TOOLS_CLAUDE_SRC
+        tools_o = TOOLS_OPENAI_SRC
+        tools_g = TOOLS_GEMINI_SRC
+    elif profile is not None:
         system   = build_system(profile, source_path, context_md, repo_path)
         if active_company_name:
             system = system.replace(
@@ -733,20 +863,26 @@ async def stream_chat(
         tools_o = tools_o + REPO_TOOLS_OPENAI
         tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + REPO_FUNCTION_DECLARATIONS}]
 
+    # Append target source tools in migration mode
+    if target_path:
+        tools_c = tools_c + TARGET_TOOLS_CLAUDE
+        tools_o = tools_o + TARGET_TOOLS_OPENAI
+        tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + TARGET_FUNCTION_DECLARATIONS}]
+
     if provider == "claude":
-        async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path):
+        async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path, target_path):
             yield evt
     elif provider == "openai":
-        async for evt in _chat_openai(api_key, model, system, messages, odoo, source_path, tools_o, repo_path):
+        async for evt in _chat_openai(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
             yield evt
     elif provider == "gemini":
-        async for evt in _chat_gemini(api_key, model, system, messages, odoo, source_path, tools_g, repo_path):
+        async for evt in _chat_gemini(api_key, model, system, messages, odoo, source_path, tools_g, repo_path, target_path):
             yield evt
     elif provider == "github":
-        async for evt in _chat_github(api_key, model, system, messages, odoo, source_path, tools_o, repo_path):
+        async for evt in _chat_github(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
             yield evt
     elif provider == "copilot":
-        async for evt in _chat_copilot(api_key, model, system, messages, odoo, source_path, tools_o, repo_path):
+        async for evt in _chat_copilot(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
             yield evt
     else:
         yield {"type": "error", "msg": f"Fournisseur inconnu : {provider}"}
