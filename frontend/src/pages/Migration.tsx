@@ -23,7 +23,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { resolvePerspective, routedContextFiles } from '../utils/aiContext'
+import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -1189,7 +1189,7 @@ export default function Migration() {
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
-  const perspective = resolvePerspective(perspectiveMode, perspectivePrompt, 'developer')
+  const perspective = useResolvedPerspective(perspectiveMode, perspectivePrompt, 'developer')
 
   const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id ?? null
 

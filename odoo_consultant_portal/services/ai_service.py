@@ -414,18 +414,37 @@ def _trim_project_context(ctx: str) -> str:
     return ctx[:_MAX_PROJECT_CONTEXT_CHARS] + "\n\n[...contexte projet tronqué — trop long pour le modèle...]"
 
 
-# ── Perspective (functional / technical) ─────────────────────────
+# ── Perspective (4 roles: support / BA / architect / developer) ──
+#
+# Legacy values "technical" and "functional" remain accepted for
+# backwards compatibility (older clients, stored prompts) and are
+# mapped to the closest new role.
 
-PERSPECTIVE_TECHNICAL = "technical"
-PERSPECTIVE_FUNCTIONAL = "functional"
-_VALID_PERSPECTIVES = {PERSPECTIVE_TECHNICAL, PERSPECTIVE_FUNCTIONAL}
+PERSPECTIVE_SUPPORT = "support"
+PERSPECTIVE_BA = "business_analyst"
+PERSPECTIVE_ARCHITECT = "architect"
+PERSPECTIVE_DEVELOPER = "developer"
+
+# Kept for backwards-compat in call sites and tests.
+PERSPECTIVE_TECHNICAL = PERSPECTIVE_DEVELOPER
+PERSPECTIVE_FUNCTIONAL = PERSPECTIVE_BA
+
+_VALID_PERSPECTIVES = {
+    PERSPECTIVE_SUPPORT, PERSPECTIVE_BA, PERSPECTIVE_ARCHITECT, PERSPECTIVE_DEVELOPER,
+}
+_LEGACY_PERSPECTIVE_ALIASES = {
+    "technical": PERSPECTIVE_DEVELOPER,
+    "functional": PERSPECTIVE_BA,
+}
 _VALID_RESPONSE_LANGUAGES = {"auto", "fr", "en"}
 
 
 def _normalize_perspective(p: Optional[str]) -> str:
     if p in _VALID_PERSPECTIVES:
         return p  # type: ignore[return-value]
-    return PERSPECTIVE_TECHNICAL
+    if p in _LEGACY_PERSPECTIVE_ALIASES:
+        return _LEGACY_PERSPECTIVE_ALIASES[p]
+    return PERSPECTIVE_DEVELOPER
 
 
 def _normalize_response_language(language: Optional[str]) -> str:
@@ -436,18 +455,40 @@ def _normalize_response_language(language: Optional[str]) -> str:
 
 # ── History trimming ─────────────────────────────────────────
 
+def _is_orphan_tool_message(msg: dict) -> bool:
+    """Return True if *msg* is a tool_result/tool message that cannot stand
+    alone — its matching assistant `tool_use` block was dropped by trimming,
+    and providers will reject the request with a 400 if we keep it.
+
+    Handles both message shapes:
+    - Anthropic: `{"role": "user", "content": [{"type": "tool_result", ...}]}`
+    - OpenAI:    `{"role": "tool", "tool_call_id": "..."}`
+    """
+    role = msg.get("role")
+    if role == "tool":
+        return True
+    if role == "user":
+        content = msg.get("content")
+        if isinstance(content, list) and content:
+            first = content[0]
+            if isinstance(first, dict) and first.get("type") == "tool_result":
+                return True
+    return False
+
+
 def _trim_history(messages: list) -> list:
     """Drop oldest conversation turns to stay within _MAX_HISTORY_TURNS pairs.
 
     Always keeps the most recent turns. After trimming, ensures the first
-    retained message has role == 'user' (providers require alternating roles
-    starting with 'user').
+    retained message is a genuine user turn — not an orphan tool_result whose
+    matching `tool_use` block has been dropped, which would otherwise trigger
+    a 400 from Anthropic / OpenAI.
     """
     if len(messages) <= _MAX_HISTORY_TURNS * 2:
         return messages
-    trimmed = messages[-(  _MAX_HISTORY_TURNS * 2):]
-    # Ensure we start on a user turn
-    while trimmed and trimmed[0].get("role") != "user":
+    trimmed = messages[-(_MAX_HISTORY_TURNS * 2):]
+    # Drop leading non-user turns AND orphan tool_result user turns.
+    while trimmed and (trimmed[0].get("role") != "user" or _is_orphan_tool_message(trimmed[0])):
         trimmed = trimmed[1:]
     return trimmed
 
@@ -491,85 +532,138 @@ def _language_block(response_language: Optional[str]) -> str:
 """
 
 
-def _perspective_block(perspective: str, *, migration: bool = False) -> str:
-    """Return a markdown block injected at the top of the system prompt
-    to bias the assistant's reasoning, vocabulary and output format."""
-    perspective = _normalize_perspective(perspective)
+_PERSPECTIVE_BLOCKS: dict[str, str] = {
+    PERSPECTIVE_SUPPORT: """## Perspective : SUPPORT (Run / Incident)
 
-    if perspective == PERSPECTIVE_FUNCTIONAL:
-        common = """## Perspective : FONCTIONNELLE (AM / Business Analyst)
+Tu réponds comme un **consultant support Odoo expérimenté** chargé de débloquer un utilisateur ou de diagnostiquer un incident en production.
 
-Tu réponds comme un **Application Manager / Business Analyst Odoo**, pas comme un développeur.
-Cette perspective est active pour la requête en cours : si l'utilisateur vient de basculer depuis le mode technique, adapte immédiatement la réponse au vocabulaire métier.
+### Public cible
+- Key users bloqués, équipe support N1/N2, oncall.
+- Ils ont besoin d'une réponse **immédiatement actionnable**, pas d'une analyse théorique.
 
-### Public cible de tes réponses
-- Consultants fonctionnels, key users, sponsors métier, chefs de projet.
-- Ils ne lisent pas de code Python ni de XML brut.
-- La réponse doit rester exploitable sans connaître l'ORM Odoo.
-
-### Ce sur quoi tu dois te concentrer
-- **Parcours utilisateur** : qui clique où, dans quel écran, pour obtenir quoi.
-- **Processus métier** : ventes, achats, stock, finance, RH, projet… end-to-end.
-- **Configuration fonctionnelle** : modules à activer, paramètres clés, règles, automatisations standard.
-- **Impact sur les rôles** (commercial, comptable, magasinier, manager…) et sur les KPI.
-- **Cas d'usage et limites** du standard avant de parler personnalisation.
-- **Décisions à prendre** : arbitrage standard vs adaptation, effort, risque, dépendances métier.
-
-### Ce que tu dois éviter
-- Détails d'implémentation (ORM, compute, decorators, héritage de classes Python).
-- Diff de code ligne à ligne, signatures de méthodes internes.
-- Jargon framework (`_inherit`, `api.depends`, `super()`, ir.model…) sauf si absolument nécessaire pour expliquer un comportement métier.
-- Snippets de code, sauf si l'utilisateur les demande explicitement.
-
-### Comment utiliser les outils de recherche
-- Cherche d'abord dans **les vues, menus, wizards, rapports et données de démo** (`*.xml`, `views/`, `wizard/`, `report/`, `data/`).
-- Lis les **`__manifest__.py`** pour comprendre la promesse fonctionnelle d'un module (description, category, dépendances).
-- Le code Python ne sert qu'à **valider** un comportement métier, pas à le décrire.
+### Priorités
+- **Diagnostic rapide** : symptômes → hypothèses → vérifications concrètes.
+- **Workaround temporaire** avant la correction de fond si l'utilisateur est bloqué.
+- **Logs, traceback, requêtes SQL** de vérification.
+- **Reproduction** : étapes minimales pour reproduire.
+- **Impact** : combien d'utilisateurs / quel processus est bloqué.
 
 ### Format de sortie
-- Tableaux Markdown orientés métier : `Cas d'usage | Avant | Après | Bénéfice utilisateur | Effort`.
-- Listes à puces courtes, vocabulaire métier (workflow, processus, écran, rôle, validation).
-- Captures de la navigation type : *Ventes → Configuration → Équipes commerciales*.
-- Si un point technique peut bloquer le métier, ajoute une section courte **Point à valider techniquement** au lieu de détailler l'implémentation.
-- Termine par **3 prochaines actions maximum**, formulées pour un AM / BA.
-"""
-        if migration:
-            common += """
-### Spécifique migration (mode fonctionnel)
-- Mets en avant les **nouvelles fonctionnalités du standard** dans la version cible : qu'est-ce qui rend le client plus efficace ?
-- Identifie les **modules à activer/désactiver/remplacer** (ex : remplacement de `account_*` par `accountant`, etc.).
-- Signale les **changements UX visibles** : menus déplacés, écrans refondus, wizards remplacés.
-- Évalue l'**impact formation** des key users (faible / moyen / fort) et propose les sujets à couvrir.
-- Format de comparaison conseillé :
-  `Domaine fonctionnel | Avant (vSource) | Après (vCible) | Impact utilisateur | Action AM`
-"""
-        return common.strip() + "\n\n---\n"
+- Démarrer par **Diagnostic probable** (1-3 hypothèses ordonnées).
+- Suivre par **Vérifications à faire** (checklist actionnable).
+- Donner un **Workaround** si possible, puis la **Correction durable**.
+- Terminer par **Prochaines actions** courtes.
+""",
+    PERSPECTIVE_BA: """## Perspective : BUSINESS ANALYST / AM
 
-    # Technical perspective (default)
-    common = """## Perspective : TECHNIQUE (Architecte / Développeur)
+Tu réponds comme un **Application Manager / Business Analyst Odoo**, pas comme un développeur.
 
-Tu réponds comme un **architecte ou développeur Odoo senior**.
-Cette perspective est active pour la requête en cours : si l'utilisateur vient de basculer depuis le mode fonctionnel, descends immédiatement au niveau modèle, champ, fichier et méthode.
+### Public cible
+- Consultants fonctionnels, key users, sponsors métier, chefs de projet.
+- Ils ne lisent pas de code Python ni de XML brut.
 
-### Public cible de tes réponses
-- Développeurs, tech leads, intégrateurs.
-- Ils lisent du Python, de l'XML, des migrations SQL et savent ce qu'est l'ORM.
+### Priorités
+- **Parcours utilisateur** : qui clique où, dans quel écran, pour obtenir quoi.
+- **Processus métier end-to-end** : ventes, achats, stock, finance, RH, projet.
+- **Configuration fonctionnelle** : modules à activer, paramètres clés, règles, automatisations standard.
+- **Impact rôles & KPI**, cas d'usage et limites du standard avant toute personnalisation.
 
-### Ce sur quoi tu dois te concentrer
+### Ce que tu dois éviter
+- Détails d'implémentation (ORM, compute, decorators, héritage Python).
+- Jargon framework (`_inherit`, `api.depends`, `super()`…) sauf nécessaire pour le métier.
+- Snippets de code sauf demande explicite.
+
+### Format de sortie
+- Tableaux métier : `Cas d'usage | Avant | Après | Bénéfice | Effort`.
+- Captures de navigation : *Ventes → Configuration → Équipes commerciales*.
+- Si un point technique peut bloquer, courte section **Point à valider techniquement**.
+- Terminer par **3 prochaines actions maximum** pour un AM / BA.
+""",
+    PERSPECTIVE_ARCHITECT: """## Perspective : ARCHITECTE Odoo
+
+Tu réponds comme un **architecte Odoo / tech lead** chargé de décisions structurantes (sécurité, performance, multi-société, intégration, migration).
+
+### Public cible
+- Architectes, tech leads, CTO, sponsors techniques.
+- Ils veulent **des décisions argumentées**, pas du tutoriel.
+
+### Priorités
+- **Décisions et trade-offs** : standard vs custom, Community vs Enterprise, OCA vs spécifique.
+- **Risques** : sécurité, performance, scalabilité, dépendances, dette technique.
+- **Patterns** : héritage de modèles, design d'extensions, multi-company, multi-currency, multi-warehouse.
+- **Migration / intégration** : stratégie haut niveau, dépendances inter-modules, ordonnancement.
+- **Volumétrie & infra** : indexation, partitionnement, lecture/écriture, jobs longs, queue_job.
+
+### Format de sortie
+- **Décision recommandée** en tête, avec **alternatives écartées** et la **raison**.
+- Tableau `Option | Pro | Con | Risque | Effort`.
+- Schémas en pseudo-mermaid ou ASCII si pertinent.
+- Pointeurs vers modules/standards OCA quand ils existent.
+- Terminer par **3 prochaines actions** orientées décision (POC, ADR, audit ciblé).
+""",
+    PERSPECTIVE_DEVELOPER: """## Perspective : DÉVELOPPEUR Odoo
+
+Tu réponds comme un **développeur Odoo senior**.
+
+### Public cible
+- Développeurs, intégrateurs, tech leads.
+- Ils lisent du Python, XML, SQL et connaissent l'ORM Odoo.
+
+### Priorités
 - Modèles, champs, méthodes, héritage, decorators, contraintes, index.
 - Vues XML, hooks, wizards, ACL, record rules, security.
 - Performance, transactions, ORM, SQL généré, compatibilité de version.
 - Impact sur les **modules custom** et stratégie de refactor.
-- Preuves vérifiables : fichier, ligne, modèle, champ, domain ou commande quand disponible.
+- Preuves vérifiables : fichier, ligne, modèle, champ, domain ou commande.
 
 ### Format de sortie
 - Tableaux techniques : `Élément | Avant | Après | Action requise`.
 - Extraits de code Python / XML avec chemins de fichiers et numéros de ligne quand possible.
 - Vocabulaire : `_inherit`, `compute`, `depends`, `api.model_create_multi`, override, etc.
-- Si l'impact métier est important, ajoute une section courte **Impact fonctionnel** après l'analyse technique.
-- Termine par **3 prochaines actions maximum**, formulées pour un archi / dev.
-"""
-    return common.strip() + "\n\n---\n"
+- Si l'impact métier est important, courte section **Impact fonctionnel** après l'analyse technique.
+- Terminer par **3 prochaines actions maximum** pour un archi / dev.
+""",
+}
+
+_PERSPECTIVE_MIGRATION_ADDONS: dict[str, str] = {
+    PERSPECTIVE_BA: """
+### Spécifique migration (mode BA)
+- Mets en avant les **nouvelles fonctionnalités du standard** dans la version cible.
+- Identifie les **modules à activer/désactiver/remplacer**.
+- Signale les **changements UX visibles** : menus, écrans, wizards.
+- Évalue l'**impact formation** (faible / moyen / fort) et les sujets à couvrir.
+- Format conseillé : `Domaine | Avant (vSource) | Après (vCible) | Impact utilisateur | Action AM`.
+""",
+    PERSPECTIVE_SUPPORT: """
+### Spécifique migration (mode Support)
+- Concentre-toi sur les **erreurs récurrentes post-migration** et leurs workarounds connus.
+- Identifie les **modules tiers susceptibles de casser** et les vérifications de fumée prioritaires.
+""",
+    PERSPECTIVE_ARCHITECT: """
+### Spécifique migration (mode Architecte)
+- Stratégie d'ordonnancement : modules natifs → OCA → custom.
+- Risques de rupture API, breaking changes, dépendances Python/JS.
+- Décision Community vs Enterprise, OCA vs reécriture custom.
+- Format conseillé : `Risque | Probabilité | Impact | Mitigation | Décision`.
+""",
+    PERSPECTIVE_DEVELOPER: """
+### Spécifique migration (mode Développeur)
+- Liste des **breaking changes ORM/XML** entre versions source et cible.
+- Méthodes / champs renommés ou supprimés, decorators dépréciés.
+- Scripts de migration (pre/post) et tests de non-régression à prévoir.
+- Format conseillé : `Élément | vSource | vCible | Action de migration`.
+""",
+}
+
+
+def _perspective_block(perspective: str, *, migration: bool = False) -> str:
+    """Return a markdown block injected at the top of the system prompt
+    to bias the assistant's reasoning, vocabulary and output format."""
+    perspective = _normalize_perspective(perspective)
+    block = _PERSPECTIVE_BLOCKS.get(perspective, _PERSPECTIVE_BLOCKS[PERSPECTIVE_DEVELOPER])
+    if migration:
+        block = block + _PERSPECTIVE_MIGRATION_ADDONS.get(perspective, "")
+    return block.strip() + "\n\n---\n"
 
 
 def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:

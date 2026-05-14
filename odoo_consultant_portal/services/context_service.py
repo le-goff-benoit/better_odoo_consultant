@@ -29,21 +29,36 @@ _DOMAIN_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("Comptabilité & Finance", "Accounting & Finance", ("compta", "account", "accounting", "finance", "invoice", "facture", "avoir", "refund", "payment", "paiement", "écriture", "ecriture", "journal", "tax", "taxe", "analytic", "analytique", "budget", "reconcile", "rapprochement")),
     ("Ventes & CRM", "Sales & CRM", ("sale", "sales", "vente", "quote", "quotation", "devis", "order", "commande", "crm", "lead", "opportun", "pipeline", "commercial", "subscription", "abonnement")),
     ("Achats", "Purchasing", ("purchase", "achat", "vendor", "supplier", "fournisseur", "rfq", "appel d'offre", "procurement", "approvisionnement")),
-    ("Stock & Logistique", "Inventory & Logistics", ("stock", "inventory", "picking", "delivery", "livraison", "receipt", "réception", "reception", "transfer", "transfert", "quant", "lot", "serial", "série", "serie", "warehouse", "entrepôt", "entrepot", "route")),
+    ("Stock & Logistique", "Inventory & Logistics", ("stock", "inventory", "picking", "delivery", "livraison", "receipt", "réception", "reception", "transfer", "transfert", "quant", "serial", "warehouse", "entrepôt", "entrepot")),
     ("Ressources Humaines & Paie", "HR & Payroll", ("hr", "employee", "employé", "employe", "leave", "congé", "conge", "payroll", "paie", "payslip", "contract", "contrat", "attendance", "présence", "presence")),
-    ("Projets & Timesheets", "Projects & Timesheets", ("project", "projet", "task", "tâche", "tache", "timesheet", "feuille de temps", "milestone", "jalon")),
-    ("Fabrication (MRP)", "Manufacturing (MRP)", ("manufacturing", "fabrication", "mrp", "of", "manufacturing order", "ordre de fabrication", "bom", "nomenclature", "workorder", "work center", "poste de charge")),
-    ("eCommerce & Site Web", "eCommerce & Website", ("ecommerce", "e-commerce", "website", "site web", "panier", "cart", "shop", "seo", "portal", "portail")),
-    ("Point de Vente (POS)", "Point of Sale (POS)", ("pos", "point of sale", "point de vente", "caisse", "session pos", "ticket")),
-    ("Règles de sécurité et droits d'accès", "Security & Access Rights", ("right", "rights", "permission", "droit", "security", "sécurité", "securite", "acl", "record rule", "ir.rule", "group", "groupe", "access", "accès")),
-    ("Customisations : comment les repérer", "Customizations: how to spot them", ("custom", "customization", "personnalisation", "studio", "third-party module", "module tiers", "module custom", "x_studio", "x_")),
-    ("Performance & Optimisation", "Performance & Optimization", ("performance", "slow", "slowness", "lenteur", "optimization", "optimisation", "index", "query", "requête", "requete", "timeout", "lent")),
+    ("Projets & Timesheets", "Projects & Timesheets", ("project", "projet", "task", "tâche", "timesheet", "feuille de temps", "milestone", "jalon")),
+    # "of" alone is a false-positive magnet (preposition in English). Use the
+    # full expression "ordre de fabrication" / "manufacturing order" instead.
+    ("Fabrication (MRP)", "Manufacturing (MRP)", ("manufacturing", "fabrication", "mrp", "manufacturing order", "ordre de fabrication", "bom", "nomenclature", "workorder", "work center", "poste de charge")),
+    ("eCommerce & Site Web", "eCommerce & Website", ("ecommerce", "e-commerce", "website", "site web", "panier", "shop", "seo", "portal", "portail")),
+    # "pos" matches "propose", "exposé"… require either word-boundary "pos" or
+    # an unambiguous multi-word phrase. Handled by _term_matches() below.
+    ("Point de Vente (POS)", "Point of Sale (POS)", ("pos", "point of sale", "point de vente", "caisse", "session pos")),
+    ("Règles de sécurité et droits d'accès", "Security & Access Rights", ("right", "permission", "droit", "security", "sécurité", "securite", "acl", "record rule", "ir.rule", "groupe", "accès")),
+    # "custom" matches "customer" — handled by word-boundary logic.
+    ("Customisations : comment les repérer", "Customizations: how to spot them", ("custom", "customization", "personnalisation", "studio", "third-party module", "module tiers", "module custom", "x_studio")),
+    ("Performance & Optimisation", "Performance & Optimization", ("performance", "slow", "slowness", "lenteur", "optimization", "optimisation", "timeout", "lent")),
 )
 
 _DIAGNOSTIC_TERMS = ("diagnostic", "diagnosti", "diagnos", "audit", "anomalie", "anomaly", "bloqué", "bloque", "blocked", "problème", "probleme", "problem", "issue", "erreur", "error", "incohérence", "incoherence", "duplicate", "doublon")
 _MEETING_TERMS = ("compte-rendu", "compte rendu", "meeting minute", "réunion", "reunion", "pv de réunion", "pv de reunion")
 _STUDIO_TERMS = ("studio", "x_studio", "personnalisation", "customisation", "champ custom", "modèle custom", "modele custom", "inspect_studio")
-_VERSION_TERMS = ("version", "migration", "upgrade", "nouveau", "nouveauté", "nouveaute", "changement", "différence", "difference", "breaking", "deprecated", "dépréci", "depreci", "supprimé", "supprime", "renommé", "renomme", "compatib", "v15", "v16", "v17", "v18", "v19", "odoo 15", "odoo 16", "odoo 17", "odoo 18", "odoo 19")
+# Removed bare "version" (matches every prompt mentioning Odoo versions); kept
+# explicit migration/upgrade vocabulary and version tokens.
+_VERSION_TERMS = ("migration", "upgrade", "nouveauté", "nouveaute", "changement de version", "breaking", "deprecated", "dépréci", "depreci", "supprimé", "supprime", "renommé", "renomme", "compatib", "v15", "v16", "v17", "v18", "v19", "odoo 15", "odoo 16", "odoo 17", "odoo 18", "odoo 19")
+
+# Single-word tokens of ≤6 chars that are ambiguous substrings of common words.
+# Matched with word boundaries instead of plain substring containment.
+_BOUNDARY_TOKENS = frozenset({
+    "pos", "of", "lot", "serie", "série", "x_",
+    "hr", "vat", "mrp", "tax", "seo", "acl",
+    "custom", "right", "group",
+})
 
 _SECTION_TITLES = {
     "fr": {
@@ -52,6 +67,7 @@ _SECTION_TITLES = {
         "studio": "Inspection Studio",
         "version": "Notes de version Odoo {version}",
         "migration": "Méthodologie de migration",
+        "profile": "Profil de réponse",
     },
     "en": {
         "skills": "Consultant skills",
@@ -59,8 +75,23 @@ _SECTION_TITLES = {
         "studio": "Studio inspection",
         "version": "Odoo {version} release notes",
         "migration": "Migration methodology",
+        "profile": "Response profile",
     },
 }
+
+# Map of perspective → markdown filename. Legacy aliases are mapped to their
+# closest new role so older clients (or stored prompts) still pick up a profile.
+_PROFILE_FILES = {
+    "support": "profile-support.md",
+    "business_analyst": "profile-business-analyst.md",
+    "architect": "profile-architect.md",
+    "developer": "profile-developer.md",
+    # legacy aliases
+    "functional": "profile-business-analyst.md",
+    "technical": "profile-developer.md",
+}
+
+_BA_LIKE = {"business_analyst", "functional"}
 
 
 def normalize_locale(locale: Optional[str]) -> str:
@@ -90,6 +121,27 @@ def list_files(locale: Optional[str] = None) -> list[dict]:
     return result
 
 
+# Mtime-aware cache for context files. A single chat turn calls read_file()
+# 4-6 times (skills + profile + studio + version notes ± migration), and every
+# turn re-reads from disk. The cache key is (path, mtime_ns), so any file edit
+# from the Settings page invalidates instantly without explicit busting.
+_READ_CACHE: dict[tuple[str, int], str] = {}
+_READ_CACHE_MAX = 64
+
+
+def _cached_read(path: Path) -> str:
+    key = (str(path), path.stat().st_mtime_ns)
+    cached = _READ_CACHE.get(key)
+    if cached is not None:
+        return cached
+    text = path.read_text(encoding="utf-8")
+    # Bound cache size; on overflow drop oldest insert (Python 3.7+ preserves insertion order).
+    if len(_READ_CACHE) >= _READ_CACHE_MAX:
+        _READ_CACHE.pop(next(iter(_READ_CACHE)))
+    _READ_CACHE[key] = text
+    return text
+
+
 def read_file(name: str, locale: Optional[str] = None) -> str:
     lang = normalize_locale(locale)
     path = _safe(name, lang)
@@ -98,7 +150,7 @@ def read_file(name: str, locale: Optional[str] = None) -> str:
         if content:
             return content  # return default without writing to disk
         raise FileNotFoundError(f"{name} introuvable")
-    return path.read_text(encoding="utf-8")
+    return _cached_read(path)
 
 
 def write_file(name: str, content: str, locale: Optional[str] = None) -> None:
@@ -115,8 +167,27 @@ def _normalize_text(text: Optional[str]) -> str:
     return (text or "").casefold()
 
 
+_BOUNDARY_PATTERN_CACHE: dict[str, "re.Pattern[str]"] = {}
+
+
+def _term_matches(text: str, term: str) -> bool:
+    """Return True if *term* appears in *text*.
+
+    Ambiguous short tokens (see _BOUNDARY_TOKENS) are matched with word
+    boundaries so that e.g. "pos" doesn't match "propose" and "custom"
+    doesn't match "customer". Everything else uses fast substring matching.
+    """
+    if term in _BOUNDARY_TOKENS:
+        pattern = _BOUNDARY_PATTERN_CACHE.get(term)
+        if pattern is None:
+            pattern = re.compile(rf"(?<!\w){re.escape(term)}(?!\w)", re.UNICODE)
+            _BOUNDARY_PATTERN_CACHE[term] = pattern
+        return bool(pattern.search(text))
+    return term in text
+
+
 def _has_any(text: str, terms: tuple[str, ...]) -> bool:
-    return any(term in text for term in terms)
+    return any(_term_matches(text, term) for term in terms)
 
 
 def _markdown_sections(content: str) -> list[tuple[str, str, int]]:
@@ -170,7 +241,7 @@ def _select_skills_context(prompt: str, perspective: Optional[str], locale: Opti
         if _has_any(prompt, terms):
             matched_domains.append(_heading_for_locale(fr_heading, en_heading, lang))
 
-    if not matched_domains and perspective == "functional":
+    if not matched_domains and perspective in _BA_LIKE:
         matched_domains.extend(["Essential cross-functional models", "Client analysis best practices"] if lang == "en" else ["Modèles transversaux essentiels", "Bonnes pratiques d'analyse client"])
     elif not matched_domains:
         matched_domains.append("Essential cross-functional models" if lang == "en" else "Modèles transversaux essentiels")
@@ -187,7 +258,7 @@ def _select_skills_context(prompt: str, perspective: Optional[str], locale: Opti
 
     supporting_headings = ("Status workflows — quick reference", "Client analysis best practices") if lang == "en" else ("Workflow des statuts — Référence rapide", "Bonnes pratiques d'analyse client")
     for heading in supporting_headings:
-        if heading in by_heading and (_has_any(prompt, _DIAGNOSTIC_TERMS) or perspective == "functional"):
+        if heading in by_heading and (_has_any(prompt, _DIAGNOSTIC_TERMS) or perspective in _BA_LIKE):
             selected.append(by_heading[heading])
 
     return "\n\n".join(dict.fromkeys(selected)).strip()
@@ -241,6 +312,7 @@ def load_context_for_prompt(
     user_prompt: Optional[str] = None,
     perspective: Optional[str] = None,
     locale: Optional[str] = None,
+    target_version: Optional[str] = None,
 ) -> str:
     """Return routed markdown context to inject into the AI system prompt."""
     lang = normalize_locale(locale)
@@ -252,6 +324,18 @@ def load_context_for_prompt(
         _maybe_section(_skills_title, _select_skills_context(prompt, perspective, lang), sections)
     except FileNotFoundError:
         _skills_title = None  # type: ignore[assignment]
+
+    # Role-specific profile file (support / BA / architect / developer).
+    # Treated as a core section so the role guidance is never crowded out.
+    _profile_title = None
+    profile_filename = _PROFILE_FILES.get(perspective or "")
+    if profile_filename:
+        try:
+            _profile_content = read_file(profile_filename, lang)
+            _profile_title = titles["profile"]
+            sections.append((_profile_title, _profile_content))
+        except FileNotFoundError:
+            pass
 
     if not migration and _has_any(prompt, _MEETING_TERMS):
         try:
@@ -270,6 +354,11 @@ def load_context_for_prompt(
             sections.append((titles["version"].format(version=odoo_version), read_file(f"odoo-{odoo_version}.md", lang)))
         except FileNotFoundError:
             pass
+    if target_version and target_version != odoo_version and (migration or _has_any(prompt, _VERSION_TERMS)):
+        try:
+            sections.append((titles["version"].format(version=target_version), read_file(f"odoo-{target_version}.md", lang)))
+        except FileNotFoundError:
+            pass
     if migration:
         try:
             sections.append((titles["migration"], read_file("migration.md", lang)))
@@ -277,11 +366,14 @@ def load_context_for_prompt(
             pass
     if not sections:
         return ""
-    # The skills section is always core — it must be injected before domain or
-    # contextual sections so that consultant rules and the response contract are
-    # never pushed out of the budget by lower-priority content.
-    core = {_skills_title} if _skills_title else None
-    fitted = _fit_context_budget(sections, core_sections=core)
+    # Skills and role profile are core — injected first so consultant rules and
+    # role guidance are never pushed out of the budget by lower-priority content.
+    core: set[str] = set()
+    if _skills_title:
+        core.add(_skills_title)
+    if _profile_title:
+        core.add(_profile_title)
+    fitted = _fit_context_budget(sections, core_sections=core or None)
     return "\n\n---\n\n".join(f"## {title}\n\n{content.strip()}" for title, content in fitted)
 
 
@@ -298,6 +390,8 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
             return _MIGRATION_MD_EN
         if name == "studio.md":
             return _STUDIO_MD_EN
+        if name in _PROFILE_DEFAULTS_EN:
+            return _PROFILE_DEFAULTS_EN[name]
         m_en = re.match(r'^odoo-([\d\.]+)\.md$', name)
         if m_en:
             return _VERSION_NOTES_EN.get(m_en.group(1))
@@ -309,10 +403,156 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
         return _MIGRATION_MD
     if name == "studio.md":
         return _STUDIO_MD
+    if name in _PROFILE_DEFAULTS:
+        return _PROFILE_DEFAULTS[name]
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
     if m:
         return _VERSION_NOTES.get(m.group(1))
     return None
+
+
+# Minimal default content for the 4 response profile files. Users can edit
+# them from the Settings page; defaults are intentionally short and focused
+# on the operational deliverables for each role.
+_PROFILE_DEFAULTS: dict[str, str] = {
+    "profile-support.md": """# Profil Support — Run & Incident
+
+## Mission
+Débloquer l'utilisateur ou diagnostiquer un incident production le plus vite possible.
+
+## Livrables attendus
+1. **Diagnostic probable** (1-3 hypothèses ordonnées par probabilité).
+2. **Vérifications à faire** : checklist d'actions concrètes (logs, requêtes SQL, configuration).
+3. **Workaround temporaire** si l'utilisateur est bloqué.
+4. **Correction durable** une fois la cause confirmée.
+5. **Prochaines actions** (3 max).
+
+## Style
+- Ton direct, vocabulaire support (ticket, log, traceback, reproduction).
+- Toujours commencer par confirmer le symptôme observable, pas l'hypothèse.
+- Citer les modèles, requêtes ou fichiers à vérifier.
+""",
+    "profile-business-analyst.md": """# Profil Business Analyst — AM / BA
+
+## Mission
+Aider un consultant fonctionnel ou un key user à comprendre un processus, configurer le standard, ou cadrer un besoin.
+
+## Livrables attendus
+1. **Processus métier** : qui clique où, dans quel écran, pour obtenir quoi.
+2. **Configuration standard** : modules à activer, paramètres, règles, automatisations natives.
+3. **Cas d'usage & limites** du standard avant toute personnalisation.
+4. **Impact rôles & KPI** (commercial, comptable, magasinier, manager).
+5. **3 prochaines actions** orientées AM/BA.
+
+## Style
+- Vocabulaire métier (workflow, écran, rôle, validation, KPI).
+- Pas de Python ni XML brut sauf demande explicite.
+- Captures de navigation : *Ventes → Configuration → Équipes commerciales*.
+- Si un point technique bloque, courte section **Point à valider techniquement**.
+""",
+    "profile-architect.md": """# Profil Architecte Odoo
+
+## Mission
+Cadrer des décisions structurantes : sécurité, performance, multi-société, intégration, stratégie de migration.
+
+## Livrables attendus
+1. **Décision recommandée** en tête, avec alternatives écartées et raison.
+2. **Tableau de trade-offs** : `Option | Pro | Con | Risque | Effort`.
+3. **Risques** : sécurité, performance, scalabilité, dépendances, dette technique.
+4. **Patterns** : héritage de modèles, multi-company, multi-currency, queue_job.
+5. **3 prochaines actions** orientées décision (POC, ADR, audit ciblé).
+
+## Style
+- Argumentation explicite — pas de tutoriel.
+- Référencer OCA / Camptocamp / Akretion / Tecnativa quand un module existe déjà.
+- Schémas en pseudo-mermaid ou ASCII si pertinent.
+""",
+    "profile-developer.md": """# Profil Développeur Odoo
+
+## Mission
+Aider un développeur Odoo senior à implémenter, déboguer, refactorer ou tester du code Odoo.
+
+## Livrables attendus
+1. **Modèles, champs, méthodes** concernés avec chemin de fichier et ligne quand possible.
+2. **Extraits de code** Python / XML / SQL avec contexte.
+3. **Impact sur les modules custom** et stratégie de refactor.
+4. **Tests** : `TransactionCase`, fixtures, scénarios.
+5. **3 prochaines actions** orientées dev.
+
+## Style
+- Vocabulaire ORM : `_inherit`, `compute`, `depends`, `api.model_create_multi`, override.
+- Chemins de fichiers complets, numéros de ligne quand disponibles.
+- Si l'impact métier est important, courte section **Impact fonctionnel**.
+""",
+}
+
+_PROFILE_DEFAULTS_EN: dict[str, str] = {
+    "profile-support.md": """# Support profile — Run & Incident
+
+## Mission
+Unblock the user or diagnose a production incident as fast as possible.
+
+## Expected output
+1. **Likely diagnosis** (1-3 ranked hypotheses).
+2. **Checks to run**: actionable checklist (logs, SQL queries, configuration).
+3. **Temporary workaround** if the user is blocked.
+4. **Permanent fix** once the cause is confirmed.
+5. **Next steps** (max 3).
+
+## Style
+- Direct tone, support vocabulary (ticket, log, traceback, reproduction).
+- Always start with the observable symptom, not the hypothesis.
+""",
+    "profile-business-analyst.md": """# Business Analyst profile — AM / BA
+
+## Mission
+Help a functional consultant or key user understand a process, configure the standard, or frame a requirement.
+
+## Expected output
+1. **Business process**: who clicks where, on which screen, to achieve what.
+2. **Standard configuration**: modules to activate, key parameters, native automations.
+3. **Use cases & standard limits** before any customization.
+4. **Impact on roles & KPIs** (sales, accounting, warehouse, manager).
+5. **3 next actions** for an AM / BA.
+
+## Style
+- Business vocabulary (workflow, screen, role, validation, KPI).
+- No raw Python or XML unless explicitly requested.
+- Navigation captures: *Sales → Configuration → Sales teams*.
+""",
+    "profile-architect.md": """# Architect profile — Odoo
+
+## Mission
+Frame structural decisions: security, performance, multi-company, integration, migration strategy.
+
+## Expected output
+1. **Recommended decision** up front, with alternatives discarded and rationale.
+2. **Trade-off table**: `Option | Pro | Con | Risk | Effort`.
+3. **Risks**: security, performance, scalability, dependencies, tech debt.
+4. **Patterns**: model inheritance, multi-company, multi-currency, queue_job.
+5. **3 next actions** focused on decisions (POC, ADR, targeted audit).
+
+## Style
+- Explicit reasoning — not a tutorial.
+- Reference OCA / Camptocamp / Akretion / Tecnativa when relevant modules exist.
+""",
+    "profile-developer.md": """# Developer profile — Odoo
+
+## Mission
+Help a senior Odoo developer implement, debug, refactor, or test Odoo code.
+
+## Expected output
+1. **Models, fields, methods** involved with file path and line when possible.
+2. **Code snippets** Python / XML / SQL with context.
+3. **Impact on custom modules** and refactor strategy.
+4. **Tests**: `TransactionCase`, fixtures, scenarios.
+5. **3 next actions** for a dev.
+
+## Style
+- ORM vocabulary: `_inherit`, `compute`, `depends`, `api.model_create_multi`, override.
+- Full file paths, line numbers when available.
+""",
+}
 
 
 _SKILLS_MD = """\

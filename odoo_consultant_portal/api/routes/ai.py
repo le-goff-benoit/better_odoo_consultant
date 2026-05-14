@@ -261,7 +261,9 @@ class ChatRequest(BaseModel):
     target_version: Optional[str] = None      # standalone target version
     target_profile_id: Optional[int] = None   # target from a project environment
     target_env_id: Optional[str] = None
-    # Reasoning perspective: "technical" (default) or "functional"
+    # Reasoning perspective: "support" | "business_analyst" | "architect" | "developer".
+    # Legacy values "technical" / "functional" are still accepted and mapped
+    # downstream to "developer" / "business_analyst".
     perspective: Optional[str] = "developer"
 
 

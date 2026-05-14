@@ -25,7 +25,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { resolvePerspective, routedContextFiles } from '../utils/aiContext'
+import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
 import { countryFlag } from '../utils/countryFlag'
 
 function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
@@ -353,7 +353,7 @@ export default function Assistant() {
 
   const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('assistant', 'auto'))
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
-  const perspective = resolvePerspective(perspectiveMode, perspectivePrompt, 'developer')
+  const perspective = useResolvedPerspective(perspectiveMode, perspectivePrompt, 'developer')
   const setPerspective = (p: PerspectiveMode) => { setPerspectiveState(p); savePerspective('assistant', p) }
 
   // Init provider when providers load

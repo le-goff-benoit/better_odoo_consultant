@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Perspective, PerspectiveMode } from '../components/PerspectiveToggle'
 
 export interface AiEventLike {
@@ -13,90 +14,120 @@ export interface ContextItem {
 }
 
 // ── Term lists (per perspective) ──────────────────────────────────
-// Strategy: each list is intentionally broad. We then SCORE the prompt
-// against each list and pick the highest-scoring perspective. If no list
-// scores, we fall back to "business_analyst" (a more neutral default
-// than "developer" for everyday functional questions).
+// Each term has an implicit weight of 1, except those listed in *_STRONG
+// which weight 3. We score the prompt against each list, then pick the
+// highest-scoring perspective above a minimum threshold. Below threshold,
+// we fall back to the caller-provided default (typically the previously
+// resolved perspective or "business_analyst").
+//
+// Guidelines for term picking:
+// - Avoid ultra-generic words that appear in any business prompt
+//   (e.g. "client", "user", "projet"). They were drowning every prompt
+//   in BA score and rendered the auto-resolver useless.
+// - Prefer multi-word phrases or specific tokens. A short generic word
+//   should be a STRONG-only signal when its presence is unambiguous.
 
 const SUPPORT_TERMS = [
   // incident vocabulary
-  'incident', 'bloqué', 'bloque', 'blocked', 'erreur', 'error', 'bug', 'crash',
-  'plante', 'crashe', 'problème', 'probleme', 'problem', 'issue',
-  'urgence', 'urgent', 'critique', 'critical', 'p1', 'p2', 'priorité',
-  'lenteur', 'lent', 'slow', 'slowness', 'freeze', 'gelé', 'gele', 'timeout',
+  'incident', 'bug', 'crash', 'plante', 'crashe', 'workaround', 'contournement',
+  'ticket', 'sla', 'reproduire', 'reproduction', 'panne', 'hors service',
+  'urgence', 'urgent', 'critique', 'critical', 'p1', 'p2',
+  'lenteur', 'slowness', 'freeze', 'timeout',
   'ne fonctionne pas', "n'arrive pas", "n'arrive plus", 'ne marche pas',
   'ne charge pas', 'pas accessible', 'inaccessible', "n'affiche", 'naffiche',
-  'corriger', 'fix', 'résoudre', 'resoudre', 'résolution', 'resolution',
-  'workaround', 'contournement', 'ticket', 'sla', 'reproduire', 'reproduction',
-  'down', 'panne', 'hors service',
+  'résoudre', 'resoudre', 'résolution', 'fix', 'corriger',
+]
+
+// Strong support signals — almost always indicate a run/incident question.
+const SUPPORT_STRONG = [
+  'incident', 'workaround', 'contournement', 'ticket', 'sla', 'panne',
+  'hors service', 'reproduire', 'p1', 'p2', "n'arrive plus",
+  'ne fonctionne pas', 'ne marche pas',
 ]
 
 const BA_TERMS = [
-  // business / functional
+  // business process & analysis vocabulary (NOT generic words like "client" / "user")
   'process', 'processus', 'métier', 'metier', 'fonctionnel', 'fonctionnelle',
-  'business', 'utilisateur', 'utilisateurs', 'user', 'users', 'as-is', 'to-be',
-  'workflow', 'parcours', 'parcours utilisateur', 'formation', 'trainee',
+  'as-is', 'to-be', 'workflow', 'parcours utilisateur', 'formation', 'trainee',
   'recette', 'uat', 'besoin', 'besoins', 'requirement', 'requirements',
   'règle de gestion', 'regle de gestion', 'gap', 'écart', 'ecart',
   'compte-rendu', 'compte rendu', 'meeting', 'réunion', 'reunion',
   'adoption', 'conduite du changement', 'change management', 'kpi',
   // configuration / standard usage
-  'configurer', 'configuration', 'paramétrer', 'parametrer', 'paramètre',
-  'parametre', 'comment faire', 'how to', 'cas d\'usage', "cas d'usage", 'use case',
-  'fonctionne', 'fonctionnement', 'utilise', 'utilisation', 'utiliser',
-  'expliquer', 'explique', 'qu\'est-ce que', "qu'est ce que", 'what is',
-  'pourquoi', 'why', 'qui peut', 'who can', 'à quoi sert', 'a quoi sert',
-  // accounting/sales/inventory functional terms (without code keywords)
-  'facture', 'factures', 'devis', 'commande', 'commandes', 'livraison',
-  'stock', 'achat', 'achats', 'vente', 'ventes', 'crm', 'lead', 'opportunité',
-  'opportunite', 'partenaire', 'fournisseur', 'client', 'employé', 'employe',
-  'congé', 'conge', 'paie', 'projet', 'tâche', 'tache', 'fabrication',
-  'production', 'point de vente', 'pos',
+  'configurer', 'paramétrer', 'parametrer',
+  'comment faire', 'how to', "cas d'usage", 'use case',
+  "qu'est-ce que", 'qu’est-ce que', 'what is', 'à quoi sert', 'a quoi sert',
+  // multi-word functional phrases (preferred over single common nouns)
+  'point de vente', 'note de frais', 'feuille de temps', 'bon de livraison',
+  'bon de commande', 'tableau de bord',
+]
+
+const BA_STRONG = [
+  'métier', 'metier', 'fonctionnel', 'as-is', 'to-be', "cas d'usage",
+  'règle de gestion', 'compte-rendu', 'compte rendu', 'recette', 'uat',
+  'parcours utilisateur',
 ]
 
 const ARCH_TERMS = [
-  'architecture', 'architecte', 'architectural', 'sécurité', 'securite',
-  'security', 'performance', 'performances', 'scalabilité', 'scalability',
-  'urbanisation', 'urbain', 'haut niveau', 'cible', 'trajectoire',
+  'architecture', 'architecte', 'architectural', 'scalabilité', 'scalability',
+  'urbanisation', 'haut niveau', 'cible', 'trajectoire',
   'dépendance', 'dependance', 'dépendances', 'dependances',
   'migration strategy', 'stratégie de migration', 'strategie de migration',
-  'choix technique', 'décision', 'decision', 'adr',
-  'risque', 'risques', 'risk', 'risks', 'sla architecture',
+  'choix technique', 'décision', 'adr',
+  'risque', 'risques', 'risk', 'risks',
   'multi-société', 'multi-societe', 'multi-company', 'multi société',
-  'audit', 'patron', 'pattern', 'patterns', 'volumétrie', 'volumetrie',
+  'patron', 'pattern', 'patterns', 'volumétrie', 'volumetrie',
   'high availability', 'haute disponibilité', 'haute dispo', 'pra', 'rto', 'rpo',
   'backup strategy', 'stratégie de backup', 'strategie de backup',
-  'indexation', 'index strategy', 'cluster', 'load balanc',
+  'indexation', 'cluster', 'load balanc',
   'oca vs', 'community vs enterprise', 'community ou enterprise',
   'roadmap', 'feuille de route', 'gouvernance',
+  // "audit" and "performance" stay but only as STRONG to avoid stealing
+  // from Support on a "performance lente" question.
+]
+
+const ARCH_STRONG = [
+  'architecture', 'architecte', 'adr', 'haute disponibilité', 'haute dispo',
+  'multi-société', 'multi-company', 'stratégie de migration', 'community vs enterprise',
+  'oca vs', 'scalabilité', 'scalability', 'gouvernance',
 ]
 
 const DEV_TERMS = [
   // explicit code/dev signals
-  'code', 'snippet', 'python', 'xml', 'js', 'javascript', 'typescript', 'sql',
-  'modèle', 'modele', 'model', 'field', 'champ', 'method', 'méthode',
-  'classe', 'class ', '_inherit', '_inherits', '_name', '_description',
-  'api.', '@api', 'override', 'surcharge', 'surcharger', 'manifest',
+  'snippet', 'python', 'xml', 'javascript', 'typescript', 'sql',
+  '_inherit', '_inherits', '_name', '_description',
+  'api.', '@api', 'override', 'surcharge', 'surcharger',
   '__manifest__', 'traceback', 'stack trace', 'stacktrace', 'exception',
-  'depends', '@depends', 'compute', 'related', 'onchange', 'constrains',
-  'command.create', 'command.update', 'command.', 'browse', 'recordset',
-  'env[', 'self.env', 'cron', 'wizard', 'controller', 'contrôleur',
-  'controleur', 'route', 'http.', 'json-rpc', 'jsonrpc',
-  'orm', 'sql query', 'requête sql', 'requete sql', 'psycopg', 'cursor',
-  'pdb', 'breakpoint', 'log', 'logger', 'logging', 'debug',
+  '@depends', 'compute', 'related', 'onchange', 'constrains',
+  'command.create', 'command.update', 'browse', 'recordset',
+  'env[', 'self.env', 'cron', 'wizard', 'controller',
+  'http.', 'json-rpc', 'jsonrpc',
+  'orm', 'requête sql', 'requete sql', 'psycopg', 'cursor',
+  'pdb', 'breakpoint', 'logger',
   'odoo-bin', 'odoo.conf', 'web_studio',
-  'github', 'pull request', 'commit', 'branch', 'merge', 'rebase',
-  // test / quality
-  'unittest', 'transactioncase', 'test unitaire', 'pytest', 'test suite',
+  'pull request', 'rebase',
+  'unittest', 'transactioncase', 'pytest',
+]
+
+const DEV_STRONG = [
+  '_inherit', '_inherits', '_name', '_description', '@api', 'api.depends',
+  '__manifest__', 'traceback', 'stack trace', 'self.env', 'env[',
+  'transactioncase', 'recordset', 'psycopg',
 ]
 
 const MEETING_TERMS = ['compte-rendu', 'compte rendu', 'meeting minute', 'réunion', 'reunion', 'pv de réunion', 'pv de reunion']
 const STUDIO_TERMS = ['studio', 'x_studio', 'personnalisation', 'customisation', 'champ custom', 'modèle custom', 'modele custom', 'inspect_studio']
 const VERSION_TERMS = ['version', 'migration', 'upgrade', 'nouveauté', 'nouveaute', 'changement', 'différence', 'difference', 'breaking', 'deprecated', 'dépréci', 'depreci', 'renommé', 'renomme', 'compatib', 'odoo 15', 'odoo 16', 'odoo 17', 'odoo 18', 'odoo 19']
 
-function countMatches(text: string, terms: string[]): number {
+// Weighted scoring: each "weak" term match = 1 point, each "strong" term = 3.
+// A perspective wins only if its score is ≥ MIN_SCORE AND strictly above the
+// second-best (otherwise we keep the fallback — usually the previous answer).
+const MIN_SCORE = 3
+
+function scoreTerms(text: string, weak: string[], strong: string[]): number {
   let n = 0
-  for (const term of terms) if (text.includes(term)) n++
+  for (const term of weak) if (text.includes(term)) n++
+  for (const term of strong) if (text.includes(term)) n += 3
   return n
 }
 
@@ -105,57 +136,108 @@ function hasAny(text: string, terms: string[]) {
 }
 
 // Detect strong "developer" signals that should override softer BA matches.
+// These are very specific tokens — no false positives like "command." matching
+// a sentence ending.
 function hasStrongDevSignal(text: string): boolean {
-  // code block / triple backtick
+  // fenced code block
   if (text.includes('```')) return true
-  // python/xml indentation hints
-  if (/\bdef\s+\w+\s*\(/.test(text)) return true
-  if (/<\s*(record|field|template|odoo|menuitem)\b/.test(text)) return true
-  // _inherit / api decorator / Command.*
-  if (text.includes('_inherit') || text.includes('@api.') || text.includes('command.')) return true
-  // python error idioms
-  if (/traceback|stack ?trace|exception:/i.test(text)) return true
+  // python def line: "def name(" with leading whitespace
+  if (/(^|\n)\s*def\s+\w+\s*\(/.test(text)) return true
+  // XML/Odoo data tags
+  if (/<\s*(record|field|template|menuitem)\b/.test(text)) return true
+  // ORM signals
+  if (text.includes('_inherit') || text.includes('@api.') || text.includes('self.env')) return true
+  // python traceback
+  if (/\btraceback\b|\bstack ?trace\b|\bexception:/i.test(text)) return true
   return false
 }
 
 /**
  * Infer the best response profile from a prompt.
- * Uses a scoring approach: counts matches per category, picks the highest.
- * Falls back to `business_analyst` (more neutral than `developer` for
- * everyday functional/config questions).
+ *
+ * Strategy:
+ * 1. Strong dev signals (code block, ORM tokens, traceback) → developer.
+ * 2. Otherwise compute a weighted score for each of the 4 perspectives.
+ * 3. Return the winner only if it scores ≥ MIN_SCORE AND beats #2 by a
+ *    margin. Otherwise return the fallback (caller passes the previous
+ *    perspective for stability across keystrokes).
+ *
+ * The function is pure and deterministic — call sites debounce it to avoid
+ * flicker on long prompts.
  */
 export function inferPerspective(text: string, fallback: Perspective = 'business_analyst'): Perspective {
   const normalized = text.toLocaleLowerCase()
   if (!normalized.trim()) return fallback
 
-  // Strong dev signals (code, traceback, ORM inherit) → developer first.
   if (hasStrongDevSignal(normalized)) return 'developer'
 
-  // Support has a hard cue: incident vocabulary almost always wins.
-  if (hasAny(normalized, SUPPORT_TERMS.slice(0, 25))) return 'support'
-
   const scores: Record<Perspective, number> = {
-    support: countMatches(normalized, SUPPORT_TERMS),
-    architect: countMatches(normalized, ARCH_TERMS),
-    developer: countMatches(normalized, DEV_TERMS),
-    business_analyst: countMatches(normalized, BA_TERMS),
+    support: scoreTerms(normalized, SUPPORT_TERMS, SUPPORT_STRONG),
+    architect: scoreTerms(normalized, ARCH_TERMS, ARCH_STRONG),
+    developer: scoreTerms(normalized, DEV_TERMS, DEV_STRONG),
+    business_analyst: scoreTerms(normalized, BA_TERMS, BA_STRONG),
   }
 
-  // Pick the highest-scoring perspective. Tie-breaker order: support > architect > developer > BA.
+  // Find the top two, with tie-breaker order: support > architect > developer > BA.
   const order: Perspective[] = ['support', 'architect', 'developer', 'business_analyst']
   let best: Perspective = fallback
   let bestScore = 0
+  let secondScore = 0
   for (const p of order) {
     if (scores[p] > bestScore) {
-      best = p
+      secondScore = bestScore
       bestScore = scores[p]
+      best = p
+    } else if (scores[p] > secondScore) {
+      secondScore = scores[p]
     }
   }
-  return bestScore > 0 ? best : fallback
+  // Require enough confidence: minimum score and a margin over the runner-up.
+  if (bestScore >= MIN_SCORE && bestScore - secondScore >= 2) return best
+  return fallback
 }
 
 export function resolvePerspective(mode: PerspectiveMode, text: string, fallback: Perspective = 'business_analyst'): Perspective {
   return mode === 'auto' ? inferPerspective(text, fallback) : mode
+}
+
+/**
+ * Debounced + sticky perspective resolution for live UIs.
+ *
+ * - When `mode` is a fixed value (not "auto") the result switches immediately.
+ * - When `mode === 'auto'`, the inferred perspective is recomputed only after
+ *   `delayMs` ms of input inactivity, and the previously resolved perspective
+ *   is used as the fallback. This prevents the badge from flickering between
+ *   roles while the user types a long prompt.
+ */
+export function useResolvedPerspective(
+  mode: PerspectiveMode,
+  text: string,
+  initial: Perspective = 'developer',
+  delayMs = 350,
+): Perspective {
+  const [resolved, setResolved] = useState<Perspective>(() =>
+    mode === 'auto' ? inferPerspective(text, initial) : mode,
+  )
+  const last = useRef<Perspective>(resolved)
+
+  useEffect(() => {
+    if (mode !== 'auto') {
+      last.current = mode
+      setResolved(mode)
+      return
+    }
+    const t = setTimeout(() => {
+      const next = inferPerspective(text, last.current)
+      if (next !== last.current) {
+        last.current = next
+        setResolved(next)
+      }
+    }, delayMs)
+    return () => clearTimeout(t)
+  }, [mode, text, delayMs])
+
+  return resolved
 }
 
 export function perspectiveLabel(value: Perspective, lang: 'fr' | 'en') {

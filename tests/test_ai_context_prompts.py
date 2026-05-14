@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from odoo_consultant_portal.services.ai_service import _language_block, _perspective_block, _read_odoo_file, _search_odoo_source, _trim_project_context
+from odoo_consultant_portal.services.ai_service import _language_block, _perspective_block, _read_odoo_file, _search_odoo_source, _trim_history, _trim_project_context
 from odoo_consultant_portal.services.context_service import load_context_for_prompt, read_file
 from odoo_consultant_portal.services.localization_service import build_localization_context, find_available_l10n_modules
 from odoo_consultant_portal.services.technical_complexity_service import (
@@ -20,16 +20,29 @@ def test_default_skills_context_uses_dynamic_date_placeholder():
 
 
 def test_perspective_blocks_have_distinct_response_contracts():
-    functional = _perspective_block("functional")
-    technical = _perspective_block("technical")
+    # Legacy aliases still work and route to BA / developer.
+    ba = _perspective_block("business_analyst")
+    developer = _perspective_block("developer")
+    architect = _perspective_block("architect")
+    support = _perspective_block("support")
 
-    assert "AM / Business Analyst" in functional
-    assert "Point à valider techniquement" in functional
-    assert "Snippets de code" in functional
+    assert "BUSINESS ANALYST" in ba
+    assert "Point à valider techniquement" in ba
+    assert "Snippets de code" in ba
 
-    assert "Architecte / Développeur" in technical
-    assert "fichier, ligne, modèle, champ" in technical
-    assert "Impact fonctionnel" in technical
+    assert "DÉVELOPPEUR" in developer
+    assert "fichier, ligne, modèle, champ" in developer
+    assert "Impact fonctionnel" in developer
+
+    assert "ARCHITECTE" in architect
+    assert "Décision recommandée" in architect
+
+    assert "SUPPORT" in support
+    assert "Diagnostic probable" in support
+
+    # Legacy aliases map to the right roles.
+    assert _perspective_block("functional") == ba
+    assert _perspective_block("technical") == developer
 
 
 def test_language_block_can_force_english_answers():
@@ -345,3 +358,42 @@ async def test_technical_complexity_does_not_flag_oca_modules_as_custom_dev(tmp_
     # OCA modules are reported in their own bucket
     assert "queue_job" in result["installed_modules"]["community_modules"]
     assert "account_financial_report" in result["installed_modules"]["community_modules"]
+
+
+def test_trim_history_drops_orphan_tool_result_user_turn():
+    # Build a long history where, after trimming to MAX_HISTORY_TURNS, the
+    # first kept message would be an orphan Anthropic tool_result user turn.
+    from odoo_consultant_portal.core.context_constants import MAX_HISTORY_TURNS
+
+    msgs = []
+    # 30 normal turns (user/assistant pairs) — far more than the cap.
+    for i in range(MAX_HISTORY_TURNS + 5):
+        msgs.append({"role": "user", "content": f"q{i}"})
+        msgs.append({"role": "assistant", "content": f"a{i}"})
+    # Drop the trailing assistant to land on a boundary, then inject the
+    # tool-cycle pattern right at the trim window.
+    msgs.append({"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "x", "input": {}}]})
+    msgs.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]})
+    msgs.append({"role": "assistant", "content": "final"})
+    msgs.append({"role": "user", "content": "follow-up"})
+
+    trimmed = _trim_history(msgs)
+    # First retained message must be a genuine user turn.
+    assert trimmed[0]["role"] == "user"
+    first_content = trimmed[0].get("content")
+    if isinstance(first_content, list):
+        assert first_content[0].get("type") != "tool_result"
+
+
+def test_trim_history_drops_orphan_openai_tool_message():
+    from odoo_consultant_portal.core.context_constants import MAX_HISTORY_TURNS
+
+    msgs = []
+    for i in range(MAX_HISTORY_TURNS + 5):
+        msgs.append({"role": "user", "content": f"q{i}"})
+        msgs.append({"role": "assistant", "content": f"a{i}"})
+    msgs.append({"role": "tool", "tool_call_id": "x", "content": "orphan"})
+    msgs.append({"role": "user", "content": "follow-up"})
+
+    trimmed = _trim_history(msgs)
+    assert trimmed[0]["role"] == "user"
