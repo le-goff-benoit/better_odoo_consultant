@@ -60,7 +60,7 @@ interface CompanyOption {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'done' | 'end'
+  type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'warning' | 'done' | 'end'
   name?: string
   args?: Record<string, unknown>
   count?: number
@@ -71,6 +71,8 @@ interface AiEvent {
   ok?: boolean
   input_tokens?: number
   output_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
 }
 
 interface Message {
@@ -1627,6 +1629,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   const textEvt   = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
   const errorEvt  = events.find(e => e.type === 'error')
+  const warningEvts = events.filter(e => e.type === 'warning')
   const time   = fmtTime(timestamp)
   const tokens = fmtTokens(inputTokens, outputTokens)
   const [copied, setCopied] = useState(false)
@@ -1687,6 +1690,16 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
             ⚠ {errorEvt.msg}
           </div>
         )}
+
+        {warningEvts.map((w, i) => (
+          <div key={i} style={{
+            background: t.bgMuted, border: `1px solid ${t.border}`,
+            borderRadius: t.radius, padding: '8px 12px', fontSize: 12, color: t.textSub,
+            marginTop: 6,
+          }}>
+            ⚠ {w.msg}
+          </div>
+        ))}
 
         {loading && !textEvt && !errorEvt && (
           <div style={{

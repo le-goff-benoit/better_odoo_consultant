@@ -90,7 +90,7 @@ function technicalComplexityLabel(raw?: string | null) {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'done' | 'end'
+  type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'warning' | 'done' | 'end'
   name?: string
   args?: Record<string, unknown>
   count?: number
@@ -100,6 +100,8 @@ interface AiEvent {
   ok?: boolean
   input_tokens?: number
   output_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
 }
 
 interface Message {

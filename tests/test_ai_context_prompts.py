@@ -397,3 +397,64 @@ def test_trim_history_drops_orphan_openai_tool_message():
 
     trimmed = _trim_history(msgs)
     assert trimmed[0]["role"] == "user"
+
+
+def test_build_system_general_returns_tuple_with_stable_variable_split():
+    from odoo_consultant_portal.services.ai_service import build_system_general
+
+    stable, variable = build_system_general(
+        "18.0",
+        source_path="/tmp/sources/18.0",
+        context_md="## Compétences consultant\nDummy routed context",
+        perspective="developer",
+        response_language="fr",
+        user_ctx="Consultant : Benoit",
+    )
+    # Stable part: identity, sources, instructions — all turn-invariant.
+    assert "Consultant : Benoit" in stable
+    assert "expert Odoo" in stable
+    assert "/tmp/sources/18.0" in stable
+    assert "search_odoo_source" in stable
+    # Variable part: language directive, perspective block, routed context.
+    assert "Réponds toujours en français" in variable
+    assert "DÉVELOPPEUR" in variable
+    assert "Compétences consultant" in variable
+    # Sources instructions must NOT leak into the variable half.
+    assert "search_odoo_source" not in variable
+
+
+def test_build_system_migration_returns_tuple_with_target_path_in_stable():
+    from odoo_consultant_portal.services.ai_service import build_system_migration
+
+    stable, variable = build_system_migration(
+        "17.0", "18.0",
+        source_path="/tmp/s/17.0",
+        target_path="/tmp/s/18.0",
+        context_md="dummy",
+        perspective="architect",
+    )
+    assert "17.0" in stable and "18.0" in stable
+    assert "/tmp/s/17.0" in stable
+    assert "/tmp/s/18.0" in stable
+    assert "ARCHITECTE" in variable
+    # Migration-specific addon should be present in architect mode.
+    assert "Spécifique migration" in variable
+
+
+def test_infer_perspective_strong_signals():
+    from odoo_consultant_portal.services.ai_service import _infer_perspective, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA, PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT
+
+    # Code block → developer
+    assert _infer_perspective("```python\nclass Foo(_inherit='res.partner')") == PERSPECTIVE_DEVELOPER
+    # Traceback → developer
+    assert _infer_perspective("J'ai cette traceback : ValueError") == PERSPECTIVE_DEVELOPER
+    # Strong BA tokens
+    assert _infer_perspective("Décris-moi le cas d'usage métier de la règle de gestion") == PERSPECTIVE_BA
+    # Strong support
+    assert _infer_perspective("Le client a un incident bloquant en P1, panne complète") == PERSPECTIVE_SUPPORT
+    # Strong architect
+    assert _infer_perspective("Quelle stratégie de migration et architecture multi-company recommandes-tu ?") == PERSPECTIVE_ARCHITECT
+    # Below threshold → fallback
+    assert _infer_perspective("salut", fallback=PERSPECTIVE_DEVELOPER) == PERSPECTIVE_DEVELOPER
+    # Empty → fallback
+    assert _infer_perspective("", fallback=PERSPECTIVE_BA) == PERSPECTIVE_BA

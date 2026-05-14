@@ -132,6 +132,7 @@ TOOLS_CLAUDE = [
         "pattern":    {"type": "string", "description": "Texte ou regex à chercher (ex: 'sale_line_id', 'class AccountMove', '_name = ')"},
         "path":       {"type": "string", "description": "Sous-dossier optionnel (ex: 'addons/stock', 'addons/sale')", "default": ""},
         "file_types": {"type": "array",  "items": {"type": "string"}, "description": "Extensions, ex: ['*.py'] ou ['*.xml']", "default": ["*.py"]},
+        "case_sensitive": {"type": "boolean", "description": "Recherche sensible à la casse (défaut: true — recommandé pour les patterns de code).", "default": True},
     }}},
     {**_TOOL_READ_SRC, "input_schema": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string",  "description": "Chemin relatif depuis la racine des sources (ex: 'addons/stock/models/stock_route.py')"},
@@ -161,6 +162,7 @@ TOOLS_OPENAI = [
         "pattern":    {"type": "string"},
         "path":       {"type": "string",  "default": ""},
         "file_types": {"type": "array",   "items": {"type": "string"}, "default": ["*.py"]},
+        "case_sensitive": {"type": "boolean", "default": True},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_SRC, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string"},
@@ -193,6 +195,7 @@ TOOLS_GEMINI = [
                  "pattern":    {"type": "string"},
                  "path":       {"type": "string"},
                  "file_types": {"type": "array"},
+                 "case_sensitive": {"type": "boolean"},
              }}},
             {"name": "read_odoo_file", "description": _TOOL_READ_SRC["description"],
              "parameters": {"type": "object", "required": ["path"], "properties": {
@@ -211,6 +214,7 @@ TOOLS_CLAUDE_SRC = [
         "pattern":    {"type": "string", "description": "Texte ou regex à chercher (ex: 'sale_line_id', 'class AccountMove', '_name = ')"},
         "path":       {"type": "string", "description": "Sous-dossier optionnel (ex: 'addons/stock', 'addons/sale')", "default": ""},
         "file_types": {"type": "array",  "items": {"type": "string"}, "description": "Extensions, ex: ['*.py'] ou ['*.xml']", "default": ["*.py"]},
+        "case_sensitive": {"type": "boolean", "description": "Recherche sensible à la casse (défaut: true — recommandé pour les patterns de code).", "default": True},
     }}},
     {**_TOOL_READ_SRC, "input_schema": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string",  "description": "Chemin relatif depuis la racine des sources (ex: 'addons/stock/models/stock_route.py')"},
@@ -224,6 +228,7 @@ TOOLS_OPENAI_SRC = [
         "pattern":    {"type": "string"},
         "path":       {"type": "string",  "default": ""},
         "file_types": {"type": "array",   "items": {"type": "string"}, "default": ["*.py"]},
+        "case_sensitive": {"type": "boolean", "default": True},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_SRC, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string"},
@@ -240,6 +245,7 @@ TOOLS_GEMINI_SRC = [
                  "pattern":    {"type": "string"},
                  "path":       {"type": "string"},
                  "file_types": {"type": "array"},
+                 "case_sensitive": {"type": "boolean"},
              }}},
             {"name": "read_odoo_file", "description": _TOOL_READ_SRC["description"],
              "parameters": {"type": "object", "required": ["path"], "properties": {
@@ -272,6 +278,7 @@ REPO_TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_SEARCH_REPO, "parameters": {"type": "object", "required": ["pattern"], "properties": {
         "pattern": {"type": "string"}, "path": {"type": "string", "default": ""},
         "file_types": {"type": "array", "items": {"type": "string"}, "default": ["*.py"]},
+        "case_sensitive": {"type": "boolean", "default": True},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_REPO, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0},
@@ -281,6 +288,7 @@ REPO_FUNCTION_DECLARATIONS = [
     {"name": "search_project_source", "description": _TOOL_SEARCH_REPO["description"],
      "parameters": {"type": "object", "required": ["pattern"], "properties": {
          "pattern": {"type": "string"}, "path": {"type": "string"}, "file_types": {"type": "array"},
+         "case_sensitive": {"type": "boolean"},
      }}},
     {"name": "read_project_file", "description": _TOOL_READ_REPO["description"],
      "parameters": {"type": "object", "required": ["path"], "properties": {
@@ -323,6 +331,7 @@ TARGET_TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_SEARCH_TARGET, "parameters": {"type": "object", "required": ["pattern"], "properties": {
         "pattern": {"type": "string"}, "path": {"type": "string", "default": ""},
         "file_types": {"type": "array", "items": {"type": "string"}, "default": ["*.py"]},
+        "case_sensitive": {"type": "boolean", "default": True},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_TARGET, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0},
@@ -332,6 +341,7 @@ TARGET_FUNCTION_DECLARATIONS = [
     {"name": "search_target_source", "description": _TOOL_SEARCH_TARGET["description"],
      "parameters": {"type": "object", "required": ["pattern"], "properties": {
          "pattern": {"type": "string"}, "path": {"type": "string"}, "file_types": {"type": "array"},
+         "case_sensitive": {"type": "boolean"},
      }}},
     {"name": "read_target_file", "description": _TOOL_READ_TARGET["description"],
      "parameters": {"type": "object", "required": ["path"], "properties": {
@@ -403,6 +413,11 @@ COPILOT_HEADERS         = {
 
 
 def _trim_context(ctx: str) -> str:
+    """Safety net only — context_service.load_context_for_prompt already fits
+    routed markdown into CONTEXT_BUDGET_CHARS (36k). This second pass at
+    MAX_CONTEXT_CHARS (40k) catches edge cases (concatenated localization,
+    multiple appended sections) without changing the typical flow.
+    """
     if len(ctx) <= _MAX_CONTEXT_CHARS:
         return ctx
     return ctx[:_MAX_CONTEXT_CHARS] + "\n\n[...contexte tronqué — trop long pour le modèle...]"
@@ -445,6 +460,139 @@ def _normalize_perspective(p: Optional[str]) -> str:
     if p in _LEGACY_PERSPECTIVE_ALIASES:
         return _LEGACY_PERSPECTIVE_ALIASES[p]
     return PERSPECTIVE_DEVELOPER
+
+
+# ── Server-side perspective inference (mirror of frontend inferPerspective) ──
+# Used when a client sends `perspective="auto"` or omits it. The frontend
+# already resolves auto → concrete role via useResolvedPerspective(), so this
+# is mainly a fallback for non-browser clients (CLI, future mobile).
+
+_SUPPORT_WEAK = (
+    "incident", "bug", "crash", "plante", "crashe", "workaround", "contournement",
+    "ticket", "sla", "reproduire", "panne", "hors service",
+    "urgence", "urgent", "critique", "p1", "p2",
+    "lenteur", "freeze", "timeout",
+    "ne fonctionne pas", "n'arrive pas", "ne marche pas", "ne charge pas",
+    "résoudre", "fix", "corriger",
+)
+_SUPPORT_STRONG = (
+    "incident", "workaround", "ticket", "sla", "panne", "p1", "p2",
+    "ne fonctionne pas", "ne marche pas",
+)
+_BA_WEAK = (
+    "process", "processus", "métier", "metier", "fonctionnel",
+    "as-is", "to-be", "workflow", "parcours utilisateur",
+    "recette", "uat", "besoin", "requirement",
+    "règle de gestion", "regle de gestion", "kpi",
+    "compte-rendu", "compte rendu", "réunion", "reunion",
+    "configurer", "paramétrer", "parametrer",
+    "comment faire", "how to", "cas d'usage", "use case",
+    "qu'est-ce que", "what is", "à quoi sert",
+    "point de vente", "note de frais", "feuille de temps",
+)
+_BA_STRONG = (
+    "métier", "fonctionnel", "as-is", "to-be", "cas d'usage",
+    "règle de gestion", "compte-rendu", "recette", "uat", "parcours utilisateur",
+)
+_ARCH_WEAK = (
+    "architecture", "architecte", "scalabilité", "scalability",
+    "urbanisation", "dépendance", "dependance",
+    "stratégie de migration", "strategie de migration",
+    "choix technique", "adr", "risque", "risques",
+    "multi-société", "multi-societe", "multi-company",
+    "pattern", "patterns", "volumétrie",
+    "haute disponibilité", "pra", "rto", "rpo",
+    "indexation", "cluster", "load balanc",
+    "community vs enterprise", "oca vs",
+    "roadmap", "feuille de route", "gouvernance",
+)
+_ARCH_STRONG = (
+    "architecture", "architecte", "adr", "haute disponibilité",
+    "multi-société", "multi-company", "stratégie de migration",
+    "community vs enterprise", "oca vs", "scalabilité", "gouvernance",
+)
+_DEV_WEAK = (
+    "snippet", "python", "xml", "javascript", "typescript", "sql",
+    "_inherit", "_inherits", "_name", "_description",
+    "api.", "@api", "override", "surcharge",
+    "__manifest__", "traceback", "stack trace", "exception",
+    "@depends", "compute", "related", "onchange", "constrains",
+    "command.create", "command.update", "browse", "recordset",
+    "env[", "self.env", "cron", "wizard", "controller",
+    "orm", "requête sql", "psycopg", "cursor",
+    "pdb", "breakpoint", "logger",
+    "odoo-bin", "odoo.conf", "web_studio",
+    "unittest", "transactioncase", "pytest",
+)
+_DEV_STRONG = (
+    "_inherit", "_inherits", "_name", "_description", "@api",
+    "__manifest__", "traceback", "stack trace", "self.env", "env[",
+    "transactioncase", "recordset", "psycopg",
+)
+
+
+def _score_terms(text: str, weak: tuple[str, ...], strong: tuple[str, ...]) -> int:
+    n = 0
+    for t in weak:
+        if t in text:
+            n += 1
+    for t in strong:
+        if t in text:
+            n += 3
+    return n
+
+
+def _infer_perspective(text: str, fallback: str = PERSPECTIVE_DEVELOPER) -> str:
+    """Python mirror of frontend inferPerspective(). Best-effort fallback for
+    clients sending `perspective="auto"`. Returns *fallback* below confidence."""
+    if not text or not text.strip():
+        return fallback
+    t = text.lower()
+    # Strong dev signals: code block, ORM tokens, traceback.
+    if "```" in t or "_inherit" in t or "@api." in t or "self.env" in t or "traceback" in t:
+        return PERSPECTIVE_DEVELOPER
+    scores = {
+        PERSPECTIVE_SUPPORT: _score_terms(t, _SUPPORT_WEAK, _SUPPORT_STRONG),
+        PERSPECTIVE_ARCHITECT: _score_terms(t, _ARCH_WEAK, _ARCH_STRONG),
+        PERSPECTIVE_DEVELOPER: _score_terms(t, _DEV_WEAK, _DEV_STRONG),
+        PERSPECTIVE_BA: _score_terms(t, _BA_WEAK, _BA_STRONG),
+    }
+    order = [PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA]
+    best = fallback
+    best_score = 0
+    second_score = 0
+    for p in order:
+        s = scores[p]
+        if s > best_score:
+            second_score = best_score
+            best_score = s
+            best = p
+        elif s > second_score:
+            second_score = s
+    # Require min confidence + margin over runner-up, matching the frontend.
+    if best_score >= 3 and best_score - second_score >= 2:
+        return best
+    return fallback
+
+
+def _last_user_text(messages: list) -> str:
+    """Extract plain text from the most recent user message (string content or
+    Anthropic-style content list)."""
+    for msg in reversed(messages):
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for blk in content:
+                if isinstance(blk, dict):
+                    if blk.get("type") == "text" and blk.get("text"):
+                        parts.append(str(blk["text"]))
+            if parts:
+                return "\n".join(parts)
+    return ""
 
 
 def _normalize_response_language(language: Optional[str]) -> str:
@@ -666,56 +814,56 @@ def _perspective_block(perspective: str, *, migration: bool = False) -> str:
     return block.strip() + "\n\n---\n"
 
 
-def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
-    perspective_md = _perspective_block(perspective, migration=False)
-    language_md = _language_block(response_language)
-    source_section = ""
+def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[str] = None, target_path: Optional[str] = None) -> str:
+    """Single source-of-truth block listing the available source roots and the
+    tools the assistant must use to query them. Centralized so every build_*
+    function emits the same wording (better for prompt caching and reviewers).
+    """
+    parts: list[str] = []
     if source_path:
-        source_section = f"""
-Code source Odoo disponible localement : {source_path}
-IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.
-Exemples d'utilisation :
-- Trouver un modèle : search_odoo_source(pattern="_name = 'sale.order'")
-- Trouver une méthode : search_odoo_source(pattern="def action_confirm", path="addons/sale")
-- Lire un fichier : read_odoo_file(path="addons/account/models/account_move.py", start_line=1, end_line=100)
-"""
+        parts.append(
+            f"### Code source Odoo (version courante)\n"
+            f"Disponible localement : `{source_path}`.\n"
+            "→ Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, "
+            "utilise SYSTÉMATIQUEMENT `search_odoo_source` avant de répondre. "
+            "Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
+            "Exemples :\n"
+            "- `search_odoo_source(pattern=\"_name = 'sale.order'\")`\n"
+            "- `search_odoo_source(pattern=\"def action_confirm\", path=\"addons/sale\")`\n"
+            "- `read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)`"
+        )
     else:
-        source_section = "\nCode source non disponible (sources non installées pour cette version).\n"
+        parts.append("### Code source Odoo\nNon disponible pour cette version (téléchargez-les depuis la page Sources).")
 
-    repo_section = ""
+    if target_path:
+        parts.append(
+            f"### Code source Odoo (version cible)\n"
+            f"Disponible : `{target_path}`.\n"
+            "→ Utilise `search_target_source` / `read_target_file` pour la version cible."
+        )
+
     if repo_path:
-        repo_section = f"""
-Code source du projet client disponible localement : {repo_path}
-Ce dépôt contient les modules custom et configurations spécifiques à ce client.
-IMPORTANT — pour découvrir les modules custom, commence TOUJOURS par :
-  search_project_source(pattern="name", file_types=["__manifest__.py"])
-Cela liste tous les modules du dépôt en cherchant "name" dans les fichiers __manifest__.py.
-Ensuite utilise read_project_file pour lire les fichiers pertinents.
-Ne cherche PAS "__manifest__.py" comme pattern — c'est un nom de fichier, pas du contenu.
+        parts.append(
+            f"### Code source du projet client\n"
+            f"Disponible : `{repo_path}`. Modules custom et configurations spécifiques au client.\n"
+            "→ Pour découvrir les modules custom, commence TOUJOURS par :\n"
+            "  `search_project_source(pattern=\"name\", file_types=[\"__manifest__.py\"])`\n"
+            "Puis `read_project_file` pour lire les fichiers pertinents. "
+            "Ne cherche PAS `__manifest__.py` comme pattern — c'est un nom de fichier, pas du contenu."
+        )
 
-Pour toute question de **volumétrie** (nombre de lignes Python/XML, taille des modules, répartition par extension),
-utilise **count_source_lines(scope='project', ...)** — il scanne le dépôt entièrement.
-Ne déduis JAMAIS un nombre total de lignes à partir de search_project_source : cet outil retourne les *occurrences* d'un pattern, pas un comptage exhaustif.
-"""
+    if source_path or repo_path or target_path:
+        parts.append(
+            "### Volumétrie / comptage de lignes\n"
+            "Pour toute question de **volumétrie** (nombre de lignes Python/XML, taille des modules, "
+            "répartition par extension), utilise **`count_source_lines`** — il scanne le dépôt entièrement.\n"
+            "Ne déduis JAMAIS un nombre total de lignes à partir de `search_*_source` : ces outils retournent "
+            "les *occurrences* d'un pattern, pas un comptage exhaustif."
+        )
+    return "\n\n".join(parts)
 
-    return f"""{language_md}{perspective_md}Tu es un assistant expert Odoo qui aide les consultants à analyser les données et le code source de leurs clients.
 
-Instance connectée :
-- URL : {profile.db_url}
-- Version : {profile.odoo_version or "inconnue"}
-- Base : {profile.db_name}
-- Société : {profile.company_name or "inconnue"}
-{source_section}{repo_section}
-Instructions :
-- Utilise les outils pour interroger Odoo directement et répondre avec des données réelles
-- Quand un modèle n'existe pas sur l'instance, cherche son nom correct dans le code source avant d'abandonner
-- Si le contexte Markdown contredit les données live ou le code source, les données live et le code source gagnent
-- Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées quand le sujet est ambigu
-- Présente les listes sous forme de tableaux Markdown
-- Si tu ne connais pas les champs d'un modèle, utilise get_odoo_fields d'abord
-- Sois concis et orienté résultats
-
-Modèles Odoo fréquents (noms peuvent varier selon la version) :
+_COMMON_ODOO_MODELS_REF = """## Modèles Odoo fréquents (référence rapide — noms variant selon la version)
 - Factures clients     : account.move, domain [["move_type","in",["out_invoice","out_refund"]]]
 - Factures fournisseurs: account.move, domain [["move_type","in",["in_invoice","in_refund"]]]
 - Commandes ventes     : sale.order
@@ -731,9 +879,91 @@ Modèles Odoo fréquents (noms peuvent varier selon la version) :
 - Tâches projet        : project.task
 - Routes stock         : stock.route (anciennement stock.location.route avant v16)
 - Règles de réapprovisionnement : stock.warehouse.orderpoint
-- Mouvements de stock  : stock.move
-{chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
-"""
+- Mouvements de stock  : stock.move"""
+
+
+def build_system(
+    profile,
+    source_path: Optional[str] = None,
+    context_md: str = "",
+    repo_path: Optional[str] = None,
+    perspective: str = PERSPECTIVE_TECHNICAL,
+    response_language: str = "auto",
+    *,
+    user_ctx: str = "",
+    active_company_name: Optional[str] = None,
+    project_context: Optional[str] = None,
+) -> tuple[str, str]:
+    """Build the system prompt for project mode.
+
+    Returns (stable, variable). The stable part is identical across turns in
+    the same conversation (identity, sources, instructions, project context)
+    and is cached by the provider. The variable part (language, perspective,
+    routed markdown) changes per turn and is appended after the cache breakpoint.
+    """
+    # ── STABLE PART ───────────────────────────────────────────────
+    society_line = f"- Société : {profile.company_name or 'inconnue'}"
+    if active_company_name:
+        society_line += f"\n- Société active (filtre) : {active_company_name}"
+
+    stable_parts: list[str] = []
+    if user_ctx:
+        stable_parts.append(user_ctx.strip())
+
+    stable_parts.append(
+        "Tu es un assistant expert Odoo qui aide les consultants à analyser les données "
+        "et le code source de leurs clients."
+    )
+    stable_parts.append(
+        f"## Instance connectée\n"
+        f"- URL : {profile.db_url}\n"
+        f"- Version : {profile.odoo_version or 'inconnue'}\n"
+        f"- Base : {profile.db_name}\n"
+        f"{society_line}"
+    )
+    stable_parts.append(_source_instructions(source_path=source_path, repo_path=repo_path))
+    stable_parts.append(
+        "## Instructions générales\n"
+        "- Utilise les outils pour interroger Odoo directement et répondre avec des données réelles.\n"
+        "- Quand un modèle n'existe pas sur l'instance, cherche son nom correct dans le code source avant d'abandonner.\n"
+        "- Si le contexte Markdown contredit les données live ou le code source, les données live et le code source gagnent.\n"
+        "- Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées quand le sujet est ambigu.\n"
+        "- Présente les listes sous forme de tableaux Markdown.\n"
+        "- Si tu ne connais pas les champs d'un modèle, utilise `get_odoo_fields` d'abord.\n"
+        "- Sois concis et orienté résultats."
+    )
+    stable_parts.append(_COMMON_ODOO_MODELS_REF)
+    if project_context:
+        stable_parts.append(f"## Contexte projet\n{_trim_project_context(project_context.strip())}")
+
+    stable = "\n\n".join(stable_parts).strip()
+
+    # ── VARIABLE PART ─────────────────────────────────────────────
+    variable = _build_variable_block(
+        response_language=response_language,
+        perspective=perspective,
+        migration=False,
+        context_md=context_md,
+    )
+    return stable, variable
+
+
+def _build_variable_block(
+    *,
+    response_language: str,
+    perspective: str,
+    migration: bool,
+    context_md: str,
+) -> str:
+    """Per-turn variable block: language directive, role perspective, routed
+    markdown context. Placed AFTER the stable cache breakpoint."""
+    parts: list[str] = []
+    parts.append(_language_block(response_language).rstrip())
+    parts.append(_perspective_block(perspective, migration=migration).rstrip())
+    ctx = context_md.strip() if context_md else ""
+    if ctx:
+        parts.append(f"---\n\n{_trim_context(ctx)}")
+    return "\n\n".join(p for p in parts if p)
 
 
 def build_system_migration(
@@ -745,89 +975,85 @@ def build_system_migration(
     repo_path: Optional[str] = None,
     perspective: str = PERSPECTIVE_TECHNICAL,
     response_language: str = "auto",
-) -> str:
-    perspective_md = _perspective_block(perspective, migration=True)
-    language_md = _language_block(response_language)
-    src_section = (
-        f"Sources Odoo VERSION SOURCE ({source_version}) disponibles : {source_path}\n"
-        "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source."
-    ) if source_path else f"Sources Odoo VERSION SOURCE ({source_version}) : non disponibles (téléchargez-les depuis la page Sources)."
+    *,
+    user_ctx: str = "",
+) -> tuple[str, str]:
+    stable_parts: list[str] = []
+    if user_ctx:
+        stable_parts.append(user_ctx.strip())
 
-    tgt_section = (
-        f"Sources Odoo VERSION CIBLE ({target_version}) disponibles : {target_path}\n"
-        "→ Utilise search_target_source / read_target_file pour explorer le code de la version cible."
-    ) if target_path else f"Sources Odoo VERSION CIBLE ({target_version}) : non disponibles (téléchargez-les depuis la page Sources)."
-
-    repo_section = (
-        f"\nCode source du projet client disponible : {repo_path}\n"
-        "→ Utilise search_project_source / read_project_file pour explorer les modules custom.\n"
-        "Pour lister les modules custom : search_project_source(pattern='name', file_types=['__manifest__.py'])\n"
-    ) if repo_path else ""
-
-    count_section = (
-        "\nPour toute question impliquant un **comptage exhaustif de lignes/fichiers** (volumétrie, taille d'un module, répartition par extension), "
-        "utilise l'outil **count_source_lines** — il scanne tout le dépôt. Ne jamais déduire un nombre de lignes à partir de search_project_source / search_odoo_source : "
-        "ces outils retournent les *occurrences* d'un pattern, pas le nombre total de lignes.\n"
+    stable_parts.append(
+        "Tu es un expert Odoo spécialisé dans les migrations de version. "
+        "Tu aides le consultant à préparer, analyser et exécuter une migration Odoo."
+    )
+    stable_parts.append(
+        f"## Contexte de migration\n"
+        f"- Version SOURCE : {source_version}\n"
+        f"- Version CIBLE  : {target_version}"
+    )
+    stable_parts.append(_source_instructions(source_path=source_path, repo_path=repo_path, target_path=target_path))
+    stable_parts.append(
+        "## Méthode de travail\n"
+        "1. Cherche d'abord dans la VERSION SOURCE avec `search_odoo_source`.\n"
+        "2. Cherche ensuite le même élément dans la VERSION CIBLE avec `search_target_source`.\n"
+        "3. Compare et explique les différences.\n"
+        "4. Si des modules custom sont fournis, vérifie leur compatibilité avec la version cible."
+    )
+    stable_parts.append(
+        "## Instructions\n"
+        "- Utilise SYSTÉMATIQUEMENT les outils de recherche avant de répondre — ne suppose jamais un comportement.\n"
+        "- Si le contexte Markdown contredit le code source ou les données client, le code source et les données client gagnent.\n"
+        "- Présente les comparaisons sous forme de tableaux (Source | Cible | Impact).\n"
+        "- Signale clairement les breaking changes avec ⚠️."
     )
 
-    return f"""{language_md}{perspective_md}Tu es un expert Odoo spécialisé dans les migrations de version. Tu aides le consultant à préparer, analyser et exécuter une migration Odoo.
-
-## Contexte de migration
-- Version SOURCE : {source_version}
-- Version CIBLE  : {target_version}
-
-## Sources disponibles
-{src_section}
-
-{tgt_section}
-{repo_section}{count_section}
-## Ton rôle
-- Comparer les implémentations source et cible pour identifier les changements breaking
-- Analyser l'impact sur les modules custom du projet (si fournis)
-- Identifier les champs, méthodes et modèles supprimés, renommés ou modifiés entre les deux versions
-- Proposer les adaptations nécessaires (scripts de migration, modifications de code)
-- Expliquer les nouvelles fonctionnalités disponibles dans la version cible
-
-## Méthode de travail
-1. Pour chaque point analysé, cherche d'abord dans la VERSION SOURCE avec search_odoo_source
-2. Cherche ensuite le même élément dans la VERSION CIBLE avec search_target_source
-3. Compare et explique les différences
-4. Si des modules custom sont disponibles, vérifie leur compatibilité avec la version cible
-
-## Instructions
-- Utilise SYSTÉMATIQUEMENT les outils de recherche avant de répondre — ne suppose jamais un comportement
-- Si le contexte Markdown contredit le code source ou les données client, le code source et les données client gagnent
-- Présente les comparaisons sous forme de tableaux (Source | Cible | Impact)
-- Signale clairement les breaking changes avec ⚠️
-{chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
-"""
+    stable = "\n\n".join(stable_parts).strip()
+    variable = _build_variable_block(
+        response_language=response_language,
+        perspective=perspective,
+        migration=True,
+        context_md=context_md,
+    )
+    return stable, variable
 
 
-def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
-    perspective_md = _perspective_block(perspective, migration=False)
-    language_md = _language_block(response_language)
-    source_section = (
-        f"Code source Odoo disponible localement : {source_path}\n"
-        "IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
-        "Exemples d'utilisation :\n"
-        "- Trouver un modèle : search_odoo_source(pattern=\"_name = 'sale.order'\")\n"
-        "- Trouver une méthode : search_odoo_source(pattern=\"def action_confirm\", path=\"addons/sale\")\n"
-        "- Lire un fichier : read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)\n"
-    ) if source_path else "Code source non disponible pour cette version.\n"
+def build_system_general(
+    version: str,
+    source_path: Optional[str] = None,
+    context_md: str = "",
+    repo_path: Optional[str] = None,
+    perspective: str = PERSPECTIVE_TECHNICAL,
+    response_language: str = "auto",
+    *,
+    user_ctx: str = "",
+) -> tuple[str, str]:
+    stable_parts: list[str] = []
+    if user_ctx:
+        stable_parts.append(user_ctx.strip())
+    stable_parts.append(
+        "Tu es un expert Odoo qui répond à des questions générales sur l'ERP, "
+        "indépendamment de tout projet client."
+    )
+    stable_parts.append(f"## Version Odoo de référence\n{version}")
+    stable_parts.append(_source_instructions(source_path=source_path, repo_path=repo_path))
+    stable_parts.append(
+        "## Instructions\n"
+        "- Réponds à toutes questions sur l'architecture Odoo, les modèles de données, les modules, les migrations.\n"
+        "- Utilise le code source pour illustrer ou vérifier tes réponses quand c'est pertinent.\n"
+        "- Si le contexte Markdown contredit le code source local, le code source local gagne.\n"
+        "- Présente les listes sous forme de tableaux Markdown.\n"
+        "- Sois précis, pédagogique, orienté consultant.\n"
+        "- Tu n'as pas accès aux données d'une instance Odoo (mode général sans connexion client)."
+    )
 
-    return f"""{language_md}{perspective_md}Tu es un expert Odoo qui répond à des questions générales sur l'ERP, indépendamment de tout projet client.
-
-Version Odoo : {version}
-{source_section}
-Instructions :
-- Réponds à toutes questions sur l'architecture Odoo, les modèles de données, les modules, les migrations
-- Utilise le code source pour illustrer ou vérifier tes réponses quand c'est pertinent
-- Si le contexte Markdown contredit le code source local, le code source local gagne
-- Présente les listes sous forme de tableaux Markdown
-- Sois précis, pédagogique, orienté consultant
-- Tu n'as pas accès aux données d'une instance Odoo (mode général sans connexion client)
-{chr(10) + "---" + chr(10) + chr(10) + _trim_context(context_md.strip()) if context_md.strip() else ""}
-"""
+    stable = "\n\n".join(stable_parts).strip()
+    variable = _build_variable_block(
+        response_language=response_language,
+        perspective=perspective,
+        migration=False,
+        context_md=context_md,
+    )
+    return stable, variable
 
 
 # ── Source code tools ────────────────────────────────────────────
@@ -843,6 +1069,13 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
     pattern    = args.get("pattern", "")
     sub_path   = args.get("path", "") or ""
     file_types = args.get("file_types") or ["*.py"]
+    # Default: case-sensitive (code patterns like _name, _inherit are
+    # case-sensitive in Python). Callers can opt into -i if they really mean
+    # a free-text natural-language search.
+    case_sensitive = args.get("case_sensitive", True)
+
+    if not pattern or not pattern.strip():
+        return {"ok": False, "error": "pattern manquant"}
 
     search_dir = _safe_source_path(source_path, sub_path)
     if not search_dir:
@@ -854,11 +1087,14 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
     for ft in file_types[:4]:  # max 4 types
         includes += ["--include", ft]
 
+    grep_args = ["grep", "-r", "-n"]
+    if not case_sensitive:
+        grep_args.append("-i")
+    grep_args += ["-m", "200", *includes, pattern, search_dir]
+
     try:
         proc = await asyncio.create_subprocess_exec(
-            "grep", "-r", "-n", "-i", "-m", "200",
-            *includes,
-            pattern, search_dir,
+            *grep_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -867,6 +1103,7 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
         return {"ok": False, "error": "Timeout — pattern trop large, affinez la recherche"}
 
     raw_lines = stdout.decode("utf-8", errors="replace").splitlines()
+    total_lines = len(raw_lines)
     base_real = os.path.realpath(source_path) + os.sep
 
     by_file: dict = {}
@@ -881,9 +1118,35 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
         by_file[rel].append({"line": int(linenum), "content": content.strip()})
 
     if not by_file:
-        return {"ok": True, "matches": 0, "files": {}, "note": "Aucune correspondance — essayez un autre pattern ou chemin"}
+        # Helpful fallback suggestions for the model so it doesn't waste tool
+        # calls retrying the same pattern.
+        suggestions: list[str] = []
+        if case_sensitive:
+            suggestions.append("Retentez avec `case_sensitive=false` (recherche insensible à la casse).")
+        if "'" not in pattern and '"' not in pattern and " = " in pattern:
+            suggestions.append("Essayez avec des guillemets différents (simples vs doubles).")
+        if "é" in pattern or "è" in pattern or "à" in pattern:
+            suggestions.append("Essayez sans les accents.")
+        if not sub_path:
+            suggestions.append("Restreignez la recherche avec `path=\"addons/<module>\"` si vous savez où chercher.")
+        return {
+            "ok": True,
+            "matches": 0,
+            "files": {},
+            "files_count": 0,
+            "note": "Aucune correspondance.",
+            "suggestions": suggestions or None,
+        }
 
-    return {"ok": True, "matches": len(raw_lines), "files": by_file}
+    truncated = total_lines > 200
+    return {
+        "ok": True,
+        "matches": total_lines,            # total grep output lines (capped at 200/file)
+        "files_count": len(by_file),       # distinct files matched
+        "files": by_file,
+        "truncated": truncated,
+        "note": "Résultats tronqués à 200 lignes — affinez le pattern ou utilisez path=." if truncated else None,
+    }
 
 
 async def _read_odoo_file(args: dict, source_path: str) -> dict:
@@ -1301,7 +1564,19 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
 
 # ── Claude ───────────────────────────────────────────────────────
 
-async def _chat_claude(api_key: str, model_id: str, system: str, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
+def _strip_cache_control_from_messages(messages: list) -> None:
+    """Remove any pre-existing cache_control entries from tool_result blocks
+    in *messages* (in place). We re-apply cache_control only on the LAST
+    tool_result each iteration; Anthropic supports max 4 breakpoints total."""
+    for msg in messages:
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and "cache_control" in block:
+                    block.pop("cache_control", None)
+
+
+async def _chat_claude(api_key: str, model_id: str, system, messages: list, odoo, source_path, tools=None, repo_path=None, target_path=None) -> AsyncIterator[dict]:
     try:
         import anthropic
     except ImportError:
@@ -1313,11 +1588,24 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
     client = anthropic.AsyncAnthropic(api_key=api_key)
     loop_msgs = list(messages)
 
-    # Wrap system in a list with cache_control so the static prefix is cached
-    # by Anthropic’s prompt-caching layer (~90% cost reduction on repeat turns).
-    system_payload = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+    # Build the system payload:
+    # - If we received a (stable, variable) tuple, use 2 blocks with an
+    #   ephemeral cache breakpoint at the end of the stable half. The variable
+    #   half (language, perspective, routed markdown) follows uncached.
+    # - Legacy string callers still work (whole system cached as one block).
+    if isinstance(system, tuple) and len(system) == 2:
+        stable, variable = system
+        system_payload = [
+            {"type": "text", "text": stable, "cache_control": {"type": "ephemeral"}},
+        ]
+        if variable.strip():
+            system_payload.append({"type": "text", "text": variable})
+    else:
+        system_payload = [{"type": "text", "text": str(system), "cache_control": {"type": "ephemeral"}}]
 
     total_in = total_out = 0
+    cache_create = cache_read = 0
+
     for _ in range(10):
         response = await client.messages.create(
             model=model_id,
@@ -1327,10 +1615,19 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
             tools=tools,
         )
         if hasattr(response, "usage") and response.usage:
-            total_in  += getattr(response.usage, "input_tokens",  0) or 0
-            total_out += getattr(response.usage, "output_tokens", 0) or 0
+            total_in     += getattr(response.usage, "input_tokens",  0) or 0
+            total_out    += getattr(response.usage, "output_tokens", 0) or 0
+            cache_create += getattr(response.usage, "cache_creation_input_tokens", 0) or 0
+            cache_read   += getattr(response.usage, "cache_read_input_tokens",     0) or 0
 
-        if response.stop_reason == "tool_use":
+        stop_reason = response.stop_reason
+
+        if stop_reason == "tool_use":
+            # Strip any previous cache_control on tool_results — we only keep
+            # the breakpoint on the LATEST batch so the cache extends as the
+            # conversation grows (max 4 breakpoints total including system).
+            _strip_cache_control_from_messages(loop_msgs)
+
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
@@ -1342,13 +1639,42 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
                         "tool_use_id": block.id,
                         "content": _compress_tool_result(result),
                     })
+            # Cache breakpoint on the LAST tool_result so the next iteration
+            # caches everything up to here (system + earlier turns + tool calls).
+            if tool_results:
+                tool_results[-1]["cache_control"] = {"type": "ephemeral"}
+
             loop_msgs.append({"role": "assistant", "content": response.content})
             loop_msgs.append({"role": "user", "content": tool_results})
-        else:
-            text = "".join(getattr(b, "text", "") for b in response.content)
+            continue
+
+        # Terminal response.
+        text = "".join(getattr(b, "text", "") for b in response.content)
+        if text:
             yield {"type": "text", "content": text}
-            yield {"type": "done", "model": model_id, "input_tokens": total_in, "output_tokens": total_out}
-            return
+
+        if stop_reason == "max_tokens":
+            yield {
+                "type": "warning",
+                "msg": "Réponse tronquée — limite de tokens atteinte. Demandez la suite ou réduisez le périmètre de la question.",
+            }
+        elif stop_reason == "refusal":
+            yield {
+                "type": "warning",
+                "msg": "Le modèle a refusé de répondre à cette requête. Reformulez ou changez de contexte.",
+            }
+        elif stop_reason not in ("end_turn", "stop_sequence", None):
+            yield {"type": "warning", "msg": f"Arrêt inattendu : stop_reason={stop_reason}"}
+
+        yield {
+            "type": "done",
+            "model": model_id,
+            "input_tokens": total_in,
+            "output_tokens": total_out,
+            "cache_creation_input_tokens": cache_create,
+            "cache_read_input_tokens": cache_read,
+        }
+        return
 
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
 
@@ -1502,6 +1828,10 @@ async def stream_chat(
     response_language: str = "auto",
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
+    # If client sent "auto", infer server-side from the last user message
+    # (mirrors the frontend resolver — useful for CLI / mobile clients).
+    if perspective == "auto" or perspective is None:
+        perspective = _infer_perspective(_last_user_text(messages))
     perspective = _normalize_perspective(perspective)
     response_language = _normalize_response_language(response_language)
 
@@ -1518,38 +1848,41 @@ async def stream_chat(
         if user_profile.get("team"):
             parts.append(f"Équipe : {user_profile['team']}")
         if parts:
-            user_ctx = "\n".join(parts) + "\n"
+            user_ctx = "\n".join(parts)
 
     if migration_mode:
         src_ver = version or (profile.odoo_version if profile else "?")
         tgt_ver = target_version or "?"
-        system  = build_system_migration(src_ver, tgt_ver, source_path, target_path, context_md, repo_path, perspective, response_language)
-        if user_ctx:
-            system = user_ctx + system
+        stable, variable = build_system_migration(
+            src_ver, tgt_ver, source_path, target_path, context_md, repo_path,
+            perspective, response_language, user_ctx=user_ctx,
+        )
         tools_c = TOOLS_CLAUDE_SRC
         tools_o = TOOLS_OPENAI_SRC
         tools_g = TOOLS_GEMINI_SRC
     elif profile is not None:
-        system   = build_system(profile, source_path, context_md, repo_path, perspective, response_language)
-        if active_company_name:
-            system = system.replace(
-                f"- Société : {profile.company_name or 'inconnue'}",
-                f"- Société : {profile.company_name or 'inconnue'}\n- Société active (filtre) : {active_company_name}"
-            )
-        if getattr(profile, "project_context", None):
-            system += f"\n\n---\n## Contexte projet\n{_trim_project_context(profile.project_context.strip())}\n"
-        if user_ctx:
-            system = user_ctx + system
+        stable, variable = build_system(
+            profile, source_path, context_md, repo_path, perspective, response_language,
+            user_ctx=user_ctx,
+            active_company_name=active_company_name,
+            project_context=getattr(profile, "project_context", None),
+        )
         tools_c  = TOOLS_CLAUDE
         tools_o  = TOOLS_OPENAI
         tools_g  = TOOLS_GEMINI
     else:
-        system   = build_system_general(version or "?", source_path, context_md, repo_path, perspective, response_language)
-        if user_ctx:
-            system = user_ctx + system
+        stable, variable = build_system_general(
+            version or "?", source_path, context_md, repo_path, perspective, response_language,
+            user_ctx=user_ctx,
+        )
         tools_c  = TOOLS_CLAUDE_SRC
         tools_o  = TOOLS_OPENAI_SRC
         tools_g  = TOOLS_GEMINI_SRC
+
+    # For non-Claude providers (no explicit cache_control), concatenate the
+    # two halves. _chat_claude receives them as a tuple and assembles a
+    # 2-block system with an ephemeral cache_control on the stable half.
+    system: object = (stable, variable) if provider == "claude" else f"{stable}\n\n{variable}".strip()
 
     # Append repo tools when a cloned repo is available
     if repo_path:
