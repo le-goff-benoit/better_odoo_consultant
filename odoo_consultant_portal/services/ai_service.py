@@ -408,18 +408,22 @@ def _trim_project_context(ctx: str) -> str:
     return ctx[:_MAX_PROJECT_CONTEXT_CHARS] + "\n\n[...contexte projet tronqué — trop long pour le modèle...]"
 
 
-# ── Perspective (functional / technical) ─────────────────────────
-
-PERSPECTIVE_TECHNICAL = "technical"
-PERSPECTIVE_FUNCTIONAL = "functional"
-_VALID_PERSPECTIVES = {PERSPECTIVE_TECHNICAL, PERSPECTIVE_FUNCTIONAL}
+# ── Perspective (support / ba / architect / developer) ──────────
+PERSPECTIVE_SUPPORT = "support"
+PERSPECTIVE_BUSINESS_ANALYST = "business_analyst"
+PERSPECTIVE_ARCHITECT = "architect"
+PERSPECTIVE_DEVELOPER = "developer"
+_VALID_PERSPECTIVES = {PERSPECTIVE_SUPPORT, PERSPECTIVE_BUSINESS_ANALYST, PERSPECTIVE_ARCHITECT, PERSPECTIVE_DEVELOPER}
 _VALID_RESPONSE_LANGUAGES = {"auto", "fr", "en"}
 
 
 def _normalize_perspective(p: Optional[str]) -> str:
     if p in _VALID_PERSPECTIVES:
         return p  # type: ignore[return-value]
-    return PERSPECTIVE_TECHNICAL
+    legacy = {"functional": PERSPECTIVE_BUSINESS_ANALYST, "technical": PERSPECTIVE_DEVELOPER}
+    if p in legacy:
+        return legacy[p]
+    return PERSPECTIVE_DEVELOPER
 
 
 def _normalize_response_language(language: Optional[str]) -> str:
@@ -457,7 +461,7 @@ def _perspective_block(perspective: str, *, migration: bool = False) -> str:
     to bias the assistant's reasoning, vocabulary and output format."""
     perspective = _normalize_perspective(perspective)
 
-    if perspective == PERSPECTIVE_FUNCTIONAL:
+    if perspective in {PERSPECTIVE_SUPPORT, PERSPECTIVE_BUSINESS_ANALYST}:
         common = """## Perspective : FONCTIONNELLE (AM / Business Analyst)
 
 Tu réponds comme un **Application Manager / Business Analyst Odoo**, pas comme un développeur.
@@ -506,7 +510,7 @@ Cette perspective est active pour la requête en cours : si l'utilisateur vient 
 """
         return common.strip() + "\n\n---\n"
 
-    # Technical perspective (default)
+    # Technical perspectives
     common = """## Perspective : TECHNIQUE (Architecte / Développeur)
 
 Tu réponds comme un **architecte ou développeur Odoo senior**.
@@ -533,7 +537,7 @@ Cette perspective est active pour la requête en cours : si l'utilisateur vient 
     return common.strip() + "\n\n---\n"
 
 
-def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
+def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_DEVELOPER, response_language: str = "auto") -> str:
     perspective_md = _perspective_block(perspective, migration=False)
     language_md = _language_block(response_language)
     source_section = ""
@@ -610,7 +614,7 @@ def build_system_migration(
     target_path: Optional[str] = None,
     context_md: str = "",
     repo_path: Optional[str] = None,
-    perspective: str = PERSPECTIVE_TECHNICAL,
+    perspective: str = PERSPECTIVE_DEVELOPER,
     response_language: str = "auto",
 ) -> str:
     perspective_md = _perspective_block(perspective, migration=True)
@@ -670,7 +674,7 @@ def build_system_migration(
 """
 
 
-def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
+def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_DEVELOPER, response_language: str = "auto") -> str:
     perspective_md = _perspective_block(perspective, migration=False)
     language_md = _language_block(response_language)
     source_section = (
@@ -1360,7 +1364,7 @@ async def stream_chat(
     target_path: Optional[str] = None,
     migration_mode: bool = False,
     target_version: Optional[str] = None,
-    perspective: str = PERSPECTIVE_TECHNICAL,
+    perspective: str = PERSPECTIVE_DEVELOPER,
     response_language: str = "auto",
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")

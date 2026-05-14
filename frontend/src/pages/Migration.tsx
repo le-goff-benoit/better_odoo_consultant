@@ -1110,7 +1110,7 @@ export default function Migration() {
   const [source, setSource] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
   const [target, setTarget] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
 
-  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('migration', 'technical'))
+  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('migration', 'developer'))
   const setPerspective = (p: Perspective) => { setPerspectiveState(p); savePerspective('migration', p) }
 
   const [messages, setMessages] = useState<Message[]>([])
@@ -1332,9 +1332,10 @@ export default function Migration() {
   }
 
   const showSuggestions = messages.length === 0 && ready && !input.trim()
+  const isFunctionalProfile = perspective === 'support' || perspective === 'business_analyst'
   const suggestionList = lang === 'en'
-    ? (perspective === 'functional' ? SUGGESTIONS_MIGRATION_FUNCTIONAL_EN : SUGGESTIONS_MIGRATION_TECHNICAL_EN)
-    : (perspective === 'functional' ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL)
+    ? (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL_EN : SUGGESTIONS_MIGRATION_TECHNICAL_EN)
+    : (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
