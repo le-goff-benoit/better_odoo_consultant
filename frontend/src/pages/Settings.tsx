@@ -739,15 +739,10 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
             {prov.models.map(m => {
               const on = isEnabled(prov.provider, m.id)
               return (
-                <button key={m.id} onClick={() => toggle(prov.provider, m.id)} style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '4px 10px',
-                  background: on ? `${prov.color}15` : t.bgMuted,
-                  border: `1px solid ${on ? prov.color : t.border}`,
-                  borderRadius: t.radiusFull,
-                  fontSize: 11, fontWeight: on ? 600 : 400,
-                  color: on ? prov.color : t.muted,
-                  cursor: 'pointer', transition: 'all .15s',
+                <button key={m.id} onClick={() => toggle(prov.provider, m.id)} className={`ui-chip-button${on ? ' is-active' : ''}`} style={{
+                  background: on ? `${prov.color}15` : undefined,
+                  borderColor: on ? prov.color : undefined,
+                  color: on ? prov.color : undefined,
                 }}>
                   <span style={{ fontSize: 10 }}>{on ? <Check size={11} /> : null}</span>
                   {m.label}
@@ -758,10 +753,7 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
         </div>
       ))}
       <div>
-        <button onClick={handleSave} style={{
-          padding: '7px 18px', background: `var(--brand, ${t.brand})`, color: '#fff', border: 'none',
-          borderRadius: t.radius, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        }}>
+        <button onClick={handleSave} className="btn btn-primary btn-sm">
           {saved ? <Check size={13} /> : null}
           {saved ? (lang === 'en' ? 'Saved' : 'Enregistré') : (lang === 'en' ? 'Save' : 'Enregistrer')}
         </button>
@@ -1262,7 +1254,7 @@ function UserProfileEditor() {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {['#22D3EE', '#818CF8', '#F472B6', '#34D399', '#F59E0B', '#EF4444', '#A855F7', '#F97316'].map(c => (
                     <button key={c} onClick={() => set('mascotColor', c)} style={{
-                      width: 22, height: 22, borderRadius: '50%', background: c, border: 'none',
+                      width: 26, height: 26, borderRadius: '50%', background: c, border: 'none',
                       cursor: 'pointer', outline: (form.mascotColor ?? '#22D3EE') === c ? `3px solid ${c}` : 'none',
                       outlineOffset: 2, transition: 'outline .1s',
                     }} />
@@ -1270,7 +1262,7 @@ function UserProfileEditor() {
                   <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} title={c.customColor}>
                     <input type="color" value={form.mascotColor ?? '#22D3EE'}
                       onChange={e => set('mascotColor', e.target.value)}
-                      style={{ width: 22, height: 22, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
+                      style={{ width: 26, height: 26, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
                   </label>
                 </div>
               </div>
@@ -1280,10 +1272,7 @@ function UserProfileEditor() {
       </div>
 
       <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={handleSave} style={{
-          padding: '8px 20px', background: form.primaryColor ?? t.brand, color: '#fff',
-          border: 'none', borderRadius: t.radius, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-        }}>
+        <button onClick={handleSave} className="btn btn-primary" style={{ background: form.primaryColor ?? t.brand }}>
           {saved ? c.saved : c.save}
         </button>
       </div>

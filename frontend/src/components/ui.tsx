@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react'
+import { X } from 'lucide-react'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'muted'
 type Size = 'sm' | 'md' | 'xs'
@@ -13,6 +14,7 @@ export function Button({
   icon,
   children,
   className,
+  type = 'button',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant
@@ -20,7 +22,7 @@ export function Button({
   icon?: ReactNode
 }) {
   return (
-    <button className={cx('ui-button', `ui-button-${variant}`, size !== 'md' && `ui-button-${size}`, className)} {...props}>
+    <button type={type} className={cx('ui-button', `ui-button-${variant}`, size !== 'md' && `ui-button-${size}`, className)} {...props}>
       {icon}
       {children}
     </button>
@@ -55,18 +57,22 @@ export function Card({
 
 export function Badge({
   tone = 'neutral',
+  size = 'sm',
   className,
   children,
   ...props
 }: HTMLAttributes<HTMLSpanElement> & {
   tone?: 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+  size?: 'sm' | 'md'
 }) {
   return (
-    <span className={cx('ui-badge', `ui-badge-${tone}`, className)} {...props}>
+    <span className={cx('ui-badge', `ui-badge-${tone}`, size === 'md' && 'ui-badge-md', className)} {...props}>
       {children}
     </span>
   )
 }
+
+export const Pill = Badge
 
 export function StatusPill({
   tone,
@@ -108,19 +114,21 @@ export function Modal({
   footer,
   onClose,
   width = 560,
+  closeLabel = 'Fermer',
 }: {
   title: ReactNode
   children: ReactNode
   footer?: ReactNode
   onClose: () => void
   width?: number
+  closeLabel?: string
 }) {
   return (
     <div className="ui-modal-overlay" role="presentation">
       <div className="ui-modal" role="dialog" aria-modal="true" style={{ maxWidth: width }}>
         <div className="ui-modal-header">
           <h2>{title}</h2>
-          <IconButton label="Fermer" onClick={onClose}>x</IconButton>
+          <IconButton label={closeLabel} onClick={onClose}><X size={16} /></IconButton>
         </div>
         <div className="ui-modal-body">{children}</div>
         {footer && <div className="ui-modal-footer">{footer}</div>}

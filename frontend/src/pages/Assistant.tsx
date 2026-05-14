@@ -191,6 +191,8 @@ const assistantCopy = {
     files: 'fichier(s)',
     truncated: 'texte tronqué côté serveur',
     emptyHistory: 'Aucune conversation sauvegardée',
+    close: 'Fermer',
+    deleteConversation: 'Supprimer la conversation',
     resume: 'Reprendre',
     activeEnv: 'Environnement actif',
     default: 'défaut',
@@ -238,6 +240,8 @@ const assistantCopy = {
     files: 'file(s)',
     truncated: 'text truncated server-side',
     emptyHistory: 'No saved conversations',
+    close: 'Close',
+    deleteConversation: 'Delete conversation',
     resume: 'Resume',
     activeEnv: 'Active environment',
     default: 'default',
@@ -1111,7 +1115,7 @@ export default function Assistant() {
         <div className="assistant-history-panel">
           <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{c.history}</span>
-            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
+            <button onClick={() => setShowHistory(false)} className="ui-icon-button" aria-label={c.close} title={c.close}><X size={15} /></button>
           </div>
           {(savedConvs[convKey] ?? []).length === 0
             ? <div style={{ padding: '20px 14px', fontSize: 12, color: t.muted, textAlign: 'center' }}>{c.emptyHistory}</div>
@@ -1124,7 +1128,7 @@ export default function Assistant() {
                   <span style={{ fontSize: 12, fontWeight: 650, color: t.text, lineHeight: 1.4, flex: 1 }}
                     title={conv.title}>{conv.title}</span>
                   <button onClick={() => deleteConv(convKey, conv.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 13, flexShrink: 0, lineHeight: 1, padding: '1px 2px' }}>×</button>
+                    className="ui-icon-button" aria-label={c.deleteConversation} title={c.deleteConversation}><X size={14} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 10, color: t.muted }}>{fmtDate(conv.updatedAt)}</span>

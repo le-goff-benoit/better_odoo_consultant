@@ -399,7 +399,7 @@ export default function Profiles() {
                 {editingId !== null ? c.editProject(form.name) : c.newProject}
               </h2>
               <button onClick={() => { setShowWizard(false); setEditingId(null); setDiag(null) }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, lineHeight: 1, padding: '2px 6px' }}>
+                className="ui-icon-button" aria-label={c.cancel} title={c.cancel}>
                 <X size={18} />
               </button>
             </div>
@@ -586,7 +586,7 @@ export default function Profiles() {
                             </div>
                           </div>
                         </div>
-                        <button onClick={() => setShowAccessWarning(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16, padding: '0 0 0 8px', flexShrink: 0 }}>✕</button>
+                        <button onClick={() => setShowAccessWarning(false)} className="ui-icon-button" aria-label={c.cancel} title={c.cancel}><X size={14} /></button>
                       </div>
                     </div>
                   )}
@@ -655,7 +655,7 @@ export default function Profiles() {
                 <ClipboardList size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} /> {c.contextProject} — {profiles.find(p => p.id === contextProfileId)?.name}
               </h2>
               <button onClick={() => setContextProfileId(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.muted, fontSize: 20, lineHeight: 1, padding: '2px 6px' }}>
+                className="ui-icon-button" aria-label={c.cancel} title={c.cancel}>
                 <X size={18} />
               </button>
             </div>

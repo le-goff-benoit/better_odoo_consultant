@@ -44,8 +44,8 @@ export const t = {
   info:      '#2563eb',
 
   // Shadows
-  shadow:   '0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04)',
-  shadowMd: '0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06)',
+  shadow:   'var(--th-shadow)',
+  shadowMd: 'var(--th-shadow-hover)',
   shadowLg: '0 20px 48px rgba(0,0,0,.18)',
 
   // Aliases
@@ -54,15 +54,15 @@ export const t = {
   white:       'var(--th-white, #ffffff)',
 
   // Shape
-  radius:     '6px',
-  radiusSm:   '4px',
-  radiusLg:   '10px',
-  radiusXl:   '14px',
-  radiusFull: '9999px',
+  radius:     'var(--radius-md)',
+  radiusSm:   'var(--radius-sm)',
+  radiusLg:   'var(--radius-lg)',
+  radiusXl:   'var(--radius-xl)',
+  radiusFull: 'var(--radius-full)',
 
   // Type
   font:     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  fontSize: '15px',
+  fontSize: 'var(--font-base)',
   navWidth: '232px',
 } as const
 
@@ -71,23 +71,23 @@ import type React from 'react'
 export const btn = {
   primary: {
     padding: '8px 18px', background: 'var(--brand, #017e84)', color: '#fff',
-    border: 'none', borderRadius: '6px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+    border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 650, cursor: 'pointer', minHeight: 36,
   } as React.CSSProperties,
   secondary: {
-    padding: '7px 16px', background: 'transparent', color: 'var(--th-text-sub, #334155)',
-    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: '6px', fontSize: 13, cursor: 'pointer',
+    padding: '8px 16px', background: 'transparent', color: 'var(--th-text-sub, #334155)',
+    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: 'var(--radius-md)', fontSize: 14, cursor: 'pointer', minHeight: 36,
   } as React.CSSProperties,
   ghost: {
-    padding: '6px 14px', background: 'var(--th-bg-muted, #f1f5f9)', color: 'var(--th-text-sub, #334155)',
-    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: '6px', fontSize: 12, cursor: 'pointer', fontWeight: 500,
+    padding: '7px 14px', background: 'var(--th-bg-muted, #f1f5f9)', color: 'var(--th-text-sub, #334155)',
+    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer', fontWeight: 500, minHeight: 36,
   } as React.CSSProperties,
   danger: {
-    padding: '7px 16px', background: '#dc2626', color: '#fff',
-    border: 'none', borderRadius: '6px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+    padding: '8px 16px', background: '#dc2626', color: '#fff',
+    border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 650, cursor: 'pointer', minHeight: 36,
   } as React.CSSProperties,
   outline: (color: string): React.CSSProperties => ({
-    padding: '6px 14px', background: 'transparent',
+    padding: '7px 14px', background: 'transparent',
     border: `1px solid ${color}`, color,
-    borderRadius: '6px', fontSize: 12, cursor: 'pointer', fontWeight: 600,
+    borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer', fontWeight: 600, minHeight: 36,
   }),
 }

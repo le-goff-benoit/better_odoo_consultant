@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listProjects, createProject, cloneProject, pullProject } from '../api/client'
+import PageHeader from '../components/PageHeader'
+import { Button, Card, Field } from '../components/ui'
+import { useUiLanguage } from '../i18n'
 
 interface Project { id: number; name: string; local_path: string; remote_url?: string }
 
 export default function Projects() {
+  const lang = useUiLanguage()
+  const c = lang === 'en'
+    ? { title: 'Repositories', description: 'Legacy repository workspace for local project clones.', name: 'Name', localPath: 'Local path', remoteUrl: 'Remote URL', add: 'Add repository', clone: 'Clone', pull: 'Pull', empty: 'No repository configured.' }
+    : { title: 'Dépôts', description: 'Espace historique de gestion des dépôts projet clonés localement.', name: 'Nom', localPath: 'Chemin local', remoteUrl: 'URL distante', add: 'Ajouter le dépôt', clone: 'Cloner', pull: 'Mettre à jour', empty: 'Aucun dépôt configuré.' }
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ['projects'], queryFn: listProjects })
   const projects: Project[] = data?.data ?? []
@@ -27,36 +34,48 @@ export default function Projects() {
   })
 
   return (
-    <div>
-      <h1 style={{ marginBottom: 24 }}>Projects</h1>
-      {msg && <p style={{ marginBottom: 12 }}>{msg}</p>}
-      <div style={{ background: '#fff', padding: 20, borderRadius: 8, marginBottom: 24 }}>
-        {(['name', 'local_path', 'remote_url'] as const).map(f => (
-          <div key={f} style={{ marginBottom: 8 }}>
-            <label style={{ display: 'block', fontSize: 12 }}>{f}</label>
-            <input value={form[f]} onChange={e => setForm(p => ({ ...p, [f]: e.target.value }))} style={{ padding: 6, width: 320 }} />
+    <div className="page-stack">
+      <PageHeader title={c.title} description={c.description} />
+      {msg && <div className="ui-alert" style={{ marginBottom: 16, borderLeftColor: msg.startsWith('Error') ? '#dc2626' : 'var(--brand)' }}>{msg}</div>}
+
+      <Card className="page-card" style={{ marginBottom: 24 }}>
+        <div className="page-card-body">
+          <div className="ui-form-grid" style={{ marginBottom: 16 }}>
+            <Field label={c.name}>
+              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className="ui-input" />
+            </Field>
+            <Field label={c.localPath}>
+              <input value={form.local_path} onChange={e => setForm(p => ({ ...p, local_path: e.target.value }))} className="ui-input" />
+            </Field>
+            <Field label={c.remoteUrl}>
+              <input value={form.remote_url} onChange={e => setForm(p => ({ ...p, remote_url: e.target.value }))} className="ui-input" />
+            </Field>
           </div>
-        ))}
-        <button onClick={() => create.mutate()} style={{ marginTop: 12, padding: '8px 16px', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-          Add Project
-        </button>
+          <Button variant="primary" onClick={() => create.mutate()} disabled={create.isPending || !form.name.trim()}>{c.add}</Button>
+        </div>
+      </Card>
+
+      <div className="ui-data-table-wrap">
+        <table className="ui-data-table">
+          <thead><tr>{['ID', c.name, c.localPath, ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
+          <tbody>
+            {projects.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--th-muted)' }}>{c.empty}</td></tr>}
+            {projects.map(p => (
+              <tr key={p.id}>
+                <td>{p.id}</td>
+                <td>{p.name}</td>
+                <td><code>{p.local_path}</code></td>
+                <td>
+                  <div className="ui-actions-row">
+                    <Button size="sm" variant="secondary" onClick={() => clone.mutate(p.id)}>{c.clone}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => pull.mutate(p.id)}>{c.pull}</Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
-        <thead><tr style={{ background: '#eee' }}>{['ID', 'Name', 'Path', ''].map(h => <th key={h} style={{ padding: 10, textAlign: 'left' }}>{h}</th>)}</tr></thead>
-        <tbody>
-          {projects.map(p => (
-            <tr key={p.id} style={{ borderTop: '1px solid #eee' }}>
-              <td style={{ padding: 10 }}>{p.id}</td>
-              <td style={{ padding: 10 }}>{p.name}</td>
-              <td style={{ padding: 10, fontSize: 12 }}>{p.local_path}</td>
-              <td style={{ padding: 10 }}>
-                <button onClick={() => clone.mutate(p.id)} style={{ marginRight: 8, cursor: 'pointer' }}>Clone</button>
-                <button onClick={() => pull.mutate(p.id)} style={{ cursor: 'pointer' }}>Pull</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   )
 }

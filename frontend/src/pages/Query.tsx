@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { listProfiles, searchRecords, getFields } from '../api/client'
 import { useUiLanguage } from '../i18n'
+import PageHeader from '../components/PageHeader'
+import { Button, Card, Field, StatusPill } from '../components/ui'
 
 interface Profile { id: number; name: string }
 
 export default function Query() {
   const lang = useUiLanguage()
   const c = lang === 'en'
-    ? { title: 'Query', profile: 'Profile', select: '— select —', model: 'Model', limit: 'Limit', exportAs: 'Export as', none: 'none', loadFields: 'Load fields', loading: 'Loading…', search: 'Search', fields: 'Fields:', more: 'more', records: 'records' }
-    : { title: 'Requêtes', profile: 'Profil', select: '— sélectionner —', model: 'Modèle', limit: 'Limite', exportAs: 'Exporter en', none: 'aucun', loadFields: 'Charger les champs', loading: 'Chargement…', search: 'Rechercher', fields: 'Champs :', more: 'en plus', records: 'enregistrements' }
+    ? { title: 'Query', description: 'Read live Odoo records from a configured project and export a small dataset.', profile: 'Profile', select: 'Select a project', model: 'Model', modelHint: 'Example: res.partner, sale.order, account.move', limit: 'Limit', exportAs: 'Export as', none: 'None', loadFields: 'Load fields', loading: 'Loading…', search: 'Search', fields: 'Fields', more: 'more', records: 'records', result: 'Result preview', noResult: 'Run a search to preview records or an export.' }
+    : { title: 'Requêtes', description: 'Lisez des enregistrements Odoo en direct depuis un projet configuré et exportez un jeu de données ciblé.', profile: 'Profil', select: 'Sélectionner un projet', model: 'Modèle', modelHint: 'Exemple : res.partner, sale.order, account.move', limit: 'Limite', exportAs: 'Exporter en', none: 'Aucun', loadFields: 'Charger les champs', loading: 'Chargement…', search: 'Rechercher', fields: 'Champs', more: 'en plus', records: 'enregistrements', result: 'Aperçu du résultat', noResult: 'Lancez une recherche pour prévisualiser les enregistrements ou un export.' }
   const { data: profilesData } = useQuery({ queryKey: ['profiles'], queryFn: listProfiles })
   const profiles: Profile[] = profilesData?.data ?? []
   const [profileId, setProfileId] = useState<number | ''>('')
@@ -31,55 +33,73 @@ export default function Query() {
   })
 
   return (
-    <div>
-      <h1 style={{ marginBottom: 24 }}>{c.title}</h1>
-      <div style={{ background: '#fff', padding: 20, borderRadius: 8, marginBottom: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 12 }}>{c.profile}</label>
-            <select value={profileId} onChange={e => setProfileId(Number(e.target.value))} style={{ padding: 6, width: '100%' }}>
+    <div className="page-stack">
+      <PageHeader title={c.title} description={c.description} />
+
+      <Card className="page-card" style={{ marginBottom: 24 }}>
+        <div className="page-card-body">
+          <div className="ui-form-grid" style={{ marginBottom: 16 }}>
+            <Field label={c.profile}>
+              <select value={profileId} onChange={e => setProfileId(e.target.value ? Number(e.target.value) : '')} className="ui-input">
               <option value="">{c.select}</option>
               {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12 }}>{c.model}</label>
-            <input value={model} onChange={e => setModel(e.target.value)} style={{ padding: 6, width: '100%' }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12 }}>{c.limit}</label>
-            <input type="number" value={limit} onChange={e => setLimit(Number(e.target.value))} style={{ padding: 6, width: '100%' }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12 }}>{c.exportAs}</label>
-            <select value={exportFormat} onChange={e => setExportFormat(e.target.value)} style={{ padding: 6, width: '100%' }}>
+              </select>
+            </Field>
+            <Field label={c.model} hint={c.modelHint}>
+              <input value={model} onChange={e => setModel(e.target.value)} className="ui-input" />
+            </Field>
+            <Field label={c.limit}>
+              <input type="number" min={1} max={500} value={limit} onChange={e => setLimit(Number(e.target.value))} className="ui-input" />
+            </Field>
+            <Field label={c.exportAs}>
+              <select value={exportFormat} onChange={e => setExportFormat(e.target.value)} className="ui-input">
               <option value="">{c.none}</option>
               <option value="markdown">Markdown</option>
               <option value="csv">CSV</option>
               <option value="excel">Excel</option>
-            </select>
+              </select>
+            </Field>
+          </div>
+          <div className="ui-actions-row">
+            <Button variant="secondary" onClick={() => profileId && fetchFields.mutate()} disabled={!profileId || fetchFields.isPending}>
+              {fetchFields.isPending ? c.loading : c.loadFields}
+            </Button>
+            <Button variant="primary" onClick={() => search.mutate()} disabled={!profileId || search.isPending}>
+              {search.isPending ? c.loading : c.search}
+            </Button>
           </div>
         </div>
-        <button onClick={() => profileId && fetchFields.mutate()} style={{ marginRight: 8, padding: '8px 14px', cursor: 'pointer' }}>{c.loadFields}</button>
-        <button onClick={() => search.mutate()} disabled={!profileId} style={{ padding: '8px 16px', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-          {search.isPending ? c.loading : c.search}
-        </button>
-      </div>
+      </Card>
+
       {Object.keys(fields).length > 0 && (
-        <div style={{ background: '#fff', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 12 }}>
-          <strong>{c.fields}</strong> {Object.entries(fields).slice(0, 20).map(([k, v]) => `${k} (${v.type})`).join(', ')}
-          {Object.keys(fields).length > 20 && ` … +${Object.keys(fields).length - 20} ${c.more}`}
-        </div>
+        <Card className="page-card" style={{ marginBottom: 16 }}>
+          <div className="page-card-body-compact">
+            <div className="ui-section-title">{c.fields}</div>
+            <div className="ui-actions-row">
+              {Object.entries(fields).slice(0, 20).map(([k, v]) => (
+                <span className="ui-badge ui-badge-neutral" key={k}>{k} · {v.type}</span>
+              ))}
+              {Object.keys(fields).length > 20 && <StatusPill tone="idle">+{Object.keys(fields).length - 20} {c.more}</StatusPill>}
+            </div>
+          </div>
+        </Card>
       )}
-      {result && (
-        <div style={{ background: '#fff', padding: 16, borderRadius: 8 }}>
-          <p style={{ marginBottom: 8, fontSize: 13 }}>{result.count} {c.records}</p>
-          {result.export && <pre style={{ fontSize: 12, overflow: 'auto', maxHeight: 400, background: '#f5f5f5', padding: 12 }}>{result.export}</pre>}
-          {result.records && !result.export && (
-            <pre style={{ fontSize: 12, overflow: 'auto', maxHeight: 400 }}>{JSON.stringify(result.records.slice(0, 5), null, 2)}</pre>
+
+      <Card className="page-card">
+        <div className="page-card-body">
+          <div className="ui-section-title">{c.result}</div>
+          {!result && <div className="ui-empty-description">{c.noResult}</div>}
+          {result && (
+            <>
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--th-muted)' }}>{result.count ?? 0} {c.records}</p>
+              {result.export && <pre className="ui-code-block">{result.export}</pre>}
+              {result.records && !result.export && (
+                <pre className="ui-code-block">{JSON.stringify(result.records.slice(0, 5), null, 2)}</pre>
+              )}
+            </>
           )}
         </div>
-      )}
+      </Card>
     </div>
   )
 }

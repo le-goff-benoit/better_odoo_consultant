@@ -391,10 +391,8 @@ export default function Sources() {
               onKeyDown={e => e.key === 'Enter' && addCustomVersion()}
               placeholder={c.customPlaceholder}
               autoFocus
-              style={{
-                padding: '7px 12px', border: `1px solid ${t.border}`, borderRadius: t.radius,
-                fontSize: 13, color: t.text, background: t.bgCard, width: 130, outline: 'none',
-              }}
+              className="ui-input"
+              style={{ width: 140 }}
             />
             <button className="btn btn-primary" onClick={addCustomVersion}>{c.add}</button>
             <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setCustomInput('') }}>{c.cancel}</button>
@@ -506,10 +504,7 @@ export default function Sources() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!isMajor && (
-                      <button onClick={() => removeCustomVersion(version)} style={{
-                        background: 'none', border: 'none', color: t.muted, fontSize: 16,
-                        cursor: 'pointer', padding: '2px 4px', lineHeight: 1,
-                      }} title={c.removeVersion}><Trash2 size={14} /></button>
+                      <button onClick={() => removeCustomVersion(version)} className="ui-icon-button" title={c.removeVersion} aria-label={c.removeVersion}><Trash2 size={14} /></button>
                     )}
                     <StatusBadge status={status} isInstalled={isInstalled} loading={statusLoading} labels={c} />
                   </div>
@@ -561,7 +556,7 @@ export default function Sources() {
 
                 {/* Advanced toggle */}
                 <button onClick={() => setAdvanced(isOpen ? null : version)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: t.action, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
+                  className="btn btn-outline-muted btn-xs" style={{ marginBottom: 6 }}>
                   {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   {isOpen ? c.hideOptions : c.showOptions}
                 </button>
@@ -571,14 +566,14 @@ export default function Sources() {
                     <label style={{ display: 'block', fontSize: 11, color: t.muted, marginBottom: 4 }}>{c.targetFolder}</label>
                     <input value={customPaths[version] ?? ''} placeholder={defaultPath(version)}
                       onChange={e => setCustomPaths(p => ({ ...p, [version]: e.target.value }))}
-                      style={{ width: '100%', padding: '6px 10px', border: `1px solid ${t.border}`, borderRadius: t.radius, fontSize: 12, boxSizing: 'border-box', background: t.bgCard, color: t.text }} />
+                      className="ui-input" style={{ fontSize: 12 }} />
                   </div>
                 )}
 
                 {/* Logs */}
                 {(card?.logs?.length ?? 0) > 0 && (
                   <button onClick={() => setCards(p => ({ ...p, [version]: { ...p[version], showLogs: !p[version]?.showLogs } }))}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: t.muted, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 6, textAlign: 'left' }}>
+                    className="btn btn-outline-muted btn-xs" style={{ marginBottom: 6 }}>
                     {card?.showLogs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                     {card?.showLogs ? c.hideLogs : `${c.showLogs} (${card?.logs.length})`}
                   </button>
@@ -587,6 +582,7 @@ export default function Sources() {
 
                 {/* Action button */}
                 <button
+                  className="btn btn-primary"
                   disabled={status === 'running'}
                   onClick={() => status === 'running' ? abortRefs.current[version]?.abort() : startSync(version)}
                   style={btnDownload(status, isInstalled)}

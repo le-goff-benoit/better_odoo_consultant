@@ -1,4 +1,4 @@
-interface IconProps { size?: number; color?: string; style?: React.CSSProperties }
+interface IconProps { size?: number; color?: string; style?: React.CSSProperties; className?: string }
 
 const icons = {
   dashboard: (
@@ -83,12 +83,13 @@ const icons = {
 
 export type IconName = keyof typeof icons
 
-export default function Icon({ name, size = 16, color = 'currentColor', style }: IconProps & { name: IconName }) {
+export default function Icon({ name, size = 16, color = 'currentColor', style, className }: IconProps & { name: IconName }) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
       fill="none" stroke={color} strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round"
+      className={className}
       style={{ flexShrink: 0, display: 'inline-block', ...style }}
     >
       {icons[name]}
