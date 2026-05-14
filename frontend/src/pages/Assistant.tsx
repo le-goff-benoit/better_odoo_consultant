@@ -5,8 +5,10 @@ import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
-import PerspectiveToggle, { Perspective, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
+import PerspectiveToggle, { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
+import ConversationContextPanel from '../components/ConversationContextPanel'
+import { useWorkspaceContext } from '../components/Layout'
 
 import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
@@ -23,6 +25,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
+import { extractToolContextItems, resolvePerspective, routedContextFiles } from '../utils/aiContext'
 
 function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
   const def = ODOO_APPS[name]
@@ -43,7 +46,17 @@ function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
 
 interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string }
 interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string; github_repo?: string; repo_branch?: string }
-interface CompanyOption { id: number; name: string }
+interface L10nModule { name: string; source?: string; path?: string }
+interface CompanyOption {
+  id: number
+  name: string
+  country_code?: string
+  country_name?: string
+  currency?: string
+  chart_template?: string
+  installed_l10n_modules?: string[]
+  available_l10n_modules?: L10nModule[]
+}
 
 interface AiEvent {
   type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'done' | 'end'
@@ -86,6 +99,16 @@ const LS_ACTIVE  = 'odoo-active-convs'
 
 function loadHistory(): Record<string, SavedConv[]> {
   try { return JSON.parse(localStorage.getItem(LS_HISTORY) ?? '{}') } catch { return {} }
+}
+
+function parseCompanies(raw?: string): CompanyOption[] {
+  try { return JSON.parse(raw ?? '[]') as CompanyOption[] } catch { return [] }
+}
+
+function companyLocalizationLabel(company?: CompanyOption | null) {
+  if (!company) return undefined
+  const parts = [company.country_code, company.currency].filter(Boolean)
+  return parts.length ? parts.join(' · ') : undefined
 }
 function persistHistory(h: Record<string, SavedConv[]>) {
   try { localStorage.setItem(LS_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
@@ -250,6 +273,7 @@ const GENERAL_KEY = 'general'
 
 export default function Assistant() {
   const lang = useUiLanguage()
+  const { contextOpen } = useWorkspaceContext()
   const c = assistantCopy[lang]
   const location = useLocation()
   const { data: profData }  = useQuery({ queryKey: ['profiles'],      queryFn: listProfiles })
@@ -302,8 +326,10 @@ export default function Assistant() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
 
-  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('assistant', 'developer'))
-  const setPerspective = (p: Perspective) => { setPerspectiveState(p); savePerspective('assistant', p) }
+  const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('assistant', 'auto'))
+  const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
+  const perspective = resolvePerspective(perspectiveMode, perspectivePrompt, 'developer')
+  const setPerspective = (p: PerspectiveMode) => { setPerspectiveState(p); savePerspective('assistant', p) }
 
   // Init provider when providers load
   useEffect(() => {
@@ -394,6 +420,27 @@ export default function Assistant() {
     return envs.find(e => e.id === effectiveId) ?? envs[0] ?? null
   })()
   const activeEnvRepo = activeEnvObj?.github_repo ?? null
+  const activeCompany = (() => {
+    if (!selectedProfile) return null
+    const companies = parseCompanies(selectedProfile.company_ids)
+    if (companies.length === 0) return null
+    const activeId = selectedCompanyId ?? selectedProfile.selected_company_id ?? companies[0]?.id
+    return companies.find(company => company.id === activeId) ?? companies[0] ?? null
+  })()
+  const activeCompanyName = activeCompany?.name
+  const activeCompanyLocalization = companyLocalizationLabel(activeCompany)
+  const latestAssistantEvents = [...messages].reverse().find(m => m.role === 'assistant')?.events ?? []
+  const contextFiles = routedContextFiles({
+    prompt: perspectivePrompt,
+    perspective,
+    version: activeVersion,
+    migration: false,
+  })
+  const conversationSources = [
+    activeVersion && sourcesInstalled ? `Sources Odoo ${activeVersion}${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' Community' : ' Enterprise'}` : null,
+    activeEnvRepo ? `Repo ${activeEnvRepo.split('/').slice(-2).join('/')}` : null,
+  ].filter(Boolean) as string[]
+  const contextToolItems = extractToolContextItems(latestAssistantEvents)
 
   // Deduplicate versions: strip -enterprise suffix, keep one entry per base version
   // Show community + enterprise availability indicators in the dropdown
@@ -916,7 +963,7 @@ export default function Assistant() {
 
       {/* Company selector bar (shown when profile has multiple companies) */}
       {selectedProfile && !isGeneralMode && (() => {
-        const companies: CompanyOption[] = (() => { try { return JSON.parse(selectedProfile.company_ids ?? '[]') } catch { return [] } })()
+        const companies = parseCompanies(selectedProfile.company_ids)
         if (companies.length <= 1) return null
         const activeId = selectedCompanyId ?? companies[0]?.id ?? null
         const accessInfo = (() => { try { return selectedProfile.user_access_info ? JSON.parse(selectedProfile.user_access_info) : null } catch { return null } })()
@@ -935,6 +982,7 @@ export default function Assistant() {
                     title={!isAccessible ? `L'utilisateur ${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
                     className={`assistant-company-button${isActive ? ' is-active' : ''}`}>
                     {!isAccessible && <Lock size={11} />}{c.name}
+                    {companyLocalizationLabel(c) && <small>{companyLocalizationLabel(c)}</small>}
                   </button>
                 )
               })}
@@ -1034,7 +1082,8 @@ export default function Assistant() {
           </button>
           <div className="assistant-perspective-slot">
             <PerspectiveToggle
-              value={perspective}
+              value={perspectiveMode}
+              effectiveValue={perspective}
               onChange={setPerspective}
               size="sm"
               disabled={streaming}
@@ -1099,6 +1148,24 @@ export default function Assistant() {
             ))
           }
         </div>
+      )}
+      {contextOpen && (
+        <ConversationContextPanel
+          mode={perspectiveMode}
+          effectivePerspective={perspective}
+          provider={currentProv?.label}
+          model={currentProv?.models.find(m => m.id === modelId)?.label}
+          project={isGeneralMode ? undefined : selectedProfile?.name}
+          environment={activeEnvObj?.name}
+          company={activeCompanyName}
+          localization={activeCompanyLocalization}
+          version={activeVersion}
+          repo={activeEnvRepo}
+          contextFiles={contextFiles}
+          sources={conversationSources}
+          attachments={readyAttachments.map(a => a.name)}
+          toolItems={contextToolItems}
+        />
       )}
       </div>
     </div>
@@ -1567,7 +1634,6 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   const time   = fmtTime(timestamp)
   const tokens = fmtTokens(inputTokens, outputTokens)
   const [copied, setCopied] = useState(false)
-  const contextItems = extractContextItems(events)
 
   function copyText() {
     if (!textEvt?.content) return
@@ -1593,31 +1659,27 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
         {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} projectName={projectName} />}
 
         {textEvt?.content && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-            <div style={{
-              position: 'relative',
-              flex: 1,
-              background: t.bgCard, border: `1px solid ${t.border}`,
-              borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
-              padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
-            }}>
-              <button
-                onClick={copyText}
-                title={c.copyTitle}
-                style={{
-                  position: 'absolute', top: 8, right: 8,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 26, height: 26, border: `1px solid ${t.border}`,
-                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                  color: copied ? t.success : t.muted, opacity: 0.8,
-                  transition: 'opacity .15s, color .15s',
-                }}
-              >
-                {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
-              </button>
-              <Markdown text={textEvt.content} />
-            </div>
-            <ContextSourcesPanel items={contextItems} />
+          <div style={{
+            position: 'relative',
+            background: t.bgCard, border: `1px solid ${t.border}`,
+            borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
+            padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
+          }}>
+            <button
+              onClick={copyText}
+              title={c.copyTitle}
+              style={{
+                position: 'absolute', top: 8, right: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 26, height: 26, border: `1px solid ${t.border}`,
+                borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                color: copied ? t.success : t.muted, opacity: 0.8,
+                transition: 'opacity .15s, color .15s',
+              }}
+            >
+              {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
+            </button>
+            <Markdown text={textEvt.content} />
           </div>
         )}
 
@@ -1671,72 +1733,6 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
         )}
       </div>
     </div>
-  )
-}
-
-interface ContextItem { type: 'context' | 'source'; label: string; detail?: string }
-
-function extractContextItems(events: AiEvent[]): ContextItem[] {
-  const seen = new Set<string>()
-  const out: ContextItem[] = []
-  for (const evt of events) {
-    if (evt.type !== 'tool_call') continue
-    const name = evt.name ?? ''
-    const args = evt.args ?? {}
-    if (name === 'read_odoo_file' || name === 'read_project_file') {
-      const path = String(args.path ?? '')
-      if (!path) continue
-      const key = `${name}:${path}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push({ type: 'context', label: path, detail: name === 'read_odoo_file' ? 'Odoo' : 'Projet' })
-    } else if (name === 'search_odoo_source' || name === 'search_project_source') {
-      const scope = name === 'search_odoo_source' ? 'Sources Odoo' : 'Code custom'
-      const pattern = String(args.pattern ?? '')
-      const version = String(args.version ?? '')
-      const label = pattern ? `Recherche: ${pattern}` : 'Recherche'
-      const detail = version ? `${scope} · v${version}` : scope
-      const key = `${name}:${pattern}:${version}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push({ type: 'source', label, detail })
-    }
-  }
-  return out.slice(-10)
-}
-
-function ContextSourcesPanel({ items }: { items: ContextItem[] }) {
-  if (!items.length) return null
-  return (
-    <aside style={{
-      width: 260, flexShrink: 0,
-      border: `1px solid ${t.border}`,
-      borderRadius: t.radiusLg,
-      background: t.bg,
-      padding: '10px 10px 8px',
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: t.textSub, marginBottom: 8 }}>
-        Contexte & sources
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {items.map((item, idx) => (
-          <div key={`${item.label}-${idx}`} style={{
-            border: `1px solid ${t.border}`,
-            borderRadius: t.radius,
-            padding: '6px 8px',
-            background: item.type === 'context' ? `${t.brand}08` : `${t.success}12`,
-          }}>
-            <div style={{ fontSize: 10, color: t.muted, marginBottom: 2 }}>
-              {item.type === 'context' ? 'Fichier' : 'Source'}
-            </div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {item.label}
-            </div>
-            {item.detail && <div style={{ fontSize: 10, color: t.textSub }}>{item.detail}</div>}
-          </div>
-        ))}
-      </div>
-    </aside>
   )
 }
 

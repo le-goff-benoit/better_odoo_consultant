@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Odoo Consultant Portal">
+  <defs>
+    <linearGradient id="bg" x1="10" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#134e4a"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <path
+    d="M20 20h10c6.6 0 12 5.4 12 12s-5.4 12-12 12H20V20Zm10 17.5a5.5 5.5 0 0 0 0-11h-3.5v11H30Z"
+    fill="#f8fafc"
+  />
+  <path
+    d="M44.5 20.5c4.4 0 7.8 2.2 9.5 5.7l-5.3 3.1c-.8-1.7-2.2-2.6-4.1-2.6-3 0-5 2.2-5 5.3s2 5.3 5 5.3c1.9 0 3.4-.9 4.2-2.6l5.3 3c-1.7 3.6-5.1 5.8-9.6 5.8-6.8 0-11.7-4.8-11.7-11.5s4.9-11.5 11.7-11.5Z"
+    fill="#ccfbf1"
+  />
+  <circle cx="18" cy="18" r="3" fill="#99f6e4"/>
+</svg>

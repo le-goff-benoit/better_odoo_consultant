@@ -2,6 +2,9 @@ import asyncio
 import json
 import logging
 import os as _os
+import shutil
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -18,6 +21,11 @@ from ...services.profile_manager import (
     get_active_env_from_json, get_active_api_key,
 )
 from ...services.odoo_client import OdooClient
+from ...services.localization_service import (
+    detect_company_localizations,
+    dump_company_cache,
+    merge_company_localizations,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -269,16 +277,24 @@ async def diagnose(body: DiagnoseRequest):
     except Exception:
         pass
 
-    # Step 5 — available companies (best-effort, for multi-company detection)
+    # Step 5 — available companies + fiscal localization cache (best-effort)
     company_ids_json = None
     try:
-        all_companies = await loop.run_in_executor(
-            None,
-            lambda: client.search_read("res.company", [], ["id", "name"], limit=50)
-        )
-        company_ids_json = json.dumps([{"id": c["id"], "name": c["name"]} for c in all_companies])
+        companies = await detect_company_localizations(client, odoo_version)
+        if companies:
+            company_ids_json = dump_company_cache(companies)
+            first = companies[0]
+            company_name = company_name or first.get("name") or None
+            company_city = company_city or first.get("city") or None
     except Exception:
-        pass
+        try:
+            all_companies = await loop.run_in_executor(
+                None,
+                lambda: client.search_read("res.company", [], ["id", "name"], limit=50)
+            )
+            company_ids_json = json.dumps([{"id": c["id"], "name": c["name"]} for c in all_companies])
+        except Exception:
+            pass
 
     # Step 6 — user access / admin check (best-effort)
     access_info = None
@@ -498,6 +514,12 @@ async def check_access(profile_id: int, session: AsyncSession = Depends(get_sess
     try:
         info = await _check_user_access(client, loop)
         profile.user_access_info = json.dumps(info)
+        try:
+            companies = await detect_company_localizations(client, profile.odoo_version)
+            if companies:
+                profile.company_ids = dump_company_cache(merge_company_localizations(profile.company_ids, companies))
+        except Exception:
+            pass
         profile.updated_at = datetime.utcnow()
         session.add(profile)
         await session.commit()
@@ -506,6 +528,33 @@ async def check_access(profile_id: int, session: AsyncSession = Depends(get_sess
     except Exception as exc:
         log.exception("check_access failed for profile %s", profile_id)
         raise HTTPException(400, str(exc))
+
+
+@router.post("/{profile_id}/localization/refresh")
+async def refresh_localization(profile_id: int, session: AsyncSession = Depends(get_session)):
+    """Refresh cached fiscal localization metadata for all companies of a project."""
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    client = _get_client_from_profile(profile)
+    fallback = {"odoo_version": profile.odoo_version}
+    active_env = get_active_env_from_json(profile.environments, profile.active_env_id, fallback)
+    version = active_env.get("odoo_version") or profile.odoo_version
+    try:
+        companies = await detect_company_localizations(client, version)
+    except Exception as exc:
+        raise HTTPException(400, f"Impossible de détecter la localisation : {exc}")
+    if not companies:
+        raise HTTPException(400, "Aucune société détectée sur l'instance Odoo")
+    profile.company_ids = dump_company_cache(merge_company_localizations(profile.company_ids, companies))
+    first = companies[0]
+    profile.company_name = profile.company_name or first.get("name")
+    profile.company_city = profile.company_city or first.get("city")
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+    return {"companies": companies, "company_ids": profile.company_ids}
 
 
 @router.post("/check-access-raw")
@@ -917,6 +966,106 @@ async def get_env_repo_status(profile_id: int, env_id: str, session: AsyncSessio
 class RepoSyncRequest(BaseModel):
     github_repo: Optional[str] = None   # overrides stored value (used before saving env)
     repo_branch: Optional[str] = None
+
+
+class WorkspaceOpenRequest(BaseModel):
+    env_id: Optional[str] = None
+
+
+def _safe_workspace_name(name: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "-" for ch in name.strip())
+    return safe.strip("-") or "odoo-project"
+
+
+def _vscode_command(workspace_path: Path) -> list[str]:
+    if code := shutil.which("code"):
+        return [code, str(workspace_path)]
+    if codium := shutil.which("codium"):
+        return [codium, str(workspace_path)]
+    if sys.platform == "darwin":
+        return ["open", "-a", "Visual Studio Code", str(workspace_path)]
+    raise HTTPException(400, "VS Code introuvable. Installez la commande 'code' ou ouvrez le workspace manuellement.")
+
+
+def _workspace_env(profile: Profile, env_id: Optional[str]) -> dict:
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    selected_id = env_id or profile.active_env_id or (envs[0].get("id") if envs else None)
+    env = next((e for e in envs if e.get("id") == selected_id), None)
+    if env:
+        return env
+    return {
+        "id": "prod",
+        "name": "Production",
+        "odoo_version": profile.odoo_version,
+        "github_repo": profile.github_repo,
+        "repo_branch": profile.default_branch,
+    }
+
+
+@router.post("/{profile_id}/vscode")
+async def open_profile_workspace(profile_id: int, body: WorkspaceOpenRequest = WorkspaceOpenRequest(), session: AsyncSession = Depends(get_session)):
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+
+    env = _workspace_env(profile, body.env_id)
+    env_id = env.get("id") or "prod"
+    version = env.get("odoo_version") or profile.odoo_version
+    github_repo = env.get("github_repo") or profile.github_repo
+
+    folders: list[dict[str, str]] = []
+    missing: list[str] = []
+    if version:
+        source_base = Path.home() / ".odoo-consultant" / "sources"
+        community = source_base / version
+        enterprise = source_base / f"{version}-enterprise"
+        if community.is_dir():
+            folders.append({"name": f"Odoo {version} Community", "path": str(community)})
+        else:
+            missing.append(f"sources Odoo {version} Community")
+        if enterprise.is_dir():
+            folders.append({"name": f"Odoo {version} Enterprise", "path": str(enterprise)})
+
+    repo_path = _repo_local_path(profile.name, env_id)
+    if github_repo:
+        if (repo_path / ".git").exists():
+            folders.append({"name": f"{profile.name} custom ({env.get('name') or env_id})", "path": str(repo_path)})
+        else:
+            missing.append(f"repo {github_repo}")
+
+    if not folders:
+        raise HTTPException(400, "Aucune source Odoo ou repo local disponible. Installez les sources et/ou clonez le repo de l'environnement.")
+
+    workspace_dir = Path.home() / ".odoo-consultant" / "workspaces"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    workspace_path = workspace_dir / f"{_safe_workspace_name(profile.name)}-{_safe_workspace_name(env_id)}.code-workspace"
+    workspace = {
+        "folders": folders,
+        "settings": {
+            "files.exclude": {
+                "**/.git": True,
+                "**/__pycache__": True,
+                "**/.pytest_cache": True,
+                "**/node_modules": True,
+            },
+            "search.exclude": {
+                "**/.git": True,
+                "**/__pycache__": True,
+                "**/node_modules": True,
+            },
+        },
+    }
+    workspace_path.write_text(json.dumps(workspace, indent=2, ensure_ascii=False), encoding="utf-8")
+    subprocess.Popen(_vscode_command(workspace_path), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {
+        "ok": True,
+        "workspace": str(workspace_path),
+        "folders": folders,
+        "missing": missing,
+    }
 
 
 @router.post("/{profile_id}/environments/{env_id}/repo/sync")

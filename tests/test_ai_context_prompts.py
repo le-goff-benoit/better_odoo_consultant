@@ -1,5 +1,10 @@
-from odoo_consultant_portal.services.ai_service import _language_block, _perspective_block, _trim_project_context
+import json
+
+import pytest
+
+from odoo_consultant_portal.services.ai_service import _language_block, _perspective_block, _read_odoo_file, _search_odoo_source, _trim_project_context
 from odoo_consultant_portal.services.context_service import load_context_for_prompt, read_file
+from odoo_consultant_portal.services.localization_service import build_localization_context, find_available_l10n_modules
 
 
 def test_default_skills_context_uses_dynamic_date_placeholder():
@@ -41,6 +46,42 @@ def test_migration_context_keeps_budget_for_migration_material():
     assert "Notes de version Odoo 19.0" in context
     assert "Modèle compte-rendu" not in context
     assert len(context) < 40_000
+
+
+def test_migration_context_includes_source_and_target_version_notes():
+    context = load_context_for_prompt(
+        "18.0",
+        target_version="19.0",
+        migration=True,
+        user_prompt="Analyse les changements de migration entre Odoo 18 et Odoo 19",
+        perspective="architect",
+    )
+
+    assert "Méthodologie de migration" in context
+    assert "Notes de version Odoo 18.0" in context
+    assert "Notes de version Odoo 19.0" in context
+
+
+def test_context_router_treats_new_ba_perspective_as_functional():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Analyse ce besoin utilisateur et propose une approche",
+        perspective="business_analyst",
+    )
+
+    assert "Modèles transversaux essentiels" in context
+    assert "Bonnes pratiques d'analyse client" in context
+    assert "Profil Business Analyst" in context
+
+
+def test_context_router_avoids_short_keyword_false_positives():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Analyse ce besoin utilisateur et propose une approche",
+        perspective="business_analyst",
+    )
+
+    assert "Point de Vente (POS)" not in context
 
 
 def test_context_router_selects_business_domain_sections():
@@ -130,3 +171,75 @@ def test_project_context_is_trimmed_independently_from_global_context():
 
     assert len(trimmed) < 13_000
     assert "contexte projet tronqué" in trimmed
+
+
+def test_available_l10n_modules_detects_community_and_enterprise(tmp_path):
+    base = tmp_path / "sources"
+    (base / "18.0" / "addons" / "l10n_ch").mkdir(parents=True)
+    (base / "18.0" / "addons" / "l10n_fr").mkdir(parents=True)
+    (base / "18.0-enterprise" / "l10n_ch_reports").mkdir(parents=True)
+
+    modules = find_available_l10n_modules("18.0", "CH", base)
+
+    assert modules == [
+        {"name": "l10n_ch", "source": "community", "path": "addons/l10n_ch"},
+        {"name": "l10n_ch_reports", "source": "enterprise", "path": "l10n_ch_reports"},
+    ]
+
+
+def test_localization_context_is_compact_for_non_fiscal_questions():
+    company_ids = json.dumps([{
+        "id": 1,
+        "name": "SwissCo",
+        "country_code": "CH",
+        "country_name": "Switzerland",
+        "currency": "CHF",
+        "installed_l10n_modules": ["l10n_ch"],
+        "available_l10n_modules": [{"name": "l10n_ch_reports", "source": "enterprise", "path": "l10n_ch_reports"}],
+    }])
+
+    context = build_localization_context(company_ids, 1, "18.0", "Analyse la performance de sale.order", "developer")
+
+    assert "Localisation fiscale" in context
+    assert "Switzerland (CH)" in context
+    assert "Modules l10n disponibles" not in context
+
+
+def test_localization_context_expands_for_fiscal_questions():
+    company_ids = json.dumps([{
+        "id": 1,
+        "name": "FranceCo",
+        "country_code": "FR",
+        "country_name": "France",
+        "currency": "EUR",
+        "installed_l10n_modules": ["l10n_fr", "l10n_fr_fec"],
+        "available_l10n_modules": [{"name": "l10n_fr_reports", "source": "enterprise", "path": "l10n_fr_reports"}],
+    }])
+
+    context = build_localization_context(company_ids, 1, "18.0", "Peux-tu vérifier la TVA et le FEC ?", "support")
+
+    assert "France (FR)" in context
+    assert "l10n_fr_fec" in context
+    assert "l10n_fr_reports (enterprise)" in context
+
+
+@pytest.mark.asyncio
+async def test_source_tools_cover_community_and_enterprise_siblings(tmp_path):
+    source = tmp_path / "sources" / "18.0"
+    enterprise = tmp_path / "sources" / "18.0-enterprise"
+    community_module = source / "addons" / "l10n_ch"
+    enterprise_module = enterprise / "l10n_ch_reports"
+    community_module.mkdir(parents=True)
+    enterprise_module.mkdir(parents=True)
+    (community_module / "__manifest__.py").write_text("Swiss accounting chart", encoding="utf-8")
+    (enterprise_module / "__manifest__.py").write_text("Swiss enterprise reports", encoding="utf-8")
+
+    search = await _search_odoo_source({"pattern": "Swiss", "file_types": ["*.py"]}, str(source))
+    read = await _read_odoo_file({"path": "enterprise/l10n_ch_reports/__manifest__.py"}, str(source))
+
+    assert search["ok"] is True
+    assert "community/addons/l10n_ch/__manifest__.py" in search["files"]
+    assert "enterprise/l10n_ch_reports/__manifest__.py" in search["files"]
+    assert read["ok"] is True
+    assert read["path"] == "enterprise/l10n_ch_reports/__manifest__.py"
+    assert "Swiss enterprise reports" in read["content"]

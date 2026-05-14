@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, Building2, Check, ClipboardList, Cloud, ExternalLink, GitBranch, Globe2, Loader2, Pencil, Play, Plus, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl } from '../api/client'
+import { Bot, Building2, Check, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Loader2, Pencil, Play, Plus, RefreshCw, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, refreshProfileLocalization, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
@@ -71,7 +71,21 @@ interface DiagResult {
   company_name?: string; company_city?: string; company_logo?: string
   company_ids?: string; access_info?: AccessInfo
 }
-interface CompanyOption { id: number; name: string }
+interface L10nModule { name: string; source?: string; path?: string }
+interface CompanyOption {
+  id: number
+  name: string
+  country_code?: string
+  country_name?: string
+  currency?: string
+  chart_template?: string
+  installed_l10n_modules?: string[]
+  available_l10n_modules?: L10nModule[]
+}
+
+function companyLocalizationLabel(company: CompanyOption) {
+  return [company.country_code, company.currency].filter(Boolean).join(' · ')
+}
 
 const VERSIONS = ['15.0', '16.0', '17.0', '18.0', '19.0']
 
@@ -125,6 +139,13 @@ const profilesCopy = {
     test: 'Tester',
     access: 'Accès',
     context: 'Contexte',
+    vscode: 'Visual Studio',
+    vscodeTitle: 'Ouvrir un workspace VS Code avec les sources Odoo et le repo de cet environnement',
+    vscodeError: "Impossible d'ouvrir Visual Studio Code",
+    localization: 'Localisation',
+    localizationTitle: 'Actualiser pays fiscal, devise et modules l10n des sociétés',
+    localizationUpdated: 'Localisation fiscale actualisée ✓',
+    localizationError: 'Impossible d’actualiser la localisation',
     deleteTitle: 'Supprimer ce projet',
     noProject: 'Aucun projet configuré',
     noProjectDesc: 'Ajoutez votre premier projet Odoo.sh pour commencer.',
@@ -162,6 +183,13 @@ const profilesCopy = {
     test: 'Test',
     access: 'Access',
     context: 'Context',
+    vscode: 'Visual Studio',
+    vscodeTitle: 'Open a VS Code workspace with Odoo sources and this environment repository',
+    vscodeError: 'Unable to open Visual Studio Code',
+    localization: 'Localization',
+    localizationTitle: 'Refresh fiscal country, currency and l10n modules for companies',
+    localizationUpdated: 'Fiscal localization refreshed ✓',
+    localizationError: 'Unable to refresh localization',
     deleteTitle: 'Delete this project',
     noProject: 'No project configured',
     noProjectDesc: 'Add your first Odoo.sh project to get started.',
@@ -270,6 +298,8 @@ export default function Profiles() {
       default_branch: p.default_branch ?? 'main',
     })
     try { setEnvs(JSON.parse(p.environments ?? '[]') as EnvEntry[]) } catch { setEnvs([]) }
+    try { setAvailableCompanies(JSON.parse(p.company_ids ?? '[]') as CompanyOption[]) } catch { setAvailableCompanies([]) }
+    try { setAccessInfo(p.user_access_info ? JSON.parse(p.user_access_info) : null) } catch { setAccessInfo(null) }
     setCompanyInfo(p.company_name ? { name: p.company_name, city: p.company_city ?? undefined, logo: p.company_logo ?? undefined } : null)
     setDiag(null)
     setStep(1)
@@ -288,6 +318,7 @@ export default function Profiles() {
   })
 
   const [checkingAccessId, setCheckingAccessId] = useState<number | null>(null)
+  const [refreshingLocalizationId, setRefreshingLocalizationId] = useState<number | null>(null)
 
   // ── Context modal ──────────────────────────────────────────────
   const [contextProfileId, setContextProfileId] = useState<number | null>(null)
@@ -354,6 +385,19 @@ export default function Profiles() {
     }
   }
 
+  const refreshLocalization = async (profileId: number) => {
+    setRefreshingLocalizationId(profileId)
+    try {
+      await refreshProfileLocalization(profileId)
+      qc.invalidateQueries({ queryKey: ['profiles'] })
+      notify(c.localizationUpdated)
+    } catch {
+      notify(c.localizationError, false)
+    } finally {
+      setRefreshingLocalizationId(null)
+    }
+  }
+
   // In edit mode, api_key is optional (user may not want to change it)
   const canNext = step === 1
     ? form.name.trim() !== '' && form.db_url.trim() !== ''
@@ -369,7 +413,7 @@ export default function Profiles() {
         title={c.title}
         description={c.description}
         action={
-          <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(EMPTY); setShowWizard(true); setStep(1) }}>
+          <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([]); setAccessInfo(null); setShowWizard(true); setStep(1) }}>
             <Plus size={15} /> {c.newProject}
           </button>
         }
@@ -719,6 +763,8 @@ export default function Profiles() {
                 .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
               onCheckAccess={() => checkAccess(p.id)}
               checkingAccess={checkingAccessId === p.id}
+              onRefreshLocalization={() => refreshLocalization(p.id)}
+              refreshingLocalization={refreshingLocalizationId === p.id}
               onContext={() => openContext(p.id)}
               onRefresh={() => qc.invalidateQueries({ queryKey: ['profiles'] })} />
           ))}
@@ -756,10 +802,11 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 type EnvModalState = { mode: 'add' } | { mode: 'edit'; env: EnvEntry }
 const EMPTY_ENV_FORM = { id: '', name: '', db_url: '', db_name: '', login: '', api_key: '', odoo_version: '', branch: '', github_repo: '', repo_branch: '' }
 
-function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onCheckAccess, checkingAccess, onContext, onRefresh }: {
+function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onCheckAccess, checkingAccess, onRefreshLocalization, refreshingLocalization, onContext, onRefresh }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
   onSelectCompany: (companyId: number) => void
   onCheckAccess: () => void; checkingAccess: boolean
+  onRefreshLocalization: () => void; refreshingLocalization: boolean
   onContext: () => void; onRefresh: () => void
 }) {
   const lang = useUiLanguage()
@@ -781,6 +828,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   const [repoStatus, setRepoStatus] = useState<{ cloned: boolean; github_repo?: string | null; head?: string; message?: string; date?: string; error?: string } | null>(null)
   const [repoSyncing, setRepoSyncing] = useState(false)
   const [repoLogs, setRepoLogs] = useState<string[]>([])
+  const [workspaceOpening, setWorkspaceOpening] = useState(false)
   const repoAbortRef = useRef<AbortController | null>(null)
   const activeEnvId = profile.active_env_id || envs[0]?.id
 
@@ -940,6 +988,18 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
     } catch { /* ignore */ }
   }
 
+  const openWorkspace = async () => {
+    setWorkspaceOpening(true)
+    try {
+      await openProfileWorkspace(profile.id, activeEnvId)
+    } catch (err) {
+      const apiErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      window.alert(apiErr.response?.data?.detail || apiErr.message || c.vscodeError)
+    } finally {
+      setWorkspaceOpening(false)
+    }
+  }
+
   const keyExpiry = (() => {
     if (!profile.api_key_expires) return null
     const expDate = new Date(profile.api_key_expires)
@@ -1039,7 +1099,8 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                   <button key={c.id} onClick={() => isAccessible && onSelectCompany(c.id)} disabled={!isAccessible}
                     title={!isAccessible ? `${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
                     className={`project-company-pill${isActive ? ' is-active' : ''}`}>
-                    {!isAccessible ? 'Verrouillé - ' : isActive ? 'Actif - ' : ''}{c.name}
+                    <span>{!isAccessible ? 'Verrouillé - ' : isActive ? 'Actif - ' : ''}{c.name}</span>
+                    {companyLocalizationLabel(c) && <small>{companyLocalizationLabel(c)}</small>}
                   </button>
                 )
               })}
@@ -1096,8 +1157,14 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
           <div className="project-action-list">
             <button className="btn btn-outline btn-sm" onClick={onEdit} title={c.edit}><Pencil size={13} /> {c.edit}</button>
             <button className="btn btn-outline btn-sm" onClick={onTest} title={c.test}><Play size={13} /> {c.test}</button>
+            <button className="btn btn-outline btn-sm" onClick={openWorkspace} disabled={workspaceOpening} title={c.vscodeTitle}>
+              {workspaceOpening ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Code2 size={13} />} {c.vscode}
+            </button>
             <button className="btn btn-outline btn-sm" onClick={onCheckAccess} disabled={checkingAccess} title="Vérifier les droits d'accès">
               {checkingAccess ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Search size={13} />} {c.access}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={onRefreshLocalization} disabled={refreshingLocalization} title={c.localizationTitle}>
+              {refreshingLocalization ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <RefreshCw size={13} />} {c.localization}
             </button>
             <button className="btn btn-outline btn-sm" onClick={onContext} title="Fichier de contexte de ce projet"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>

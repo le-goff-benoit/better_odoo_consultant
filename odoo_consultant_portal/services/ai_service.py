@@ -29,14 +29,16 @@ _TOOL_SEARCH_SRC = {
     "description": (
         "Rechercher dans le code source Odoo local (grep). "
         "Utilise pour trouver des modèles, méthodes, champs, modules, noms corrects de modèles. "
-        "Retourne les lignes correspondantes avec fichier et numéro de ligne."
+        "Cherche dans Community et Enterprise quand les deux sources sont installées. "
+        "Retourne les lignes correspondantes avec fichier et numéro de ligne, préfixées par community/ ou enterprise/ si utile."
     ),
 }
 _TOOL_READ_SRC = {
     "name": "read_odoo_file",
     "description": (
         "Lire le contenu d'un fichier du code source Odoo local. "
-        "Utilise après search_odoo_source pour voir l'implémentation complète."
+        "Utilise après search_odoo_source pour voir l'implémentation complète. "
+        "Accepte les chemins préfixés community/ ou enterprise/."
     ),
 }
 _TOOL_SEARCH_REPO = {
@@ -544,10 +546,12 @@ def build_system(profile, source_path: Optional[str] = None, context_md: str = "
     if source_path:
         source_section = f"""
 Code source Odoo disponible localement : {source_path}
-IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.
+IMPORTANT : Pour toute question sur des modèles, champs, méthodes, comportements Odoo ou localisations l10n, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.
+Si les sources Enterprise de la même version sont installées, les outils les parcourent aussi et retournent des chemins préfixés `enterprise/`.
 Exemples d'utilisation :
 - Trouver un modèle : search_odoo_source(pattern="_name = 'sale.order'")
 - Trouver une méthode : search_odoo_source(pattern="def action_confirm", path="addons/sale")
+- Trouver une localisation suisse : search_odoo_source(pattern="QR", path="l10n_ch_reports", file_types=["*.py","*.xml"])
 - Lire un fichier : read_odoo_file(path="addons/account/models/account_move.py", start_line=1, end_line=100)
 """
     else:
@@ -621,12 +625,12 @@ def build_system_migration(
     language_md = _language_block(response_language)
     src_section = (
         f"Sources Odoo VERSION SOURCE ({source_version}) disponibles : {source_path}\n"
-        "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source."
+        "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source, Community et Enterprise si disponibles."
     ) if source_path else f"Sources Odoo VERSION SOURCE ({source_version}) : non disponibles (téléchargez-les depuis la page Sources)."
 
     tgt_section = (
         f"Sources Odoo VERSION CIBLE ({target_version}) disponibles : {target_path}\n"
-        "→ Utilise search_target_source / read_target_file pour explorer le code de la version cible."
+        "→ Utilise search_target_source / read_target_file pour explorer le code de la version cible, Community et Enterprise si disponibles."
     ) if target_path else f"Sources Odoo VERSION CIBLE ({target_version}) : non disponibles (téléchargez-les depuis la page Sources)."
 
     repo_section = (
@@ -679,10 +683,12 @@ def build_system_general(version: str, source_path: Optional[str] = None, contex
     language_md = _language_block(response_language)
     source_section = (
         f"Code source Odoo disponible localement : {source_path}\n"
-        "IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
+        "IMPORTANT : Pour toute question sur des modèles, champs, méthodes, comportements Odoo ou localisations l10n, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
+        "Les sources Enterprise de la même version sont aussi consultées quand elles sont installées.\n"
         "Exemples d'utilisation :\n"
         "- Trouver un modèle : search_odoo_source(pattern=\"_name = 'sale.order'\")\n"
         "- Trouver une méthode : search_odoo_source(pattern=\"def action_confirm\", path=\"addons/sale\")\n"
+        "- Trouver une localisation suisse : search_odoo_source(pattern=\"QR\", path=\"l10n_ch_reports\", file_types=[\"*.py\",\"*.xml\"])\n"
         "- Lire un fichier : read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)\n"
     ) if source_path else "Code source non disponible pour cette version.\n"
 
@@ -707,66 +713,111 @@ def _safe_source_path(source_path: str, sub_path: str) -> Optional[str]:
     """Return an absolute path only if it stays within source_path."""
     base = os.path.realpath(source_path)
     full = os.path.realpath(os.path.join(source_path, sub_path)) if sub_path else base
-    return full if full.startswith(base) else None
+    return full if full == base or full.startswith(base + os.sep) else None
+
+
+def _source_roots(source_path: str) -> list[tuple[str, str]]:
+    """Return source roots to inspect, adding the Enterprise sibling when present."""
+    roots: list[tuple[str, str]] = []
+    base = os.path.realpath(source_path)
+    name = os.path.basename(base)
+    if name.endswith("-enterprise"):
+        if os.path.isdir(base):
+            roots.append(("enterprise", base))
+        return roots
+    if os.path.isdir(base):
+        roots.append(("community", base))
+    enterprise = os.path.realpath(os.path.join(os.path.dirname(base), f"{name}-enterprise"))
+    if os.path.isdir(enterprise):
+        roots.append(("enterprise", enterprise))
+    return roots
+
+
+def _split_source_prefix(path: str) -> tuple[Optional[str], str]:
+    clean = (path or "").strip().lstrip("/")
+    if clean.startswith("community/"):
+        return "community", clean[len("community/"):]
+    if clean.startswith("enterprise/"):
+        return "enterprise", clean[len("enterprise/"):]
+    return None, clean
 
 
 async def _search_odoo_source(args: dict, source_path: str) -> dict:
     pattern    = args.get("pattern", "")
-    sub_path   = args.get("path", "") or ""
+    prefix, sub_path = _split_source_prefix(args.get("path", "") or "")
     file_types = args.get("file_types") or ["*.py"]
-
-    search_dir = _safe_source_path(source_path, sub_path)
-    if not search_dir:
-        return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
-    if not os.path.isdir(search_dir):
-        return {"ok": False, "error": f"Dossier introuvable : {sub_path or source_path}"}
 
     includes = []
     for ft in file_types[:4]:  # max 4 types
         includes += ["--include", ft]
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "grep", "-r", "-n", "-i", "-m", "200",
-            *includes,
-            pattern, search_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-    except asyncio.TimeoutError:
-        return {"ok": False, "error": "Timeout — pattern trop large, affinez la recherche"}
+    raw_lines: list[tuple[str, str]] = []
+    searched: list[str] = []
+    missing: list[str] = []
+    for root_prefix, root in _source_roots(source_path):
+        if prefix and prefix != root_prefix:
+            continue
+        search_dir = _safe_source_path(root, sub_path)
+        if not search_dir:
+            return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
+        if not os.path.isdir(search_dir):
+            missing.append(f"{root_prefix}/{sub_path or '.'}")
+            continue
+        searched.append(f"{root_prefix}/{sub_path or '.'}")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "grep", "-r", "-n", "-i", "-m", "200",
+                *includes,
+                pattern, search_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        except asyncio.TimeoutError:
+            return {"ok": False, "error": "Timeout — pattern trop large, affinez la recherche"}
+        raw_lines.extend((root_prefix, line) for line in stdout.decode("utf-8", errors="replace").splitlines())
 
-    raw_lines = stdout.decode("utf-8", errors="replace").splitlines()
-    base_real = os.path.realpath(source_path) + os.sep
+    if not searched:
+        return {"ok": False, "error": f"Dossier introuvable : {sub_path or source_path}"}
 
     by_file: dict = {}
-    for line in raw_lines[:200]:
+    root_map = {root_prefix: os.path.realpath(root) + os.sep for root_prefix, root in _source_roots(source_path)}
+    for root_prefix, line in raw_lines[:200]:
         parts = line.split(":", 2)
         if len(parts) < 3:
             continue
         file_abs, linenum, content = parts[0], parts[1], parts[2]
-        rel = file_abs.replace(base_real, "")
+        rel = file_abs.replace(root_map[root_prefix], "")
+        rel = f"{root_prefix}/{rel}"
         if rel not in by_file:
             by_file[rel] = []
         by_file[rel].append({"line": int(linenum), "content": content.strip()})
 
     if not by_file:
-        return {"ok": True, "matches": 0, "files": {}, "note": "Aucune correspondance — essayez un autre pattern ou chemin"}
+        return {"ok": True, "matches": 0, "files": {}, "searched": searched, "missing": missing, "note": "Aucune correspondance — essayez un autre pattern ou chemin"}
 
-    return {"ok": True, "matches": len(raw_lines), "files": by_file}
+    return {"ok": True, "matches": len(raw_lines), "searched": searched, "missing": missing, "files": by_file}
 
 
 async def _read_odoo_file(args: dict, source_path: str) -> dict:
-    rel_path   = args.get("path", "")
+    prefix, rel_path = _split_source_prefix(args.get("path", ""))
     start_line = max(1, int(args.get("start_line") or 1))
     end_line   = int(args.get("end_line") or 0)
 
-    file_abs = _safe_source_path(source_path, rel_path)
+    file_abs = None
+    file_prefix = prefix
+    for root_prefix, root in _source_roots(source_path):
+        if prefix and prefix != root_prefix:
+            continue
+        candidate = _safe_source_path(root, rel_path)
+        if not candidate:
+            return {"ok": False, "error": "Chemin invalide"}
+        if os.path.isfile(candidate):
+            file_abs = candidate
+            file_prefix = root_prefix
+            break
     if not file_abs:
-        return {"ok": False, "error": "Chemin invalide"}
-    if not os.path.isfile(file_abs):
-        return {"ok": False, "error": f"Fichier introuvable : {rel_path}"}
+        return {"ok": False, "error": f"Fichier introuvable : {prefix + '/' if prefix else ''}{rel_path}"}
 
     try:
         with open(file_abs, "r", encoding="utf-8", errors="replace") as f:
@@ -782,7 +833,7 @@ async def _read_odoo_file(args: dict, source_path: str) -> dict:
     content = "".join(all_lines[s:e])
     return {
         "ok":         True,
-        "path":       rel_path,
+        "path":       f"{file_prefix}/{rel_path}" if file_prefix else rel_path,
         "start_line": s + 1,
         "end_line":   e,
         "total_lines": total,

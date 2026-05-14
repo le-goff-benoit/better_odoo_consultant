@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
@@ -51,11 +51,13 @@ export default function Sidebar({
   onToggleContext: () => void
 }) {
   const { data } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile, staleTime: 60_000 })
+  const location = useLocation()
   const up = data?.data ?? {}
   const lang = normalizeUiLanguage(up.language)
   const tr = labels[lang]
   const avatarIsImg = (up.avatar as string | undefined)?.startsWith('data:')
   const ContextIcon = contextOpen ? PanelRightClose : PanelRightOpen
+  const showContextToggle = location.pathname === '/assistant' || location.pathname === '/migration'
 
   return (
     <header className="app-topbar">
@@ -104,10 +106,12 @@ export default function Sidebar({
         })}
       </nav>
 
-      <button type="button" className="topbar-context-button" onClick={onToggleContext} title={tr.context}>
-        <ContextIcon size={16} />
-        <span>{tr.context}</span>
-      </button>
+      {showContextToggle && (
+        <button type="button" className="topbar-context-button" onClick={onToggleContext} title={tr.context}>
+          <ContextIcon size={16} />
+          <span>{tr.context}</span>
+        </button>
+      )}
 
       <div className="topbar-user">
         <div className="topbar-avatar">

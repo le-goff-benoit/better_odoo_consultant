@@ -600,6 +600,10 @@ textarea:focus-visible {
   border-left: 1px solid var(--th-border);
 }
 
+.conversation-context {
+  width: 300px;
+}
+
 .workspace-context-header {
   display: flex;
   align-items: center;
@@ -650,6 +654,75 @@ textarea:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+}
+
+.conversation-profile-live {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--brand-20);
+  border-radius: var(--radius-md);
+  background: var(--brand-10);
+}
+
+.conversation-profile-live span {
+  color: var(--brand-muted-text);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.conversation-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.conversation-tool-item {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--th-border);
+  border-radius: var(--radius-md);
+  background: var(--th-bg-card);
+}
+
+.conversation-tool-item span,
+.conversation-tool-item small {
+  display: block;
+  color: var(--th-muted);
+  font-size: 10px;
+}
+
+.conversation-tool-item strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.migration-content-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.migration-main-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.perspective-auto-inferred {
+  animation: perspectivePulse 1.25s ease-in-out infinite;
+}
+
+@keyframes perspectivePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(.92); }
 }
 
 .page-stack {
@@ -1095,6 +1168,15 @@ textarea:focus-visible {
   font-weight: 650;
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+
+.project-company-pill small,
+.assistant-company-button small {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 750;
+  opacity: .78;
+  white-space: nowrap;
 }
 
 .project-env-pill:hover,

@@ -27,6 +27,7 @@ export const getProfileApps = (id: number) => api.get(`/profiles/${id}/apps`)
 export const diagnoseOdoo = (data: object) => api.post('/profiles/diagnose', data)
 export const checkAccessRaw = (data: object) => api.post('/profiles/check-access-raw', data)
 export const checkAccessProfile = (id: number) => api.post(`/profiles/${id}/check-access`)
+export const refreshProfileLocalization = (id: number) => api.post(`/profiles/${id}/localization/refresh`)
 export const getProfileContext = (id: number) => api.get(`/profiles/${id}/context`)
 export const saveProfileContext = (id: number, content: string) => api.put(`/profiles/${id}/context`, { content })
 export const autoFillContext = (id: number) => api.post(`/profiles/${id}/context/auto-fill`)
@@ -39,6 +40,7 @@ export const activateProfileEnv = (id: number, envId: string) => api.post(`/prof
 export const testProfileEnv    = (id: number, envId: string) => api.post(`/profiles/${id}/environments/${envId}/test`)
 export const getEnvRepoStatus  = (id: number, envId: string) => api.get(`/profiles/${id}/environments/${envId}/repo`)
 export const syncEnvRepoUrl    = (id: number, envId: string) => `/api/profiles/${id}/environments/${envId}/repo/sync`
+export const openProfileWorkspace = (id: number, envId?: string | null) => api.post(`/profiles/${id}/vscode`, { env_id: envId ?? undefined })
 
 // Projects
 export const listProjects = () => api.get('/projects/')

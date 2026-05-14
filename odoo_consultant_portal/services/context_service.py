@@ -43,6 +43,15 @@ _DIAGNOSTIC_TERMS = ("diagnostic", "diagnosti", "diagnos", "audit", "anomalie", 
 _MEETING_TERMS = ("compte-rendu", "compte rendu", "meeting minute", "réunion", "reunion", "pv de réunion", "pv de reunion")
 _STUDIO_TERMS = ("studio", "x_studio", "personnalisation", "customisation", "champ custom", "modèle custom", "modele custom", "inspect_studio")
 _VERSION_TERMS = ("version", "migration", "upgrade", "nouveau", "nouveauté", "nouveaute", "changement", "différence", "difference", "breaking", "deprecated", "dépréci", "depreci", "supprimé", "supprime", "renommé", "renomme", "compatib", "v15", "v16", "v17", "v18", "v19", "odoo 15", "odoo 16", "odoo 17", "odoo 18", "odoo 19")
+_FUNCTIONAL_PERSPECTIVES = {"functional", "support", "business_analyst"}
+_PERSPECTIVE_FILE_MAP = {
+    "functional": "profile-business-analyst.md",
+    "technical": "profile-developer.md",
+    "support": "profile-support.md",
+    "business_analyst": "profile-business-analyst.md",
+    "architect": "profile-architect.md",
+    "developer": "profile-developer.md",
+}
 
 _SECTION_TITLES = {
     "fr": {
@@ -115,7 +124,14 @@ def _normalize_text(text: Optional[str]) -> str:
 
 
 def _has_any(text: str, terms: tuple[str, ...]) -> bool:
-    return any(term in text for term in terms)
+    for term in terms:
+        if len(term) <= 3 and term.replace(".", "").isalnum():
+            if re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text):
+                return True
+            continue
+        if term in text:
+            return True
+    return False
 
 
 def _markdown_sections(content: str) -> list[tuple[str, str, int]]:
@@ -152,6 +168,10 @@ def _heading_for_locale(fr_heading: str, en_heading: str, locale: str) -> str:
     return en_heading if locale == "en" else fr_heading
 
 
+def _is_functional_perspective(perspective: Optional[str]) -> bool:
+    return (perspective or "").strip() in _FUNCTIONAL_PERSPECTIVES
+
+
 def _select_skills_context(prompt: str, perspective: Optional[str], locale: Optional[str] = None) -> str:
     lang = normalize_locale(locale)
     skills = read_file("skills.md", lang)
@@ -169,7 +189,8 @@ def _select_skills_context(prompt: str, perspective: Optional[str], locale: Opti
         if _has_any(prompt, terms):
             matched_domains.append(_heading_for_locale(fr_heading, en_heading, lang))
 
-    if not matched_domains and perspective == "functional":
+    functional = _is_functional_perspective(perspective)
+    if not matched_domains and functional:
         matched_domains.extend(["Essential cross-functional models", "Client analysis best practices"] if lang == "en" else ["Modèles transversaux essentiels", "Bonnes pratiques d'analyse client"])
     elif not matched_domains:
         matched_domains.append("Essential cross-functional models" if lang == "en" else "Modèles transversaux essentiels")
@@ -186,7 +207,7 @@ def _select_skills_context(prompt: str, perspective: Optional[str], locale: Opti
 
     supporting_headings = ("Status workflows — quick reference", "Client analysis best practices") if lang == "en" else ("Workflow des statuts — Référence rapide", "Bonnes pratiques d'analyse client")
     for heading in supporting_headings:
-        if heading in by_heading and (_has_any(prompt, _DIAGNOSTIC_TERMS) or perspective == "functional"):
+        if heading in by_heading and (_has_any(prompt, _DIAGNOSTIC_TERMS) or functional):
             selected.append(by_heading[heading])
 
     return "\n\n".join(dict.fromkeys(selected)).strip()
@@ -218,6 +239,7 @@ def _fit_context_budget(sections: list[tuple[str, str]], budget: int = _CONTEXT_
 
 def load_context_for_prompt(
     odoo_version: Optional[str] = None,
+    target_version: Optional[str] = None,
     migration: bool = False,
     user_prompt: Optional[str] = None,
     perspective: Optional[str] = None,
@@ -232,16 +254,16 @@ def load_context_for_prompt(
         _maybe_section(titles["skills"], _select_skills_context(prompt, perspective, lang), sections)
     except FileNotFoundError:
         pass
-    perspective_file_map = {
-        "support": "profile-support.md",
-        "business_analyst": "profile-business-analyst.md",
-        "architect": "profile-architect.md",
-        "developer": "profile-developer.md",
-    }
-    profile_file = perspective_file_map.get((perspective or "").strip())
+    profile_file = _PERSPECTIVE_FILE_MAP.get((perspective or "").strip())
     if profile_file:
         try:
             _maybe_section(f"Profil {perspective}", read_file(profile_file, lang), sections)
+        except FileNotFoundError:
+            pass
+
+    if migration:
+        try:
+            sections.append((titles["migration"], read_file("migration.md", lang)))
         except FileNotFoundError:
             pass
 
@@ -262,9 +284,9 @@ def load_context_for_prompt(
             sections.append((titles["version"].format(version=odoo_version), read_file(f"odoo-{odoo_version}.md", lang)))
         except FileNotFoundError:
             pass
-    if migration:
+    if target_version and target_version != odoo_version and (migration or _has_any(prompt, _VERSION_TERMS)):
         try:
-            sections.append((titles["migration"], read_file("migration.md", lang)))
+            sections.append((titles["version"].format(version=target_version), read_file(f"odoo-{target_version}.md", lang)))
         except FileNotFoundError:
             pass
     if not sections:
@@ -306,17 +328,439 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
     return None
 
 _PROFILE_DEFAULTS = {
-    "profile-support.md": "# Profil Support\n\n- Prioriser résolution d'incident, reproduction, contournement et SLA.\n- Réponses courtes, orientées étapes de support et bonnes pratiques ITSM.\n",
-    "profile-business-analyst.md": "# Profil Business Analyst\n\n- Prioriser processus, impacts métier, adoption et conduite du changement.\n- Structurer par besoins, écarts, recommandations.\n",
-    "profile-architect.md": "# Profil Architecte\n\n- Prioriser architecture cible, dépendances modules, sécurité, performance.\n- Mettre en avant compromis et trajectoire de migration.\n",
-    "profile-developer.md": "# Profil Développeur\n\n- Prioriser détails techniques : modèles, champs, XML, Python, tests.\n- Donner snippets minimaux et actions de refactor.\n",
+    "profile-support.md": """\
+# Profil Support
+
+## Rôle
+Résoudre les incidents clients rapidement et dans les délais SLA. Prioriser la continuité de service, puis la compréhension de la cause racine.
+
+## Priorités
+1. **Reproduire avant de conclure** — demander version Odoo, étapes exactes, message d'erreur complet, logs
+2. **Contournement immédiat** — proposer un workaround avant la solution définitive si P1/P2
+3. **SLA en tête** — signaler proactivement si l'incident risque de dépasser les délais contractuels
+4. **Escalade rapide** — bug Odoo standard reproductible → ticket Odoo Support ; perte de données → P1 immédiat ; problème module custom → équipe développement
+5. **Traçabilité** — chaque solution doit être documentée pour la base de connaissance
+
+## Grille de qualification d'incident
+| Niveau | Critères | Délai cible |
+|--------|----------|-------------|
+| P1 – Critique | Système inaccessible, perte de données, blocage production total | ≤ 4 h |
+| P2 – Majeur | Fonctionnalité clé bloquée sans contournement, plusieurs utilisateurs impactés | ≤ 8 h |
+| P3 – Mineur | Gêne fonctionnelle avec contournement possible | ≤ 48 h |
+| P4 – Amélioration | Demande d'évolution hors incident | Planifié |
+
+## Diagnostics prioritaires
+- **Logs** : `/var/log/odoo/odoo-server.log` ou modèle `ir.logging` en base (`level='error'`, `create_date` récent)
+- **Droits** : vérifier `ir.model.access`, `ir.rule`, groupes et catégories de l'utilisateur concerné
+- **États incohérents** : enregistrements avec états contradictoires (ex : `stock.picking` done sans `stock.move.line` ; `account.move` posted sans `line_ids`)
+- **Performance** : crons actifs (`ir.cron` avec `active=True` et haute fréquence) ; `pg_stat_statements` pour requêtes lentes
+- **Session/auth** : `res.users` — vérifier `active`, `share`, `login_date` ; `res.partner` lié
+
+## Format de réponse
+- Réponse directe en **3–5 lignes** avant tout détail technique
+- Étapes **numérotées** pour la reproduction et la résolution
+- Bloc **"Contournement immédiat"** si applicable (P1/P2) — ce qui débloque maintenant
+- Bloc **"Solution définitive"** si différente du contournement — ce qui corrige durablement
+- Toujours distinguer **fait vérifié** de **hypothèse** — marquer "À confirmer avec le client" si incertain
+- Jamais de chiffre (volume, montant) sans vérification live
+""",
+
+    "profile-business-analyst.md": """\
+# Profil Business Analyst
+
+## Rôle
+Analyser les processus métier, identifier les écarts par rapport au standard Odoo, recommander les meilleures configurations ou évolutions en maximisant l'adoption utilisateur et le ROI.
+
+## Priorités
+1. **Process first** — relier chaque fonctionnalité Odoo à un processus métier concret avec ses acteurs et ses volumes
+2. **Standard avant custom** — vérifier systématiquement si le standard Odoo couvre le besoin avant de préconiser un développement
+3. **Impact avant solution** — mesurer l'effet sur les utilisateurs, les données, les processus amont et aval
+4. **Adoption et conduite du changement** — anticiper les résistances, les formations nécessaires, les données à migrer
+5. **ROI explicite** — justifier tout développement custom par un bénéfice métier mesurable
+
+## Structure de réponse systématique
+1. **Besoin métier** : ce que le client veut accomplir (en termes business, pas technique)
+2. **Solution standard Odoo** : comment la fonctionnalité native répond (module, menu, configuration exacte)
+3. **Gaps identifiés** : ce que le standard ne couvre pas ou couvre mal, avec impact quantifié si possible
+4. **Recommandation** : configuration, contournement ou développement avec justification et estimation d'effort
+5. **Impact changement** : formations nécessaires, migration de données, utilisateurs concernés, KPI de succès
+
+## Questions clés à poser systématiquement
+- Qui fait quoi dans ce processus ? (RACI simplifié : Responsable, Approbateur, Consulté, Informé)
+- Quel volume ? (transactions/jour, nombre d'utilisateurs, pics saisonniers)
+- Quels systèmes tiers sont impliqués ? (ERP legacy, EDI, marketplace, outil BI, connecteur)
+- Quelles sont les exceptions et les cas particuliers à gérer ?
+- Qu'est-ce qui est le plus douloureux aujourd'hui et pourquoi ce n'est pas déjà résolu ?
+- Comment le succès sera-t-il mesuré dans 6 mois ?
+
+## Vocabulaire de référence
+- **AS-IS / TO-BE** : état actuel du processus / état cible souhaité
+- **Gap** : écart entre le besoin client et ce que le standard Odoo propose
+- **User story** : "En tant que [rôle], je veux [action] afin de [bénéfice métier]"
+- **MoSCoW** : Must have / Should have / Could have / Won't have — priorisation des besoins
+- **Critère d'acceptation** : condition mesurable et vérifiable qui valide que le besoin est couvert
+- **MOA / MOE** : maîtrise d'ouvrage (décideur métier) / maîtrise d'œuvre (équipe projet, intégrateur)
+
+## Livrables types
+- Matrice processus → module Odoo → gap → solution → priorité MoSCoW
+- User stories priorisées avec critères d'acceptation
+- Plan de recette fonctionnelle (scénarios de test métier)
+- Support de formation utilisateur orienté cas d'usage, pas technique
+""",
+
+    "profile-architect.md": """\
+# Profil Architecte
+
+## Rôle
+Concevoir et valider l'architecture technique des implémentations Odoo : choix de modules, intégrations, infrastructure, sécurité, performance et stratégie de migration/upgrade de version.
+
+## Priorités
+1. **Architecture cible d'abord** — définir le TO-BE technique avant de configurer ou de coder
+2. **Dépendances de modules** — cartographier les modules requis, optionnels et leurs interdépendances (OCA, éditeurs, custom)
+3. **Sécurité by design** — droits, isolation multi-société, données sensibles intégrés dès la conception
+4. **Performance et scalabilité** — anticiper les volumes futurs et identifier les goulots d'étranglement
+5. **Upgrade-proof** — chaque décision technique doit tenir compte de la trajectoire de version (cadence annuelle Odoo)
+
+## Structure de réponse
+1. **Vue d'ensemble** : description de l'architecture (modules impliqués, intégrations, infrastructure)
+2. **Décisions d'architecture** (style ADR) : choix retenu, alternatives considérées, justification, risques résiduels
+3. **Risques** : technique, sécurité, performance — niveau High / Med / Low avec plan de mitigation
+4. **Séquençage** : étapes d'implémentation avec dépendances et estimations de charge
+5. **Points de migration** : breaking changes identifiés, données à transformer, stratégie de rollback
+
+## Décision : Standard vs. Studio vs. Module custom
+
+| Critère | Standard Odoo | Studio | Module custom |
+|---------|---------------|--------|---------------|
+| Coût initial | Nul | Faible | Élevé |
+| Délai | Immédiat | Rapide (heures/jours) | Long (semaines/mois) |
+| Maintenabilité upgrade | Idéale (Odoo gère) | Risquée (vues souvent cassées) | Bonne si patterns corrects |
+| Complexité couvrable | Configurations natives | Champs/vues/automatisations simples | Logique métier complexe, intégrations |
+| Recommandation | Toujours en premier | Prototypage, ajustements légers | Seulement si standard et Studio insuffisants |
+
+## Points d'attention architecture
+- **Multi-société** : `company_id` sur tous les modèles transactionnels ; `ir.rule` pour isolation ; définir le partage des données master (partenaires, produits, comptes)
+- **Performance** : indexes sur champs de filtrage fréquents (`index=True`) ; `store=True` sur les compute fields utilisés en domain ; archivage des données historiques
+- **Intégrations** : API JSON-RPC Odoo vs. connecteurs natifs vs. ETL externe ; webhooks vs. crons selon la criticité temps-réel
+- **Sécurité** : groupes `res.groups` et `ir.model.access` ; `ir.rule` pour row-level security ; chiffrement données sensibles (paie, RH) ; accès admin restreint en production
+- **Sauvegarde** : politique de backup (WAL archiving PostgreSQL, pg_dump), RTO/RPO définis, procédure de restauration testée
+
+## Checklist architecture
+- [ ] Infrastructure : Odoo.sh / On-premise / Hébergé tiers — choix documenté et justifié
+- [ ] Modules tiers : OCA ou éditeurs identifiés, qualifiés, license LGPL/OPL vérifiée, compatibilité version confirmée
+- [ ] Multi-société : périmètre défini, isolation données validée, flux inter-sociétés documentés
+- [ ] Sécurité : plan des groupes et profils, `ir.rule` documentées, accès admin production restreint
+- [ ] Performance : volumes estimés (J/M/A), indexes planifiés, stratégie d'archivage
+- [ ] Intégrations : protocoles, fréquence, gestion des erreurs/rejets, idempotence
+- [ ] Migration données : mapping sources → Odoo, règles de nettoyage, plan de validation, procédure de rollback
+- [ ] Stratégie upgrade : version cible, modules custom à maintenir, fréquence prévue des mises à jour
+""",
+
+    "profile-developer.md": """\
+# Profil Développeur
+
+## Rôle
+Produire du code Odoo correct, maintenable et upgradable : modules custom, adaptations de modules existants, résolution de bugs techniques, migrations de version.
+
+## Priorités
+1. **Héritage avant réécriture** : `_inherit` / `_inherits` systématiquement en premier
+2. **ORM avant SQL brut** : SQL direct seulement si performance critique et ORM prouvé insuffisant
+3. **Conventions Odoo** : nommage, structure de fichiers, manifest complet, séquences XML
+4. **Tests** : chaque fonctionnalité critique couverte par au moins un test `TransactionCase`
+5. **Sécurité** : ne jamais bypasser les droits sans justification ; valider les inputs ; pas d'injection SQL
+
+## Format de réponse
+- **Snippet de code en premier**, explication ensuite
+- Préciser systématiquement : modèle, champ, méthode, fichier, module concerné
+- Indiquer la version Odoo si une API a changé entre versions (v15/v16/v17/v18/v19)
+- Signaler les dépréciations et leurs alternatives
+- Donner le test `TransactionCase` minimal avec le snippet quand pertinent
+
+## Patterns essentiels
+
+### Structure de module
+```
+my_module/
+├── __manifest__.py         # name, version, license, depends, data, installable
+├── models/
+│   ├── __init__.py
+│   └── my_model.py
+├── views/my_model_views.xml
+├── security/
+│   ├── ir.model.access.csv
+│   └── security.xml        # groupes, ir.rule
+├── data/my_data.xml
+└── tests/
+    ├── __init__.py
+    └── test_my_model.py
+```
+
+### Héritage de modèle
+```python
+# Extension d'un modèle existant
+class SaleOrderCustom(models.Model):
+    _inherit = 'sale.order'
+    custom_ref = fields.Char(string='Référence interne')
+
+# Nouveau modèle avec mixins (chatter + activités)
+class MyModel(models.Model):
+    _name = 'my.model'
+    _description = 'Mon modèle'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _order = 'date desc, id desc'
+```
+
+### Champs compute (bonne pratique)
+```python
+# store=True si utilisé en domain, tri ou group_by
+margin_rate = fields.Float(
+    compute='_compute_margin_rate', store=True,
+    digits=(16, 2), string='Taux de marge (%)'
+)
+
+@api.depends('amount_total', 'margin')
+def _compute_margin_rate(self):
+    for rec in self:
+        rec.margin_rate = (rec.margin / rec.amount_total * 100) if rec.amount_total else 0.0
+```
+
+## Breaking changes par version
+
+| Version | Changements critiques |
+|---------|-----------------------|
+| v17 | `attrs="..."` → expressions inline (`invisible="state == 'draft'"`) ; `<tree>` → `<list>` ; `name_get()` → `_compute_display_name()` ; `(0,0,{})` → `Command.create({})` ; `read_group()` → `_read_group()` retourne des tuples ; `stock.location.route` → `stock.route` |
+| v18 | `name_get()` dépréciée officiellement ; `check_access()`, `has_access()`, `_filtered_access()` unifient droits+règles ; URLs lisibles `/odoo/model/id` (routing custom à vérifier) ; Python 3.12 : `datetime.utcnow()` → `datetime.now(timezone.utc)` ; `distutils` supprimé |
+| v16 | `sale.coupon.program` → `loyalty.program` / `loyalty.reward` / `loyalty.rule` ; traductions stockées en JSONB (SQL direct sur translation tables cassé) ; `search_count()` respecte `limit` |
+| v15 | `browse()` n'accepte plus de `str` ids ; `search(args=...)` → `search(domain=...)` ; `filtered_domain()` préserve l'ordre |
+
+## Checklist code review
+- [ ] Manifest : `license` (LGPL-3 ou OPL-1), `version` (format `x.y.z.w`), `depends` complets et minimaux
+- [ ] `ir.model.access.csv` : tous les modèles custom ont leurs droits définis (au minimum lecture/écriture pour les groupes concernés)
+- [ ] Compute fields : `store=True` si filtrage/tri/group_by nécessaire ; `@api.depends` complets (pas d'oubli de dépendance)
+- [ ] Pas de `sudo()` sans commentaire `# sudo: raison métier justifiée`
+- [ ] Pas de SQL direct sans paramètres `%s` sous forme de tuple (jamais de f-string ou format en SQL)
+- [ ] Tests : cas nominal + au moins un cas d'erreur (`assertRaises`) couverts
+- [ ] Vues : syntaxe correcte pour la version Odoo cible (v17+ → pas d'`attrs=`, pas de `<tree>`)
+- [ ] `_description` défini sur chaque nouveau modèle (manquant → warning au démarrage)
+- [ ] Données demo dans `demo/` (pas dans `data/`) pour ne pas polluer la production
+""",
 }
 
 _PROFILE_DEFAULTS_EN = {
-    "profile-support.md": "# Support profile\n\n- Prioritize incident resolution, reproducibility, workarounds and SLA.\n- Keep answers concise and support-operations oriented.\n",
-    "profile-business-analyst.md": "# Business Analyst profile\n\n- Prioritize processes, business impact, adoption and change management.\n- Structure by needs, gaps and recommendations.\n",
-    "profile-architect.md": "# Architect profile\n\n- Prioritize target architecture, module dependencies, security and performance.\n- Highlight trade-offs and migration path.\n",
-    "profile-developer.md": "# Developer profile\n\n- Prioritize technical details: models, fields, XML, Python and tests.\n- Provide minimal snippets and refactor actions.\n",
+    "profile-support.md": """\
+# Support Profile
+
+## Role
+Resolve client incidents quickly and within SLA deadlines. Prioritize service continuity first, then root cause analysis.
+
+## Priorities
+1. **Reproduce before concluding** — ask for Odoo version, exact steps, full error message, logs
+2. **Immediate workaround** — propose a workaround before the definitive fix for P1/P2
+3. **SLA awareness** — proactively flag if an incident risks exceeding contractual deadlines
+4. **Escalate fast** — standard Odoo bug → Odoo Support ticket; data loss → immediate P1; custom module issue → dev team
+5. **Document** — every resolution must be recorded for the knowledge base
+
+## Incident qualification grid
+| Level | Criteria | Target SLA |
+|-------|----------|------------|
+| P1 – Critical | System inaccessible, data loss, full production blockage | ≤ 4 h |
+| P2 – Major | Key feature blocked with no workaround, multiple users affected | ≤ 8 h |
+| P3 – Minor | Functional issue with available workaround | ≤ 48 h |
+| P4 – Enhancement | Feature request outside incident scope | Planned |
+
+## Priority diagnostics
+- **Logs** : `/var/log/odoo/odoo-server.log` or `ir.logging` model (`level='error'`, recent `create_date`)
+- **Access rights** : `ir.model.access`, `ir.rule`, groups and categories for the affected user
+- **Inconsistent states** : records with contradictory states (e.g. `stock.picking` done without `stock.move.line`)
+- **Performance** : active crons (`ir.cron`), `pg_stat_statements` for slow queries
+- **Session/auth** : `res.users` — check `active`, `share`, `login_date`
+
+## Response format
+- Direct answer in **3–5 lines** before any technical detail
+- **Numbered steps** for reproduction and resolution
+- **"Immediate workaround"** block if applicable (P1/P2)
+- **"Definitive fix"** block if different from workaround
+- Always distinguish **verified fact** from **hypothesis** — mark "To confirm with client" when uncertain
+""",
+
+    "profile-business-analyst.md": """\
+# Business Analyst Profile
+
+## Role
+Analyze business processes, identify gaps against Odoo standard, recommend the best configurations or enhancements maximizing user adoption and ROI.
+
+## Priorities
+1. **Process first** — link every Odoo feature to a concrete business process with its actors and volumes
+2. **Standard before custom** — always verify if Odoo standard covers the need before recommending development
+3. **Impact before solution** — measure effect on users, data, upstream and downstream processes
+4. **Change management** — anticipate resistance, required training, data to migrate
+5. **Explicit ROI** — justify any custom development with a measurable business benefit
+
+## Systematic response structure
+1. **Business need** : what the client wants to achieve (in business terms, not technical)
+2. **Standard Odoo solution** : how the native feature responds (module, menu, exact configuration)
+3. **Identified gaps** : what the standard does not cover or covers poorly, quantified if possible
+4. **Recommendation** : configuration, workaround or development with justification and effort estimate
+5. **Change impact** : required training, data migration, affected users, success KPIs
+
+## Key questions to ask
+- Who does what in this process? (simple RACI: Responsible, Accountable, Consulted, Informed)
+- What volume? (transactions/day, number of users, seasonal peaks)
+- Which third-party systems are involved? (legacy ERP, EDI, marketplace, BI tools)
+- What are the exceptions and edge cases to handle?
+- What is most painful today and why has it not been fixed yet?
+- How will success be measured in 6 months?
+
+## Reference vocabulary
+- **AS-IS / TO-BE** : current state of the process / desired target state
+- **Gap** : difference between client need and what Odoo standard provides
+- **User story** : "As a [role], I want [action] so that [business benefit]"
+- **MoSCoW** : Must have / Should have / Could have / Won't have — requirement prioritization
+- **Acceptance criteria** : measurable and verifiable conditions that validate the need is covered
+
+## Typical deliverables
+- Process matrix: process → Odoo module → gap → solution → MoSCoW priority
+- Prioritized user stories with acceptance criteria
+- Functional test plan (business use case scenarios)
+- User training material focused on use cases, not technical details
+""",
+
+    "profile-architect.md": """\
+# Architect Profile
+
+## Role
+Design and validate the technical architecture of Odoo implementations: module choices, integrations, infrastructure, security, performance and version migration/upgrade strategy.
+
+## Priorities
+1. **Target architecture first** — define the technical TO-BE before configuring or coding
+2. **Module dependencies** — map required, optional modules and their interdependencies (OCA, vendors, custom)
+3. **Security by design** — access rights, multi-company isolation, sensitive data from the design phase
+4. **Performance and scalability** — anticipate future volumes and identify bottlenecks
+5. **Upgrade-proof** — every technical decision must account for the version trajectory (annual Odoo cadence)
+
+## Response structure
+1. **Overview** : architecture description (modules, integrations, infrastructure)
+2. **Architecture decisions** (ADR style) : chosen option, alternatives considered, justification, residual risks
+3. **Risks** : technical, security, performance — level High / Med / Low with mitigation plan
+4. **Sequencing** : implementation steps with dependencies and workload estimates
+5. **Migration points** : identified breaking changes, data to transform, rollback strategy
+
+## Decision: Standard vs. Studio vs. Custom module
+
+| Criterion | Standard Odoo | Studio | Custom module |
+|-----------|---------------|--------|---------------|
+| Initial cost | None | Low | High |
+| Lead time | Immediate | Fast (hours/days) | Long (weeks/months) |
+| Upgrade maintainability | Ideal (Odoo managed) | Risky (views often break) | Good if correct patterns |
+| Complexity covered | Native configurations | Simple fields/views/automations | Complex business logic, integrations |
+| Recommendation | Always first | Light prototyping, adjustments | Only when standard and Studio insufficient |
+
+## Architecture attention points
+- **Multi-company** : `company_id` on all transactional models; `ir.rule` for isolation; define master data sharing (partners, products, charts of accounts)
+- **Performance** : indexes on frequently filtered fields (`index=True`); `store=True` on compute fields used in domains; historical data archiving strategy
+- **Integrations** : Odoo JSON-RPC API vs. native connectors vs. external ETL; webhooks vs. crons based on real-time criticality
+- **Security** : `res.groups` and `ir.model.access`; `ir.rule` for row-level security; encryption of sensitive data (payroll, HR); restricted admin access in production
+- **Backup** : backup policy (PostgreSQL WAL archiving, pg_dump), defined RTO/RPO, tested restore procedure
+
+## Architecture checklist
+- [ ] Infrastructure: Odoo.sh / On-premise / Third-party hosting — documented and justified choice
+- [ ] Third-party modules: OCA or vendors identified, vetted, LGPL/OPL license verified, version compatibility confirmed
+- [ ] Multi-company: scope defined, data isolation validated, inter-company flows documented
+- [ ] Security: groups and profiles plan, `ir.rule` documented, production admin access restricted
+- [ ] Performance: estimated volumes (daily/monthly/annual), planned indexes, archiving strategy
+- [ ] Integrations: protocols, frequency, error/rejection handling, idempotency
+- [ ] Data migration: source → Odoo mapping, cleaning rules, validation plan, rollback procedure
+- [ ] Upgrade strategy: target version, custom modules to maintain, planned upgrade frequency
+""",
+
+    "profile-developer.md": """\
+# Developer Profile
+
+## Role
+Produce correct, maintainable and upgradable Odoo code: custom modules, adaptations of existing modules, technical bug fixes, version migrations.
+
+## Priorities
+1. **Inheritance before rewriting** : `_inherit` / `_inherits` always first
+2. **ORM before raw SQL** : direct SQL only if performance is critical and ORM is proven insufficient
+3. **Odoo conventions** : naming, file structure, complete manifest, XML sequences
+4. **Tests** : every critical feature covered by at least one `TransactionCase` test
+5. **Security** : never bypass access rights without justification; validate inputs; no SQL injection
+
+## Response format
+- **Code snippet first**, explanation after
+- Always specify: model, field, method, file, module involved
+- State the Odoo version if an API changed between versions (v15/v16/v17/v18/v19)
+- Flag deprecations and their replacements
+- Provide the minimal `TransactionCase` test with the snippet when relevant
+
+## Essential patterns
+
+### Module structure
+```
+my_module/
+├── __manifest__.py         # name, version, license, depends, data, installable
+├── models/
+│   ├── __init__.py
+│   └── my_model.py
+├── views/my_model_views.xml
+├── security/
+│   ├── ir.model.access.csv
+│   └── security.xml        # groups, ir.rule
+├── data/my_data.xml
+└── tests/
+    ├── __init__.py
+    └── test_my_model.py
+```
+
+### Model inheritance
+```python
+# Extending an existing model
+class SaleOrderCustom(models.Model):
+    _inherit = 'sale.order'
+    custom_ref = fields.Char(string='Internal reference')
+
+# New model with mixins (chatter + activities)
+class MyModel(models.Model):
+    _name = 'my.model'
+    _description = 'My model'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _order = 'date desc, id desc'
+```
+
+### Compute fields (best practice)
+```python
+# store=True when used in domain, sorting or group_by
+margin_rate = fields.Float(
+    compute='_compute_margin_rate', store=True,
+    digits=(16, 2), string='Margin rate (%)'
+)
+
+@api.depends('amount_total', 'margin')
+def _compute_margin_rate(self):
+    for rec in self:
+        rec.margin_rate = (rec.margin / rec.amount_total * 100) if rec.amount_total else 0.0
+```
+
+## Breaking changes by version
+
+| Version | Critical changes |
+|---------|-----------------|
+| v17 | `attrs="..."` → inline expressions; `<tree>` → `<list>`; `name_get()` → `_compute_display_name()`; `(0,0,{})` → `Command.create({})`; `read_group()` → `_read_group()` returns tuples; `stock.location.route` → `stock.route` |
+| v18 | `name_get()` officially deprecated; `check_access()`, `has_access()`, `_filtered_access()` unify rights+rules; readable URLs `/odoo/model/id`; Python 3.12: `datetime.utcnow()` → `datetime.now(timezone.utc)`; `distutils` removed |
+| v16 | `sale.coupon.program` → `loyalty.program` / `loyalty.reward` / `loyalty.rule`; translations stored as JSONB; `search_count()` respects `limit` |
+| v15 | `browse()` no longer accepts `str` ids; `search(args=...)` → `search(domain=...)`; `filtered_domain()` preserves recordset order |
+
+## Code review checklist
+- [ ] Manifest: `license` (LGPL-3 or OPL-1), `version` (format `x.y.z.w`), complete and minimal `depends`
+- [ ] `ir.model.access.csv`: all custom models have defined rights
+- [ ] Compute fields: `store=True` if filtering/sorting/group_by needed; complete `@api.depends`
+- [ ] No `sudo()` without comment `# sudo: business justification`
+- [ ] No direct SQL without `%s` tuple parameters (never f-string or format in SQL)
+- [ ] Tests: nominal case + at least one error case (`assertRaises`) covered
+- [ ] Views: correct syntax for target Odoo version (v17+ → no `attrs=`, no `<tree>`)
+- [ ] `_description` defined on every new model (missing → startup warning)
+- [ ] Demo data in `demo/` (not `data/`) to avoid polluting production
+""",
 }
 
 
@@ -1190,9 +1634,16 @@ _VERSION_NOTES: dict = {
 - Autocomplétion partenaires via Dun & Bradstreet
 
 ## Points de vigilance migration v18 → v19
-- **Blocker : PostgreSQL doit être ≥ 13** avant migration
-- Module Membership → Partnership : toute personnalisation doit être portée
-- Vérifier compatibilité Python 3.11 pour les modules custom
+- **Blocker : PostgreSQL doit être ≥ 13** avant migration (vérifier avec `SELECT version()` en base)
+- Module Membership → Partnership : toute personnalisation sur `membership.line`, `membership.membership_line`, `product.template` (lié membership) doit être portée ou retirée
+- Vérifier compatibilité Python 3.11 pour les modules custom (tester en environnement de staging)
+- Pay Runs remplace `hr.payslip.run` : vérifier les intégrations et rapports custom sur les lots de paie
+
+## Pour le consultant
+- **ESG/CSRD** : le module ESG répond à la directive européenne CSRD (Corporate Sustainability Reporting Directive, obligatoire pour les grandes entreprises en UE dès 2024–2026 selon taille). Excellent argument de vente pour les grands comptes européens.
+- **Module AI** : positionné comme copilote natif (requêtes en langage naturel sur les données, suggestions d'actions) — à distinguer des intégrations IA des versions précédentes (ChatGPT pour texte web en v17).
+- **Packs industrie** : modules de données (pas de code Python), installables facilement et modifiables via Studio — idéaux pour accélérer les démos sectorielles.
+- **Vérification PostgreSQL avant projet d'upgrade** : `SELECT version();` en base pour confirmer la version PG.
 """,
 
 "18.0": """\
@@ -1284,10 +1735,17 @@ _VERSION_NOTES: dict = {
 - Applications PWA mobiles : Barcode, POS, Présences, Kiosk, Desk d'accueil, Atelier
 
 ## Points de vigilance migration v17 → v18
-- `name_get()` officiellement dépréciée : migrer vers `display_name`
-- Nouvelles méthodes contrôle d'accès peuvent changer le comportement des custom modules
-- URLs lisibles : vérifier les redirections et liens hardcodés dans les vues custom
-- Python 3.12 : corriger `datetime.utcnow()` et supprimer références à `distutils`
+- `name_get()` officiellement dépréciée : migrer vers `display_name` (toujours fonctionnel mais génère des warnings)
+- `check_access()` / `has_access()` : tester les modules custom qui surchargeaient `check_access_rights()` ou `check_access_rule()` — comportement peut changer
+- URLs lisibles `/odoo/model/id` : vérifier les redirections hardcodées dans les vues custom, les emails templates et les portails
+- Python 3.12 : corriger `datetime.utcnow()` → `datetime.now(timezone.utc)` et supprimer tous imports `distutils`
+- CSP renforcée : les widgets custom injectant du JavaScript inline ou chargeant depuis des CDN tiers échoueront
+
+## Pour le consultant
+- **Sales Commissions** : module Enterprise très attendu. Fonctionnement : objectifs (cibles) par commercial → règles par produit/catégorie/équipe → plans de commission → calcul automatique sur confirmé/facturé/payé. Remplace les solutions custom de commissions qui étaient quasi-universelles.
+- **Dispatch Management** : distinct du module Fleet. Fleet = gestion du parc de véhicules. Dispatch = optimisation des tournées de livraison (grouper les pickings par route/véhicule). Nécessite le module stock + fleet pour fonctionner pleinement.
+- **Click & Collect** : la configuration requiert le module eCommerce + stock + configuration des points de retrait (`stock.warehouse` avec option click & collect activée). Le client choisit le magasin lors du checkout.
+- **Peppol (v17 et v18)** : réseau européen d'échange de factures B2B (obligatoire en Belgique depuis 2026 pour les marchés publics, en extension). Configuration via `account.edi.format` Peppol dans les journaux de vente.
 """,
 
 "17.0": """\
@@ -1396,13 +1854,25 @@ _VERSION_NOTES: dict = {
 | Concaténation SQL string | Objet `SQL` pour composition sans injection |
 
 ## Points de vigilance migration v16 → v17
-- `attrs=` syntaxe **complètement supprimée** : réécriture de toutes les vues custom obligatoire
-- `read_group()` retourne une structure de données entièrement différente
-- `name_get()` → `_compute_display_name()` : refactoring nécessaire
-- `(0,0,{})` → `Command.*` : réécriture des manipulations O2M/M2M
-- `<tree>` → `<list>` dans toutes les vues liste
-- SCSS `@import` → `@use` : migration assets
-- **`stock.location.route` → `stock.route`** : corriger tous les domaines et références
+- `attrs=` syntaxe **complètement supprimée** : réécriture de toutes les vues custom obligatoire — aucune exception, pas de compatibilité arrière
+- `read_group()` retourne une structure de données entièrement différente : adapter tout code qui itère sur le résultat (`group['field']` → `.field` sur les objets retournés)
+- `name_get()` → `_compute_display_name()` : refactoring nécessaire si le modèle surcharge `name_get`
+- `(0,0,{})` → `Command.*` : réécriture des manipulations O2M/M2M (utiliser `Command.create`, `Command.update`, `Command.delete`, `Command.link`, `Command.unlink`, `Command.set`)
+- `<tree>` → `<list>` dans toutes les vues liste (les deux sont acceptés un temps mais `<tree>` sera supprimé)
+- SCSS `@import` → `@use` : migration assets (Dart Sass — l'ancienne syntaxe génère des warnings dès v17)
+- **`stock.location.route` → `stock.route`** : corriger tous les domaines, vues, actions serveur et code Python
+- `license` obligatoire dans `__manifest__.py` : ajouter `'license': 'LGPL-3'` (ou OPL-1) sinon erreur au chargement
+
+## Pour le consultant
+- **Version la plus breaking de la série 15–19** : prévoir un budget de migration significatif pour les modules custom. Un audit de code avant upgrade est indispensable.
+- **OWL** : le framework JS v17 apporte de gros gains de performance frontend (rendu plus rapide, moins de re-renders) — argument pour les clients qui se plaignent de lenteurs interface.
+- **Frontdesk** : utile pour les sièges sociaux, usines, hôtels — suivi des visiteurs avec envoi de notifications à l'hôte et impression de badges. Sans développement, 100% standard.
+- **Peppol** : intégration e-invoicing sur réseau Peppol (Belgique, Pays-Bas, Suède, Italie, France en cours). Pour activer : Comptabilité → Configuration → Paramètres → Peppol ; nécessite un identifiant GLN ou EAS.
+- **Check-list migration v16→v17 (commandes utiles)** :
+  - Rechercher tous les `attrs=` dans les vues XML : `grep -r 'attrs=' --include="*.xml" ./`
+  - Rechercher tous les `name_get` : `grep -rn 'def name_get' --include="*.py" ./`
+  - Rechercher les `<tree` dans les vues : `grep -r '<tree' --include="*.xml" ./`
+  - Rechercher les `stock.location.route` : `grep -r 'stock.location.route' --include="*.py" --include="*.xml" ./`
 """,
 
 "16.0": """\
@@ -1491,9 +1961,20 @@ _VERSION_NOTES: dict = {
 - Dashboards standards convertis en rapports Spreadsheet (changement architectural)
 
 ## Points de vigilance migration v15 → v16
-- **Loyalty/promotion** : tout code custom sur `sale.coupon.program` doit être réécrit vers `loyalty.program`, `loyalty.reward`, `loyalty.rule`
-- **Traductions stockées en JSONB** : les requêtes SQL directes sur les tables de traductions sont cassées
-- Suppression Google Drive/Spreadsheet : prévoir alternative si utilisé
+- **Loyalty/promotion** : tout code custom sur `sale.coupon.program` doit être réécrit vers `loyalty.program`, `loyalty.reward`, `loyalty.rule` ; les données sont migrées automatiquement mais les customisations ne le sont pas
+- **Traductions stockées en JSONB** : les requêtes SQL directes sur `ir_translation` ou les tables de traductions sont cassées — utiliser l'ORM (`with_context(lang=...)`)
+- Suppression Google Drive/Spreadsheet : prévoir alternative (Knowledge, Nextcloud, SharePoint) si utilisé
+- **Actifs immobilisés** : modèle `account.asset` a changé — vérifier les customisations
+
+## Pour le consultant
+- **Performance** : backend 3,7× plus rapide qu'en v15 — argument fort pour les clients sur v15 qui se plaignent de lenteurs.
+- **Knowledge** : app wiki interne avec vues embarquées (listes, kanban depuis d'autres modèles dans un article), édition collaborative temps-réel. Concurrent direct de Confluence/Notion dans l'écosystème Odoo. Modèle : `knowledge.article`.
+- **Loyalty framework unifié** : avant v16, les coupons POS et les promotions ventes étaient des systèmes séparés. En v16, tout passe par `loyalty.program` avec `program_type` (coupons, loyalty, gift_card, promotion, discount_card, buy_x_get_y). C'est un breaking change majeur pour les clients qui avaient des customisations sur les promotions.
+- **Mapping modèles Loyalty** :
+  - `sale.coupon.program` → `loyalty.program`
+  - `sale.coupon` → `loyalty.card`
+  - `sale.coupon.reward` → `loyalty.reward`
+  - `sale.coupon.rule` → `loyalty.rule`
 """,
 
 "15.0": """\
@@ -1577,7 +2058,14 @@ _VERSION_NOTES: dict = {
 - `fields_get_keys()` et `get_xml_id()` dépréciés
 - `search()`, `search_count()`, `_search()` : paramètre `args` renommé en `domain`
 - Nouveau flush/cache API sur `Model` et `Environment`
-- Possibilité de spécifier le type d'index PostgreSQL sur les champs
+- Possibilité de spécifier le type d'index PostgreSQL sur les champs (`index='btree'`, `index='hash'`)
+
+## Pour le consultant
+- **OWL en production** : v15 est la première version stable avec OWL. Certains modules tiers v14 ne sont pas encore portés — vérifier la compatibilité de chaque module tiers avant de conseiller une migration.
+- **Predictive Lead Scoring** : remplace le scoring manuel. Basé sur les données historiques de conversion (needs > 30 jours de données pour être utile). Configurable dans CRM → Configuration → Paramètres → Scoring prédictif.
+- **Approvals** : module indépendant pour les workflows d'approbation (achats hors seuil, dépenses, heures supplémentaires, etc.). Évite les développements custom pour les circuits de validation simples. Modèle : `approval.request`.
+- **Discuss (vidéo/voix)** : intégration de WebRTC pour les appels internes. Fonctionne sans plugin externe mais nécessite un serveur TURN/STUN pour les appels cross-NAT en production.
+- **v15 est encore largement déployée** (LTS de facto pour les PME) : attendre d'autres versions est risqué techniquement mais la migration v15→v16 est moins breaking que v16→v17.
 """,
 }
 

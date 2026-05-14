@@ -4,8 +4,10 @@ import { ArrowRightLeft, ArrowUp, ChevronDown, Check, CheckCheck, Copy, FileText
 import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
-import PerspectiveToggle, { Perspective, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
+import PerspectiveToggle, { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
+import ConversationContextPanel from '../components/ConversationContextPanel'
+import { useWorkspaceContext } from '../components/Layout'
 import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
 import { useUiLanguage } from '../i18n'
@@ -21,6 +23,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
+import { extractToolContextItems, resolvePerspective, routedContextFiles } from '../utils/aiContext'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -30,6 +33,8 @@ interface Profile {
   odoo_version: string | null
   environments: string | null
   active_env_id: string | null
+  company_ids?: string | null
+  selected_company_id?: number | null
 }
 
 interface EnvEntry {
@@ -39,6 +44,14 @@ interface EnvEntry {
   github_repo?: string | null
 }
 
+interface CompanyOption {
+  id: number
+  name: string
+  country_code?: string
+  country_name?: string
+  currency?: string
+}
+
 type SelectorMode = 'version' | 'environment'
 
 interface SideConfig {
@@ -46,6 +59,24 @@ interface SideConfig {
   version: string
   profileId: number | null
   envId: string | null
+}
+
+function parseCompanies(raw?: string | null): CompanyOption[] {
+  try { return JSON.parse(raw ?? '[]') as CompanyOption[] } catch { return [] }
+}
+
+function activeCompany(profile?: Profile | null): CompanyOption | null {
+  if (!profile) return null
+  const companies = parseCompanies(profile.company_ids)
+  if (companies.length === 0) return null
+  const activeId = profile.selected_company_id ?? companies[0]?.id
+  return companies.find(c => c.id === activeId) ?? companies[0] ?? null
+}
+
+function companyLocalizationLabel(company?: CompanyOption | null) {
+  if (!company) return undefined
+  const parts = [company.country_code, company.currency].filter(Boolean)
+  return parts.length ? parts.join(' · ') : undefined
 }
 
 interface AiEvent {
@@ -206,6 +237,15 @@ function resolveRepoPath(cfg: SideConfig, profiles: Profile[]): { profileId: num
   const env = envs.find(e => e.id === envId)
   if (!env?.github_repo) return { profileId: null, envId: null }
   return { profileId: p.id, envId }
+}
+
+function resolveRepoName(cfg: SideConfig, profiles: Profile[]): string | null {
+  if (cfg.mode !== 'environment') return null
+  const p = profiles.find(p => p.id === cfg.profileId)
+  if (!p) return null
+  const envs = profileEnvs(p)
+  const envId = cfg.envId ?? (envs[0]?.id ?? null)
+  return envs.find(e => e.id === envId)?.github_repo ?? null
 }
 
 function cmpVersion(a: string | null, b: string | null): number {
@@ -1070,6 +1110,7 @@ function Markdown({ text }: { text: string }) {
 
 export default function Migration() {
   const lang = useUiLanguage()
+  const { contextOpen } = useWorkspaceContext()
   const c = migrationCopy[lang]
   const { data: profilesData } = useQuery({ queryKey: ['profiles'],     queryFn: listProfiles })
   const { data: sourcesData }  = useQuery({ queryKey: ['sources-all'],  queryFn: checkAllSources, staleTime: 30_000 })
@@ -1110,8 +1151,8 @@ export default function Migration() {
   const [source, setSource] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
   const [target, setTarget] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
 
-  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('migration', 'developer'))
-  const setPerspective = (p: Perspective) => { setPerspectiveState(p); savePerspective('migration', p) }
+  const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('migration', 'auto'))
+  const setPerspective = (p: PerspectiveMode) => { setPerspectiveState(p); savePerspective('migration', p) }
 
   const [messages, setMessages] = useState<Message[]>([])
   const [input,     setInput]   = useState('')
@@ -1122,6 +1163,8 @@ export default function Migration() {
   const abortRef  = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const assistantRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
+  const perspective = resolvePerspective(perspectiveMode, perspectivePrompt, 'developer')
 
   const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id ?? null
 
@@ -1138,6 +1181,25 @@ export default function Migration() {
   const sourceLabel   = resolveLabel(source, profiles)
   const targetLabel   = resolveLabel(target, profiles)
   const sourceRepo    = resolveRepoPath(source, profiles)
+  const sourceRepoName = resolveRepoName(source, profiles)
+  const sourceProfile = source.mode === 'environment' ? profiles.find(p => p.id === source.profileId) : undefined
+  const sourceEnv = sourceProfile ? profileEnvs(sourceProfile).find(e => e.id === source.envId) : undefined
+  const sourceCompany = activeCompany(sourceProfile)
+  const sourceLocalization = companyLocalizationLabel(sourceCompany)
+  const latestAssistantEvents = [...messages].reverse().find(m => m.role === 'assistant')?.events ?? []
+  const contextFiles = routedContextFiles({
+    prompt: perspectivePrompt,
+    perspective,
+    version: sourceVersion,
+    targetVersion,
+    migration: true,
+  })
+  const conversationSources = [
+    sourceVersion && sourcesInstalled(sourceVersion, srcStatus) ? `Sources Odoo ${sourceVersion}` : null,
+    targetVersion && sourcesInstalled(targetVersion, srcStatus) ? `Sources cible ${targetVersion}` : null,
+    sourceRepoName ? `Repo ${sourceRepoName.split('/').slice(-2).join('/')}` : null,
+  ].filter(Boolean) as string[]
+  const contextToolItems = extractToolContextItems(latestAssistantEvents)
 
   // Auto-reset target when it becomes invalid (version ≤ new source)
   useEffect(() => {
@@ -1362,6 +1424,8 @@ export default function Migration() {
         }
       />
 
+      <div className="migration-content-row">
+        <div className="migration-main-column">
       {/* Context bar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
@@ -1553,7 +1617,8 @@ export default function Migration() {
           </button>
           <div className="assistant-perspective-slot">
             <PerspectiveToggle
-              value={perspective}
+              value={perspectiveMode}
+              effectiveValue={perspective}
               onChange={setPerspective}
               size="sm"
               disabled={streaming}
@@ -1578,6 +1643,27 @@ export default function Migration() {
             <span>{sourceLabel} → {targetLabel}</span>
           )}
         </div>
+      </div>
+        </div>
+        {contextOpen && (
+          <ConversationContextPanel
+            mode={perspectiveMode}
+            effectivePerspective={perspective}
+            provider={activeProvDef?.label}
+            model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
+            project={sourceProfile?.name}
+            environment={sourceEnv?.name}
+            company={sourceCompany?.name}
+            localization={sourceLocalization}
+            version={sourceVersion}
+            targetVersion={targetVersion}
+            repo={sourceRepoName}
+            contextFiles={contextFiles}
+            sources={conversationSources}
+            attachments={readyAttachments.map(a => a.name)}
+            toolItems={contextToolItems}
+          />
+        )}
       </div>
     </div>
   )

@@ -19,6 +19,7 @@ from ...services.ai_service import (
     GITHUB_MODELS_BASE_URL, COPILOT_BASE_URL, COPILOT_HEADERS,
 )
 from ...services.context_service import load_context_for_prompt
+from ...services.localization_service import build_localization_context
 
 router = APIRouter()
 
@@ -403,12 +404,14 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     # ── General / Migration mode (no profile) ─────────────────────
     if req.profile_id is None:
         version = req.version or "?"
+        _gen_target_ver = req.target_version
         source_path: Optional[str] = None
         candidate = str(Path.home() / ".odoo-consultant" / "sources" / version)
         if _os.path.isdir(candidate):
             source_path = candidate
         context_md = load_context_for_prompt(
             version,
+            target_version=_gen_target_ver,
             migration=req.migration_mode,
             user_prompt=user_prompt,
             perspective=req.perspective or "developer",
@@ -417,7 +420,6 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
         # Migration target resolution
         _gen_target_path = None
-        _gen_target_ver = req.target_version
         if req.migration_mode and _gen_target_ver:
             _tgt_c = str(Path.home() / ".odoo-consultant" / "sources" / _gen_target_ver)
             if _os.path.isdir(_tgt_c):
@@ -522,11 +524,21 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     context_md = load_context_for_prompt(
         _version_to_use,
+        target_version=_target_version,
         migration=req.migration_mode,
         user_prompt=user_prompt,
         perspective=req.perspective or "developer",
         locale=_context_locale,
     )
+    localization_md = build_localization_context(
+        profile.company_ids,
+        active_company_id,
+        _version_to_use,
+        user_prompt,
+        req.perspective or "developer",
+    )
+    if localization_md:
+        context_md = f"{context_md}\n\n---\n\n{localization_md}" if context_md else localization_md
 
     async def generate():
         try:
