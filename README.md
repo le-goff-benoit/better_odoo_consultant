@@ -5,7 +5,7 @@
 L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.23.0**
+> Version actuelle : **0.25.0** — perspective 4 rôles end-to-end · cache prompts Anthropic optimisé · interface OPERATIONS.SYS neo-retro
 
 ---
 
@@ -87,7 +87,7 @@ La page **Fonctionnement** explique le flux complet de l'application sous forme 
 Elle détaille comment le portail combine :
 - la **configuration utilisateur** : nom, poste, équipe, thème, couleur d'accent et préférences d'interface ;
 - la **configuration des providers IA** : clés API, provider actif, modèle choisi et modèles activés/désactivés ;
-- la **perspective de réponse** : AM/BA pour une réponse métier, Archi/Dev pour une réponse technique ;
+- la **perspective de réponse** : 4 rôles consultant (Support, Business Analyst, Architecte, Développeur) avec détection automatique selon la question ;
 - les **fichiers Markdown de contexte** : `skills.md`, `studio.md`, `migration.md`, `meeting-minute.md`, `odoo-*.md` ;
 - le **projet client** : environnement actif, société active, contexte projet et auto-complétion ;
 - les **sources Odoo locales** et le **repo custom client** ;
@@ -112,6 +112,34 @@ La version 0.23 nettoie l'expérience de discussion :
 - **auto-perspective** revue avec listes de termes élargies, scoring multi-catégories, fallback BA au lieu de Dev pour les questions fonctionnelles ;
 - **analyse de complexité** corrigée : les modules OCA et communautaires (Camptocamp, Akretion, Tecnativa…) ne sont plus classés comme custom dev ; seuil Studio relevé à 3 signaux ;
 - **drapeaux fiscaux** : émoji du pays affiché à côté des sociétés (sélecteur, onglets projets) et dans le panneau contextuel.
+
+La version 0.23.x **unifie le système de perspective** des 4 rôles end-to-end :
+- backend reconnaît désormais Support / BA / Architecte / Développeur (au lieu de seulement 2 valeurs internes) ;
+- les fichiers `profile-*.md` sont **réellement injectés** dans le contexte (section core, jamais évincée du budget) — avant, ils étaient annoncés mais jamais chargés côté serveur ;
+- **scoring pondéré** avec seuil minimum et marge sur le runner-up : moins de bascules erratiques entre rôles ;
+- nouveau hook `useResolvedPerspective` avec hystérésis 350 ms — le badge ne flicke plus pendant la frappe ;
+- routage de contexte resserré : tokens ambigus (`pos`, `custom`, `mrp`, `of`…) matchés avec word-boundaries pour éviter les faux positifs (« propose » → POS, « customer » → Customizations) ;
+- `load_context_for_prompt` accepte un `target_version` pour charger les notes source ET cible en mode migration ;
+- cache mtime-aware sur les lectures markdown — un tour chat ne re-lit plus 5-6 fichiers depuis le disque.
+
+La version 0.24 **optimise les coûts d'API IA** :
+- le system prompt est **scindé en deux blocs** — stable (identité, sources, instructions, contexte projet) cacheable + variable (langue, perspective, markdown routé) non-cacheable ;
+- en mode Claude, un `cache_control: ephemeral` est posé à la frontière stable/variable, et un autre sur le **dernier `tool_result`** de chaque itération ; les tours conversationnels et les tours outils profitent désormais tous les deux du caching ;
+- l'événement `done` SSE expose `cache_creation_input_tokens` et `cache_read_input_tokens` pour observer l'efficacité du cache ;
+- nouveau helper `_source_instructions()` DRY (les 3 versions de `build_system_*` partagent un texte identique pour stabiliser le préfixe cacheable) ;
+- `search_odoo_source` : option `case_sensitive` (défaut `true` pour les patterns de code), retour distinct `files_count` vs `matches`, suggestions de fallback si 0 hit (insensible casse / sans accents / restreindre `path`) ;
+- `stop_reason` Claude `max_tokens` et `refusal` surfacés comme événement `warning` SSE et affichés en bulle grise — fin des troncatures silencieuses ;
+- inférence perspective côté serveur si un client envoie `perspective="auto"` — utile pour CLI / mobile.
+
+La version 0.25 **refond l'interface en style neo-retro OPERATIONS.SYS** :
+- inspirations HARRY.SYS + Portal Aperture + Arc Raiders ;
+- typographie tri-rôle : **Space Grotesk** (titres / CTAs en uppercase), **Inter** (corps), **JetBrains Mono** (codes / IDs / badges) ;
+- palette : light = blueprint off-white, dark = terminal `#0a0a0a` avec bordures blanches ; brand orange Aperture `#FF6B00` ;
+- bordures **2px solides** partout, coins carrés, plus aucune ombre — uniquement des bordures franches ;
+- topbar redessinée : logo `[O.SYS]`, lien actif avec marqueur `▪` et soulignement orange 3px ;
+- chaque page affiche désormais un **identifiant section `00000NNN`** au-dessus du titre ;
+- effet **CRT subtil en dark mode** : scanlines orange 2% + vignette radiale (light reste pur pour la lisibilité en réunion) ;
+- nouvelles classes utilitaires : `.neo-id`, `.neo-tag`, `.neo-section-number`, `.neo-frame`, `.neo-status-bar`, `.neo-bracket`.
 
 ---
 
