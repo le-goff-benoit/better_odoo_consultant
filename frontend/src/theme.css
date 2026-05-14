@@ -37,6 +37,11 @@
   --th-success-bg: #e8f5e2;
   --th-danger-bg: #fde8e8;
   --th-warning-bg: #fef3d8;
+  /* Theme-aware status foregrounds — readable on either bg or bg-card */
+  --th-success-fg: #1f5a2e;
+  --th-warning-fg: #8a5500;
+  --th-danger-fg:  #8a261d;
+  --th-info-fg:    #163a8e;
   --th-shadow: none;                                  /* shadows replaced by hard borders */
   --th-shadow-hover: 0 0 0 1px var(--brand) inset;    /* hover = inset brand outline */
   --th-focus-ring: color-mix(in srgb, var(--brand) 35%, transparent);
@@ -62,7 +67,8 @@
   --radius-md: 0px;
   --radius-lg: 0px;
   --radius-xl: 2px;
-  --radius-full: 999px;
+  --radius-full: 0px;        /* neo-retro: pills are square too */
+  --radius-circle: 999px;    /* opt-in for true circles when needed */
 
   --font-xs: 11px;
   --font-sm: 12px;
@@ -96,6 +102,11 @@
   --th-success-bg: #0d2417;
   --th-danger-bg: #2a0c0c;
   --th-warning-bg: #2a1e08;
+  /* Brighter status foregrounds for dark mode (needed for AA contrast on bg) */
+  --th-success-fg: #6dcf85;
+  --th-warning-fg: #f0b65a;
+  --th-danger-fg:  #ff7a6a;
+  --th-info-fg:    #7faaff;
   --th-shadow: none;
   --th-shadow-hover: 0 0 0 1px var(--brand) inset;
 }
@@ -2369,76 +2380,98 @@ input::placeholder, textarea::placeholder {
 .neo-kv b { color: var(--th-text); font-weight: 700; }
 
 
-/* ─── System status LED ──────────────────────────────────────────
- * Fixed red recording-style LED at the very top-left of the viewport.
- * Signals "system live" in the OPERATIONS.SYS aesthetic. Two layers:
- *   - .neo-led-dot       — the solid 8px red dot
- *   - .neo-led-dot::after — an expanding halo pulsing at 1.6s
- * Sits above all content (z-index 10000) but ignores pointer events. */
+/* ─── HAL 9000 status eye ────────────────────────────────────────
+ * Integrated into the topbar (NOT a fixed overlay). Sits in its own
+ * slot at the far-left edge with its own padding and right border,
+ * before the brand block. Three layers:
+ *   .hal-eye   — outer dark recessed bezel (24px circle)
+ *   .hal-iris  — bright red iris with radial gradient + halo (breathes)
+ *   .hal-glint — small white reflection for depth (top-left highlight)
+ */
 
-/* Free-floating LED in the very top-left corner of the viewport.
- * No label — just a small pulsing red dot. The label is provided via
- * the `title` attribute for screen readers and on hover. */
-.neo-led {
-  position: fixed;
-  top: 6px;
-  left: 6px;
-  z-index: 10000;
-  pointer-events: none;
-  user-select: none;
+.topbar-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 58px;
+  align-self: stretch;
+  background: var(--th-bg-card);
+  border-right: var(--neo-border-w) solid var(--th-border);
 }
-.neo-led-label { display: none; }   /* label slot kept in markup for future use */
 
-.neo-led-dot {
+.hal-eye {
   position: relative;
-  width: 9px;
-  height: 9px;
-  background: #e74c3c;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #1a0000 0%, #050000 75%, #000 100%);
+  border: 1px solid #000;
   box-shadow:
-    0 0 4px #e74c3c,
-    0 0 10px rgba(231, 76, 60, .6),
-    inset 0 0 2px rgba(255, 255, 255, .35);
-  animation: neo-led-pulse 1.6s ease-in-out infinite;
-}
-.neo-led-dot::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1px solid #e74c3c;
-  opacity: 0;
-  animation: neo-led-halo 1.6s ease-out infinite;
+    inset 0 0 4px rgba(0, 0, 0, .9),
+    inset 0 0 0 2px #2a0a0a;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-@keyframes neo-led-pulse {
+.hal-iris {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    #ffd5d5 0%,
+    #ff4040 25%,
+    #c0241c 60%,
+    #5a0a0a 100%
+  );
+  box-shadow:
+    0 0 6px #ff3030,
+    0 0 14px rgba(255, 50, 50, .9),
+    0 0 24px rgba(255, 40, 40, .55);
+  animation: hal-breathe 2.8s ease-in-out infinite;
+}
+
+/* Small specular highlight — gives the eye a glassy depth. */
+.hal-glint {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  width: 5px;
+  height: 4px;
+  background: rgba(255, 255, 255, .6);
+  border-radius: 50%;
+  filter: blur(.5px);
+  pointer-events: none;
+}
+
+@keyframes hal-breathe {
   0%, 100% {
-    background: #e74c3c;
     box-shadow:
-      0 0 4px #e74c3c,
-      0 0 10px rgba(231, 76, 60, .6),
-      inset 0 0 2px rgba(255, 255, 255, .35);
+      0 0 5px #ff3030,
+      0 0 12px rgba(255, 50, 50, .85),
+      0 0 20px rgba(255, 40, 40, .45);
+    filter: brightness(.95);
   }
   50% {
-    background: #ff4d4d;
     box-shadow:
-      0 0 6px #ff4d4d,
-      0 0 18px rgba(255, 77, 77, .85),
-      inset 0 0 2px rgba(255, 255, 255, .5);
+      0 0 9px #ff5050,
+      0 0 22px rgba(255, 80, 80, 1),
+      0 0 36px rgba(255, 60, 60, .75);
+    filter: brightness(1.15);
   }
 }
 
-@keyframes neo-led-halo {
-  0%   { transform: scale(1);   opacity: .85; }
-  100% { transform: scale(2.8); opacity: 0;   }
+[data-theme="dark"] .hal-eye {
+  background: radial-gradient(circle at 50% 50%, #220000 0%, #080000 75%, #000 100%);
+  border-color: #1a1a1a;
 }
 
-/* In dark mode, give the LED a touch more brightness to keep it readable
- * against the near-black background without changing the hue. */
-[data-theme="dark"] .neo-led-dot {
-  background: #ff5050;
-  box-shadow:
-    0 0 5px #ff5050,
-    0 0 14px rgba(255, 80, 80, .8),
-    inset 0 0 2px rgba(255, 255, 255, .55);
+@media (max-width: 900px) {
+  .topbar-status { width: 48px; }
+  .hal-eye { width: 20px; height: 20px; }
+  .hal-iris { width: 10px; height: 10px; }
 }

@@ -330,7 +330,7 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
         <span style={{ color: t.border, fontSize: 13 }}>·</span>
         <span style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{currentModel?.label}</span>
         {currentModel?.recommended && (
-          <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>
+          <span style={{ fontSize: 9, background: t.successSolid, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>
         )}
         <ChevronDown size={12} color={t.muted} style={{ marginLeft: 1 }} />
       </button>
@@ -370,7 +370,7 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontWeight: 600, fontSize: 12, color: isSelected ? prov.color : t.text }}>{m.label}</span>
                       {m.recommended && (
-                        <span style={{ fontSize: 9, background: t.success, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+                        <span style={{ fontSize: 9, background: t.successSolid, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
                           {migrationCopy[lang].recommended}
                         </span>
                       )}

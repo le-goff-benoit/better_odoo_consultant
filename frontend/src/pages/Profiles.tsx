@@ -710,7 +710,7 @@ export default function Profiles() {
                   Suivant →
                 </button>
               ) : (
-                <button className="btn btn-primary" style={{ background: t.success }}
+                <button className="btn btn-primary" style={{ background: t.successSolid }}
                   disabled={editingId !== null ? update.isPending : create.isPending}
                   onClick={() => editingId !== null ? update.mutate() : create.mutate()}>
                   {(editingId !== null ? update.isPending : create.isPending) ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Check size={14} />}
@@ -1216,7 +1216,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <ClipboardList size={13} /> {c.context}
               {profile.project_context && (
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.success, display: 'inline-block', flexShrink: 0 }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.successSolid, display: 'inline-block', flexShrink: 0 }} />
               )}
             </button>
             <div style={{ flex: 1 }} />

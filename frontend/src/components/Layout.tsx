@@ -56,10 +56,6 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
-      {/* System "live" indicator — fixed top-left, pulses red. */}
-      <div className="neo-led" title="System operational" aria-label="System operational">
-        <span className="neo-led-dot" />
-      </div>
       <Sidebar contextOpen={contextOpen} onToggleContext={toggleContext} />
       <WorkspaceContextState.Provider value={{ contextOpen }}>
         <div className="app-workspace">

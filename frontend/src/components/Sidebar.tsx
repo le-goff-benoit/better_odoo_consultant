@@ -61,6 +61,12 @@ export default function Sidebar({
 
   return (
     <header className="app-topbar">
+      <div className="topbar-status" title="System operational" aria-label="System operational">
+        <span className="hal-eye">
+          <span className="hal-iris" />
+          <span className="hal-glint" />
+        </span>
+      </div>
       <div className="topbar-brand">
         <div className="topbar-logo" aria-hidden>
           O

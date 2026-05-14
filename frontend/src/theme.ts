@@ -34,14 +34,23 @@ export const t = {
   borderFocus: 'var(--brand, #0f766e)',
   borderLight: 'var(--th-border-light, #f1f5f9)',
 
-  // Status (industrial palette aligned with the neo-retro design)
-  success:   '#2f7a3f',
+  // Status (theme-aware foregrounds — adjust between light + dark so
+  // inline `color: t.success` etc. stay readable on either background).
+  success:   'var(--th-success-fg, #2f7a3f)',
   successBg: 'var(--th-success-bg, #e8f5e2)',
-  warning:   '#c97a00',
+  warning:   'var(--th-warning-fg, #c97a00)',
   warningBg: 'var(--th-warning-bg, #fef3d8)',
-  danger:    '#c0392b',
+  danger:    'var(--th-danger-fg, #c0392b)',
   dangerBg:  'var(--th-danger-bg, #fde8e8)',
-  info:      '#1f4ec3',
+  info:      'var(--th-info-fg, #1f4ec3)',
+  // Solid status colors — same value in both themes. Use as a BACKGROUND
+  // with white text (e.g. small ★ / ✓ chips). The theme-aware vars above
+  // are not safe as backgrounds with white text because the dark-mode
+  // variant is too light for AA contrast.
+  successSolid: '#2f7a3f',
+  warningSolid: '#c97a00',
+  dangerSolid:  '#c0392b',
+  infoSolid:    '#1f4ec3',
 
   // Shadows
   shadow:   'var(--th-shadow)',
