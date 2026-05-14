@@ -260,7 +260,7 @@ class ChatRequest(BaseModel):
     target_profile_id: Optional[int] = None   # target from a project environment
     target_env_id: Optional[str] = None
     # Reasoning perspective: "technical" (default) or "functional"
-    perspective: Optional[str] = "technical"
+    perspective: Optional[str] = "developer"
 
 
 _ATTACHMENT_MAX_FILES = 5
@@ -411,7 +411,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             version,
             migration=req.migration_mode,
             user_prompt=user_prompt,
-            perspective=req.perspective or "technical",
+            perspective=req.perspective or "developer",
             locale=_context_locale,
         )
 
@@ -425,7 +425,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
         async def generate_general():
             try:
-                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, req.perspective or "technical", _response_language):
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, req.perspective or "developer", _response_language):
                     yield _sse(evt)
             except Exception as exc:
                 yield _sse({"type": "error", "msg": str(exc)})
@@ -524,13 +524,13 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         _version_to_use,
         migration=req.migration_mode,
         user_prompt=user_prompt,
-        perspective=req.perspective or "technical",
+        perspective=req.perspective or "developer",
         locale=_context_locale,
     )
 
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, req.perspective or "technical", _response_language):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, req.perspective or "developer", _response_language):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

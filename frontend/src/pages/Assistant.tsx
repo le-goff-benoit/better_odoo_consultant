@@ -302,7 +302,7 @@ export default function Assistant() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
 
-  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('assistant', 'technical'))
+  const [perspective, setPerspectiveState] = useState<Perspective>(() => loadPerspective('assistant', 'developer'))
   const setPerspective = (p: Perspective) => { setPerspectiveState(p); savePerspective('assistant', p) }
 
   // Init provider when providers load
@@ -1567,6 +1567,7 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   const time   = fmtTime(timestamp)
   const tokens = fmtTokens(inputTokens, outputTokens)
   const [copied, setCopied] = useState(false)
+  const contextItems = extractContextItems(events)
 
   function copyText() {
     if (!textEvt?.content) return
@@ -1592,27 +1593,31 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
         {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} projectName={projectName} />}
 
         {textEvt?.content && (
-          <div style={{
-            position: 'relative',
-            background: t.bgCard, border: `1px solid ${t.border}`,
-            borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
-            padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
-          }}>
-            <button
-              onClick={copyText}
-              title={c.copyTitle}
-              style={{
-                position: 'absolute', top: 8, right: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 26, height: 26, border: `1px solid ${t.border}`,
-                borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                color: copied ? t.success : t.muted, opacity: 0.8,
-                transition: 'opacity .15s, color .15s',
-              }}
-            >
-              {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
-            </button>
-            <Markdown text={textEvt.content} />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+            <div style={{
+              position: 'relative',
+              flex: 1,
+              background: t.bgCard, border: `1px solid ${t.border}`,
+              borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
+              padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
+            }}>
+              <button
+                onClick={copyText}
+                title={c.copyTitle}
+                style={{
+                  position: 'absolute', top: 8, right: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, border: `1px solid ${t.border}`,
+                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                  color: copied ? t.success : t.muted, opacity: 0.8,
+                  transition: 'opacity .15s, color .15s',
+                }}
+              >
+                {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
+              </button>
+              <Markdown text={textEvt.content} />
+            </div>
+            <ContextSourcesPanel items={contextItems} />
           </div>
         )}
 
@@ -1666,6 +1671,72 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
         )}
       </div>
     </div>
+  )
+}
+
+interface ContextItem { type: 'context' | 'source'; label: string; detail?: string }
+
+function extractContextItems(events: AiEvent[]): ContextItem[] {
+  const seen = new Set<string>()
+  const out: ContextItem[] = []
+  for (const evt of events) {
+    if (evt.type !== 'tool_call') continue
+    const name = evt.name ?? ''
+    const args = evt.args ?? {}
+    if (name === 'read_odoo_file' || name === 'read_project_file') {
+      const path = String(args.path ?? '')
+      if (!path) continue
+      const key = `${name}:${path}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ type: 'context', label: path, detail: name === 'read_odoo_file' ? 'Odoo' : 'Projet' })
+    } else if (name === 'search_odoo_source' || name === 'search_project_source') {
+      const scope = name === 'search_odoo_source' ? 'Sources Odoo' : 'Code custom'
+      const pattern = String(args.pattern ?? '')
+      const version = String(args.version ?? '')
+      const label = pattern ? `Recherche: ${pattern}` : 'Recherche'
+      const detail = version ? `${scope} · v${version}` : scope
+      const key = `${name}:${pattern}:${version}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ type: 'source', label, detail })
+    }
+  }
+  return out.slice(-10)
+}
+
+function ContextSourcesPanel({ items }: { items: ContextItem[] }) {
+  if (!items.length) return null
+  return (
+    <aside style={{
+      width: 260, flexShrink: 0,
+      border: `1px solid ${t.border}`,
+      borderRadius: t.radiusLg,
+      background: t.bg,
+      padding: '10px 10px 8px',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: t.textSub, marginBottom: 8 }}>
+        Contexte & sources
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.map((item, idx) => (
+          <div key={`${item.label}-${idx}`} style={{
+            border: `1px solid ${t.border}`,
+            borderRadius: t.radius,
+            padding: '6px 8px',
+            background: item.type === 'context' ? `${t.brand}08` : `${t.success}12`,
+          }}>
+            <div style={{ fontSize: 10, color: t.muted, marginBottom: 2 }}>
+              {item.type === 'context' ? 'Fichier' : 'Source'}
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.label}
+            </div>
+            {item.detail && <div style={{ fontSize: 10, color: t.textSub }}>{item.detail}</div>}
+          </div>
+        ))}
+      </div>
+    </aside>
   )
 }
 

@@ -1,15 +1,17 @@
-import { Briefcase, Code2 } from 'lucide-react'
+import { Briefcase, Building2, Code2, Wrench } from 'lucide-react'
 import { t } from '../theme'
 import { useUiLanguage } from '../i18n'
 
-export type Perspective = 'functional' | 'technical'
+export type Perspective = 'support' | 'business_analyst' | 'architect' | 'developer'
 
 const STORAGE_PREFIX = 'perspective:'
 
-export function loadPerspective(scope: string, fallback: Perspective = 'technical'): Perspective {
+export function loadPerspective(scope: string, fallback: Perspective = 'developer'): Perspective {
   try {
     const v = localStorage.getItem(STORAGE_PREFIX + scope)
-    if (v === 'functional' || v === 'technical') return v
+    if (v === 'support' || v === 'business_analyst' || v === 'architect' || v === 'developer') return v
+    if (v === 'functional') return 'business_analyst'
+    if (v === 'technical') return 'developer'
   } catch { /* ignore */ }
   return fallback
 }
@@ -26,32 +28,21 @@ interface PerspectiveToggleProps {
 }
 
 /**
- * Compact 2-icon segmented toggle to switch between a "functional" (AM / BA)
- * and a "technical" (Architect / Dev) reasoning perspective for the AI.
- *
- * Icons + tooltips, no visible labels — meant to sit next to the send button.
+ * 2x2 profile switcher to pick support / BA / architect / developer response styles.
  */
 export default function PerspectiveToggle({ value, onChange, size = 'md', disabled }: PerspectiveToggleProps) {
   const lang = useUiLanguage()
-  const dim   = size === 'sm' ? 26 : 30
-  const icon  = size === 'sm' ? 13 : 15
-  const activeLabel = value === 'functional' ? 'AM / BA' : 'Archi / Dev'
+  const dim   = size === 'sm' ? 28 : 32
+  const icon  = size === 'sm' ? 12 : 14
+  const activeLabel = value
   const copy = lang === 'en'
     ? {
-      group: `Response perspective, active mode ${activeLabel}`,
+      group: `Response profile, active mode ${activeLabel}`,
       active: `Active mode: ${activeLabel}`,
-      functionalTitle: 'Functional perspective (AM / BA) — user journeys, business processes, configuration',
-      functionalAria: 'Enable functional AM / BA perspective',
-      technicalTitle: 'Technical perspective (Archi / Dev) — models, code, XML views, performance',
-      technicalAria: 'Enable technical Archi / Dev perspective',
     }
     : {
-      group: `Perspective de réponse, mode actif ${activeLabel}`,
+      group: `Profil de réponse, mode actif ${activeLabel}`,
       active: `Mode actif : ${activeLabel}`,
-      functionalTitle: 'Perspective fonctionnelle (AM / BA) — orientée parcours utilisateur, processus métier, configuration',
-      functionalAria: 'Activer la perspective fonctionnelle AM / BA',
-      technicalTitle: 'Perspective technique (Archi / Dev) — orientée modèles, code, vues XML, performance',
-      technicalAria: 'Activer la perspective technique Archi / Dev',
     }
 
   const itemStyle = (active: boolean): React.CSSProperties => ({
@@ -70,36 +61,22 @@ export default function PerspectiveToggle({ value, onChange, size = 'md', disabl
       aria-label={copy.group}
       title={copy.active}
       style={{
-        display: 'inline-flex',
-        background: t.bgMuted,
+        display: 'grid',
+        gridTemplateColumns: `repeat(2, ${dim}px)`,
+        gap: 2,
+        background: '#f3f4f6',
         border: `1px solid ${t.border}`,
-        borderRadius: t.radiusFull,
-        overflow: 'hidden',
-        height: dim,
+        borderRadius: t.radius,
+        padding: 2,
       }}
     >
-      <button
-        type="button"
-        title={copy.functionalTitle}
-        aria-label={copy.functionalAria}
-        aria-pressed={value === 'functional'}
-        disabled={disabled}
-        onClick={() => !disabled && onChange('functional')}
-        style={itemStyle(value === 'functional')}
-      >
-        <Briefcase size={icon} />
-      </button>
-      <button
-        type="button"
-        title={copy.technicalTitle}
-        aria-label={copy.technicalAria}
-        aria-pressed={value === 'technical'}
-        disabled={disabled}
-        onClick={() => !disabled && onChange('technical')}
-        style={itemStyle(value === 'technical')}
-      >
-        <Code2 size={icon} />
-      </button>
+      {[{ id: 'support', icon: <Wrench size={icon} />, title: 'Support' }, { id: 'business_analyst', icon: <Briefcase size={icon} />, title: 'Business Analyst' }, { id: 'architect', icon: <Building2 size={icon} />, title: 'Architecte' }, { id: 'developer', icon: <Code2 size={icon} />, title: 'Développeur' }].map(p => (
+        <button key={p.id} type="button" title={p.title} aria-label={p.title} aria-pressed={value === p.id}
+          disabled={disabled} onClick={() => !disabled && onChange(p.id as Perspective)}
+          style={{ ...itemStyle(value === p.id), borderRadius: 6, background: value === p.id ? '#6b7280' : 'transparent' }}>
+          {p.icon}
+        </button>
+      ))}
     </div>
   )
 }

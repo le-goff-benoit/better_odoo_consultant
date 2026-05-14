@@ -232,6 +232,18 @@ def load_context_for_prompt(
         _maybe_section(titles["skills"], _select_skills_context(prompt, perspective, lang), sections)
     except FileNotFoundError:
         pass
+    perspective_file_map = {
+        "support": "profile-support.md",
+        "business_analyst": "profile-business-analyst.md",
+        "architect": "profile-architect.md",
+        "developer": "profile-developer.md",
+    }
+    profile_file = perspective_file_map.get((perspective or "").strip())
+    if profile_file:
+        try:
+            _maybe_section(f"Profil {perspective}", read_file(profile_file, lang), sections)
+        except FileNotFoundError:
+            pass
 
     if not migration and _has_any(prompt, _MEETING_TERMS):
         try:
@@ -273,6 +285,8 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
             return _MIGRATION_MD_EN
         if name == "studio.md":
             return _STUDIO_MD_EN
+        if name.startswith("profile-") and name.endswith(".md"):
+            return _PROFILE_DEFAULTS_EN.get(name)
         m_en = re.match(r'^odoo-([\d\.]+)\.md$', name)
         if m_en:
             return _VERSION_NOTES_EN.get(m_en.group(1))
@@ -284,10 +298,26 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
         return _MIGRATION_MD
     if name == "studio.md":
         return _STUDIO_MD
+    if name.startswith("profile-") and name.endswith(".md"):
+        return _PROFILE_DEFAULTS.get(name)
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
     if m:
         return _VERSION_NOTES.get(m.group(1))
     return None
+
+_PROFILE_DEFAULTS = {
+    "profile-support.md": "# Profil Support\n\n- Prioriser résolution d'incident, reproduction, contournement et SLA.\n- Réponses courtes, orientées étapes de support et bonnes pratiques ITSM.\n",
+    "profile-business-analyst.md": "# Profil Business Analyst\n\n- Prioriser processus, impacts métier, adoption et conduite du changement.\n- Structurer par besoins, écarts, recommandations.\n",
+    "profile-architect.md": "# Profil Architecte\n\n- Prioriser architecture cible, dépendances modules, sécurité, performance.\n- Mettre en avant compromis et trajectoire de migration.\n",
+    "profile-developer.md": "# Profil Développeur\n\n- Prioriser détails techniques : modèles, champs, XML, Python, tests.\n- Donner snippets minimaux et actions de refactor.\n",
+}
+
+_PROFILE_DEFAULTS_EN = {
+    "profile-support.md": "# Support profile\n\n- Prioritize incident resolution, reproducibility, workarounds and SLA.\n- Keep answers concise and support-operations oriented.\n",
+    "profile-business-analyst.md": "# Business Analyst profile\n\n- Prioritize processes, business impact, adoption and change management.\n- Structure by needs, gaps and recommendations.\n",
+    "profile-architect.md": "# Architect profile\n\n- Prioritize target architecture, module dependencies, security and performance.\n- Highlight trade-offs and migration path.\n",
+    "profile-developer.md": "# Developer profile\n\n- Prioritize technical details: models, fields, XML, Python and tests.\n- Provide minimal snippets and refactor actions.\n",
+}
 
 
 _SKILLS_MD = """\
