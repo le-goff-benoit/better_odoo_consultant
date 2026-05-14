@@ -14,7 +14,12 @@ MODE_LABELS = {
     "studio_dev": "Studio + Dev",
 }
 
-ODOO_AUTHORS = {"odoo", "odoo s.a.", "odoo sa", "odoo s.a", ""}
+# Tokens to identify Odoo official authors. Use substring match because the
+# manifest author field often includes extra text like "(https://www.odoo.com)"
+# or email addresses that prevent exact-set membership. "odoo" alone is NOT
+# included here because it matches "Odoo Community Association (OCA)" — handled
+# by explicit equality in _is_odoo_author instead.
+ODOO_AUTHOR_TOKENS = ("odoo s.a.", "odoo sa")
 
 # Known community publishers — modules from these authors are NOT custom dev
 # (they're standard community modules, like OCA addons). Treated separately
@@ -84,6 +89,12 @@ STUDIO_SIGNAL_THRESHOLD = 3
 # that we filter community modules out, a single truly-custom module is
 # meaningful.
 CUSTOM_MODULE_THRESHOLD = 1
+
+
+def _is_odoo_author(author_lower: str) -> bool:
+    if not author_lower or author_lower == "odoo":
+        return True
+    return any(token in author_lower for token in ODOO_AUTHOR_TOKENS)
 
 
 def _is_community_author(author_lower: str) -> bool:
@@ -204,7 +215,7 @@ async def _installed_module_summary(odoo) -> dict[str, Any]:
             studio_modules.append(name)
         if name == "base_automation":
             automation_modules.append(name)
-        if author in ODOO_AUTHORS or name.startswith("l10n_"):
+        if _is_odoo_author(author) or name.startswith("l10n_"):
             continue
         if _is_community_author(author) or _looks_like_community_module(name):
             community_modules.append(name)

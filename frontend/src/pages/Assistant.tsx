@@ -455,6 +455,8 @@ export default function Assistant() {
   const activeCompanyName = activeCompany?.name
   const activeCompanyLocalization = companyLocalizationLabel(activeCompany)
   const activeComplexity = technicalComplexityLabel(selectedProfile?.technical_complexity)
+  const complexityParsed = (() => { try { return JSON.parse(selectedProfile?.technical_complexity ?? '{}') } catch { return {} } })()
+  const repoIsCloned = ((complexityParsed?.dev?.repositories ?? []) as Array<{ cloned: boolean }>).some(r => r.cloned)
   const contextFiles = routedContextFiles({
     prompt: perspectivePrompt,
     perspective,
@@ -463,6 +465,7 @@ export default function Assistant() {
   })
   const conversationSources = [
     activeVersion && sourcesInstalled ? `Sources Odoo ${activeVersion}${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' Community' : ' Enterprise'}` : null,
+    activeEnvRepo && repoIsCloned ? activeEnvRepo.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
   ].filter(Boolean) as string[]
 
   // Deduplicate versions: strip -enterprise suffix, keep one entry per base version

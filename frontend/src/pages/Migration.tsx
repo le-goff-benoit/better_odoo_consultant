@@ -1212,6 +1212,8 @@ export default function Migration() {
   const sourceCompany = activeCompany(sourceProfile)
   const sourceLocalization = companyLocalizationLabel(sourceCompany)
   const sourceComplexity = technicalComplexityLabel(sourceProfile?.technical_complexity)
+  const sourceComplexityParsed = (() => { try { return JSON.parse(sourceProfile?.technical_complexity ?? '{}') } catch { return {} } })()
+  const sourceRepoIsCloned = ((sourceComplexityParsed?.dev?.repositories ?? []) as Array<{ cloned: boolean }>).some(r => r.cloned)
   const contextFiles = routedContextFiles({
     prompt: perspectivePrompt,
     perspective,
@@ -1222,6 +1224,7 @@ export default function Migration() {
   const conversationSources = [
     sourceVersion && sourcesInstalled(sourceVersion, srcStatus) ? `Sources Odoo ${sourceVersion}` : null,
     targetVersion && sourcesInstalled(targetVersion, srcStatus) ? `Sources cible ${targetVersion}` : null,
+    sourceRepoName && sourceRepoIsCloned ? sourceRepoName.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
   ].filter(Boolean) as string[]
 
   // Auto-reset target when it becomes invalid (version ≤ new source)
