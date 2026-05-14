@@ -62,12 +62,14 @@ export default function Sidebar({
   return (
     <header className="app-topbar">
       <div className="topbar-brand">
-        <div className="topbar-logo">
+        <div className="topbar-logo" aria-hidden>
           O
         </div>
         <div className="topbar-title">
-          <div>Odoo Consultant</div>
-          <span>v{APP_VERSION}</span>
+          <div>
+            ODOO.CONSULTANT <span className="neo-bracket">SYS</span>
+          </div>
+          <span>v{APP_VERSION} · OPERATIONAL</span>
         </div>
       </div>
 
