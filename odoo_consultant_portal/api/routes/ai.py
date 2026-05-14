@@ -20,6 +20,7 @@ from ...services.ai_service import (
 )
 from ...services.context_service import load_context_for_prompt
 from ...services.localization_service import build_localization_context
+from ...services.technical_complexity_service import build_technical_complexity_context
 
 router = APIRouter()
 
@@ -539,6 +540,9 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     )
     if localization_md:
         context_md = f"{context_md}\n\n---\n\n{localization_md}" if context_md else localization_md
+    complexity_md = build_technical_complexity_context(profile.technical_complexity)
+    if complexity_md:
+        context_md = f"{context_md}\n\n---\n\n{complexity_md}" if context_md else complexity_md
 
     async def generate():
         try:

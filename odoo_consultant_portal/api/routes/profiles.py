@@ -26,6 +26,10 @@ from ...services.localization_service import (
     dump_company_cache,
     merge_company_localizations,
 )
+from ...services.technical_complexity_service import (
+    analyze_technical_complexity,
+    dump_technical_complexity,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -70,6 +74,7 @@ class ProfileUpdate(BaseModel):
     selected_company_id: Optional[int] = None
     user_access_info: Optional[str] = None
     project_context: Optional[str] = None
+    technical_complexity: Optional[str] = None
 
 
 class EnvCreate(BaseModel):
@@ -520,6 +525,11 @@ async def check_access(profile_id: int, session: AsyncSession = Depends(get_sess
                 profile.company_ids = dump_company_cache(merge_company_localizations(profile.company_ids, companies))
         except Exception:
             pass
+        try:
+            analysis = await analyze_technical_complexity(profile.name, profile.environments, client, profile.github_repo)
+            profile.technical_complexity = dump_technical_complexity(analysis)
+        except Exception:
+            pass
         profile.updated_at = datetime.utcnow()
         session.add(profile)
         await session.commit()
@@ -555,6 +565,26 @@ async def refresh_localization(profile_id: int, session: AsyncSession = Depends(
     await session.commit()
     await session.refresh(profile)
     return {"companies": companies, "company_ids": profile.company_ids}
+
+
+@router.post("/{profile_id}/technical-complexity/refresh")
+async def refresh_technical_complexity(profile_id: int, session: AsyncSession = Depends(get_session)):
+    """Refresh cached Studio/custom-dev complexity signals for a project."""
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+    client = None
+    try:
+        client = _get_client_from_profile(profile)
+    except Exception:
+        client = None
+    analysis = await analyze_technical_complexity(profile.name, profile.environments, client, profile.github_repo)
+    profile.technical_complexity = dump_technical_complexity(analysis)
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+    return analysis
 
 
 @router.post("/check-access-raw")

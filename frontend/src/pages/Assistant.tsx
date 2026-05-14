@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, FolderCode, Globe2, History, Lock, Paperclip, Settings, Square, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, Globe2, History, Lock, Paperclip, Settings, Square, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
-import PerspectiveToggle, { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
+import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import { useWorkspaceContext } from '../components/Layout'
@@ -25,7 +25,8 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { extractToolContextItems, resolvePerspective, routedContextFiles } from '../utils/aiContext'
+import { resolvePerspective, routedContextFiles } from '../utils/aiContext'
+import { countryFlag } from '../utils/countryFlag'
 
 function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
   const def = ODOO_APPS[name]
@@ -44,7 +45,7 @@ function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string }
+interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string; technical_complexity?: string }
 interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string; github_repo?: string; repo_branch?: string }
 interface L10nModule { name: string; source?: string; path?: string }
 interface CompanyOption {
@@ -109,6 +110,15 @@ function companyLocalizationLabel(company?: CompanyOption | null) {
   if (!company) return undefined
   const parts = [company.country_code, company.currency].filter(Boolean)
   return parts.length ? parts.join(' · ') : undefined
+}
+
+function technicalComplexityLabel(raw?: string) {
+  try {
+    const value = JSON.parse(raw ?? '{}')
+    return value.label || undefined
+  } catch {
+    return undefined
+  }
 }
 function persistHistory(h: Record<string, SavedConv[]>) {
   try { localStorage.setItem(LS_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
@@ -324,7 +334,22 @@ export default function Assistant() {
   const [draggingFiles, setDraggingFiles] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messageListRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
+  const [isScrolled, setIsScrolled] = useState(false)
+
+  // Collapse top bar when user scrolls down in the chat (> 40px)
+  useEffect(() => {
+    const el = messageListRef.current
+    if (!el) return
+    const onScroll = () => {
+      const scrolled = el.scrollTop > 40
+      setIsScrolled(prev => prev !== scrolled ? scrolled : prev)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
 
   const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('assistant', 'auto'))
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
@@ -429,7 +454,7 @@ export default function Assistant() {
   })()
   const activeCompanyName = activeCompany?.name
   const activeCompanyLocalization = companyLocalizationLabel(activeCompany)
-  const latestAssistantEvents = [...messages].reverse().find(m => m.role === 'assistant')?.events ?? []
+  const activeComplexity = technicalComplexityLabel(selectedProfile?.technical_complexity)
   const contextFiles = routedContextFiles({
     prompt: perspectivePrompt,
     perspective,
@@ -438,9 +463,7 @@ export default function Assistant() {
   })
   const conversationSources = [
     activeVersion && sourcesInstalled ? `Sources Odoo ${activeVersion}${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' Community' : ' Enterprise'}` : null,
-    activeEnvRepo ? `Repo ${activeEnvRepo.split('/').slice(-2).join('/')}` : null,
   ].filter(Boolean) as string[]
-  const contextToolItems = extractToolContextItems(latestAssistantEvents)
 
   // Deduplicate versions: strip -enterprise suffix, keep one entry per base version
   // Show community + enterprise availability indicators in the dropdown
@@ -752,7 +775,7 @@ export default function Assistant() {
   }
 
   return (
-    <div className="assistant-shell">
+    <div className={`assistant-shell${isScrolled ? ' is-scrolled' : ''}`}>
 
       <PageHeader
         title={c.title}
@@ -791,6 +814,12 @@ export default function Assistant() {
           {profiles.map(p => {
             const msgCount = (conversations[String(p.id)] ?? []).filter(m => m.role === 'user').length
             const isActive = p.id === profileId
+            // Pick a representative flag for the project: prefer the selected company,
+            // otherwise the first company in the profile's company_ids JSON.
+            const profileCompanies = parseCompanies(p.company_ids)
+            const profileCountry = profileCompanies.find(c => c.id === p.selected_company_id)?.country_code
+              ?? profileCompanies[0]?.country_code
+            const tabFlag = countryFlag(profileCountry)
             return (
               <button key={p.id} onClick={() => setProfileId(p.id)} className={`assistant-tab-button${isActive ? ' is-active' : ''}`}>
                 {p.company_logo
@@ -798,6 +827,7 @@ export default function Assistant() {
                   : <Building2 size={14} />
                 }
                 {p.name}
+                {tabFlag && <span style={{ fontSize: 12, lineHeight: 1, opacity: 0.85 }}>{tabFlag}</span>}
                 {msgCount > 0 && (
                   <span className="assistant-tab-count">{msgCount}</span>
                 )}
@@ -860,39 +890,6 @@ export default function Assistant() {
 
               <div className="assistant-control-spacer" />
 
-              {/* Sources badge */}
-              {selectedProfile && !isGeneralMode && activeVersion && (
-                <span
-                  title={sourcesInstalled
-                    ? c.sourcesInstalled(activeVersion)
-                    : c.sourcesMissing(activeVersion)}
-                  style={{
-                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
-                    background: sourcesInstalled ? `${t.success}15` : '#fef3c7',
-                    color: sourcesInstalled ? t.success : '#b45309',
-                    border: `1px solid ${sourcesInstalled ? `${t.success}40` : '#f59e0b'}`,
-                    cursor: 'help',
-                  }}>
-                  {sourcesInstalled
-                    ? <><Check size={12} /> Sources v{activeVersion}{communityInstalled && enterpriseInstalled ? ' · C+E' : communityInstalled ? ' · C' : ' · E'}</>
-                    : <><TriangleAlert size={12} /> Sources v{activeVersion}</>}
-                </span>
-              )}
-
-              {/* Repo badge — shown when active env has a linked GitHub repo */}
-              {selectedProfile && !isGeneralMode && activeEnvRepo && (
-                <span
-                  title={c.repoTitle(activeEnvRepo)}
-                  style={{
-                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
-                    background: `${t.brand}12`, color: t.brand,
-                    border: `1px solid ${t.brand40}`,
-                    cursor: 'help', display: 'inline-flex', alignItems: 'center', gap: 4,
-                  }}>
-                  <Check size={12} /> <FolderCode size={12} /> {activeEnvRepo.split('/')[1] ?? activeEnvRepo}
-                </span>
-              )}
-
               {/* Conversation action buttons */}
               {(messages.length > 0 || (convKey && (savedConvs[convKey] ?? []).length > 0)) && (
                 <div className="assistant-control-group">
@@ -943,7 +940,7 @@ export default function Assistant() {
       <div className="assistant-chat-panel">
 
       {/* Chat history */}
-      <div className="assistant-message-list">
+      <div className="assistant-message-list" ref={messageListRef}>
 
         {messages.map(msg => (
           msg.role === 'user'
@@ -979,9 +976,11 @@ export default function Assistant() {
                   <button key={c.id}
                     onClick={() => isAccessible && setSelectedCompanyId(c.id)}
                     disabled={!isAccessible}
-                    title={!isAccessible ? `L'utilisateur ${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
+                    title={!isAccessible ? `L'utilisateur ${accessInfo?.user_name} n'a pas accès à cette société` : (c.country_name ?? undefined)}
                     className={`assistant-company-button${isActive ? ' is-active' : ''}`}>
-                    {!isAccessible && <Lock size={11} />}{c.name}
+                    {!isAccessible && <Lock size={11} />}
+                    {countryFlag(c.country_code) && <span style={{ fontSize: 13, lineHeight: 1 }}>{countryFlag(c.country_code)}</span>}
+                    {c.name}
                     {companyLocalizationLabel(c) && <small>{companyLocalizationLabel(c)}</small>}
                   </button>
                 )
@@ -1080,15 +1079,6 @@ export default function Assistant() {
           >
             <Paperclip size={16} />
           </button>
-          <div className="assistant-perspective-slot">
-            <PerspectiveToggle
-              value={perspectiveMode}
-              effectiveValue={perspective}
-              onChange={setPerspective}
-              size="sm"
-              disabled={streaming}
-            />
-          </div>
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
             disabled={configuredProviders.length === 0 || profileId === null || (!streaming && ((!input.trim() && readyAttachments.length === 0) || companyAccessBlocked))}
@@ -1153,18 +1143,21 @@ export default function Assistant() {
         <ConversationContextPanel
           mode={perspectiveMode}
           effectivePerspective={perspective}
+          onModeChange={setPerspective}
+          disabled={streaming}
           provider={currentProv?.label}
           model={currentProv?.models.find(m => m.id === modelId)?.label}
           project={isGeneralMode ? undefined : selectedProfile?.name}
           environment={activeEnvObj?.name}
           company={activeCompanyName}
+          countryCode={activeCompany?.country_code}
           localization={activeCompanyLocalization}
+          complexity={activeComplexity}
           version={activeVersion}
           repo={activeEnvRepo}
           contextFiles={contextFiles}
           sources={conversationSources}
           attachments={readyAttachments.map(a => a.name)}
-          toolItems={contextToolItems}
         />
       )}
       </div>

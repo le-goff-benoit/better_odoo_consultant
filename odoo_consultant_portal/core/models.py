@@ -34,6 +34,7 @@ class Profile(SQLModel, table=True):
     api_key_expires: Optional[str] = None                    # format ISO date: "2026-12-31"
     user_access_info: Optional[str] = Field(default=None)    # JSON: {is_system,is_admin,user_name,accessible_company_ids,checked_at}
     project_context: Optional[str] = Field(default=None)     # Free-text context notes for this project
+    technical_complexity: Optional[str] = Field(default=None) # JSON: Studio / custom dev complexity analysis
     active_env_id: Optional[str] = Field(default=None)       # ID of the active environment (null = first env = prod)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -1,46 +1,53 @@
 import { Bot, Database, FileText, FolderCode, Globe2, PanelRight, Sparkles, Workflow } from 'lucide-react'
-import { t } from '../theme'
 import { useUiLanguage } from '../i18n'
-import type { ContextItem } from '../utils/aiContext'
 import type { Perspective, PerspectiveMode } from './PerspectiveToggle'
+import PerspectiveToggle from './PerspectiveToggle'
 import { perspectiveLabel } from '../utils/aiContext'
+import { countryFlag } from '../utils/countryFlag'
 
 interface ConversationContextPanelProps {
   title?: string
   mode: PerspectiveMode
   effectivePerspective: Perspective
+  onModeChange?: (mode: PerspectiveMode) => void
+  disabled?: boolean
   provider?: string
   model?: string
   project?: string
   environment?: string
   company?: string
+  /** ISO 3166-1 alpha-2 country code of the active company (e.g. "FR", "CH"). Used to display a flag emoji. */
+  countryCode?: string | null
   localization?: string
+  complexity?: string
   version?: string | null
   targetVersion?: string | null
   repo?: string | null
   contextFiles: string[]
   sources: string[]
   attachments: string[]
-  toolItems: ContextItem[]
 }
 
 export default function ConversationContextPanel({
   title,
   mode,
   effectivePerspective,
+  onModeChange,
+  disabled,
   provider,
   model,
   project,
   environment,
   company,
+  countryCode,
   localization,
+  complexity,
   version,
   targetVersion,
   repo,
   contextFiles,
   sources,
   attachments,
-  toolItems,
 }: ConversationContextPanelProps) {
   const lang = useUiLanguage()
   const c = lang === 'en'
@@ -50,11 +57,15 @@ export default function ConversationContextPanel({
       automatic: 'Automatic',
       manual: 'Manual',
       selection: 'Current selection',
+      project: 'Project',
+      environment: 'Environment',
+      company: 'Company',
+      complexity: 'Complexity',
+      repository: 'Repository',
       localization: 'Fiscal localization',
       ai: 'AI',
       context: 'Markdown context',
       sources: 'Sources used',
-      tools: 'Live lookups',
       attachments: 'Attachments',
       none: 'None yet',
       general: 'General mode',
@@ -67,11 +78,15 @@ export default function ConversationContextPanel({
       automatic: 'Automatique',
       manual: 'Manuel',
       selection: 'Sélection courante',
+      project: 'Projet',
+      environment: 'Environnement',
+      company: 'Société',
+      complexity: 'Complexité',
+      repository: 'Dépôt',
       localization: 'Localisation fiscale',
       ai: 'IA',
       context: 'Contexte Markdown',
       sources: 'Sources utilisées',
-      tools: 'Recherches live',
       attachments: 'Pièces jointes',
       none: 'Aucun pour le moment',
       general: 'Mode général',
@@ -79,14 +94,17 @@ export default function ConversationContextPanel({
       target: 'Cible',
     }
 
+  const flag = countryFlag(countryCode)
+  const companyWithFlag = company && flag ? `${flag} ${company}` : company
   const selectionRows = [
-    project || c.general,
-    environment,
-    company,
-    version ? `${c.version} ${version}` : undefined,
-    targetVersion ? `${c.target} ${targetVersion}` : undefined,
-    repo ? repo.split('/').slice(-2).join('/') : undefined,
-  ].filter(Boolean) as string[]
+    { label: c.project, value: project || c.general },
+    { label: c.environment, value: environment },
+    { label: c.company, value: companyWithFlag },
+    { label: c.complexity, value: complexity },
+    { label: c.version, value: version || undefined },
+    { label: c.target, value: targetVersion || undefined },
+    { label: c.repository, value: repo ? repo.split('/').slice(-2).join('/') : undefined },
+  ].filter(row => row.value)
 
   return (
     <aside className="workspace-context conversation-context" aria-label={c.title}>
@@ -96,9 +114,20 @@ export default function ConversationContextPanel({
       </div>
 
       <ContextBlock icon={<Sparkles size={15} />} label={c.profile}>
-        <div className="conversation-profile-live">
-          <strong>{perspectiveLabel(effectivePerspective, lang)}</strong>
-          <span>{mode === 'auto' ? c.automatic : c.manual}</span>
+        <div className="conversation-profile-card">
+          <div className="conversation-profile-live">
+            <strong>{perspectiveLabel(effectivePerspective, lang)}</strong>
+            <span>{mode === 'auto' ? c.automatic : c.manual}</span>
+          </div>
+          {onModeChange && (
+            <PerspectiveToggle
+              value={mode}
+              effectiveValue={effectivePerspective}
+              onChange={onModeChange}
+              size="sm"
+              disabled={disabled}
+            />
+          )}
         </div>
       </ContextBlock>
 
@@ -108,12 +137,21 @@ export default function ConversationContextPanel({
       </ContextBlock>
 
       <ContextBlock icon={<Workflow size={15} />} label={c.selection}>
-        {selectionRows.length > 0 ? selectionRows.map(row => <span key={row}>{row}</span>) : <span>{c.none}</span>}
+        {selectionRows.length > 0 ? (
+          <div className="conversation-selection-list">
+            {selectionRows.map(row => (
+              <div key={row.label} className="conversation-selection-row">
+                <span>{row.label}</span>
+                <strong>{row.value}</strong>
+              </div>
+            ))}
+          </div>
+        ) : <span>{c.none}</span>}
       </ContextBlock>
 
       {localization && (
         <ContextBlock icon={<Globe2 size={15} />} label={c.localization}>
-          <span>{localization}</span>
+          <span>{flag ? `${flag} ${localization}` : localization}</span>
         </ContextBlock>
       )}
 
@@ -125,25 +163,11 @@ export default function ConversationContextPanel({
         <PillList items={sources} empty={c.none} tone="success" />
       </ContextBlock>
 
-      {(attachments.length > 0 || repo) && (
-        <ContextBlock icon={<FolderCode size={15} />} label={attachments.length > 0 ? c.attachments : 'Repo'}>
-          <PillList items={attachments.length > 0 ? attachments : [repo!]} empty={c.none} tone="neutral" />
+      {attachments.length > 0 && (
+        <ContextBlock icon={<FolderCode size={15} />} label={c.attachments}>
+          <PillList items={attachments} empty={c.none} tone="neutral" />
         </ContextBlock>
       )}
-
-      <ContextBlock icon={<Database size={15} />} label={c.tools}>
-        {toolItems.length > 0 ? (
-          <div className="conversation-tool-list">
-            {toolItems.map((item, idx) => (
-              <div key={`${item.label}-${idx}`} className="conversation-tool-item">
-                <span>{item.type === 'tool' ? 'Tool' : item.type === 'source' ? 'Source' : 'File'}</span>
-                <strong>{item.label}</strong>
-                {item.detail && <small>{item.detail}</small>}
-              </div>
-            ))}
-          </div>
-        ) : <span>{c.none}</span>}
-      </ContextBlock>
     </aside>
   )
 }

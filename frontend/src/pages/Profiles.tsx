@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, Building2, Check, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Loader2, Pencil, Play, Plus, RefreshCw, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, refreshProfileLocalization, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
+import { Bot, Building2, Check, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Layers3, Loader2, Pencil, Play, Plus, RefreshCw, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, refreshProfileLocalization, refreshProfileComplexity, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { ODOO_APPS } from '../constants/odooApps'
 import { useUiLanguage } from '../i18n'
+import { countryFlag } from '../utils/countryFlag'
 
 function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string }[]; max?: number }) {
   const known = apps.filter(a => ODOO_APPS[a.name])
@@ -62,7 +63,7 @@ interface Profile {
   default_branch?: string; environments?: string; active_env_id?: string
   company_name?: string; company_city?: string; company_logo?: string
   company_ids?: string; selected_company_id?: number; api_key_expires?: string
-  user_access_info?: string; project_context?: string
+  user_access_info?: string; project_context?: string; technical_complexity?: string
 }
 interface DiagStep { name: string; ok: boolean; detail: string }
 interface DiagResult {
@@ -85,6 +86,15 @@ interface CompanyOption {
 
 function companyLocalizationLabel(company: CompanyOption) {
   return [company.country_code, company.currency].filter(Boolean).join(' · ')
+}
+
+function technicalComplexityLabel(raw?: string) {
+  try {
+    const value = JSON.parse(raw ?? '{}')
+    return value.label || null
+  } catch {
+    return null
+  }
 }
 
 const VERSIONS = ['15.0', '16.0', '17.0', '18.0', '19.0']
@@ -146,6 +156,10 @@ const profilesCopy = {
     localizationTitle: 'Actualiser pays fiscal, devise et modules l10n des sociétés',
     localizationUpdated: 'Localisation fiscale actualisée ✓',
     localizationError: 'Impossible d’actualiser la localisation',
+    complexity: 'Complexité',
+    complexityTitle: 'Analyser Studio et le repo custom du projet',
+    complexityUpdated: 'Complexité technique analysée ✓',
+    complexityError: 'Impossible d’analyser la complexité',
     deleteTitle: 'Supprimer ce projet',
     noProject: 'Aucun projet configuré',
     noProjectDesc: 'Ajoutez votre premier projet Odoo.sh pour commencer.',
@@ -190,6 +204,10 @@ const profilesCopy = {
     localizationTitle: 'Refresh fiscal country, currency and l10n modules for companies',
     localizationUpdated: 'Fiscal localization refreshed ✓',
     localizationError: 'Unable to refresh localization',
+    complexity: 'Complexity',
+    complexityTitle: 'Analyze Studio and the project custom repository',
+    complexityUpdated: 'Technical complexity analyzed ✓',
+    complexityError: 'Unable to analyze complexity',
     deleteTitle: 'Delete this project',
     noProject: 'No project configured',
     noProjectDesc: 'Add your first Odoo.sh project to get started.',
@@ -319,6 +337,7 @@ export default function Profiles() {
 
   const [checkingAccessId, setCheckingAccessId] = useState<number | null>(null)
   const [refreshingLocalizationId, setRefreshingLocalizationId] = useState<number | null>(null)
+  const [refreshingComplexityId, setRefreshingComplexityId] = useState<number | null>(null)
 
   // ── Context modal ──────────────────────────────────────────────
   const [contextProfileId, setContextProfileId] = useState<number | null>(null)
@@ -395,6 +414,19 @@ export default function Profiles() {
       notify(c.localizationError, false)
     } finally {
       setRefreshingLocalizationId(null)
+    }
+  }
+
+  const refreshComplexity = async (profileId: number) => {
+    setRefreshingComplexityId(profileId)
+    try {
+      await refreshProfileComplexity(profileId)
+      qc.invalidateQueries({ queryKey: ['profiles'] })
+      notify(c.complexityUpdated)
+    } catch {
+      notify(c.complexityError, false)
+    } finally {
+      setRefreshingComplexityId(null)
     }
   }
 
@@ -765,6 +797,8 @@ export default function Profiles() {
               checkingAccess={checkingAccessId === p.id}
               onRefreshLocalization={() => refreshLocalization(p.id)}
               refreshingLocalization={refreshingLocalizationId === p.id}
+              onRefreshComplexity={() => refreshComplexity(p.id)}
+              refreshingComplexity={refreshingComplexityId === p.id}
               onContext={() => openContext(p.id)}
               onRefresh={() => qc.invalidateQueries({ queryKey: ['profiles'] })} />
           ))}
@@ -802,11 +836,12 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 type EnvModalState = { mode: 'add' } | { mode: 'edit'; env: EnvEntry }
 const EMPTY_ENV_FORM = { id: '', name: '', db_url: '', db_name: '', login: '', api_key: '', odoo_version: '', branch: '', github_repo: '', repo_branch: '' }
 
-function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onCheckAccess, checkingAccess, onRefreshLocalization, refreshingLocalization, onContext, onRefresh }: {
+function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onCheckAccess, checkingAccess, onRefreshLocalization, refreshingLocalization, onRefreshComplexity, refreshingComplexity, onContext, onRefresh }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
   onSelectCompany: (companyId: number) => void
   onCheckAccess: () => void; checkingAccess: boolean
   onRefreshLocalization: () => void; refreshingLocalization: boolean
+  onRefreshComplexity: () => void; refreshingComplexity: boolean
   onContext: () => void; onRefresh: () => void
 }) {
   const lang = useUiLanguage()
@@ -819,6 +854,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   })()
   const companies: CompanyOption[] = (() => { try { return JSON.parse(profile.company_ids ?? '[]') } catch { return [] } })()
   const accessInfo: AccessInfo | null = (() => { try { return profile.user_access_info ? JSON.parse(profile.user_access_info) : null } catch { return null } })()
+  const complexityLabel = technicalComplexityLabel(profile.technical_complexity)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [envModal, setEnvModal] = useState<EnvModalState | null>(null)
   const [envForm, setEnvForm] = useState(EMPTY_ENV_FORM)
@@ -1061,6 +1097,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
             {!accessInfo?.is_system && accessInfo?.is_admin && (
               <span title="Utilisateur avec droits d'administration" className="project-pill project-pill-warning"><TriangleAlert size={11} /> Admin</span>
             )}
+            {complexityLabel && (
+              <span title={c.complexityTitle} className="project-pill project-pill-neutral"><Layers3 size={11} /> {complexityLabel}</span>
+            )}
           </div>
         </div>
       </div>
@@ -1097,9 +1136,13 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                 const isAccessible = !accessInfo || accessInfo.accessible_company_ids.includes(c.id)
                 return (
                   <button key={c.id} onClick={() => isAccessible && onSelectCompany(c.id)} disabled={!isAccessible}
-                    title={!isAccessible ? `${accessInfo?.user_name} n'a pas accès à cette société` : undefined}
+                    title={!isAccessible ? `${accessInfo?.user_name} n'a pas accès à cette société` : (c.country_name ?? undefined)}
                     className={`project-company-pill${isActive ? ' is-active' : ''}`}>
-                    <span>{!isAccessible ? 'Verrouillé - ' : isActive ? 'Actif - ' : ''}{c.name}</span>
+                    <span>
+                      {!isAccessible ? 'Verrouillé - ' : isActive ? 'Actif - ' : ''}
+                      {countryFlag(c.country_code) && <span style={{ marginRight: 5 }}>{countryFlag(c.country_code)}</span>}
+                      {c.name}
+                    </span>
                     {companyLocalizationLabel(c) && <small>{companyLocalizationLabel(c)}</small>}
                   </button>
                 )
@@ -1165,6 +1208,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
             </button>
             <button className="btn btn-outline btn-sm" onClick={onRefreshLocalization} disabled={refreshingLocalization} title={c.localizationTitle}>
               {refreshingLocalization ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <RefreshCw size={13} />} {c.localization}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={onRefreshComplexity} disabled={refreshingComplexity} title={c.complexityTitle}>
+              {refreshingComplexity ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Layers3 size={13} />} {c.complexity}
             </button>
             <button className="btn btn-outline btn-sm" onClick={onContext} title="Fichier de contexte de ce projet"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>

@@ -28,6 +28,7 @@ export const diagnoseOdoo = (data: object) => api.post('/profiles/diagnose', dat
 export const checkAccessRaw = (data: object) => api.post('/profiles/check-access-raw', data)
 export const checkAccessProfile = (id: number) => api.post(`/profiles/${id}/check-access`)
 export const refreshProfileLocalization = (id: number) => api.post(`/profiles/${id}/localization/refresh`)
+export const refreshProfileComplexity = (id: number) => api.post(`/profiles/${id}/technical-complexity/refresh`)
 export const getProfileContext = (id: number) => api.get(`/profiles/${id}/context`)
 export const saveProfileContext = (id: number, content: string) => api.put(`/profiles/${id}/context`, { content })
 export const autoFillContext = (id: number) => api.post(`/profiles/${id}/context/auto-fill`)

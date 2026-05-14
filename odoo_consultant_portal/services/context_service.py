@@ -1560,325 +1560,386 @@ _VERSION_NOTES: dict = {
 # Odoo 19.0
 
 **Date de sortie :** Septembre 2025 (Odoo Experience 2025)
+**Support :** LTS — ★ = fonctionnalité Enterprise uniquement
 
 ## Prérequis techniques
-- **Python :** 3.10 minimum, **3.11 recommandé**
-- **PostgreSQL : 13.0 minimum** (rupture — PG 12 non supporté)
-- PostgreSQL 14+ recommandé pour les performances
+- **Python :** 3.10 minimum, **3.11 recommandé** (3.12 supporté)
+- **PostgreSQL : 13.0 minimum strict** — PG 12 non supporté (rupture dure)
+- PostgreSQL 14+ recommandé pour les performances (index BRIN, partitionnement)
+- Vérifier la version PG : `SELECT version();` en base avant tout projet d'upgrade
 
 ## Nouveaux modules
-- **Equity** — suivi des parts, actionnaires et bénéficiaires (cabinets comptables et fiduciaires)
-- **ESG (Environmental, Social, Governance)** — empreinte carbone intégrée RH/Paie, reporting Scope 3 automatique depuis les données factures, conformité CSRD
-- **Partnership** — remplace le module Membership ; gestion des grades, listes de prix et programmes partenaires
-- **Module AI** — framework d'agents IA pour requêtes en langage naturel et actions sur la base de données
-- **40+ packs industrie** (modules données sans code Python) : cabinet comptable, boulangerie, charpentier, traiteur, salle de concert, construction, cosmétiques, coworking, électricien, escape rooms, food truck, galerie, hôtel, HVAC, bibliothèque, location machines, thérapie, boîte de nuit, coach sportif, immobilier, spa, tatouage, théâtre, vétérinaire, cave à vin, yoga, etc.
+
+| Module | Edition | Description | Modèles clés |
+|--------|---------|-------------|--------------|
+| **Equity** | ★ | Parts, actionnaires, bénéficiaires — cabinets fiduciaires | `equity.share`, `equity.shareholder` |
+| **ESG** | ★ | Reporting Scope 1/2/3, conformité CSRD | `esg.report`, `esg.emission.line` |
+| **Partnership** | Community | Remplace Membership ; grades, listes de prix partenaires | `partner.grade`, `partner.membership` |
+| **AI Module** | ★ | Agents IA natifs, requêtes langage naturel sur les données | `ai.agent`, `ai.action` |
+| **Industry Packs (40+)** | Community | Modules données sans code Python (hôtel, spa, yoga, boulangerie…) | (données uniquement) |
 
 ## Suppressions / remplacements
-- Module **Membership** → remplacé par **Partnership**
+- Module **Membership** → **Partnership** : migration données automatique ; customisations (`membership.line`, vues, règles, rapports) à porter manuellement
+- `membership.membership_line` → `partner.grade.line`
 
-## Comptabilité
-- Rapprochement bancaire : réconciliation sur écritures brouillon
-- États financiers annuels : rapport composite bilan + P&L
-- Déclaration fiscale avec validation automatique
-- Catégories fiscales déplacées des catégories vers les comptes
-- Escomptes de caisse : option "Toujours (à la facturation)"
-- Paiements ISO20022 avec identifiant End-to-End
-- Relances clients via WhatsApp
+## Comptabilité ★/Community
+- Rapprochement bancaire : réconciliation sur **écritures brouillon** (avant : uniquement sur écritures postées)
+- Rapport annuel composite : bilan + P&L en vue unique consolidée
+- Déclaration fiscale avec **validation automatique** (workflow simplifié par étapes)
+- Catégories fiscales déplacées des catégories produit vers les **comptes comptables** — vérifier les mappings fiscaux après upgrade
+- Escomptes de caisse : nouvelle option "Toujours (à la facturation)" sans attendre le paiement
+- Paiements ISO20022 avec identifiant **End-to-End** (`pain.001`, `camt.054`)
+- Relances clients via **WhatsApp** ★ (nécessite intégration WhatsApp Business API + WABA configuré)
 
-## Ventes & CRM
-- Prédiction probabilité de leads par IA
-- Scan de cartes de visite pour création de leads
-- Produits optionnels éditables dans le portail client
+## ESG / CSRD ★ — détail fonctionnel
+- **Scope 1** : émissions directes (flotte, énergie sites, gaz industriels)
+- **Scope 2** : émissions indirectes énergie (achats d'électricité, vapeur, chaleur)
+- **Scope 3** : émissions chaîne de valeur — calculées **automatiquement** depuis les données achats, ventes, paie, transport
+- Conformité **CSRD** (Corporate Sustainability Reporting Directive) :
+  - Obligatoire UE : >250 salariés OU >50 M€ CA OU >25 M€ bilan
+  - Calendrier : depuis exercice 2024 (plus grandes entreprises), 2025 (autres grandes), 2026 (PME cotées)
+  - Standard de reporting : ESRS (European Sustainability Reporting Standards)
+- Rapport ESRS générable directement depuis Odoo 19
+
+## Ventes & CRM ★/Community
+- **Prédiction probabilité leads par IA** ★ : score ML en temps réel (modèle entraîné sur l'historique client — nécessite minimum 30 jours de données de conversion)
+- Scan de cartes de visite pour création de leads (OCR mobile, pas de dev)
+- Produits optionnels éditables dans le portail client sans re-confirmation côté commercial
 - Paiements partiels dans le portail utilisateur
-- Intégrations marketplaces : Amazon Ireland, Shopee, Gelato
+- Marketplaces : Amazon Ireland ★, Shopee ★, Gelato ★
 
 ## Stock & Logistique
-- Plusieurs routes par ligne de commande (ex: MTO + Buy simultanément)
-- Packages dans packages (emballages imbriqués)
-- Règles de réappro : paramètre horizon avec champ date limite
-- Notifications d'expédition WhatsApp
-- Améliorations prévision de la demande MPS
+- **Plusieurs routes par ligne** de commande (ex: MTO + Buy simultanément sur la même ligne `sale.order.line`)
+- Packages imbriqués (packages dans packages) — modèle `stock.quant.package` enrichi
+- Règles de réappro : champ `date_deadline` sur `stock.warehouse.orderpoint` + paramètre horizon
+- Notifications expédition WhatsApp ★
+- MPS ★ : amélioration prévision demande avec historique configurable par produit
 
-## Fabrication
-- **Vue Gantt pour les ordres de fabrication** (planification visuelle)
-- Taille de lot par défaut sur les nomenclatures
-- Plusieurs numéros de série/lot par ordre de fabrication
-- Coût employé par poste de charge impacte la valorisation
-- Statut des opérations de travail éditable
+## Fabrication ★/Community
+- **Vue Gantt ordres de fabrication** ★ : planification visuelle par poste de charge (`mrp.workcenter`)
+- Taille de lot par défaut sur les nomenclatures (`mrp.bom` → champ `lot_size`)
+- Plusieurs numéros de série/lot par ordre de fabrication (multi-SN production)
+- Coût employé par poste de charge → impacte la **valorisation automatique** des OF (`mrp.workcenter.productivity`)
+- Statut des opérations de travail éditable en cours de production
 
-## Ressources Humaines
-- Contrats fusionnés avec mécanisme de versioning (historique en un seul enregistrement)
-- **Pay Runs** remplace les lots de fiches de paie (interface guidée)
-- Plusieurs comptes bancaires par employé avec split du net salarial
-- Module LMS de base (Learning Management System)
-- Réserve de talents remplace le système de candidats
-- Travail à distance activé par défaut
+## Ressources Humaines ★
+- Contrats : versioning unifié (historique en un seul enregistrement `hr.contract` avec champs de période)
+- **Pay Runs** ★ : remplace `hr.payslip.run` → nouveau modèle `hr.payroll.run` avec interface guidée pas-à-pas
+- Plusieurs comptes bancaires par employé avec **split du net salarial** configurable (%)
+- LMS de base : gestion formations internes (extension de `slide.channel`)
+- Réserve de talents remplace le système de candidats (talent pool — `hr.applicant` étendu)
+- Travail à distance activé par défaut sur les contrats
 
-## Projets
-- Templates de projets avec tâches pré-remplies
-- Vue Gantt pour tâches du portail
-- Niveaux de priorité multiples
-- Planification auto sur planning flexible
-
-## eCommerce / Site Web
-- Synchronisation produits Google Merchant Center
-- Widget stock Click & Collect
-- Pagination SEO améliorée
-- Génération de pages web depuis prompts IA
+## eCommerce / Site Web ★/Community
+- Synchronisation produits **Google Merchant Center** ★
+- Widget stock Click & Collect avec sélection magasin au checkout
+- Pagination SEO améliorée (canonical tags corrects sur les pages paginées)
+- Génération de pages web depuis **prompts IA** ★
 
 ## Technique / ORM
-- **PostgreSQL 13 est le minimum strict** — bases PG 12 doivent migrer avant upgrade v19
-- Python 3.11 requis pour certains modules
-- Modification de masse incrémentale : opérateurs `+=`, `-=`, `*=`, `/=` sur les champs
-- Données en cache et traductions pour navigation plus rapide
-- Autocomplétion partenaires via Dun & Bradstreet
+- **PostgreSQL 13 minimum strict** — bases PG 12 : migrer PostgreSQL d'abord, puis Odoo
+- Python 3.11 requis pour les modules AI et ESG
+- Opérateurs incrémentaux en `write()` : `+=`, `-=`, `*=`, `/=` sur les champs numériques
+- Autocomplétion partenaires via **Dun & Bradstreet** ★ (données entreprises automatiques)
 
 ## Points de vigilance migration v18 → v19
-- **Blocker : PostgreSQL doit être ≥ 13** avant migration (vérifier avec `SELECT version()` en base)
-- Module Membership → Partnership : toute personnalisation sur `membership.line`, `membership.membership_line`, `product.template` (lié membership) doit être portée ou retirée
-- Vérifier compatibilité Python 3.11 pour les modules custom (tester en environnement de staging)
-- Pay Runs remplace `hr.payslip.run` : vérifier les intégrations et rapports custom sur les lots de paie
+- **Blocker absolu : PostgreSQL ≥ 13** — vérifier avec `SELECT version()` ; si PG 12, migrer PG **avant** Odoo
+- **Membership → Partnership** : auditer toutes les customisations sur `membership.*` avant upgrade
+- **Pay Runs** : `hr.payslip.run` dépréciée → adapter intégrations et rapports custom
+- Python 3.11 : tester tous les modules custom en staging sur Python 3.11 avant production
+- WhatsApp : vérifier que le WABA (WhatsApp Business Account) est configuré si utilisé
 
 ## Pour le consultant
-- **ESG/CSRD** : le module ESG répond à la directive européenne CSRD (Corporate Sustainability Reporting Directive, obligatoire pour les grandes entreprises en UE dès 2024–2026 selon taille). Excellent argument de vente pour les grands comptes européens.
-- **Module AI** : positionné comme copilote natif (requêtes en langage naturel sur les données, suggestions d'actions) — à distinguer des intégrations IA des versions précédentes (ChatGPT pour texte web en v17).
-- **Packs industrie** : modules de données (pas de code Python), installables facilement et modifiables via Studio — idéaux pour accélérer les démos sectorielles.
-- **Vérification PostgreSQL avant projet d'upgrade** : `SELECT version();` en base pour confirmer la version PG.
+- **ESG/CSRD** : premier ERP généraliste à intégrer le reporting CSRD nativement. Scope 3 automatique depuis les données transactionnelles est un différenciateur fort. Argument majeur pour les grands comptes européens soumis à la directive.
+- **Module AI** : copilote natif distinct des intégrations IA précédentes (v17 ChatGPT texte, v18 scoring ML). Nécessite une clé API configurée. Positionner comme "assistant de recherche données" pour les utilisateurs non techniques.
+- **Industry Packs** : sans code Python, modifiables via Studio, installables en 2 minutes. Idéaux pour démos sectorielles personnalisées sans préparation.
+- **Pay Runs** : impacte uniquement l'interface — les calculs restent identiques. Former les équipes RH sur la nouvelle interface guidée.
 """,
 
 "18.0": """\
 # Odoo 18.0
 
 **Date de sortie :** 2–4 Octobre 2024 (Odoo Experience 2024, Brussels Expo)
+**Support :** LTS — ★ = fonctionnalité Enterprise uniquement
 
 ## Prérequis techniques
-- **Python :** 3.10 minimum (3.12 recommandé pour +10–60% de performance)
+- **Python :** 3.10 minimum — **3.12 recommandé** (+10–60% performance selon workload)
 - **PostgreSQL :** 12.0 minimum (15 recommandé)
-- Note : Python 3.12 déprécié `datetime.utcnow()` → utiliser `datetime.now(timezone.utc)` ; module `distutils` supprimé
+- Python 3.12 breaking : `datetime.utcnow()` → `datetime.now(timezone.utc)` ; module `distutils` supprimé
 
 ## Nouveaux modules
-- **Sales Commissions** — gestion complète des commissions : cibles, règles par produit/catégorie/période, calcul sur marge/montant/quantité, dashboards prévision vs cible
-- **Dispatch Management** — organisation des tournées de livraison avec flotte propre ou 3PL, vue carte, lots de prélèvements par véhicule, optimisation cross-docking
-- Packs industrie étendus : Boulangerie, Food Truck, Nettoyage, Électricien, Agence Marketing, Activités outdoor
+
+| Module | Edition | Description | Modèles clés |
+|--------|---------|-------------|--------------|
+| **Sales Commissions** | ★ | Plans de commission, paliers, calcul automatique, dashboards | `sale.commission.plan`, `sale.commission.rule`, `sale.commission` |
+| **Dispatch Management** | ★ | Tournées de livraison, vue carte, cross-docking | `stock.route.planner`, `stock.route.planner.line` |
+
+Industry Packs étendus (Community) : Boulangerie, Food Truck, Nettoyage, Électricien, Agence Marketing, Outdoor
 
 ## Suppressions
-- Providers paiement : Alipay, PayU Latam, PayUmoney supprimés
-- Ogone et SIPS → remplacés par connecteur Worldline
-- Connecteur eBay supprimé
+- Providers paiement : **Alipay, PayU Latam, PayUmoney** supprimés
+- **Ogone et SIPS** → remplacés par connecteur Worldline
+- Connecteur **eBay** supprimé (prévoir alternative si utilisé)
 
-## Comptabilité
-- **Alertes factures anormales** (statistiques — détecte automatiquement montants/dates aberrants)
-- Rapprochement bancaire : correspondance lots de paiements simplifiée
-- Budgets analytiques redessinés : sans restriction de dates, affectation de plan flexible
-- **Gestion des prêts** : calendrier d'amortissement automatique
-- Intégration Peppol : envoi/réception de factures sur le réseau Peppol
-- Matching PO/facture : écran avancé pour correspondance manuelle
+## Comptabilité ★/Community
 
-## Ventes & CRM
-- **Produits combo** : pack avec sélection par le client (style menu restaurant)
-- EDI commandes : import PO par glisser-déposer avec pré-remplissage XML
-- Intégration Gelato (impression à la demande)
-- Templates de devis dynamiques : descriptions produits intégrées depuis template
-- Export tarifs : PDF, CSV, XLSX
-- CRM : CA attendu recalculé automatiquement à la confirmation du devis
+### Alertes factures anormales ★
+Détection statistique des anomalies : montant 3× supérieur à la moyenne client, date inhabituellement éloignée, TVA incohérente avec le partenaire.
+- Modèle : `account.move` — champ `abnormal_amount_warning` (booléen)
+- Configuration : Comptabilité → Configuration → Paramètres → Alertes factures anormales
+
+### Gestion des prêts ★
+- Calendrier d'amortissement automatique (capital + intérêts)
+- Modèles : `account.loan` + `account.loan.line`
+- Génère automatiquement les écritures mensuelles de remboursement
+
+### Autres nouveautés
+- Rapprochement bancaire : correspondance **lots de paiements** simplifiée (regrouper plusieurs virements)
+- Budgets analytiques redessinés : sans restriction de dates, affectation de plan flexible (`account.budget.line`)
+- **Peppol** ★ : envoi/réception de factures sur le réseau Peppol — configuration via `account.edi.format`
+  - Réseau B2B européen — obligatoire pour marchés publics en Belgique dès 2026
+  - Activation : Comptabilité → Configuration → Paramètres → Peppol
+- Matching PO/facture : écran avancé pour correspondance manuelle (quantités partielles)
+
+## Sales Commissions ★ — workflow complet
+**Modèles :** `sale.commission.plan` · `sale.commission.rule` · `sale.commission` · `sale.commission.achievement`
+
+**Workflow :**
+1. **Plan** (`sale.commission.plan`) : période, base de calcul (CA / marge / quantité), mode de déclenchement (confirmé / facturé / payé)
+2. **Règles** (`sale.commission.rule`) : paliers par tranche, filtres par produit/catégorie/équipe
+3. **Assignation** : lier le plan à des commerciaux (`res.users.commission_plan_id`)
+4. **Calcul** : automatique selon le déclencheur choisi
+5. **Dashboard** : prévision vs objectif en temps réel par commercial et par équipe
+
+Remplace les solutions custom de commissions quasi-universelles en clientèle.
+
+## Dispatch Management ★ — workflow complet
+**Distinct du module Fleet** : Fleet = gestion parc (véhicules, assurances, km) ; Dispatch = organisation tournées de livraison.
+
+**Workflow :**
+1. Grouper les `stock.picking` par zone géographique ou véhicule
+2. Vue carte (Google Maps) pour visualiser les points de livraison
+3. Assigner les lots à un chauffeur (`res.partner` avec véhicule)
+4. Suivi en temps réel + optimisation cross-docking
+5. Intégration 3PL : déléguer à un transporteur tiers
+
+**Prérequis :** modules `stock` + `fleet` installés
+
+## Ventes & CRM ★/Community
+- **Produits combo** ★ : pack avec sélection par le client (ex: menu — client choisit parmi une liste)
+  - Modèles : `product.template` + `product.combo` + `product.combo.item`
+- EDI commandes : import PO par glisser-déposer (XML/EDI) avec pré-remplissage automatique
+- Templates de devis dynamiques : descriptions produits depuis le template, personnalisables par client
+- Export tarifs : PDF, CSV, XLSX depuis la liste de prix
+- CRM : `crm.lead.expected_revenue` recalculé automatiquement à la confirmation du devis lié
 
 ## Stock
-- Traçabilité lot/série inter-sociétés
-- Règles pull-to-push : routes flexibles avec approvisionnement à la demande
-- Valorisation par lot/série (coût séparé par unité de traçabilité)
-- Putaway amélioré : dirige les produits vers emplacements déjà utilisés pour ce produit
-- Système Dispatch Management (voir nouveaux modules)
+- Traçabilité lot/série **inter-sociétés** ★ : un lot peut être suivi à travers plusieurs sociétés Odoo
+- Valorisation par lot/série : coût FIFO séparé par unité (`stock.lot.standard_price`)
+- Règles pull-to-push : routes flexibles avec approvisionnement à la demande dynamique
+- Putaway amélioré : dirige vers les emplacements déjà utilisés pour ce produit (putaway "history-based")
 
-## Fabrication
-- MPS (Plan Directeur de Production) : planification annuelle, réapprovisionnement automatique, dimensionnement des lots
-- Écritures de travaux en cours (WIP) : enregistrement consommation matières et main d'œuvre au bilan
-- Assistant numéros de série pour production en masse revu
+## Fabrication ★/Community
+- MPS ★ : planification annuelle complète, réapprovisionnement automatique, dimensionnement des lots (`mrp.production.schedule`)
+- **Écritures WIP (Work-In-Progress)** ★ : enregistrement des consommations matières et main d'œuvre au bilan **pendant** la production
+  - Génère des écritures sur compte WIP à chaque consommation
+  - Soldé automatiquement à la **clôture de l'OF** (`mrp.production.state = 'done'`)
+  - Impact : stock de composants débité en cours de production (pas uniquement à la clôture)
+- Assistant numéros de série pour production en masse : workflow simplifié
 
-## Ressources Humaines
-- Installation localisations automatique (modules paie pays auto-installés selon pays)
-- Rôles de signature flexibles dans les contrats
-- Suivi des effectifs par contrat à tout instant dans le temps
-- Calcul année en cours avec date fin d'année personnalisable
-- Feedback 360° : renvoi en lot
+## Ressources Humaines ★/Community
+- Installation localisations **automatique** : modules paie pays auto-installés selon pays de la société
+- Rôles de signature flexibles dans les contrats (plus de rôles prédéfinis uniquement)
+- Suivi effectifs par contrat à tout instant dans le temps (historique complet)
+- Feedback 360° : renvoi en lot (campagnes de feedback massives `hr.appraisal.goal`)
 
 ## Projets
-- Plans analytiques directement sur les projets
-- Graphique burn-up
-- Utilisateurs portail : édition toutes tâches ou tâches suivies seulement
-- Échéances tâches visibles dans le Gantt
-- Historique des révisions de description de tâche (suivi + retour arrière)
+- Plans analytiques directement sur les projets (sans passer par la comptabilité)
+- Graphique burn-up (en plus du burndown existant — `project.task` avec dates)
+- Portail : option édition toutes tâches ou uniquement tâches suivies
+- Historique révisions description de tâche : suivi des modifications + retour arrière (`mail.message`)
 
-## eCommerce / Site Web
-- **Click & Collect** : vérification stock magasin avec sélection lieu de retrait
-- Méga menus : navigation basée sur les catégories
-- Pages de catégories personnalisables avec blocs de construction
-- Contrôle d'accès boutique : restreindre `/shop` aux utilisateurs connectés
-- 60+ nouveaux snippets site web
-- 27+ thèmes redessinés
-- Upload de polices personnalisées
-- Authentification par **Passkeys** (WebAuthn)
+## eCommerce / Site Web ★/Community
+- **Click & Collect** ★ : vérification stock magasin, sélection lieu de retrait au checkout
+  - Configuration : eCommerce → Configuration → Activer Click & Collect par entrepôt (`stock.warehouse`)
+  - Prérequis : modules `ecommerce` + `stock` installés
+- Méga menus : navigation basée sur les catégories de produits (`product.public.category`)
+- Contrôle d'accès boutique : restreindre `/shop` aux utilisateurs connectés uniquement
+- Authentification par **Passkeys** (WebAuthn — sans mot de passe, biométrie ou clé physique)
+- 60+ nouveaux snippets, 27+ thèmes redessinés
 
-## Point de vente
-- Refonte complète interface POS
-- Intégration AvaTax
-- Paiements QR code (application bancaire)
-- Création et édition produits depuis le POS
-- Écran client sur n'importe quel appareil sans IoT box
+## Point de Vente ★/Community
+- **Refonte complète interface POS** : UX modernisée, navigation plus rapide
+- Intégration AvaTax ★ (calcul taxes US en temps réel — pour clients américains)
+- Paiements QR code via application bancaire (CBE/Payconiq en Belgique)
+- Création et édition produits directement depuis le POS (sans quitter la session)
+- **Écran client sur n'importe quel appareil** sans IoT box (via URL dédiée `pos.session`)
 
 ## Technique / ORM
-- **Nouvelles méthodes de contrôle d'accès** : `check_access()`, `has_access()`, `_filtered_access()` — unifie droits + règles
-- `_search_display_name()` : recherche du display name via méthode dédiée
-- `name_get()` **officiellement dépréciée** (dépréciée en v17, maintenant officielle)
-- `_flush_search()` dépréciée — flush géré par `execute_query()` via SQL object
-- Content Security Policy renforcée : pas de scripts inline, pas de CDN externe sans liste blanche
-- URLs lisibles introduites : `/odoo/project/5/tasks` (affecte le routing des contrôleurs custom)
-- Applications PWA mobiles : Barcode, POS, Présences, Kiosk, Desk d'accueil, Atelier
+- **Nouvelles méthodes contrôle d'accès** (uniformisent droits + règles d'accès) :
+  - `record.check_access('write')` — lève une exception si refusé
+  - `record.has_access('read')` → `bool` (sans exception)
+  - `records._filtered_access('read')` → recordset filtré sur les droits autorisés
+- `_search_display_name()` : méthode dédiée pour la recherche sur `display_name`
+- `name_get()` **officiellement dépréciée** (→ `_compute_display_name()`)
+- CSP renforcée : pas de scripts inline, CDN externes en liste blanche seulement
+- URLs lisibles : `/odoo/project/5/tasks` — vérifier le routing des contrôleurs custom
+- Applications **PWA mobiles** : Barcode, POS, Présences, Kiosk, Desk d'accueil, Atelier
 
 ## Points de vigilance migration v17 → v18
-- `name_get()` officiellement dépréciée : migrer vers `display_name` (toujours fonctionnel mais génère des warnings)
-- `check_access()` / `has_access()` : tester les modules custom qui surchargeaient `check_access_rights()` ou `check_access_rule()` — comportement peut changer
-- URLs lisibles `/odoo/model/id` : vérifier les redirections hardcodées dans les vues custom, les emails templates et les portails
-- Python 3.12 : corriger `datetime.utcnow()` → `datetime.now(timezone.utc)` et supprimer tous imports `distutils`
-- CSP renforcée : les widgets custom injectant du JavaScript inline ou chargeant depuis des CDN tiers échoueront
+- `name_get()` dépréciée : migrer vers `_compute_display_name()` (warnings → erreur dans une version future)
+- `check_access_rights()` + `check_access_rule()` remplacés par `check_access()` : tester les modules custom qui les surchargeaient
+- URLs lisibles : vérifier redirections hardcodées dans les vues custom, emails templates, portails
+- Python 3.12 : corriger `datetime.utcnow()` et supprimer tous imports `distutils`
+- CSP renforcée : widgets custom injectant du JS inline ou chargeant depuis CDN tiers → à corriger
+- **Alipay / PayU / eBay** : prévoir alternative si utilisés par le client
 
 ## Pour le consultant
-- **Sales Commissions** : module Enterprise très attendu. Fonctionnement : objectifs (cibles) par commercial → règles par produit/catégorie/équipe → plans de commission → calcul automatique sur confirmé/facturé/payé. Remplace les solutions custom de commissions qui étaient quasi-universelles.
-- **Dispatch Management** : distinct du module Fleet. Fleet = gestion du parc de véhicules. Dispatch = optimisation des tournées de livraison (grouper les pickings par route/véhicule). Nécessite le module stock + fleet pour fonctionner pleinement.
-- **Click & Collect** : la configuration requiert le module eCommerce + stock + configuration des points de retrait (`stock.warehouse` avec option click & collect activée). Le client choisit le magasin lors du checkout.
-- **Peppol (v17 et v18)** : réseau européen d'échange de factures B2B (obligatoire en Belgique depuis 2026 pour les marchés publics, en extension). Configuration via `account.edi.format` Peppol dans les journaux de vente.
+- **Sales Commissions** : module Enterprise très attendu — remplace les développements custom de commissions (quasi-universels). Vérifier que le mode de déclenchement (confirmé/facturé/payé) correspond à la pratique comptable du client avant implémentation.
+- **WIP accounting** : fonctionnalité MRP avancée qui modifie le flux comptable de la fabrication. Former les comptables car les écritures apparaissent maintenant en cours de production, pas uniquement à la clôture.
+- **Peppol** : réseau e-invoicing européen. En Belgique, obligatoire pour les marchés publics dès 2026 — bonne raison pour convaincre les entreprises belges de migrer vers v17/v18.
+- **Click & Collect** : 100% standard Enterprise — pas de développement. Nécessite eCommerce + stock + activer par entrepôt. Le client choisit le point de retrait au checkout.
+- **Passkeys** : méthode d'authentification alternative (non obligatoire). Utile pour les clients avec contraintes de sécurité renforcées (plus de mots de passe à gérer).
 """,
 
 "17.0": """\
 # Odoo 17.0
 
 **Date de sortie :** Octobre–Novembre 2023 (Odoo Experience 2023)
+**Note :** Version la plus breaking de la série 15–19 pour les modules custom — ★ = Enterprise
 
 ## Prérequis techniques
-- **Python :** 3.10 minimum (3.10, 3.11 supportés)
+- **Python :** 3.10 minimum (3.10 et 3.11 supportés)
 - **PostgreSQL :** 12.0 minimum
-- **Framework JS :** OWL — gains de performance majeurs sur le rendu
+- **Framework JS :** OWL (Odoo Web Library) — gains de performance majeurs sur le rendu frontend
 
 ## Nouveaux modules
-- **Frontdesk** — gestion des visiteurs (borne de pointage, impression badges, notifications hôte)
-- **Industries** — packs de données pré-configurés (Avocat, Bar, Coiffeur, etc.) ; pas de code Python
-- **Check Management** — gestion des chèques propres et de tiers (Comptabilité)
-- Module **To-Do** remplace l'ancien module Notes
-- Export SD Worx pour la paie
 
-## Comptabilité
-- Rapports redessinés : sections drag-and-drop
-- Assistant d'auto-réconciliation bancaire
-- Facture : design épuré, montant total en lettres
-- OCR synchrone : traitement 5× plus rapide
-- **Intégration Peppol** : envoi/réception factures réseau Peppol
-- **Comptes bancaires fournisseurs : validation obligatoire** (anti-fraude) avant paiement
-- Gestion des chèques : traitement des chèques reçus et émis
+| Module | Edition | Description | Modèles clés |
+|--------|---------|-------------|--------------|
+| **Frontdesk** | Community | Gestion des visiteurs, borne de pointage, badges, notifications hôte | `hr.visitor`, `hr.reception.desk` |
+| **Check Management** | ★ | Gestion des chèques reçus et émis (Comptabilité) | `account.check` |
+| **Industries** | Community | Packs données pré-configurés (Avocat, Bar, Coiffeur…) sans code Python | (données uniquement) |
+| **To-Do** | Community | Remplace le module Notes — tâches personnelles sans projet | `note.note` → `project.task` (migration) |
+| **SD Worx export** | ★ | Export paie vers SD Worx (Belgique) | — |
 
-## Ventes
-- Remises globales sur toute la commande
-- PDF Quote Builder : pages entête/pied personnalisées par devis
-- Documents produits auto-partagés à l'envoi du devis
-- Paiements partiels avec confirmation automatique
-- Restrictions programmes fidélité par liste de prix
-- Templates de devis incluent les tickets d'événements
+## Comptabilité ★/Community
+- Rapports comptables redessinés : sections **drag-and-drop**, personnalisation sans développement
+- **Assistant d'auto-réconciliation bancaire** : suggestions basées sur le machine learning des réconciliations passées
+- Facture : design épuré, montant total en lettres (plusieurs langues)
+- OCR synchrone : traitement **5× plus rapide** qu'en v16
+- **Peppol** ★ : envoi/réception factures réseau Peppol
+  - Activation : Comptabilité → Configuration → Paramètres → Peppol
+  - Nécessite un identifiant Peppol (GLN ou EAS + code pays)
+  - Pays supportés : Belgique, Pays-Bas, Suède, Italie, France (et autres pays Peppol)
+- **Comptes bancaires fournisseurs : validation obligatoire** (anti-fraude) avant premier paiement
+  - Un utilisateur distinct doit valider chaque nouveau compte bancaire fournisseur
+  - Empêche les fraudes au changement de RIB (attaque BEC très répandue)
+- Gestion des chèques ★ : traitement des chèques reçus et émis (`account.check`)
+
+## Ventes ★/Community
+- **Remises globales** sur toute la commande (champ `discount_amount` ou `discount_pct` sur `sale.order`)
+- **PDF Quote Builder** ★ : pages entête/pied personnalisées par devis (sections, images, textes libres)
+- Documents produits auto-partagés à l'envoi du devis (pièces jointes `product.document`)
+- Paiements partiels avec confirmation automatique de commande
+- Restrictions programmes fidélité par liste de prix (`loyalty.program` + `product.pricelist` link)
+- Templates de devis incluent les tickets d'événements (`event.event.ticket`)
 
 ## CRM
-- Dates de réunions visibles sur les cartes de leads
+- Dates de réunions (`calendar.event`) visibles directement sur les cartes de leads
 - Propagation des tags leads vers rapports d'activités
 
 ## Stock
-- **Rapport d'ancienneté du stock** : monitoring des stocks dormants
-- Coût FIFO : calcul prix moyen pour quantités restantes
-- Réservations flexibles : édition des quantités et quants spécifiques
-- Stratégie "Least Packages" : évite de fragmenter sur plusieurs colis
-- Replenishment : filtres par fournisseur, sélection de listes de produits
-- **Modèle renommé : `stock.location.route` → `stock.route`** (breaking change v17)
+- **Rapport d'ancienneté du stock** ★ : monitoring des stocks dormants par tranche d'âge (30/60/90/180 jours)
+- Coût FIFO : calcul prix moyen pour les quantités restantes après épuisement d'un lot
+- Réservations flexibles : édition des quantités et quants spécifiques (`stock.quant`)
+- Stratégie "Least Packages" : évite de fragmenter les colis en choisissant les packages déjà ouverts
+- **Modèle renommé : `stock.location.route` → `stock.route`** ⚠️ breaking change — corriger PARTOUT
 
-## Fabrication
-- MAJ nomenclature : appliquer changements aux OF en cours
+## Fabrication ★/Community
+- MAJ nomenclature : appliquer les changements aux OF en cours (propagation `mrp.bom` → `mrp.production`)
 - Propagation des composants : demandes transmises aux prélèvements de pré-production
-- Rapport de synthèse OF : vue unique sur tous les aspects
-- Filtre composants en retard
+- Rapport de synthèse OF : vue unique sur tous les aspects (composants, travaux, coûts)
+- Filtre composants en retard dans la vue Planning
 
-## Ressources Humaines
-- Lieux de télétravail par jour de semaine
-- Vue organigramme employés et départements
-- Génération CV employé en PDF
-- Rapport de suivi des certifications
-- Heures supplémentaires avec génération automatique d'entrées de travail
-- Pauses configurables sur les horaires
+## Ressources Humaines ★/Community
+- Lieux de télétravail par jour de semaine (`hr.work.location` sur `resource.calendar.attendance`)
+- Vue organigramme employés et départements (hiérarchique)
+- Génération CV employé en PDF depuis la fiche employé
+- Heures supplémentaires avec génération automatique d'entrées de travail (`hr.work.entry`)
+- Pauses configurables sur les horaires de travail (`resource.calendar`)
 
-## Projets
-- Statuts de tâches supplémentaires : Terminé, Annulé, En cours, Modifications demandées, Approuvé
-- Génération de projets depuis les commandes de vente
-- Tâches récurrentes : auto-génération à la complétion
-- Raccourcis tâches : tags, assignés, heures via notation textuelle
-- Acomptes inclus dans les calculs de rentabilité
+## Projets ★/Community
+- Statuts de tâches supplémentaires : Terminé, Annulé, En cours, Modifications demandées, Approuvé (`project.task.state`)
+- Génération de projets depuis les commandes de vente (`project.project` lié à `sale.order`)
+- Tâches récurrentes : auto-génération à la complétion (`project.task.recurrence`)
+- Acomptes inclus dans les calculs de rentabilité projet
 
-## eCommerce
-- Redesign du checkout
-- Attributs multi-checkbox pour les variantes produits
-- Attributs image (images au lieu de pastilles couleur)
-- Codes promo automatiquement affichés au checkout
-- Méthodes d'expédition sans besoin du module stock
+## eCommerce ★/Community
+- Redesign du checkout (UX simplifiée, moins d'étapes)
+- Attributs multi-checkbox pour les variantes produits (sélection multiple)
+- Attributs image (images au lieu de pastilles couleur pour les variantes)
+- Codes promo automatiquement affichés au checkout (depuis `loyalty.program`)
+- Méthodes d'expédition sans besoin du module stock (`delivery.carrier` simplifié)
 
-## Site Web
-- Templates de pages à la création
+## Site Web ★/Community
+- Templates de pages à la création du site
 - Polices dynamiques responsive
-- Support format d'image WebP
-- Intégration ChatGPT pour génération de texte IA
-- Bloc Instagram feed
-- Couleurs personnalisées de menus
+- Support format **WebP** pour les images (meilleure compression)
+- Intégration **ChatGPT** ★ pour génération de texte IA dans le constructeur
 
-## Technique / ORM — MIGRATIONS MAJEURES (version la plus breaking de la série 15–19)
+## Technique / ORM — ⚠️ BREAKING CHANGES MAJEURS
 
-| Avant (≤16) | Après (17+) |
-|---|---|
-| `attrs="{'invisible': [('state','=','draft')]}"` | `invisible="state == 'draft'"` |
-| `states="draft"` | `invisible="state != 'draft'"` |
-| Override `name_get()` → `[(id, name)]` | Override `_compute_display_name()` → `record.display_name` |
-| `(0,0,{...})`, `(1,id,{...})`, etc. | `Command.create({})`, `Command.update(id,{})`, etc. |
-| `read_group()` retourne liste de dicts | `_read_group()` retourne liste de tuples avec objets |
-| `invalidate_cache()`, `flush()` | `invalidate_model()`, `invalidate_recordset()`, `flush_model()`, `flush_recordset()` |
-| `<tree>` | **`<list>`** |
-| `kanban-card` avec divs manuels | `<card>` avec `<header>`, `<main>`, `<footer>` |
-| `t-raw` | `t-out` (avec `markupsafe.Markup`) |
-| `t-esc` | `t-out` (`t-esc` dépréciée) |
-| `type="json"` sur contrôleur | `type="jsonrpc"` |
-| Champ `license` optionnel | **`license` obligatoire** dans manifest (manquant = erreur) |
-| `post_init_hook(cr, registry)` | `post_init_hook(env)` |
-| `SavepointCase` | `TransactionCase` |
-| `_render_qweb_pdf(res_ids)` | `_render(res_ids)` |
-| Boilerplate chatter 3 champs | `<chatter/>` balise courte |
-| SCSS `@import` | `@use` / `@forward` (migration Dart Sass) |
-| Concaténation SQL string | Objet `SQL` pour composition sans injection |
+| Avant (≤ v16) | Après (v17+) | Impact |
+|---|---|---|
+| `attrs="{'invisible': [('state','=','draft')]}"` | `invisible="state == 'draft'"` | **Toutes les vues custom** |
+| `states="draft"` | `invisible="state != 'draft'"` | **Toutes les vues custom** |
+| `def name_get(self): return [(r.id, r.name) for r in self]` | `def _compute_display_name(self): self.display_name = self.name` | Modèles avec `name_get` surchargé |
+| `[(0,0,{...}), (1,id,{...}), (2,id), (3,id), (4,id), (5,), (6,0,[ids])]` | `Command.create({})`, `Command.update(id,{})`, `Command.delete(id)`, `Command.unlink(id)`, `Command.link(id)`, `Command.clear()`, `Command.set([ids])` | Tout code Python manipulant O2M/M2M |
+| `read_group(domain, fields, groupby)` → liste de dicts | `_read_group(domain, groupby, aggregates)` → liste de tuples d'objets | Toute analytique/groupement custom |
+| `invalidate_cache()`, `flush()` | `invalidate_model()`, `invalidate_recordset()`, `flush_model()`, `flush_recordset()` | Performance/cache |
+| `<tree>` | **`<list>`** | Toutes les vues liste |
+| `kanban-card` avec divs manuels | `<card>` avec `<header>`, `<main>`, `<footer>` | Vues kanban custom |
+| `t-raw` | `t-out` (avec `markupsafe.Markup`) | Templates QWeb |
+| `type="json"` sur contrôleur HTTP | `type="jsonrpc"` | Contrôleurs custom |
+| `license` optionnel dans manifest | **`license` obligatoire** (manquant = erreur au chargement) | Tous les modules custom |
+| `post_init_hook(cr, registry)` | `post_init_hook(env)` | Hooks de modules |
+| `SavepointCase` | `TransactionCase` | Tests unitaires |
+| SCSS `@import` | `@use` / `@forward` (Dart Sass) | Assets CSS/SCSS |
+| Concaténation SQL string | Objet `SQL(...)` pour composition sécurisée | Requêtes SQL custom |
+| `stock.location.route` | `stock.route` | Tous les domaines et references stock |
 
 ## Points de vigilance migration v16 → v17
-- `attrs=` syntaxe **complètement supprimée** : réécriture de toutes les vues custom obligatoire — aucune exception, pas de compatibilité arrière
-- `read_group()` retourne une structure de données entièrement différente : adapter tout code qui itère sur le résultat (`group['field']` → `.field` sur les objets retournés)
-- `name_get()` → `_compute_display_name()` : refactoring nécessaire si le modèle surcharge `name_get`
-- `(0,0,{})` → `Command.*` : réécriture des manipulations O2M/M2M (utiliser `Command.create`, `Command.update`, `Command.delete`, `Command.link`, `Command.unlink`, `Command.set`)
-- `<tree>` → `<list>` dans toutes les vues liste (les deux sont acceptés un temps mais `<tree>` sera supprimé)
-- SCSS `@import` → `@use` : migration assets (Dart Sass — l'ancienne syntaxe génère des warnings dès v17)
-- **`stock.location.route` → `stock.route`** : corriger tous les domaines, vues, actions serveur et code Python
-- `license` obligatoire dans `__manifest__.py` : ajouter `'license': 'LGPL-3'` (ou OPL-1) sinon erreur au chargement
+- **`attrs=` syntaxe supprimée** : réécriture obligatoire de TOUTES les vues custom — pas de compatibilité arrière
+- **`read_group()` → `_read_group()`** : structure de retour entièrement différente — adapter tout code d'analytique
+- **`(0,0,{})` → `Command.*`** : réécriture des manipulations O2M/M2M
+- **`stock.location.route` → `stock.route`** : corriger tous les domaines, vues, actions serveur, code Python
+- **`license` obligatoire** dans `__manifest__.py` : ajouter `'license': 'LGPL-3'` sinon erreur
+- **SCSS `@import` → `@use`** : migration assets (Dart Sass — warnings puis erreur)
+
+### Commandes d'audit pré-migration
+```bash
+grep -r 'attrs=' --include="*.xml" ./           # vues à réécrire
+grep -rn 'def name_get' --include="*.py" ./     # name_get à migrer
+grep -r '<tree' --include="*.xml" ./            # <tree> à renommer en <list>
+grep -r 'stock.location.route' -l ./            # références route à corriger
+grep -r '(0,\s*0,\s*{' --include="*.py" ./     # Command.create à utiliser
+grep -r "'license'" --include="__manifest__.py" -L ./ # modules sans license
+```
 
 ## Pour le consultant
-- **Version la plus breaking de la série 15–19** : prévoir un budget de migration significatif pour les modules custom. Un audit de code avant upgrade est indispensable.
-- **OWL** : le framework JS v17 apporte de gros gains de performance frontend (rendu plus rapide, moins de re-renders) — argument pour les clients qui se plaignent de lenteurs interface.
-- **Frontdesk** : utile pour les sièges sociaux, usines, hôtels — suivi des visiteurs avec envoi de notifications à l'hôte et impression de badges. Sans développement, 100% standard.
-- **Peppol** : intégration e-invoicing sur réseau Peppol (Belgique, Pays-Bas, Suède, Italie, France en cours). Pour activer : Comptabilité → Configuration → Paramètres → Peppol ; nécessite un identifiant GLN ou EAS.
-- **Check-list migration v16→v17 (commandes utiles)** :
-  - Rechercher tous les `attrs=` dans les vues XML : `grep -r 'attrs=' --include="*.xml" ./`
-  - Rechercher tous les `name_get` : `grep -rn 'def name_get' --include="*.py" ./`
-  - Rechercher les `<tree` dans les vues : `grep -r '<tree' --include="*.xml" ./`
-  - Rechercher les `stock.location.route` : `grep -r 'stock.location.route' --include="*.py" --include="*.xml" ./`
+- **Version la plus breaking de la série 15–19** : prévoir un sprint d'audit + portage modules custom. Sans cet investissement, une migration v16→v17 échouera sur les modules custom.
+- **OWL** : gains de performance frontend significatifs (rendu plus rapide, moins de re-renders). Argument commercial fort pour les clients v15/v16 qui se plaignent de lenteurs interface.
+- **Validation comptes bancaires fournisseurs** : nouvelle contrainte qui peut surprendre les utilisateurs. Former les équipes comptables : un approbateur différent doit valider chaque nouveau RIB fournisseur avant le premier paiement.
+- **Frontdesk** : 100% standard, sans développement. Idéal pour les sièges sociaux, usines, hôtels, cliniques — suivi visiteurs + badge + notification hôte. Modèles : `hr.visitor`, `hr.reception.desk`.
+- **Check Management** ★ : gestion des chèques papier (encore courant en France, Maroc, Tunisie) — traitement des chèques reçus de clients et émis aux fournisseurs.
 """,
 
 "16.0": """\
 # Odoo 16.0
 
 **Date de sortie :** 12 Octobre 2022 (Odoo Experience 2022, Bruxelles)
+**Performance :** backend **3,7× plus rapide** qu'en v15 — ★ = Enterprise
 
 ## Prérequis techniques
 - **Python :** 3.10 minimum
@@ -1886,186 +1947,253 @@ _VERSION_NOTES: dict = {
 - **Performance :** backend 3,7× plus rapide qu'en v15 ; eCommerce/web 2,7× plus rapide
 
 ## Nouveaux modules
-- **Knowledge** — wiki interne avec articles imbriqués, vues embarquées, édition collaborative (app majeure)
-- **Live Chat Chatbot** — scripting de chatbot natif dans le Live Chat (arbre de décision, choix multiples)
-- **GDPR / Data Cleaning** — recherche de données personnelles, archivage/suppression de fiches, règles de nettoyage
-- **Sendcloud Connector** — agrégateur d'expédition pour l'Europe occidentale
-- Bibliothèque Spreadsheet open-sourcée sous LGPL
+
+| Module | Edition | Description | Modèles clés |
+|--------|---------|-------------|--------------|
+| **Knowledge** | Community | Wiki interne, articles imbriqués, vues embarquées, édition collaborative | `knowledge.article`, `knowledge.article.member` |
+| **Live Chat Chatbot** | ★ | Chatbot natif avec arbre de décision, choix multiples | `chatbot.script`, `chatbot.script.step` |
+| **GDPR / Data Cleaning** | Community | Recherche données personnelles, archivage/suppression, règles nettoyage | `data.merge.record`, `privacy.activity` |
+| **Sendcloud** | Community | Agrégateur expédition Europe occidentale | `sendcloud.shipping` |
+| **Spreadsheet** | Community | Bibliothèque Spreadsheet open-sourcée (LGPL) | `spreadsheet.mixin` |
 
 ## Suppressions
-- Modules **Google Drive** et **Google Spreadsheet** supprimés entièrement
+- Modules **Google Drive** et **Google Spreadsheet** supprimés entièrement — prévoir alternative (Knowledge, OneDrive, SharePoint)
 
-## Comptabilité
-- **Nouveau widget distribution analytique** avec édition en masse et modèles de distribution
-- Rapprochement bancaire redessiné
-- Gestion des actifs : annulation, actifs négatifs, amortissements affinés
+## Comptabilité ★/Community
+
+### Distribution analytique — nouveau widget
+- Widget de distribution analytique avec édition en masse et **modèles de distribution réutilisables**
+- Modèle : `account.analytic.distribution.model` (nouveau en v16)
+- Permet d'appliquer automatiquement une répartition analytique selon le partenaire, le produit ou le compte
+- `account.analytic.plan` (v16+) remplace le plan analytique unique de v15
+
+### Autres nouveautés comptabilité
+- Rapprochement bancaire **entièrement redessiné** (interface plus claire, workflow en une page)
+- Gestion des actifs ★ : annulation, actifs négatifs, amortissements affinés (`account.asset`)
 - **Escomptes de caisse redessinés** : définitions séparées supportant différentes législations fiscales
-- **Limites de crédit** : configuration par société et par partenaire
-- Conditions de paiement : nouvel écran avec logique de calcul d'échéance
-- OCR : validation en arrière-plan, meilleur mappage des champs
-- Comptabilité Storno (débits/crédits négatifs pour les contrepassations)
-- SEPA étendu aux caractères européens non-Latin
+- **Limites de crédit** ★ : configuration par société ET par partenaire (`res.partner.credit_limit`)
+- Conditions de paiement : nouvel écran avec logique de calcul d'échéance précise
+- Comptabilité **Storno** : débits/crédits négatifs pour les contrepassations (pratique comptable CH/AT/DE)
+- SEPA étendu aux caractères européens non-Latin (accents, caractères spéciaux)
 
-## Ventes & CRM
-- **Framework fidélité/coupons multi-canal** : unifié POS, Ventes, eCommerce
-  - Anciens modèles `sale.coupon.program` → **nouveaux `loyalty.program`, `loyalty.reward`, `loyalty.rule`** (breaking change majeur)
-- Connecteur Amazon : onboarding simplifié, multi-marketplace
-- Statut livraison visible sur les commandes (livré/partiellement livré/non livré)
+## Loyalty Framework — BREAKING CHANGE MAJEUR
+
+**Avant v16 :** systèmes séparés POS vs Ventes vs eCommerce
+**En v16 :** framework unifié multi-canal
+
+### Mapping des modèles (migration automatique des données, pas des customisations)
+| Ancien modèle (≤v15) | Nouveau modèle (v16+) | Champ `program_type` |
+|---|---|---|
+| `sale.coupon.program` | `loyalty.program` | `coupons`, `loyalty`, `gift_card`, `promotion`, `discount_card`, `buy_x_get_y` |
+| `sale.coupon` | `loyalty.card` | — |
+| `sale.coupon.reward` | `loyalty.reward` | — |
+| `sale.coupon.rule` | `loyalty.rule` | — |
+| `pos.coupon.program` | `loyalty.program` | idem (unifié) |
+
+**Valeurs `loyalty.program.program_type` :**
+- `coupons` : génération de codes promotionnels
+- `loyalty` : programme de fidélité (points → récompenses)
+- `gift_card` : cartes cadeaux
+- `promotion` : promotion automatique sans code
+- `discount_card` : carte de réduction permanente
+- `buy_x_get_y` : promotions "achetez X, obtenez Y"
+
+## Ventes & CRM ★/Community
+- **Framework fidélité/coupons multi-canal** : unifié POS, Ventes, eCommerce (voir section Loyalty)
+- Connecteur Amazon ★ : onboarding simplifié, multi-marketplace (`amazon.account`)
+- Statut livraison visible sur les commandes (`sale.order.delivery_status` : nothing/partial/full)
 - Avertissement liste de prix partenaire sur commandes ouvertes
-- Détection de leads similaires par numéro de téléphone
+- Détection de leads similaires par numéro de téléphone (`crm.lead.phone_state`)
+
+## Knowledge — app majeure (détail)
+**Modèles :**
+- `knowledge.article` : article (titre, corps HTML, arborescence `parent_id`)
+- `knowledge.article.member` : droits d'accès par article (lecture/écriture par utilisateur/groupe)
+
+**Fonctionnalités clés :**
+- Articles imbriqués (arborescence illimitée)
+- **Vues embarquées** : intégrer une liste, kanban ou pivot d'un autre modèle Odoo dans un article
+- Édition collaborative temps-réel (multi-utilisateurs simultanés)
+- Templates d'articles prédéfinis
+- Espace de travail partagé + articles privés
+- Accès depuis le portail client (articles publiés)
 
 ## Stock
-- Transferts par lot : automatisation par contact, transporteur ou destination
-- Code-barres GS1-128 pour lots/séries avec données d'expiration
-- Réapprovisionnement : automatisation par emplacement ; visibilité niveau entrepôt
-- Interface barcode : optimisation mobile ; filtrage par colis
-- Transferts : vue kanban, chatter intégré, édition quantités
+- Transferts par lot : automatisation par contact, transporteur ou destination (`stock.picking.batch`)
+- Code-barres **GS1-128** pour lots/séries avec données d'expiration (SSCC, GTIN, date DLC)
+- Réapprovisionnement ★ : automatisation par emplacement ; visibilité niveau entrepôt
+- Interface barcode : optimisation mobile ; filtrage par colis (`stock.quant.package`)
 
-## Fabrication
-- **Tablette opérations de travail entièrement redessinée** (MES)
-- Login employé par poste de charge
+## Fabrication ★/Community
+- **Tablette opérations de travail entièrement redessinée** (MES — Manufacturing Execution System)
+- Login employé par poste de charge (badge ou PIN)
 - Production continue : consommation auto des produits tracés lot/série
-- Valorisation des kits : partage du coût entre composants de la nomenclature
-- Vue d'ensemble OF/nomenclature avec délais et dates de disponibilité
-- Scission/fusion des ordres de fabrication
-- Portail sous-traitance : enregistrement production pour sous-traitants
+- Valorisation des kits : partage du coût entre composants de la nomenclature (`mrp.bom.type = 'phantom'`)
+- **Scission/fusion des ordres de fabrication** : diviser ou regrouper des OF en cours
+- Portail sous-traitance ★ : enregistrement de production pour les sous-traitants via portail web
 
-## Ressources Humaines
-- **Numérisation CV** pour le recrutement (extraction nom/email/téléphone)
-- Détection de doublons de candidats
+## Ressources Humaines ★/Community
+- **Numérisation CV** ★ : extraction nom/email/téléphone depuis PDF (OCR) pour le recrutement
+- Détection de doublons de candidats (`hr.applicant`)
 - Congés : transfert de plan d'acquisition ; annulation auto jours fériés ; jours de stress par département
-- Évaluations : date par défaut depuis la date de contrat
-- Dashboard paie ; localisation Kenya/Luxembourg
+- Dashboard paie ★ ; localisations Kenya, Luxembourg
 
-## Projets
-- Gantt : barres de progression d'allocation ressources ; création de dépendances
-- Jalons : lien avec les tâches ; marquage auto à la complétion
+## Projets ★/Community
+- Gantt ★ : barres de progression d'allocation ressources ; création de dépendances
+- Jalons ★ : lien avec les tâches ; marquage auto à la complétion (`project.milestone`)
 - Tâches récurrentes avec calcul automatique de date planifiée
-- Planification intelligente : résolution de conflits en lot
-- Facturation basée sur les jalons sur les projets de services
+- **Facturation basée sur les jalons** ★ : facturer automatiquement à l'atteinte d'un jalon
 
-## eCommerce / Site Web
-- Rappels paniers abandonnés
-- Notifications de retour en stock
-- Autocomplétion adresses Google Places
-- Intégration fidélité/coupon multi-canal
-- Édition mobile complète dans le constructeur de site
-- Gestion du consentement cookies
-- Intégration Plausible.io pour analytics
+## eCommerce / Site Web ★/Community
+- **Rappels paniers abandonnés** ★ : email automatique après X heures (`sale.order` + `mail.template`)
+- Notifications de retour en stock (email clients en attente)
+- Autocomplétion adresses Google Places ★
+- Gestion du consentement cookies (conforme RGPD)
+- Intégration Plausible.io pour analytics (alternative privacy-friendly à Google Analytics)
 
 ## Technique / ORM
-- **Traductions** : champs traduits stockés en **JSONB dans PostgreSQL** (changement de schéma majeur)
-- `search_count()` respecte désormais l'argument `limit`
-- Stack HTTP refactorisée pour meilleure extensibilité
-- Etherpads natifs remplacés par éditeur HTML collaboratif
-- Dashboards standards convertis en rapports Spreadsheet (changement architectural)
+- **Traductions stockées en JSONB** dans PostgreSQL (champs traduits dans la table du modèle, plus `ir_translation`)
+  - Requêtes SQL directes sur `ir_translation` → **cassées** — utiliser l'ORM avec `with_context(lang='fr_FR')`
+  - Exemple correct : `record.with_context(lang='fr_FR').name`
+- `search_count()` respecte désormais l'argument `limit` (comportement corrigé)
+- Stack HTTP refactorisée pour meilleure extensibilité (contrôleurs custom peuvent être impactés)
+- Etherpads natifs remplacés par éditeur HTML collaboratif intégré
 
 ## Points de vigilance migration v15 → v16
-- **Loyalty/promotion** : tout code custom sur `sale.coupon.program` doit être réécrit vers `loyalty.program`, `loyalty.reward`, `loyalty.rule` ; les données sont migrées automatiquement mais les customisations ne le sont pas
-- **Traductions stockées en JSONB** : les requêtes SQL directes sur `ir_translation` ou les tables de traductions sont cassées — utiliser l'ORM (`with_context(lang=...)`)
-- Suppression Google Drive/Spreadsheet : prévoir alternative (Knowledge, Nextcloud, SharePoint) si utilisé
-- **Actifs immobilisés** : modèle `account.asset` a changé — vérifier les customisations
+- **Loyalty/promotion** : tout code custom sur `sale.coupon.program` → réécrire vers `loyalty.program` ; données migrées automatiquement, customisations **non**
+- **Traductions en JSONB** : auditer toutes les requêtes SQL directes sur `ir_translation` — utiliser l'ORM
+- **Google Drive/Spreadsheet** : prévoir alternative si utilisés (Knowledge, OneDrive, SharePoint, Nextcloud)
+- **Actifs immobilisés** (`account.asset`) : modèle modifié — vérifier les customisations
+- **Plans analytiques** : `account.analytic.plan` (v16+) remplace le plan unique de v15 — adapter les règles et modèles de distribution
 
 ## Pour le consultant
-- **Performance** : backend 3,7× plus rapide qu'en v15 — argument fort pour les clients sur v15 qui se plaignent de lenteurs.
-- **Knowledge** : app wiki interne avec vues embarquées (listes, kanban depuis d'autres modèles dans un article), édition collaborative temps-réel. Concurrent direct de Confluence/Notion dans l'écosystème Odoo. Modèle : `knowledge.article`.
-- **Loyalty framework unifié** : avant v16, les coupons POS et les promotions ventes étaient des systèmes séparés. En v16, tout passe par `loyalty.program` avec `program_type` (coupons, loyalty, gift_card, promotion, discount_card, buy_x_get_y). C'est un breaking change majeur pour les clients qui avaient des customisations sur les promotions.
-- **Mapping modèles Loyalty** :
-  - `sale.coupon.program` → `loyalty.program`
-  - `sale.coupon` → `loyalty.card`
-  - `sale.coupon.reward` → `loyalty.reward`
-  - `sale.coupon.rule` → `loyalty.rule`
+- **Performance** : argument fort pour les clients v15 — backend 3,7× plus rapide, très visible pour les utilisateurs avec beaucoup d'enregistrements.
+- **Knowledge vs Confluence/Notion** : Knowledge est la réponse Odoo au besoin de wiki interne. Différenciateur : vues embarquées (intégrer une liste d'OF, de factures dans un article de procédure). Limite actuelle : pas de commentaires par ligne / annotations comme Notion.
+- **Loyalty framework** : expliquer aux clients que la migration des données est automatique mais que **leurs extensions custom doivent être réécrites**. Prévoir un sprint de portage si le client avait des promotions custom.
+- **Scission/fusion OF** : très attendu par les fabricants qui devaient créer manuellement de nouveaux OF lors d'incidents. Fonctionnalité 100% standard.
+- **Storno** : pratique comptable suisse/autrichienne/allemande — si client CH/AT/DE, vérifier si Storno était utilisé en v15 et valider le comportement attendu.
 """,
 
 "15.0": """\
 # Odoo 15.0
 
 **Date de sortie :** 6–7 Octobre 2021 (Odoo Experience 2021)
+**Note :** Version encore très répandue en PME (LTS de facto) — ★ = Enterprise
 
 ## Prérequis techniques
 - **Python :** 3.8 minimum (3.8–3.10 supportés)
 - **PostgreSQL :** 12.0 ou supérieur
-- **Framework JS :** OWL (Odoo Web Library) — première version de production complète
+- **Framework JS :** OWL (Odoo Web Library) — **première version de production stable**
+- Migration v14→v15 : JavaScript entièrement réécrit en OWL — vérifier compatibilité modules tiers
 
 ## Nouveaux modules
-- **Approvals** — gestionnaire de workflow d'approbation dédié
-- **Discuss** — appels vidéo/voix (extension majeure des capacités)
 
-## Comptabilité
-- Formulaire de compte avec suivi de l'historique des modifications
-- Rapports d'ancienneté améliorés avec colonnes par devise
-- Outil de rapprochement reconstruit : rapprochement partiel par défaut
-- Génération d'écritures de régularisation depuis les commandes de vente/achat
-- Mécanisme de tolérance de paiement pour les sous-paiements
-- Support TVA pour les sociétés étrangères
-- Connecteurs Gmail et Outlook pour la journalisation email
+| Module | Edition | Description | Modèles clés |
+|--------|---------|-------------|--------------|
+| **Approvals** | Community | Workflows d'approbation configurables sans développement | `approval.request`, `approval.category` |
+| **Discuss (voix/vidéo)** | Community | Appels vidéo/voix WebRTC intégrés au chat | `discuss.channel` étendu |
 
-## Ventes & CRM
-- **Lead Scoring Prédictif** remplace le scoring manuel
-- Règles d'assignation de leads avec opt-out possible
-- Détection de doublons de leads via boutons de stat
+## Comptabilité ★/Community
+- Formulaire de compte avec suivi de l'**historique des modifications** (chatter sur `account.account`)
+- Rapports d'ancienneté améliorés avec colonnes par devise (`account.move.line`)
+- Outil de rapprochement **reconstruit** : rapprochement partiel par défaut
+- Génération d'**écritures de régularisation** depuis les commandes de vente/achat
+- **Mécanisme de tolérance de paiement** : clôture automatique des sous-paiements en dessous d'un seuil configurable
+  - Configuration : Comptabilité → Configuration → Paramètres → Tolérance de paiement
+  - Utile pour les paiements avec frais bancaires (ex: virement SWIFT avec frais déduits)
+- Support TVA pour les **sociétés étrangères** (TVA d'un autre pays sur une société domestique)
+- Connecteurs **Gmail et Outlook** pour la journalisation email dans les chatter (`fetchmail.server`)
+
+## Approvals — détail fonctionnel
+**Modèles :** `approval.category` · `approval.request` · `approval.approver`
+
+**Workflow :**
+1. Créer une catégorie d'approbation (ex: "Achat > 5 000 €", "Heure supplémentaire")
+2. Configurer les approbateurs (un ou plusieurs, séquentiels ou en parallèle)
+3. Lier la catégorie à un objet Odoo (optionnel — peut aussi être autonome)
+4. L'utilisateur crée une demande (`approval.request`) → les approbateurs reçoivent une notification
+5. Approbation/refus → email + chatter + action configurable
+
+**Cas d'usage sans développement :** validation achats hors seuil, dépenses, heures supplémentaires, congés exceptionnels, remises commerciales élevées.
+
+## Ventes & CRM ★/Community
+- **Lead Scoring Prédictif** ★ : remplace le scoring manuel — score ML calculé sur l'historique de conversion
+  - Nécessite minimum 30 jours de données CRM pour être pertinent
+  - Configuration : CRM → Configuration → Paramètres → Scoring prédictif
+  - Champ : `crm.lead.automated_probability`
+- Règles d'assignation de leads avec opt-out possible (`crm.team.member` + `crm.lead.assignment`)
+- Détection de doublons de leads via boutons de stat (`crm.lead.duplicate_lead_ids`)
 - Prévision des ventes avec glisser-déposer entre les mois
-- Recherche de contact par numéro de téléphone
+- Recherche de contact par numéro de téléphone (normalisation internationale)
 
-## Stock
-- Refonte complète de l'interface des ajustements d'inventaire
-- Inventaire cyclique par emplacement avec résolution de conflits
-- Stratégie de déstockage "Closest Location"
-- Réservation de stock : automatique, manuelle ou planifiée
-- **Catégories de stockage** : suivi poids, nombre produits, capacité colis (pour règles putaway)
+## Stock ★/Community
+- Refonte complète de l'interface des **ajustements d'inventaire** (plus proche du physique)
+- Inventaire cyclique par emplacement avec résolution de conflits (`stock.quant`)
+- Réservation de stock : **automatique, manuelle ou planifiée** (configurable par type d'opération)
+- **Catégories de stockage** ★ : suivi poids, nombre produits, capacité colis pour les règles putaway
+  - Modèle : `stock.storage.category`
+  - Permet d'automatiser le placement selon la capacité des étagères/zones
 - Emballages liés aux types de colis pour l'automatisation putaway
 - Infos fournisseur visibles dans la vue de réapprovisionnement
 
-## Fabrication
-- Comptabilité analytique sur les ordres de fabrication
+## Fabrication ★/Community
+- Comptabilité analytique sur les ordres de fabrication (`mrp.production` + `account.analytic.line`)
 - Copie d'opérations de nomenclature ; sous-produits spécifiques aux variantes
 - Prévision des composants pour les OF en brouillon
 - Production en masse de numéros de série avec confirmation en lot
-- Nouveau statut ordre de travail pour vérification disponibilité matières
-- MPS : options d'historique de la demande
+- **MPS** ★ : options d'historique de la demande (configurable par horizon)
 - Dashboard d'analyse de production pour le suivi des coûts
 
-## Ressources Humaines
-- Compétences intégrées dans les évaluations
+## Ressources Humaines ★/Community
+- Compétences intégrées dans les évaluations (`hr.employee.skill` → `hr.appraisal`)
 - Gestion des questionnaires d'évaluation avec suivi des réponses
-- Assistant temps partiel pour changements d'horaire
-- Création de fiches de paie en lot optimisée
-- Gestion des commissions (structure de base)
-- Standardisation des saisies sur salaires
+- Création de fiches de paie en lot optimisée (`hr.payslip.run`)
+- Gestion des commissions (structure de base, non comparable aux Sales Commissions de v18)
 
-## Projets
-- Assignation de plusieurs utilisateurs par tâche
+## Projets ★/Community
+- Assignation de **plusieurs utilisateurs** par tâche (`project.task.user_ids` — Many2many)
 - Contrôles de visibilité des tâches privées
-- Gantt avec suivi des jalons et dépendances inter-tâches
+- Gantt ★ avec suivi des jalons et dépendances inter-tâches
 - Replanification automatique des tâches dépendantes
-- Graphique burndown
+- Graphique **burndown** ★
 - Analyse de rentabilité vs budget/coûts/revenus
 
-## eCommerce / Site Web
+## eCommerce / Site Web ★/Community
 - Nouveau design page produit/boutique avec affichage des remises
-- Section "Produits récemment consultés"
-- Achat de cartes cadeaux dans la boutique
+- Achat de **cartes cadeaux** dans la boutique (`gift.card` — avant v16 Loyalty)
 - Notification de disponibilité pour produits en rupture
-- Animations et effets texte/image dans le constructeur web
-- Intégration Google Analytics GA4
+- Intégration Google Analytics **GA4** (remplacement Universal Analytics)
+
+## Discuss — voix/vidéo (détail technique)
+- WebRTC intégré — appels vidéo/voix sans plugin externe
+- **Prérequis production** : serveur **TURN/STUN** pour les appels cross-NAT (sans ça, les appels échouent entre deux NAT différents)
+  - Solution recommandée : coturn (open source) ou service TURN managé (Twilio, Cloudflare)
+- Modèle principal : `discuss.channel` (anciennement `mail.channel` en v14)
 
 ## Technique / ORM
-- Attribut `_sequence` supprimé de `Model` (gestion native PostgreSQL)
-- `column_format` et `deprecated` supprimés de `Field`
-- Attribut `limit` supprimé des `One2many` et `Many2many`
-- `browse()` n'accepte plus de valeurs string pour les `ids`
+- `browse()` n'accepte plus de valeurs string pour les `ids` (→ toujours passer des `int`)
 - `filtered_domain()` préserve désormais l'ordre du recordset
+- `search()`, `search_count()`, `_search()` : paramètre `args` renommé en **`domain`**
 - `fields_get_keys()` et `get_xml_id()` dépréciés
-- `search()`, `search_count()`, `_search()` : paramètre `args` renommé en `domain`
-- Nouveau flush/cache API sur `Model` et `Environment`
-- Possibilité de spécifier le type d'index PostgreSQL sur les champs (`index='btree'`, `index='hash'`)
+- Nouveau flush/cache API sur `Model` et `Environment` (unifié)
+- Possibilité de spécifier le type d'index PostgreSQL sur les champs : `index='btree'` (défaut) ou `index='hash'` (pour l'égalité uniquement)
+- `_sequence` supprimé de `Model` (séquences gérées nativement par PostgreSQL)
+- `column_format` et `deprecated` supprimés de `Field`
+- Attribut `limit` supprimé des `One2many` et `Many2many` (n'avait aucun effet)
+
+## Points de vigilance migration v14 → v15
+- **OWL** : toute la partie JavaScript a été réécrite. Les modules tiers v14 en JavaScript pur (non OWL) sont incompatibles — vérifier la compatibilité de CHAQUE module tiers avant de migrer
+- **`mail.channel` → `discuss.channel`** : adapter les références dans les modules custom
+- **`search(args=...)` → `search(domain=...`)** : corriger tous les appels `search` avec paramètre nommé `args`
+- **Cartes cadeaux** : si utilisées avant v15 (via module communautaire), vérifier le comportement avec le nouveau système
+- **GA4** : si Google Analytics était configuré, reconfigurer avec l'ID GA4 (format G-XXXXXXXXX)
 
 ## Pour le consultant
-- **OWL en production** : v15 est la première version stable avec OWL. Certains modules tiers v14 ne sont pas encore portés — vérifier la compatibilité de chaque module tiers avant de conseiller une migration.
-- **Predictive Lead Scoring** : remplace le scoring manuel. Basé sur les données historiques de conversion (needs > 30 jours de données pour être utile). Configurable dans CRM → Configuration → Paramètres → Scoring prédictif.
-- **Approvals** : module indépendant pour les workflows d'approbation (achats hors seuil, dépenses, heures supplémentaires, etc.). Évite les développements custom pour les circuits de validation simples. Modèle : `approval.request`.
-- **Discuss (vidéo/voix)** : intégration de WebRTC pour les appels internes. Fonctionne sans plugin externe mais nécessite un serveur TURN/STUN pour les appels cross-NAT en production.
-- **v15 est encore largement déployée** (LTS de facto pour les PME) : attendre d'autres versions est risqué techniquement mais la migration v15→v16 est moins breaking que v16→v17.
+- **OWL en production** : première version stable. Certains modules tiers v14 non encore portés — toujours vérifier la compatibilité avant de conseiller la migration.
+- **Approvals** : évite de nombreux développements custom pour les circuits de validation. Module souvent sous-utilisé par les clients qui ne le connaissent pas. À proposer systématiquement pour les processus d'approbation.
+- **Lead Scoring Prédictif** ★ : outil puissant pour les équipes commerciales, mais nécessite un historique de données suffisant. À activer dès le démarrage pour que les modèles ML s'entraînent.
+- **Discuss (voix/vidéo)** : fonctionnalité populaire mais qui nécessite une infrastructure TURN/STUN en production. Ne pas la promettre sans vérifier l'infrastructure réseau du client.
+- **v15 encore très répandue** : beaucoup de PME restent sur v15 par confort. La migration v15→v16 est moins breaking que v16→v17, mais le saut vers v17 directement depuis v15 est très coûteux — recommander de passer par v16 pour amortir les changements.
 """,
 }
 

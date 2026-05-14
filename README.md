@@ -5,7 +5,7 @@
 L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.22.0**
+> Version actuelle : **0.23.0**
 
 ---
 
@@ -96,12 +96,22 @@ Elle détaille comment le portail combine :
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
 
-La version 0.22 modernise aussi l'interface :
+La version 0.22 modernise l'interface :
 - navigation principale dans une **top bar responsive** ;
 - panneau **Contexte workspace** repliable avec profil, providers IA, projets et sources Odoo ;
 - typographie **Geist Sans / Geist Mono** ;
 - personnalisation couleur recentrée sur une **couleur d'accent** sobre ;
 - documents joints disponibles dans l'Assistant IA et les requêtes de Migration.
+
+La version 0.23 nettoie l'expérience de discussion :
+- **bandeau de contexte allégé** sur Assistant IA et Migration (suppression des badges Sources / Repo / Migration path qui doublonnaient le sélecteur de version et le panneau contextuel) ;
+- **collapse-on-scroll** : le titre de page et la barre de configuration se compactent automatiquement dès qu'on scrolle dans la discussion, pour libérer la zone de lecture ;
+- **PerspectiveToggle redessiné** : couleurs theme-aware (variables CSS), libellé du profil actif affiché à côté de l'icône, transitions fluides ;
+- **profils Markdown** (Support, BA, Architecte, Développeur) réécrits avec grilles de priorité, vocabulaire de référence, snippets, checklists ;
+- **notes de version Odoo v15→v19** enrichies avec tags Community/Enterprise, modèles ORM par fonctionnalité, workflows détaillés (Sales Commissions, Dispatch, ESG/CSRD, Loyalty) et commandes d'audit pré-migration ;
+- **auto-perspective** revue avec listes de termes élargies, scoring multi-catégories, fallback BA au lieu de Dev pour les questions fonctionnelles ;
+- **analyse de complexité** corrigée : les modules OCA et communautaires (Camptocamp, Akretion, Tecnativa…) ne sont plus classés comme custom dev ; seuil Studio relevé à 3 signaux ;
+- **drapeaux fiscaux** : émoji du pays affiché à côté des sociétés (sélecteur, onglets projets) et dans le panneau contextuel.
 
 ---
 

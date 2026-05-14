@@ -16,6 +16,8 @@ def anyio_backend():
 
 @pytest_asyncio.fixture
 async def db_session():
+    import odoo_consultant_portal.core.models  # noqa: F401
+
     engine = create_async_engine(TEST_DB_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)

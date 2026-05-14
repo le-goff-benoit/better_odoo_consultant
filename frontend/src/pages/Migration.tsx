@@ -4,7 +4,7 @@ import { ArrowRightLeft, ArrowUp, ChevronDown, Check, CheckCheck, Copy, FileText
 import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
-import PerspectiveToggle, { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
+import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import { useWorkspaceContext } from '../components/Layout'
@@ -23,7 +23,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { extractToolContextItems, resolvePerspective, routedContextFiles } from '../utils/aiContext'
+import { resolvePerspective, routedContextFiles } from '../utils/aiContext'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -35,6 +35,7 @@ interface Profile {
   active_env_id: string | null
   company_ids?: string | null
   selected_company_id?: number | null
+  technical_complexity?: string | null
 }
 
 interface EnvEntry {
@@ -77,6 +78,15 @@ function companyLocalizationLabel(company?: CompanyOption | null) {
   if (!company) return undefined
   const parts = [company.country_code, company.currency].filter(Boolean)
   return parts.length ? parts.join(' · ') : undefined
+}
+
+function technicalComplexityLabel(raw?: string | null) {
+  try {
+    const value = JSON.parse(raw ?? '{}')
+    return value.label || undefined
+  } catch {
+    return undefined
+  }
 }
 
 interface AiEvent {
@@ -1162,7 +1172,22 @@ export default function Migration() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messageListRef = useRef<HTMLDivElement>(null)
   const assistantRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const [isScrolled, setIsScrolled] = useState(false)
+
+  // Collapse top bar when user scrolls down in the chat (> 40px)
+  useEffect(() => {
+    const el = messageListRef.current
+    if (!el) return
+    const onScroll = () => {
+      const scrolled = el.scrollTop > 40
+      setIsScrolled(prev => prev !== scrolled ? scrolled : prev)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
   const perspective = resolvePerspective(perspectiveMode, perspectivePrompt, 'developer')
 
@@ -1186,7 +1211,7 @@ export default function Migration() {
   const sourceEnv = sourceProfile ? profileEnvs(sourceProfile).find(e => e.id === source.envId) : undefined
   const sourceCompany = activeCompany(sourceProfile)
   const sourceLocalization = companyLocalizationLabel(sourceCompany)
-  const latestAssistantEvents = [...messages].reverse().find(m => m.role === 'assistant')?.events ?? []
+  const sourceComplexity = technicalComplexityLabel(sourceProfile?.technical_complexity)
   const contextFiles = routedContextFiles({
     prompt: perspectivePrompt,
     perspective,
@@ -1197,9 +1222,7 @@ export default function Migration() {
   const conversationSources = [
     sourceVersion && sourcesInstalled(sourceVersion, srcStatus) ? `Sources Odoo ${sourceVersion}` : null,
     targetVersion && sourcesInstalled(targetVersion, srcStatus) ? `Sources cible ${targetVersion}` : null,
-    sourceRepoName ? `Repo ${sourceRepoName.split('/').slice(-2).join('/')}` : null,
   ].filter(Boolean) as string[]
-  const contextToolItems = extractToolContextItems(latestAssistantEvents)
 
   // Auto-reset target when it becomes invalid (version ≤ new source)
   useEffect(() => {
@@ -1400,7 +1423,7 @@ export default function Migration() {
     : (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+    <div className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
       <PageHeader
         title={c.title}
         description={c.description}
@@ -1446,38 +1469,12 @@ export default function Migration() {
             />
 
             <div style={{ flex: 1 }} />
-
-            {/* Migration path badge */}
-            {(sourceVersion || targetVersion) && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '3px 10px', borderRadius: t.radiusFull,
-                background: `var(--brand, ${t.brand})15`,
-                border: `1px solid var(--brand, ${t.brand})40`,
-                color: `var(--brand, ${t.brand})`, fontWeight: 600, fontSize: 12,
-              }}>
-                {sourceLabel} → {targetLabel}
-              </div>
-            )}
-
-            {/* Repo badge */}
-            {sourceRepo.profileId && (
-              <span title={c.repoActive}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  padding: '3px 10px', borderRadius: t.radiusFull,
-                  background: `${t.success}15`, border: `1px solid ${t.success}40`,
-                  color: t.success, fontWeight: 600, fontSize: 12,
-                }}>
-                <Check size={11} /> ⎇ repo
-              </span>
-            )}
           </>
         )}
       </div>
 
       {/* Side selectors */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16, flexShrink: 0 }}>
+      <div className="migration-side-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16, flexShrink: 0 }}>
         <SideSelector
           label={c.source}
           cfg={source} onChange={setSource}
@@ -1498,7 +1495,7 @@ export default function Migration() {
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 4, marginBottom: 12 }}>
+      <div ref={messageListRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 4, marginBottom: 12 }}>
         {messages.length === 0 && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
             <div style={{ textAlign: 'center', color: t.muted, maxWidth: 520 }}>
@@ -1615,15 +1612,6 @@ export default function Migration() {
           >
             <Paperclip size={16} />
           </button>
-          <div className="assistant-perspective-slot">
-            <PerspectiveToggle
-              value={perspectiveMode}
-              effectiveValue={perspective}
-              onChange={setPerspective}
-              size="sm"
-              disabled={streaming}
-            />
-          </div>
           <button
             onClick={streaming ? () => abortRef.current?.abort() : send}
             disabled={!streaming && ((!input.trim() && readyAttachments.length === 0) || !ready)}
@@ -1649,19 +1637,22 @@ export default function Migration() {
           <ConversationContextPanel
             mode={perspectiveMode}
             effectivePerspective={perspective}
+            onModeChange={setPerspective}
+            disabled={streaming}
             provider={activeProvDef?.label}
             model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
             project={sourceProfile?.name}
             environment={sourceEnv?.name}
             company={sourceCompany?.name}
+            countryCode={sourceCompany?.country_code}
             localization={sourceLocalization}
+            complexity={sourceComplexity}
             version={sourceVersion}
             targetVersion={targetVersion}
             repo={sourceRepoName}
             contextFiles={contextFiles}
             sources={conversationSources}
             attachments={readyAttachments.map(a => a.name)}
-            toolItems={contextToolItems}
           />
         )}
       </div>

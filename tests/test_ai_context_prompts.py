@@ -1,10 +1,15 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from odoo_consultant_portal.services.ai_service import _language_block, _perspective_block, _read_odoo_file, _search_odoo_source, _trim_project_context
 from odoo_consultant_portal.services.context_service import load_context_for_prompt, read_file
 from odoo_consultant_portal.services.localization_service import build_localization_context, find_available_l10n_modules
+from odoo_consultant_portal.services.technical_complexity_service import (
+    analyze_technical_complexity,
+    build_technical_complexity_context,
+)
 
 
 def test_default_skills_context_uses_dynamic_date_placeholder():
@@ -243,3 +248,100 @@ async def test_source_tools_cover_community_and_enterprise_siblings(tmp_path):
     assert read["ok"] is True
     assert read["path"] == "enterprise/l10n_ch_reports/__manifest__.py"
     assert "Swiss enterprise reports" in read["content"]
+
+
+def test_technical_complexity_context_guides_response_strategy():
+    raw = json.dumps({
+        "mode": "studio_dev",
+        "label": "Studio + Dev",
+        "confidence": "high",
+        "studio": {"detected": True, "signal_count": 8},
+        "dev": {"detected": True, "manifest_count": 4, "python_files": 12, "xml_files": 30},
+    })
+
+    context = build_technical_complexity_context(raw)
+
+    assert "Complexité technique du projet" in context
+    assert "Studio + Dev" in context
+    assert "standard, de Studio ou du code custom" in context
+
+
+@pytest.mark.asyncio
+async def test_technical_complexity_detects_dev_repo_from_legacy_github_repo(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    repo = home / ".odoo-consultant" / "repos" / "Demo" / "prod"
+    module = repo / "custom_sale"
+    (repo / ".git").mkdir(parents=True)
+    module.mkdir()
+    (module / "__manifest__.py").write_text("{'name': 'Custom Sale'}", encoding="utf-8")
+    (module / "models.py").write_text("from odoo import models\n", encoding="utf-8")
+
+    monkeypatch.setattr(Path, "home", lambda: home)
+
+    result = await analyze_technical_complexity("Demo", None, None, "org/demo")
+
+    assert result["mode"] == "dev"
+    assert result["dev"]["manifest_count"] == 1
+    assert result["confidence"] == "high"
+
+
+class FakeModuleOdoo:
+    def get_installed_modules(self):
+        return [
+            {"name": "base", "author": "Odoo S.A."},
+            {"name": "sale", "author": "Odoo S.A."},
+            {"name": "web_studio", "author": "Odoo S.A."},
+            {"name": "custom_connector", "author": "Customer"},
+        ]
+
+    def search_read(self, model, domain=None, fields=None, limit=80, offset=0, order=""):
+        return []
+
+
+@pytest.mark.asyncio
+async def test_technical_complexity_uses_installed_modules_as_custom_dev_signal(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: home)
+
+    result = await analyze_technical_complexity("Demo", None, FakeModuleOdoo(), None)
+    context = build_technical_complexity_context(json.dumps(result))
+
+    assert result["mode"] == "dev"
+    assert result["installed_modules"]["studio_modules"] == ["web_studio"]
+    assert result["installed_modules"]["custom_module_count"] == 1
+    assert "custom_connector" in context
+
+
+class FakeOcaOnlyOdoo:
+    """Odoo instance with only OCA / community modules installed (no truly custom dev)."""
+
+    def get_installed_modules(self):
+        return [
+            {"name": "base", "author": "Odoo S.A."},
+            {"name": "sale", "author": "Odoo S.A."},
+            {"name": "account_financial_report", "author": "Odoo Community Association (OCA)"},
+            {"name": "queue_job", "author": "Camptocamp,Akretion,Odoo Community Association (OCA)"},
+            {"name": "web_responsive", "author": "Odoo Community Association (OCA)"},
+            {"name": "l10n_fr", "author": "Odoo S.A."},
+        ]
+
+    def search_read(self, model, domain=None, fields=None, limit=80, offset=0, order=""):
+        return []
+
+
+@pytest.mark.asyncio
+async def test_technical_complexity_does_not_flag_oca_modules_as_custom_dev(tmp_path, monkeypatch):
+    """A project with only OCA / community modules installed must be 'standard',
+    not 'dev'. Regression test for the false-positive that classified projects
+    running OCA addons as having custom development."""
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: home)
+
+    result = await analyze_technical_complexity("Demo", None, FakeOcaOnlyOdoo(), None)
+
+    assert result["mode"] == "standard"
+    assert result["installed_modules"]["custom_module_count"] == 0
+    assert result["installed_modules"]["community_module_count"] >= 3
+    # OCA modules are reported in their own bucket
+    assert "queue_job" in result["installed_modules"]["community_modules"]
+    assert "account_financial_report" in result["installed_modules"]["community_modules"]

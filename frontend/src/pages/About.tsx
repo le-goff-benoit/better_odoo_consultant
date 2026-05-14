@@ -7,10 +7,27 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.22.0',
+    version: '0.23.0',
     date: '2026-05-14',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Assistant IA & Migration : nettoyage du bandeau de contexte — suppression du badge Sources et du badge Repo qui dupliquaient l’information du sélecteur de version et du panneau contextuel',
+      'Migration : retrait du badge Migration path et du badge ⎇ repo dans le bandeau supérieur (redondants avec les sélecteurs source/cible)',
+      'Collapse-on-scroll : le PageHeader et le bandeau de contexte se compactent automatiquement lorsque l’utilisateur scrolle dans la discussion, pour libérer de la place de lecture',
+      'PerspectiveToggle : redesign theme-aware (variables CSS), libellé du profil actif affiché à côté de l’icône, transitions de padding/gap fluides, suppression des couleurs codées en dur',
+      'Profils Markdown : réécriture complète des 4 profils consultant (Support, BA, Architecte, Développeur) avec grilles, vocabulaire de référence, snippets et checklists',
+      'Notes de version Odoo : enrichissement des notes v15→v19 avec tags Community/Enterprise (★), modèles ORM par fonctionnalité, workflows détaillés (Sales Commissions, Dispatch, ESG/CSRD, Loyalty), commandes d’audit grep pré-migration',
+      'Auto-perspective : inférence revue avec listes de termes élargies (support, BA, architecte, dev), approche par score plutôt que premier match, signaux forts (code, traceback, _inherit) prioritaires, fallback BA au lieu de Dev pour les questions fonctionnelles',
+      'Analyse de complexité : les modules OCA et communautaires (Camptocamp, Akretion, Tecnativa…) ne sont plus comptés comme "custom dev" ; nouveau bucket "Modules communautaires" séparé ; seuil Studio relevé à 3 signaux pour éviter les faux positifs',
+      'Drapeaux fiscaux : émoji du pays affiché à côté des sociétés (sélecteur, onglets projets) et de la localisation fiscale dans le panneau contextuel',
+    ],
+  },
+  {
+    version: '0.22.0',
+    date: '2026-05-14',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Navigation : remplacement de la sidebar permanente par une top bar responsive plus compacte',
       'Workspace : ajout d’un panneau contexte repliable avec profil consultant, providers IA, projets et sources Odoo installées',

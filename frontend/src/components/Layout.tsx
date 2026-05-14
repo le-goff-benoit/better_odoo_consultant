@@ -60,7 +60,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <WorkspaceContextState.Provider value={{ contextOpen }}>
         <div className="app-workspace">
           <main className="app-main">
-            <div className="app-page" style={{ maxWidth: maxW }}>
+            <div className="app-page" data-content-width={width} style={{ maxWidth: maxW }}>
               {children}
             </div>
           </main>

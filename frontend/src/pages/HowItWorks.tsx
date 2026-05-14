@@ -514,8 +514,7 @@ function MiniPanel({ title, items, icon: Icon }: { title: string; items: string[
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    maxWidth: 980,
-    margin: '0 auto',
+    width: '100%',
     paddingBottom: 36,
   },
   heroBand: {

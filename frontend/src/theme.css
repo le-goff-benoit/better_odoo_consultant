@@ -589,6 +589,7 @@ textarea:focus-visible {
 }
 .app-page {
   width: 100%; margin: 0 auto; animation: fadeIn .16s ease;
+  transition: max-width .18s ease;
 }
 
 .workspace-context {
@@ -656,11 +657,19 @@ textarea:focus-visible {
   gap: 5px;
 }
 
+.conversation-profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
 .conversation-profile-live {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
   padding: 7px 9px;
   border: 1px solid var(--brand-20);
   border-radius: var(--radius-md);
@@ -674,33 +683,35 @@ textarea:focus-visible {
   text-transform: uppercase;
 }
 
-.conversation-tool-list {
+.conversation-selection-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
 
-.conversation-tool-item {
+.conversation-selection-row {
   min-width: 0;
-  padding: 7px 8px;
-  border: 1px solid var(--th-border);
-  border-radius: var(--radius-md);
-  background: var(--th-bg-card);
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
 }
 
-.conversation-tool-item span,
-.conversation-tool-item small {
-  display: block;
+.conversation-selection-row span {
   color: var(--th-muted);
   font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
 }
 
-.conversation-tool-item strong {
+.conversation-selection-row strong {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  color: var(--th-text);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .migration-content-row {
@@ -1079,6 +1090,7 @@ textarea:focus-visible {
 }
 
 .project-pill-brand { background: var(--brand); color: #fff; }
+.project-pill-neutral { background: var(--th-bg-muted); color: var(--th-text-sub); border-color: var(--th-border); }
 .project-pill-warning { background: var(--th-warning-bg); color: #92400e; border-color: color-mix(in srgb, #d97706 35%, transparent); }
 .project-pill-danger { background: #dc2626; color: #fff; }
 
@@ -1448,7 +1460,57 @@ textarea:focus-visible {
   flex-direction: column;
   height: calc(100vh - 56px);
   min-height: 640px;
-  max-width: 1120px;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Collapse-on-scroll: hide header + collapse context bar when chat is scrolled down */
+.assistant-shell.is-scrolled .page-header,
+.migration-shell.is-scrolled .page-header {
+  max-height: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+.assistant-shell .page-header,
+.migration-shell .page-header {
+  transition: max-height .25s ease, margin-bottom .25s ease, opacity .2s ease, transform .25s ease;
+  max-height: 200px;
+  overflow: hidden;
+}
+.assistant-shell.is-scrolled .assistant-context {
+  margin-bottom: 6px;
+}
+.assistant-shell.is-scrolled .assistant-context .assistant-project-row {
+  padding-block: 0;
+}
+.assistant-shell.is-scrolled .assistant-tabs {
+  padding: 3px 6px;
+}
+.assistant-shell.is-scrolled .assistant-tab-button {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.assistant-shell.is-scrolled .assistant-control-row {
+  padding: 5px 12px;
+}
+.assistant-shell.is-scrolled .assistant-source-warning {
+  padding: 4px 12px;
+  font-size: 11px;
+}
+.migration-shell.is-scrolled .migration-side-row {
+  max-height: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.migration-shell .migration-side-row {
+  transition: max-height .25s ease, margin .25s ease, opacity .2s ease;
+  overflow: hidden;
+  max-height: 420px;
 }
 
 .assistant-context {
@@ -1795,7 +1857,7 @@ textarea:focus-visible {
   box-sizing: border-box;
   min-height: 86px;
   max-height: 180px;
-  padding: 13px 110px 13px 54px;
+  padding: 13px 58px 13px 54px;
   border: 0;
   border-radius: 8px;
   font-size: 14px;
@@ -1805,14 +1867,6 @@ textarea:focus-visible {
   outline: none;
   font-family: inherit;
   line-height: 1.55;
-}
-
-.assistant-perspective-slot {
-  position: absolute;
-  bottom: 13px;
-  right: 56px;
-  display: flex;
-  align-items: center;
 }
 
 .assistant-textarea:focus {
