@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink } from 'react-router-dom'
-import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow } from 'lucide-react'
-import { t } from '../theme'
+import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
@@ -16,6 +15,7 @@ const labels = {
     settings: 'Paramètres',
     about: 'À propos',
     consultant: 'Consultant',
+    context: 'Contexte',
   },
   en: {
     sources: 'Sources',
@@ -26,99 +26,107 @@ const labels = {
     settings: 'Settings',
     about: 'About',
     consultant: 'Consultant',
+    context: 'Context',
   },
 }
 
-const links = [
-  { to: '/sources',   labelKey: 'sources',   icon: Database },
-  { to: '/profiles',  labelKey: 'profiles',  icon: FolderKanban },
+const primaryLinks = [
   { to: '/assistant', labelKey: 'assistant', icon: Bot },
   { to: '/migration', labelKey: 'migration', icon: ArrowRightLeft },
+  { to: '/profiles',  labelKey: 'profiles',  icon: FolderKanban },
+  { to: '/sources',   labelKey: 'sources',   icon: Database },
+]
+
+const secondaryLinks = [
   { to: '/how-it-works', labelKey: 'how', icon: Workflow },
   { to: '/settings',  labelKey: 'settings',  icon: Settings },
   { to: '/about',     labelKey: 'about',     icon: Info },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({
+  contextOpen,
+  onToggleContext,
+}: {
+  contextOpen: boolean
+  onToggleContext: () => void
+}) {
   const { data } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile, staleTime: 60_000 })
   const up = data?.data ?? {}
   const lang = normalizeUiLanguage(up.language)
   const tr = labels[lang]
   const avatarIsImg = (up.avatar as string | undefined)?.startsWith('data:')
+  const ContextIcon = contextOpen ? PanelRightClose : PanelRightOpen
 
   return (
-    <nav style={{
-      width: t.navWidth,
-      minHeight: '100vh',
-      background: t.sidebarBg,
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-      position: 'sticky',
-      top: 0,
-      overflowY: 'auto',
-      borderRight: '1px solid rgba(255,255,255,.06)',
-    }}>
-      {/* Profile header */}
-      <div style={{
-        padding: '18px 16px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        borderBottom: '1px solid rgba(255,255,255,.07)',
-        marginBottom: 8,
-      }}>
-        {/* Avatar / O logo */}
-        <div style={{
-          width: 36, height: 36, borderRadius: 9,
-          background: `var(--brand, #017e84)`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, overflow: 'hidden',
-          boxShadow: '0 2px 8px rgba(0,0,0,.3)',
-        }}>
-          {avatarIsImg
-            ? <img src={up.avatar as string} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="avatar" />
-            : up.avatar && up.avatar !== '👤'
-              ? <span style={{ fontSize: 18 }}>{up.avatar}</span>
-              : <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.5px' }}>O</span>
-          }
+    <header className="app-topbar">
+      <div className="topbar-brand">
+        <div className="topbar-logo">
+          O
         </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {up.name || 'Odoo Portal'}
-          </div>
-          <div style={{ color: 'rgba(255,255,255,.45)', fontSize: 11, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {up.title || tr.consultant}
-          </div>
+        <div className="topbar-title">
+          <div>Odoo Consultant</div>
+          <span>v{APP_VERSION}</span>
         </div>
       </div>
 
-      {/* Nav */}
-      <div style={{ flex: 1, padding: '4px 10px' }}>
-        {links.map(l => {
+      <nav className="topbar-nav" aria-label="Navigation principale">
+        {primaryLinks.map(l => {
           const Icon = l.icon
           return (
-          <NavLink
-            key={l.to}
-            to={l.to}
-            className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
-          >
-            <Icon size={16} aria-hidden />
-            {tr[l.labelKey as keyof typeof tr]}
-          </NavLink>
+            <NavLink
+              key={l.to}
+              to={l.to}
+              className={({ isActive }) => `topbar-link${isActive ? ' active' : ''}`}
+            >
+              <Icon size={16} aria-hidden />
+              {tr[l.labelKey as keyof typeof tr]}
+            </NavLink>
           )
         })}
-      </div>
+      </nav>
 
-      {/* Footer — version only */}
-      <div style={{
-        padding: '8px 16px 12px',
-        borderTop: '1px solid rgba(255,255,255,.06)',
-        display: 'flex', justifyContent: 'space-between',
-      }}>
-        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>v{APP_VERSION}</span>
-        <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 10 }}>© Benoît Le Goff</span>
+      <div className="topbar-spacer" />
+
+      <nav className="topbar-secondary" aria-label="Navigation secondaire">
+        {secondaryLinks.map(l => {
+          const Icon = l.icon
+          return (
+            <NavLink
+              key={l.to}
+              to={l.to}
+              className={({ isActive }) => `topbar-icon-link${isActive ? ' active' : ''}`}
+              title={tr[l.labelKey as keyof typeof tr]}
+            >
+              <Icon size={16} aria-hidden />
+              <span>{tr[l.labelKey as keyof typeof tr]}</span>
+            </NavLink>
+          )
+        })}
+      </nav>
+
+      <button type="button" className="topbar-context-button" onClick={onToggleContext} title={tr.context}>
+        <ContextIcon size={16} />
+        <span>{tr.context}</span>
+      </button>
+
+      <div className="topbar-user">
+        <div className="topbar-avatar">
+          {avatarIsImg
+            ? <img src={up.avatar as string} alt="avatar" />
+            : up.avatar && up.avatar !== '👤'
+              ? <span>{up.avatar}</span>
+              : <span>O</span>
+          }
+        </div>
+        <div className="topbar-user-text">
+          <div>
+            {up.name || 'Odoo Portal'}
+          </div>
+          <span>
+            {up.title || tr.consultant}
+          </span>
+        </div>
       </div>
-    </nav>
+    </header>
   )
 }

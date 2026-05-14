@@ -978,7 +978,14 @@ function ContextEditor() {
 
 // ── User profile editor ──────────────────────────────────────────
 
-const PRESET_COLORS = ['#017e84', '#2563EB', '#7C3AED', '#DC2626', '#D97706', '#16A34A', '#0891B2', '#EC4899', '#374151']
+const ACCENT_PRESETS = [
+  { id: 'teal', color: '#0f766e', labelFr: 'Teal', labelEn: 'Teal' },
+  { id: 'blue', color: '#2563eb', labelFr: 'Bleu', labelEn: 'Blue' },
+  { id: 'indigo', color: '#4f46e5', labelFr: 'Indigo', labelEn: 'Indigo' },
+  { id: 'slate', color: '#475569', labelFr: 'Ardoise', labelEn: 'Slate' },
+  { id: 'emerald', color: '#059669', labelFr: 'Emeraude', labelEn: 'Emerald' },
+  { id: 'amber', color: '#b45309', labelFr: 'Ambre', labelEn: 'Amber' },
+]
 const selectStyle: React.CSSProperties = {
   width: '100%',
   padding: '7px 10px',
@@ -1017,7 +1024,8 @@ function UserProfileEditor() {
       aiLanguage: 'AI response language',
       contextLanguage: 'AI context language',
       automatic: 'Automatic',
-      primaryColor: 'Main menu color',
+      primaryColor: 'Accent color',
+      accentHint: 'Used for primary actions, active states and focus rings. Structural areas stay neutral.',
       other: 'Other',
       theme: 'Display theme',
       light: 'Light',
@@ -1042,7 +1050,8 @@ function UserProfileEditor() {
       aiLanguage: 'Langue des réponses IA',
       contextLanguage: 'Langue du contexte IA',
       automatic: 'Automatique',
-      primaryColor: 'Couleur principale des menus',
+      primaryColor: "Couleur d'accent",
+      accentHint: "Utilisée pour les actions principales, les états actifs et le focus. Les zones de structure restent neutres.",
       other: 'Autre',
       theme: "Thème d'affichage",
       light: 'Clair',
@@ -1107,8 +1116,9 @@ function UserProfileEditor() {
             title={c.avatarTitle}
             style={{
               width: 72, height: 72, borderRadius: '50%',
-              background: form.primaryColor ? `${form.primaryColor}20` : t.brand20,
-              border: `2px solid ${form.primaryColor ? `${form.primaryColor}40` : t.brand40}`,
+              background: t.bgMuted,
+              border: `1px solid ${t.border}`,
+              boxShadow: `inset 0 -3px 0 ${form.primaryColor ?? t.brand}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: avatarIsImage ? 0 : 32, cursor: 'pointer',
               overflow: 'hidden', flexShrink: 0,
@@ -1123,8 +1133,8 @@ function UserProfileEditor() {
           <div style={{ display: 'flex', gap: 4 }}>
             {['👤', '🧑‍💻', '👨‍💼', '👩‍💼', '🦊'].map(em => (
               <button key={em} onClick={() => set('avatar', em)} style={{
-                fontSize: 16, background: form.avatar === em ? t.brand15 : 'transparent',
-                border: `1px solid ${form.avatar === em ? t.brand : t.border}`,
+                fontSize: 16, background: form.avatar === em ? t.bgMuted : 'transparent',
+                border: `1px solid ${form.avatar === em ? t.textSub : t.border}`,
                 borderRadius: 6, padding: '2px 4px', cursor: 'pointer',
               }}>{em}</button>
             ))}
@@ -1180,19 +1190,32 @@ function UserProfileEditor() {
           {/* Color picker */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>{c.primaryColor}</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              {PRESET_COLORS.map(c => (
-                <button key={c} onClick={() => set('primaryColor', c)} style={{
-                  width: 26, height: 26, borderRadius: '50%', background: c, border: 'none',
-                  cursor: 'pointer', outline: form.primaryColor === c ? `3px solid ${c}` : 'none',
-                  outlineOffset: 2, transition: 'outline .1s',
-                }} />
-              ))}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.muted, cursor: 'pointer' }}>
-                <input type="color" value={form.primaryColor ?? '#017e84'}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8 }}>
+              {ACCENT_PRESETS.map(accent => {
+                const active = (form.primaryColor ?? '#0f766e').toLowerCase() === accent.color.toLowerCase()
+                return (
+                <button key={accent.id} onClick={() => set('primaryColor', accent.color)} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  minHeight: 34, padding: '6px 9px',
+                  borderRadius: t.radius, background: active ? t.bgMuted : t.bgCard,
+                  border: `1px solid ${active ? accent.color : t.border}`,
+                  color: active ? t.text : t.textSub,
+                  cursor: 'pointer', fontSize: 12, fontWeight: active ? 650 : 500,
+                  transition: 'background .15s, border-color .15s, color .15s',
+                }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 999, background: accent.color, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.45)' }} />
+                  {lang === 'en' ? accent.labelEn : accent.labelFr}
+                </button>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: t.muted, lineHeight: 1.45 }}>{c.accentHint}</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: t.muted, cursor: 'pointer' }}>
+                <input type="color" value={form.primaryColor ?? '#0f766e'}
                   onChange={e => set('primaryColor', e.target.value)}
-                  style={{ width: 26, height: 26, border: 'none', borderRadius: '50%', padding: 0, cursor: 'pointer' }} />
-                {c.other}
+                  style={{ width: 28, height: 28, border: `1px solid ${t.border}`, borderRadius: 6, padding: 2, cursor: 'pointer', background: t.bgCard }} />
+                {c.customColor}
               </label>
             </div>
           </div>
@@ -1211,9 +1234,9 @@ function UserProfileEditor() {
                   <button key={m.id} onClick={() => set('themeMode', m.id)} style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '6px 14px', borderRadius: t.radius, cursor: 'pointer',
-                    border: `1px solid ${active ? 'var(--brand, #017e84)' : t.border}`,
-                    background: active ? 'var(--brand, #017e84)' : t.bgMuted,
-                    color: active ? '#fff' : t.muted,
+                    border: `1px solid ${active ? t.brand40 : t.border}`,
+                    background: active ? t.brand10 : t.bgMuted,
+                    color: active ? t.text : t.muted,
                     fontSize: 12, fontWeight: active ? 600 : 400,
                     transition: 'all .15s',
                   }}>
@@ -1238,8 +1261,8 @@ function UserProfileEditor() {
                   <button key={id} onClick={() => set('mascotType', id)} style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                     padding: '8px 12px', borderRadius: t.radius, cursor: 'pointer',
-                    border: `2px solid ${active ? (form.mascotColor ?? 'var(--brand, #017e84)') : t.border}`,
-                    background: active ? `${form.mascotColor ?? 'var(--brand, #017e84)'}15` : t.bgMuted,
+                    border: `2px solid ${active ? (form.mascotColor ?? 'var(--brand, #0f766e)') : t.border}`,
+                    background: active ? `${form.mascotColor ?? 'var(--brand, #0f766e)'}15` : t.bgMuted,
                     transition: 'all .15s',
                   }}>
                     <div style={{ height: 44, display: 'flex', alignItems: 'flex-end' }}>{preview}</div>
@@ -1272,7 +1295,7 @@ function UserProfileEditor() {
       </div>
 
       <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={handleSave} className="btn btn-primary" style={{ background: form.primaryColor ?? t.brand }}>
+        <button onClick={handleSave} className="btn btn-primary">
           {saved ? c.saved : c.save}
         </button>
       </div>

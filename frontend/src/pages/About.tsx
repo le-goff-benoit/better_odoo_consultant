@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.21.0',
-    date: '2026-05-13',
+    version: '0.22.0',
+    date: '2026-05-14',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Navigation : remplacement de la sidebar permanente par une top bar responsive plus compacte',
+      'Workspace : ajout d’un panneau contexte repliable avec profil consultant, providers IA, projets et sources Odoo installées',
+      'Design system : typographie modernisée avec Geist Sans / Geist Mono et espacements de navigation harmonisés',
+      'Couleurs : nouvelle logique de couleur d’accent plus sobre, avec presets nommés et usage limité aux actions, focus et états actifs',
+      'Migration : ajout du support des documents joints dans les requêtes de migration, aligné avec l’Assistant IA',
+    ],
+  },
+  {
+    version: '0.21.0',
+    date: '2026-05-13',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Internationalisation UI : migration FR/EN des écrans historiques principaux (Sources, Projets, Assistant IA, Migration, Paramètres, À propos, Dashboard, Requêtes, Historique)',
       'Composants communs : sidebar, largeur de contenu, toggle de perspective et helpers i18n harmonisés',

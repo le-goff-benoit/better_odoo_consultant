@@ -544,7 +544,7 @@ export default function Sources() {
                     <input type="checkbox"
                       checked={enterprise[version] ?? false}
                       onChange={e => setEnterprise(p => ({ ...p, [version]: e.target.checked }))}
-                      style={{ accentColor: 'var(--brand, #017e84)', width: 14, height: 14 }} />
+                      style={{ accentColor: 'var(--brand, #0f766e)', width: 14, height: 14 }} />
                     <span style={{ color: t.muted }}>
                       {c.includeEnterprise}
                       {entInfo?.installed && (
@@ -658,7 +658,7 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
       )}
       {entInfo?.installed && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--brand, #017e84)', fontWeight: 700 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--brand-muted-text)', fontWeight: 700 }}>
             <CheckCircle2 size={12} /> Enterprise
           </span>
           <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{entInfo.head}</span>

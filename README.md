@@ -5,7 +5,7 @@
 L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.21.0**
+> Version actuelle : **0.22.0**
 
 ---
 
@@ -85,7 +85,7 @@ Voici le flux typique pour commencer à travailler sur un nouveau projet client 
 La page **Fonctionnement** explique le flux complet de l'application sous forme d'un diagramme vertical, du haut vers le bas.
 
 Elle détaille comment le portail combine :
-- la **configuration utilisateur** : nom, poste, équipe, thème, couleur primaire et préférences d'interface ;
+- la **configuration utilisateur** : nom, poste, équipe, thème, couleur d'accent et préférences d'interface ;
 - la **configuration des providers IA** : clés API, provider actif, modèle choisi et modèles activés/désactivés ;
 - la **perspective de réponse** : AM/BA pour une réponse métier, Archi/Dev pour une réponse technique ;
 - les **fichiers Markdown de contexte** : `skills.md`, `studio.md`, `migration.md`, `meeting-minute.md`, `odoo-*.md` ;
@@ -95,6 +95,13 @@ Elle détaille comment le portail combine :
 - les **outils IA** : données live Odoo, lecture du code source, inspection Studio, comptage de lignes, etc.
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
+
+La version 0.22 modernise aussi l'interface :
+- navigation principale dans une **top bar responsive** ;
+- panneau **Contexte workspace** repliable avec profil, providers IA, projets et sources Odoo ;
+- typographie **Geist Sans / Geist Mono** ;
+- personnalisation couleur recentrée sur une **couleur d'accent** sobre ;
+- documents joints disponibles dans l'Assistant IA et les requêtes de Migration.
 
 ---
 

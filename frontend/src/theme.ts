@@ -1,9 +1,9 @@
 // Design tokens — colors use CSS custom properties for theme support
 export const t = {
   // Brand (set dynamically via --brand CSS var)
-  brand:       'var(--brand, #017e84)',
-  brandDark:   '#015f64',
-  brandLight:  '#e6f4f5',
+  brand:       'var(--brand, #0f766e)',
+  brandDark:   '#115e59',
+  brandLight:  '#f0fdfa',
   // Transparent brand variants — use these instead of ${t.brand}XX (invalid on CSS vars)
   brand10: 'var(--brand-10)',
   brand15: 'var(--brand-15)',
@@ -12,14 +12,14 @@ export const t = {
   brand60: 'var(--brand-60)',
 
   // Sidebar
-  sidebarBg:        'var(--th-sidebar-bg, #1e293b)',
+  sidebarBg:        'var(--th-bg-card, #ffffff)',
   sidebarHover:     '#334155',
   sidebarActive:    '#0f172a',
   sidebarText:      'rgba(255,255,255,.72)',
   sidebarTextActive:'#ffffff',
 
   // Backgrounds
-  bg:       'var(--th-bg, #f8fafc)',
+  bg:       'var(--th-bg, #f7f8fa)',
   bgCard:   'var(--th-bg-card, #ffffff)',
   bgMuted:  'var(--th-bg-muted, #f1f5f9)',
 
@@ -31,7 +31,7 @@ export const t = {
 
   // Borders
   border:      'var(--th-border, #e2e8f0)',
-  borderFocus: 'var(--brand, #017e84)',
+  borderFocus: 'var(--brand, #0f766e)',
   borderLight: 'var(--th-border-light, #f1f5f9)',
 
   // Status
@@ -49,8 +49,8 @@ export const t = {
   shadowLg: '0 20px 48px rgba(0,0,0,.18)',
 
   // Aliases
-  action:      'var(--brand, #017e84)',
-  actionHover: '#015f64',
+  action:      'var(--brand, #0f766e)',
+  actionHover: '#115e59',
   white:       'var(--th-white, #ffffff)',
 
   // Shape
@@ -61,7 +61,7 @@ export const t = {
   radiusFull: 'var(--radius-full)',
 
   // Type
-  font:     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  font:     "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   fontSize: 'var(--font-base)',
   navWidth: '232px',
 } as const
@@ -70,7 +70,7 @@ import type React from 'react'
 
 export const btn = {
   primary: {
-    padding: '8px 18px', background: 'var(--brand, #017e84)', color: '#fff',
+    padding: '8px 18px', background: 'var(--brand, #0f766e)', color: '#fff',
     border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 650, cursor: 'pointer', minHeight: 36,
   } as React.CSSProperties,
   secondary: {

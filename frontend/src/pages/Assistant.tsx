@@ -11,6 +11,18 @@ import MascotThinking from '../components/MascotThinking'
 import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
 import { useUiLanguage } from '../i18n'
+import {
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_MAX_FILES,
+  ATTACHMENT_MAX_TOTAL_CHARS,
+  attachmentMeta,
+  attachmentPayload,
+  fileKind,
+  fileToBase64,
+  formatFileSize,
+  type AttachmentDraft,
+  type AttachmentMeta,
+} from '../utils/attachments'
 
 function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
   const def = ODOO_APPS[name]
@@ -66,30 +78,6 @@ interface SavedConv {
   version?: string   // Odoo version at time of save
   createdAt: number
   updatedAt: number
-}
-
-type AttachmentKind = 'text' | 'pdf'
-type AttachmentStatus = 'ready' | 'error'
-
-interface AttachmentPayload {
-  name: string
-  mime_type: string
-  size: number
-  kind: AttachmentKind
-  text?: string
-  content_base64?: string
-}
-
-interface AttachmentMeta {
-  name: string
-  size: number
-  kind: AttachmentKind
-}
-
-interface AttachmentDraft extends AttachmentPayload {
-  id: string
-  status: AttachmentStatus
-  error?: string
 }
 
 // ── Conversation history helpers ───────────────────────────────
@@ -258,44 +246,6 @@ const assistantCopy = {
 const ODOO_VERSIONS_BASE = ['19.0', '18.0', '17.0', '16.0', '15.0']
 
 const GENERAL_KEY = 'general'
-const ATTACHMENT_MAX_FILES = 5
-const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
-const ATTACHMENT_TEXT_EXTENSIONS = new Set(['txt', 'md', 'csv', 'json', 'xml', 'py', 'log'])
-const ATTACHMENT_MAX_TOTAL_CHARS = 40_000
-
-function fileExt(name: string): string {
-  return name.split('.').pop()?.toLowerCase() ?? ''
-}
-
-function fileKind(file: File): AttachmentKind | null {
-  const ext = fileExt(file.name)
-  if (ext === 'pdf') return 'pdf'
-  if (ATTACHMENT_TEXT_EXTENSIONS.has(ext)) return 'text'
-  return null
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = String(reader.result ?? '')
-      resolve(result.includes(',') ? result.split(',')[1] : result)
-    }
-    reader.onerror = () => reject(reader.error ?? new Error('Lecture impossible'))
-    reader.readAsDataURL(file)
-  })
-}
-
-function attachmentMeta(att: AttachmentDraft): AttachmentMeta {
-  return { name: att.name, size: att.size, kind: att.kind }
-}
-
 // ── Main page ─────────────────────────────────────────────────
 
 export default function Assistant() {
@@ -632,7 +582,7 @@ export default function Assistant() {
     const useGeneral = overrideVersion != null ? true : isGeneralMode
 
     try {
-      const cleanAttachments = attached.map(({ id: _id, status: _status, error: _error, ...payload }) => payload)
+      const cleanAttachments = attached.map(attachmentPayload)
       const body = useGeneral
         ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId, perspective }
         : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective }
