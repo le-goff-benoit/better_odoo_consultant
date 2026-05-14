@@ -7,6 +7,15 @@ from typing import AsyncIterator, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from ..services.odoo_client import OdooClient
 
+from ..core.context_constants import (
+    MAX_CONTEXT_CHARS as _MAX_CONTEXT_CHARS,
+    MAX_PROJECT_CONTEXT_CHARS as _MAX_PROJECT_CONTEXT_CHARS,
+    MAX_HISTORY_TURNS as _MAX_HISTORY_TURNS,
+    MAX_TOOL_RESULT_HISTORY_CHARS as _MAX_TOOL_RESULT_HISTORY_CHARS,
+    CLAUDE_MAX_OUTPUT_TOKENS as _CLAUDE_MAX_OUTPUT_TOKENS,
+    GEMINI_MAX_OUTPUT_TOKENS as _GEMINI_MAX_OUTPUT_TOKENS,
+)
+
 log = logging.getLogger(__name__)
 
 # ── Tool definitions ─────────────────────────────────────────────
@@ -29,16 +38,14 @@ _TOOL_SEARCH_SRC = {
     "description": (
         "Rechercher dans le code source Odoo local (grep). "
         "Utilise pour trouver des modèles, méthodes, champs, modules, noms corrects de modèles. "
-        "Cherche dans Community et Enterprise quand les deux sources sont installées. "
-        "Retourne les lignes correspondantes avec fichier et numéro de ligne, préfixées par community/ ou enterprise/ si utile."
+        "Retourne les lignes correspondantes avec fichier et numéro de ligne."
     ),
 }
 _TOOL_READ_SRC = {
     "name": "read_odoo_file",
     "description": (
         "Lire le contenu d'un fichier du code source Odoo local. "
-        "Utilise après search_odoo_source pour voir l'implémentation complète. "
-        "Accepte les chemins préfixés community/ ou enterprise/."
+        "Utilise après search_odoo_source pour voir l'implémentation complète."
     ),
 }
 _TOOL_SEARCH_REPO = {
@@ -394,9 +401,6 @@ COPILOT_HEADERS         = {
 
 # ── System prompt ────────────────────────────────────────────────
 
-_MAX_CONTEXT_CHARS = 40_000  # ~10k tokens — prevents hitting model limits
-_MAX_PROJECT_CONTEXT_CHARS = 12_000
-
 
 def _trim_context(ctx: str) -> str:
     if len(ctx) <= _MAX_CONTEXT_CHARS:
@@ -410,28 +414,57 @@ def _trim_project_context(ctx: str) -> str:
     return ctx[:_MAX_PROJECT_CONTEXT_CHARS] + "\n\n[...contexte projet tronqué — trop long pour le modèle...]"
 
 
-# ── Perspective (support / ba / architect / developer) ──────────
-PERSPECTIVE_SUPPORT = "support"
-PERSPECTIVE_BUSINESS_ANALYST = "business_analyst"
-PERSPECTIVE_ARCHITECT = "architect"
-PERSPECTIVE_DEVELOPER = "developer"
-_VALID_PERSPECTIVES = {PERSPECTIVE_SUPPORT, PERSPECTIVE_BUSINESS_ANALYST, PERSPECTIVE_ARCHITECT, PERSPECTIVE_DEVELOPER}
+# ── Perspective (functional / technical) ─────────────────────────
+
+PERSPECTIVE_TECHNICAL = "technical"
+PERSPECTIVE_FUNCTIONAL = "functional"
+_VALID_PERSPECTIVES = {PERSPECTIVE_TECHNICAL, PERSPECTIVE_FUNCTIONAL}
 _VALID_RESPONSE_LANGUAGES = {"auto", "fr", "en"}
 
 
 def _normalize_perspective(p: Optional[str]) -> str:
     if p in _VALID_PERSPECTIVES:
         return p  # type: ignore[return-value]
-    legacy = {"functional": PERSPECTIVE_BUSINESS_ANALYST, "technical": PERSPECTIVE_DEVELOPER}
-    if p in legacy:
-        return legacy[p]
-    return PERSPECTIVE_DEVELOPER
+    return PERSPECTIVE_TECHNICAL
 
 
 def _normalize_response_language(language: Optional[str]) -> str:
     if language in _VALID_RESPONSE_LANGUAGES:
         return language  # type: ignore[return-value]
     return "auto"
+
+
+# ── History trimming ─────────────────────────────────────────
+
+def _trim_history(messages: list) -> list:
+    """Drop oldest conversation turns to stay within _MAX_HISTORY_TURNS pairs.
+
+    Always keeps the most recent turns. After trimming, ensures the first
+    retained message has role == 'user' (providers require alternating roles
+    starting with 'user').
+    """
+    if len(messages) <= _MAX_HISTORY_TURNS * 2:
+        return messages
+    trimmed = messages[-(  _MAX_HISTORY_TURNS * 2):]
+    # Ensure we start on a user turn
+    while trimmed and trimmed[0].get("role") != "user":
+        trimmed = trimmed[1:]
+    return trimmed
+
+
+def _compress_tool_result(result: dict) -> str:
+    """Serialize a tool result for storage in the messages array.
+
+    The returned string is capped at _MAX_TOOL_RESULT_HISTORY_CHARS so that
+    large tool outputs (Studio audit, source searches) don’t bloat the context
+    window across many turns. The full result is still streamed to the frontend
+    via the SSE 'tool_result' event before this compressed copy is stored.
+    """
+    raw = json.dumps(result, ensure_ascii=False, default=str)
+    if len(raw) <= _MAX_TOOL_RESULT_HISTORY_CHARS:
+        return raw
+    suffix = "...[résultat tronqué dans l'historique — complet dans le panneau contextuel]"
+    return raw[: _MAX_TOOL_RESULT_HISTORY_CHARS - len(suffix)] + suffix
 
 
 def _language_block(response_language: Optional[str]) -> str:
@@ -463,7 +496,7 @@ def _perspective_block(perspective: str, *, migration: bool = False) -> str:
     to bias the assistant's reasoning, vocabulary and output format."""
     perspective = _normalize_perspective(perspective)
 
-    if perspective in {PERSPECTIVE_SUPPORT, PERSPECTIVE_BUSINESS_ANALYST}:
+    if perspective == PERSPECTIVE_FUNCTIONAL:
         common = """## Perspective : FONCTIONNELLE (AM / Business Analyst)
 
 Tu réponds comme un **Application Manager / Business Analyst Odoo**, pas comme un développeur.
@@ -512,7 +545,7 @@ Cette perspective est active pour la requête en cours : si l'utilisateur vient 
 """
         return common.strip() + "\n\n---\n"
 
-    # Technical perspectives
+    # Technical perspective (default)
     common = """## Perspective : TECHNIQUE (Architecte / Développeur)
 
 Tu réponds comme un **architecte ou développeur Odoo senior**.
@@ -539,19 +572,17 @@ Cette perspective est active pour la requête en cours : si l'utilisateur vient 
     return common.strip() + "\n\n---\n"
 
 
-def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_DEVELOPER, response_language: str = "auto") -> str:
+def build_system(profile, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
     perspective_md = _perspective_block(perspective, migration=False)
     language_md = _language_block(response_language)
     source_section = ""
     if source_path:
         source_section = f"""
 Code source Odoo disponible localement : {source_path}
-IMPORTANT : Pour toute question sur des modèles, champs, méthodes, comportements Odoo ou localisations l10n, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.
-Si les sources Enterprise de la même version sont installées, les outils les parcourent aussi et retournent des chemins préfixés `enterprise/`.
+IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.
 Exemples d'utilisation :
 - Trouver un modèle : search_odoo_source(pattern="_name = 'sale.order'")
 - Trouver une méthode : search_odoo_source(pattern="def action_confirm", path="addons/sale")
-- Trouver une localisation suisse : search_odoo_source(pattern="QR", path="l10n_ch_reports", file_types=["*.py","*.xml"])
 - Lire un fichier : read_odoo_file(path="addons/account/models/account_move.py", start_line=1, end_line=100)
 """
     else:
@@ -618,19 +649,19 @@ def build_system_migration(
     target_path: Optional[str] = None,
     context_md: str = "",
     repo_path: Optional[str] = None,
-    perspective: str = PERSPECTIVE_DEVELOPER,
+    perspective: str = PERSPECTIVE_TECHNICAL,
     response_language: str = "auto",
 ) -> str:
     perspective_md = _perspective_block(perspective, migration=True)
     language_md = _language_block(response_language)
     src_section = (
         f"Sources Odoo VERSION SOURCE ({source_version}) disponibles : {source_path}\n"
-        "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source, Community et Enterprise si disponibles."
+        "→ Utilise search_odoo_source / read_odoo_file pour explorer le code de la version source."
     ) if source_path else f"Sources Odoo VERSION SOURCE ({source_version}) : non disponibles (téléchargez-les depuis la page Sources)."
 
     tgt_section = (
         f"Sources Odoo VERSION CIBLE ({target_version}) disponibles : {target_path}\n"
-        "→ Utilise search_target_source / read_target_file pour explorer le code de la version cible, Community et Enterprise si disponibles."
+        "→ Utilise search_target_source / read_target_file pour explorer le code de la version cible."
     ) if target_path else f"Sources Odoo VERSION CIBLE ({target_version}) : non disponibles (téléchargez-les depuis la page Sources)."
 
     repo_section = (
@@ -678,17 +709,15 @@ def build_system_migration(
 """
 
 
-def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_DEVELOPER, response_language: str = "auto") -> str:
+def build_system_general(version: str, source_path: Optional[str] = None, context_md: str = "", repo_path: Optional[str] = None, perspective: str = PERSPECTIVE_TECHNICAL, response_language: str = "auto") -> str:
     perspective_md = _perspective_block(perspective, migration=False)
     language_md = _language_block(response_language)
     source_section = (
         f"Code source Odoo disponible localement : {source_path}\n"
-        "IMPORTANT : Pour toute question sur des modèles, champs, méthodes, comportements Odoo ou localisations l10n, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
-        "Les sources Enterprise de la même version sont aussi consultées quand elles sont installées.\n"
+        "IMPORTANT : Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, utilise SYSTÉMATIQUEMENT search_odoo_source avant de répondre. Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
         "Exemples d'utilisation :\n"
         "- Trouver un modèle : search_odoo_source(pattern=\"_name = 'sale.order'\")\n"
         "- Trouver une méthode : search_odoo_source(pattern=\"def action_confirm\", path=\"addons/sale\")\n"
-        "- Trouver une localisation suisse : search_odoo_source(pattern=\"QR\", path=\"l10n_ch_reports\", file_types=[\"*.py\",\"*.xml\"])\n"
         "- Lire un fichier : read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)\n"
     ) if source_path else "Code source non disponible pour cette version.\n"
 
@@ -713,111 +742,66 @@ def _safe_source_path(source_path: str, sub_path: str) -> Optional[str]:
     """Return an absolute path only if it stays within source_path."""
     base = os.path.realpath(source_path)
     full = os.path.realpath(os.path.join(source_path, sub_path)) if sub_path else base
-    return full if full == base or full.startswith(base + os.sep) else None
-
-
-def _source_roots(source_path: str) -> list[tuple[str, str]]:
-    """Return source roots to inspect, adding the Enterprise sibling when present."""
-    roots: list[tuple[str, str]] = []
-    base = os.path.realpath(source_path)
-    name = os.path.basename(base)
-    if name.endswith("-enterprise"):
-        if os.path.isdir(base):
-            roots.append(("enterprise", base))
-        return roots
-    if os.path.isdir(base):
-        roots.append(("community", base))
-    enterprise = os.path.realpath(os.path.join(os.path.dirname(base), f"{name}-enterprise"))
-    if os.path.isdir(enterprise):
-        roots.append(("enterprise", enterprise))
-    return roots
-
-
-def _split_source_prefix(path: str) -> tuple[Optional[str], str]:
-    clean = (path or "").strip().lstrip("/")
-    if clean.startswith("community/"):
-        return "community", clean[len("community/"):]
-    if clean.startswith("enterprise/"):
-        return "enterprise", clean[len("enterprise/"):]
-    return None, clean
+    return full if full.startswith(base) else None
 
 
 async def _search_odoo_source(args: dict, source_path: str) -> dict:
     pattern    = args.get("pattern", "")
-    prefix, sub_path = _split_source_prefix(args.get("path", "") or "")
+    sub_path   = args.get("path", "") or ""
     file_types = args.get("file_types") or ["*.py"]
+
+    search_dir = _safe_source_path(source_path, sub_path)
+    if not search_dir:
+        return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
+    if not os.path.isdir(search_dir):
+        return {"ok": False, "error": f"Dossier introuvable : {sub_path or source_path}"}
 
     includes = []
     for ft in file_types[:4]:  # max 4 types
         includes += ["--include", ft]
 
-    raw_lines: list[tuple[str, str]] = []
-    searched: list[str] = []
-    missing: list[str] = []
-    for root_prefix, root in _source_roots(source_path):
-        if prefix and prefix != root_prefix:
-            continue
-        search_dir = _safe_source_path(root, sub_path)
-        if not search_dir:
-            return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
-        if not os.path.isdir(search_dir):
-            missing.append(f"{root_prefix}/{sub_path or '.'}")
-            continue
-        searched.append(f"{root_prefix}/{sub_path or '.'}")
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "grep", "-r", "-n", "-i", "-m", "200",
-                *includes,
-                pattern, search_dir,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-        except asyncio.TimeoutError:
-            return {"ok": False, "error": "Timeout — pattern trop large, affinez la recherche"}
-        raw_lines.extend((root_prefix, line) for line in stdout.decode("utf-8", errors="replace").splitlines())
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "grep", "-r", "-n", "-i", "-m", "200",
+            *includes,
+            pattern, search_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "Timeout — pattern trop large, affinez la recherche"}
 
-    if not searched:
-        return {"ok": False, "error": f"Dossier introuvable : {sub_path or source_path}"}
+    raw_lines = stdout.decode("utf-8", errors="replace").splitlines()
+    base_real = os.path.realpath(source_path) + os.sep
 
     by_file: dict = {}
-    root_map = {root_prefix: os.path.realpath(root) + os.sep for root_prefix, root in _source_roots(source_path)}
-    for root_prefix, line in raw_lines[:200]:
+    for line in raw_lines[:200]:
         parts = line.split(":", 2)
         if len(parts) < 3:
             continue
         file_abs, linenum, content = parts[0], parts[1], parts[2]
-        rel = file_abs.replace(root_map[root_prefix], "")
-        rel = f"{root_prefix}/{rel}"
+        rel = file_abs.replace(base_real, "")
         if rel not in by_file:
             by_file[rel] = []
         by_file[rel].append({"line": int(linenum), "content": content.strip()})
 
     if not by_file:
-        return {"ok": True, "matches": 0, "files": {}, "searched": searched, "missing": missing, "note": "Aucune correspondance — essayez un autre pattern ou chemin"}
+        return {"ok": True, "matches": 0, "files": {}, "note": "Aucune correspondance — essayez un autre pattern ou chemin"}
 
-    return {"ok": True, "matches": len(raw_lines), "searched": searched, "missing": missing, "files": by_file}
+    return {"ok": True, "matches": len(raw_lines), "files": by_file}
 
 
 async def _read_odoo_file(args: dict, source_path: str) -> dict:
-    prefix, rel_path = _split_source_prefix(args.get("path", ""))
+    rel_path   = args.get("path", "")
     start_line = max(1, int(args.get("start_line") or 1))
     end_line   = int(args.get("end_line") or 0)
 
-    file_abs = None
-    file_prefix = prefix
-    for root_prefix, root in _source_roots(source_path):
-        if prefix and prefix != root_prefix:
-            continue
-        candidate = _safe_source_path(root, rel_path)
-        if not candidate:
-            return {"ok": False, "error": "Chemin invalide"}
-        if os.path.isfile(candidate):
-            file_abs = candidate
-            file_prefix = root_prefix
-            break
+    file_abs = _safe_source_path(source_path, rel_path)
     if not file_abs:
-        return {"ok": False, "error": f"Fichier introuvable : {prefix + '/' if prefix else ''}{rel_path}"}
+        return {"ok": False, "error": "Chemin invalide"}
+    if not os.path.isfile(file_abs):
+        return {"ok": False, "error": f"Fichier introuvable : {rel_path}"}
 
     try:
         with open(file_abs, "r", encoding="utf-8", errors="replace") as f:
@@ -833,7 +817,7 @@ async def _read_odoo_file(args: dict, source_path: str) -> dict:
     content = "".join(all_lines[s:e])
     return {
         "ok":         True,
-        "path":       f"{file_prefix}/{rel_path}" if file_prefix else rel_path,
+        "path":       rel_path,
         "start_line": s + 1,
         "end_line":   e,
         "total_lines": total,
@@ -1235,12 +1219,16 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
     client = anthropic.AsyncAnthropic(api_key=api_key)
     loop_msgs = list(messages)
 
+    # Wrap system in a list with cache_control so the static prefix is cached
+    # by Anthropic’s prompt-caching layer (~90% cost reduction on repeat turns).
+    system_payload = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+
     total_in = total_out = 0
     for _ in range(10):
         response = await client.messages.create(
             model=model_id,
-            max_tokens=4096,
-            system=system,
+            max_tokens=_CLAUDE_MAX_OUTPUT_TOKENS,
+            system=system_payload,
             messages=loop_msgs,
             tools=tools,
         )
@@ -1258,7 +1246,7 @@ async def _chat_claude(api_key: str, model_id: str, system: str, messages: list,
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
-                        "content": json.dumps(result, ensure_ascii=False, default=str),
+                        "content": _compress_tool_result(result),
                     })
             loop_msgs.append({"role": "assistant", "content": response.content})
             loop_msgs.append({"role": "user", "content": tool_results})
@@ -1295,7 +1283,7 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
                 yield {"type": "tool_result", "name": tc.function.name, **result}
                 oai_msgs.append({
                     "role": "tool", "tool_call_id": tc.id,
-                    "content": json.dumps(result, ensure_ascii=False, default=str),
+                    "content": _compress_tool_result(result),
                 })
         else:
             yield {"type": "text", "content": choice.message.content or ""}
@@ -1358,6 +1346,7 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
         model_name=model_id,
         system_instruction=system,
         tools=tools,
+        generation_config={"max_output_tokens": _GEMINI_MAX_OUTPUT_TOKENS},
     )
 
     history = []
@@ -1385,7 +1374,7 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
             last_msg = genai.protos.Content(parts=[genai.protos.Part(
                 function_response=genai.protos.FunctionResponse(
                     name=fc.name,
-                    response={"result": json.dumps(result, ensure_ascii=False, default=str)},
+                    response={"result": _compress_tool_result(result)},
                 )
             )], role="user")
         else:
@@ -1415,12 +1404,15 @@ async def stream_chat(
     target_path: Optional[str] = None,
     migration_mode: bool = False,
     target_version: Optional[str] = None,
-    perspective: str = PERSPECTIVE_DEVELOPER,
+    perspective: str = PERSPECTIVE_TECHNICAL,
     response_language: str = "auto",
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
     perspective = _normalize_perspective(perspective)
     response_language = _normalize_response_language(response_language)
+
+    # Trim conversation history to avoid context-window overflow on long sessions.
+    messages = _trim_history(messages)
 
     user_ctx = ""
     if user_profile:
