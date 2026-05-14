@@ -1,9 +1,9 @@
 // Design tokens — colors use CSS custom properties for theme support
 export const t = {
-  // Brand (set dynamically via --brand CSS var)
-  brand:       'var(--brand, #0f766e)',
-  brandDark:   '#115e59',
-  brandLight:  '#f0fdfa',
+  // Brand (set dynamically via --brand CSS var) — Aperture-style orange.
+  brand:       'var(--brand, #FF6B00)',
+  brandDark:   '#d95a00',
+  brandLight:  '#fff5ec',
   // Transparent brand variants — use these instead of ${t.brand}XX (invalid on CSS vars)
   brand10: 'var(--brand-10)',
   brand15: 'var(--brand-15)',
@@ -11,12 +11,12 @@ export const t = {
   brand40: 'var(--brand-40)',
   brand60: 'var(--brand-60)',
 
-  // Sidebar
+  // Sidebar (legacy aliases — kept for backwards compat in inline styles).
   sidebarBg:        'var(--th-bg-card, #ffffff)',
-  sidebarHover:     '#334155',
-  sidebarActive:    '#0f172a',
-  sidebarText:      'rgba(255,255,255,.72)',
-  sidebarTextActive:'#ffffff',
+  sidebarHover:     'var(--th-bg-muted)',
+  sidebarActive:    'var(--th-text)',
+  sidebarText:      'var(--th-text-sub)',
+  sidebarTextActive:'var(--th-text)',
 
   // Backgrounds
   bg:       'var(--th-bg, #f7f8fa)',
@@ -34,14 +34,14 @@ export const t = {
   borderFocus: 'var(--brand, #0f766e)',
   borderLight: 'var(--th-border-light, #f1f5f9)',
 
-  // Status
-  success:   '#16a34a',
-  successBg: 'var(--th-success-bg, #f0fdf4)',
-  warning:   '#d97706',
-  warningBg: 'var(--th-warning-bg, #fffbeb)',
-  danger:    '#dc2626',
-  dangerBg:  'var(--th-danger-bg, #fef2f2)',
-  info:      '#2563eb',
+  // Status (industrial palette aligned with the neo-retro design)
+  success:   '#2f7a3f',
+  successBg: 'var(--th-success-bg, #e8f5e2)',
+  warning:   '#c97a00',
+  warningBg: 'var(--th-warning-bg, #fef3d8)',
+  danger:    '#c0392b',
+  dangerBg:  'var(--th-danger-bg, #fde8e8)',
+  info:      '#1f4ec3',
 
   // Shadows
   shadow:   'var(--th-shadow)',
@@ -49,8 +49,8 @@ export const t = {
   shadowLg: '0 20px 48px rgba(0,0,0,.18)',
 
   // Aliases
-  action:      'var(--brand, #0f766e)',
-  actionHover: '#115e59',
+  action:      'var(--brand, #FF6B00)',
+  actionHover: '#d95a00',
   white:       'var(--th-white, #ffffff)',
 
   // Shape
@@ -61,33 +61,53 @@ export const t = {
   radiusFull: 'var(--radius-full)',
 
   // Type
-  font:     "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  font:     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  fontDisplay: "'Space Grotesk', 'Inter', system-ui, sans-serif",
+  fontMono:    "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   fontSize: 'var(--font-base)',
   navWidth: '232px',
 } as const
 
 import type React from 'react'
 
+// Neo-retro inline button presets. Borders are 2px, corners square,
+// labels uppercase with display-font letter-spacing. These mirror the
+// .btn-* classes in theme.css for callers that compose inline styles.
+const neoButtonBase: React.CSSProperties = {
+  fontFamily: "'Space Grotesk', system-ui, sans-serif",
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '.04em',
+  cursor: 'pointer',
+  minHeight: 36,
+  borderRadius: 0,
+}
+
 export const btn = {
   primary: {
-    padding: '8px 18px', background: 'var(--brand, #0f766e)', color: '#fff',
-    border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 650, cursor: 'pointer', minHeight: 36,
+    ...neoButtonBase,
+    padding: '8px 18px', background: 'var(--brand, #FF6B00)', color: '#fff',
+    border: '2px solid var(--brand, #FF6B00)', fontSize: 14,
   } as React.CSSProperties,
   secondary: {
-    padding: '8px 16px', background: 'transparent', color: 'var(--th-text-sub, #334155)',
-    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: 'var(--radius-md)', fontSize: 14, cursor: 'pointer', minHeight: 36,
+    ...neoButtonBase,
+    padding: '8px 16px', background: 'var(--th-bg-card)', color: 'var(--th-text)',
+    border: '2px solid var(--th-border)', fontSize: 14,
   } as React.CSSProperties,
   ghost: {
-    padding: '7px 14px', background: 'var(--th-bg-muted, #f1f5f9)', color: 'var(--th-text-sub, #334155)',
-    border: '1px solid var(--th-border, #e2e8f0)', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer', fontWeight: 500, minHeight: 36,
+    ...neoButtonBase,
+    padding: '7px 14px', background: 'transparent', color: 'var(--th-text-sub)',
+    border: '2px solid var(--th-border-soft, var(--th-border))', fontSize: 13,
   } as React.CSSProperties,
   danger: {
-    padding: '8px 16px', background: '#dc2626', color: '#fff',
-    border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 650, cursor: 'pointer', minHeight: 36,
+    ...neoButtonBase,
+    padding: '8px 16px', background: '#c0392b', color: '#fff',
+    border: '2px solid #c0392b', fontSize: 14,
   } as React.CSSProperties,
   outline: (color: string): React.CSSProperties => ({
+    ...neoButtonBase,
     padding: '7px 14px', background: 'transparent',
-    border: `1px solid ${color}`, color,
-    borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer', fontWeight: 600, minHeight: 36,
+    border: `2px solid ${color}`, color,
+    fontSize: 13,
   }),
 }
