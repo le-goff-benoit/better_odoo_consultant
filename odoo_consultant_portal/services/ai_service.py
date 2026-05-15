@@ -881,10 +881,13 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
             "→ Pour toute question sur des modèles, champs, méthodes ou comportements Odoo, "
             "utilise SYSTÉMATIQUEMENT `search_odoo_source` avant de répondre. "
             "Ne suppose jamais un nom de modèle ou de champ — vérifie dans le code source.\n"
+            "STRUCTURE : modules Community sous `community/addons/<module>/`, "
+            "modules Enterprise directement sous `enterprise/<module>/` (PAS sous addons/).\n"
             "Exemples :\n"
-            "- `search_odoo_source(pattern=\"_name = 'sale.order'\")`\n"
-            "- `search_odoo_source(pattern=\"def action_confirm\", path=\"addons/sale\")`\n"
-            "- `read_odoo_file(path=\"addons/account/models/account_move.py\", start_line=1, end_line=100)`"
+            "- `search_odoo_source(pattern=\"_name = 'sale.order'\")`  ← sans path = cherche partout (C+E)\n"
+            "- `search_odoo_source(pattern=\"def action_confirm\", path=\"addons/sale\")`  ← module Community\n"
+            "- `search_odoo_source(pattern=\"_name = 'helpdesk.ticket'\", path=\"enterprise/helpdesk\")`  ← module Enterprise\n"
+            "- `read_odoo_file(path=\"community/addons/account/models/account_move.py\", start_line=1, end_line=100)`"
         )
     else:
         parts.append("### Code source Odoo\nNon disponible pour cette version (téléchargez-les depuis la page Sources).")

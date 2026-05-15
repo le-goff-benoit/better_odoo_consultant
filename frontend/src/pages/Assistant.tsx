@@ -1516,7 +1516,7 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
       <div style={{ maxWidth: '78%' }}>
         <div style={{
           padding: '10px 14px',
-          background: 'var(--th-text)', color: 'var(--th-bg)',
+          background: 'var(--brand)', color: 'var(--brand-contrast)',
           borderRadius: `${t.radiusLg} ${t.radiusLg} 4px ${t.radiusLg}`,
           fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap',
         }}>
@@ -1527,8 +1527,8 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
                 <span key={`${att.name}-${att.size}`} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '3px 7px', borderRadius: 999,
-                  background: 'rgba(128,128,128,.18)', border: '1px solid rgba(128,128,128,.28)',
-                  color: 'var(--th-bg)', fontSize: 11, fontWeight: 650, maxWidth: 260,
+                  background: 'rgba(0,0,0,.18)', border: '1px solid rgba(0,0,0,.22)',
+                  color: 'var(--brand-contrast)', fontSize: 11, fontWeight: 650, maxWidth: 260,
                 }}>
                   <Paperclip size={12} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>

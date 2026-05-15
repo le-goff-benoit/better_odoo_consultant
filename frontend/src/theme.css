@@ -38,9 +38,9 @@
   --boa-topbar-hover: #eef2f6;
 
   /* Light theme: "blueprint lab" — near-white with very dark text */
-  --th-bg: #f5f5f3;
-  --th-bg-card: #ffffff;
-  --th-bg-muted: #ebebe7;
+  --th-bg: color-mix(in srgb, var(--brand) 5%, #f5f5f3);
+  --th-bg-card: color-mix(in srgb, var(--brand) 2%, #ffffff);
+  --th-bg-muted: color-mix(in srgb, var(--brand) 4%, #ebebe7);
   --th-text: #0a0a0a;
   --th-text-sub: #2a2a2a;
   --th-muted: #6b6b6b;
@@ -104,9 +104,9 @@
 
 [data-theme="dark"] {
   /* Dark theme: "terminal console" — near-black with phosphor highlights */
-  --th-bg: #1b1f27;
-  --th-bg-card: #232832;
-  --th-bg-muted: #2c323d;
+  --th-bg: color-mix(in srgb, var(--brand) 5%, #1b1f27);
+  --th-bg-card: color-mix(in srgb, var(--brand) 3%, #232832);
+  --th-bg-muted: color-mix(in srgb, var(--brand) 4%, #2c323d);
   --th-text: #f4f5f7;
   --th-text-sub: #d9dde4;
   --th-muted: #aab2c0;
@@ -135,9 +135,9 @@
 }
 
 [data-theme="sepia"] {
-  --th-bg: #f5f0e8;
-  --th-bg-card: #faf7f2;
-  --th-bg-muted: #ede8de;
+  --th-bg: color-mix(in srgb, var(--brand) 4%, #f5f0e8);
+  --th-bg-card: color-mix(in srgb, var(--brand) 2%, #faf7f2);
+  --th-bg-muted: color-mix(in srgb, var(--brand) 3%, #ede8de);
   --th-text: #2c1a0a;
   --th-text-sub: #5c3d1e;
   --th-muted: #8b6a45;
