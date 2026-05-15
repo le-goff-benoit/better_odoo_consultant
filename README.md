@@ -5,7 +5,7 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.26.0** — topbar avec horloge live · sélecteurs neo-retro unifiés · détection complexité technique fiabilisée
+> Version actuelle : **0.27.0** — streaming en arrière-plan · indicateurs nav · historique Migration · tints brand dynamiques
 
 ---
 
@@ -130,6 +130,17 @@ La version 0.24 **optimise les coûts d'API IA** :
 - `search_odoo_source` : option `case_sensitive` (défaut `true` pour les patterns de code), retour distinct `files_count` vs `matches`, suggestions de fallback si 0 hit (insensible casse / sans accents / restreindre `path`) ;
 - `stop_reason` Claude `max_tokens` et `refusal` surfacés comme événement `warning` SSE et affichés en bulle grise — fin des troncatures silencieuses ;
 - inférence perspective côté serveur si un client envoie `perspective="auto"` — utile pour CLI / mobile.
+
+La version 0.27 **ajoute le streaming en arrière-plan et l'historique Migration** :
+- une requête lancée sur Assistant IA ou Migration **continue de s'exécuter** même si on navigue ailleurs — les messages s'accumulent dans un buffer module-level hors du cycle React et sont réinjectés au retour sur la page ;
+- **indicateurs de streaming dans la topbar** : point pulsant sur les liens Assistant et Migration pendant une réponse en cours, point vert quand le résultat est disponible ;
+- **indicateurs par onglet projet** : chaque onglet projet dans l'Assistant affiche son propre dot de streaming/done indépendant ;
+- **historique de la page Migration** : les conversations sont sauvegardées en localStorage par paire de versions (ex: 16.0 C+E → 17.0 C+E), avec titre auto-généré, panneau historique accessible depuis un bouton en haut de page ;
+- **bulles utilisateur et fonds tintés** : les bulles de saisie utilisent `var(--brand)`, les fonds de l'application utilisent `color-mix()` avec la couleur d'accent choisie — l'interface reflète subtilement la personnalisation couleur ;
+- **texte gras en couleur brand légère** : les éléments `<strong>` dans les réponses IA utilisent `color-mix(40% brand + 60% text)` pour un rappel discret sans surcharger la lecture ;
+- **badge C+E en Migration** et recherche étendue aux sources Enterprise dans les sélecteurs source/cible ;
+- **limite de boucle outils portée à 25 itérations** avec garde anti-répétition — les requêtes nécessitant de nombreux appels d'outils n'échouent plus prématurément ;
+- **correction chemin Enterprise** : les modules Enterprise (helpdesk, etc.) sont à la racine `enterprise/<module>/`, pas sous `addons/` — les outils de recherche gèrent désormais les deux structures.
 
 La version 0.25 **refond l'interface en identité Better Odoo Assistant neo-retro** :
 - inspirations HARRY.SYS + Portal Aperture + Arc Raiders, avec une marque propre à l'app ;

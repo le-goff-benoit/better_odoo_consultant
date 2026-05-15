@@ -7,10 +7,29 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.26.0',
+    version: '0.27.0',
     date: '2026-05-15',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Streaming en arrière-plan : une requête lancée sur Assistant IA ou Migration continue de s\'exécuter même si on navigue vers une autre page — les messages s\'accumulent dans un buffer module-level hors du cycle React',
+      'Indicateurs visuels de streaming dans la topbar : point animé (pulsant) sur les liens Assistant et Migration pendant une réponse en cours, point vert quand la réponse est disponible',
+      'Indicateurs par onglet projet : chaque onglet projet et l\'onglet Odoo Général affichent un dot de streaming/done indépendant dans l\'Assistant IA',
+      'Historique de la page Migration : les conversations migration sont sauvegardées en localStorage avec titre auto-généré, date et versions source/cible — panneau historique accessible depuis le bouton en haut de page',
+      'Clé de session Migration : les conversations sont segmentées par paire de versions (ex: 16.0 C+E → 17.0 C+E) — changer les sélecteurs ouvre une nouvelle conversation sans effacer la précédente',
+      'Bulles utilisateur avec couleur brand : fond var(--brand) + texte var(--brand-contrast) sur Assistant IA et Migration pour personnalisation cohérente avec l\'accent choisi',
+      'Fonds tintés dynamiques : --th-bg, --th-card, --th-muted utilisent color-mix(var(--brand), base) dans les 3 thèmes — le fond de l\'app reflète subtilement la couleur choisie',
+      'Texte gras en couleur brand légère : les balises <strong> dans les réponses IA utilisent color-mix(40% brand + 60% text) pour un rappel discret de la couleur d\'accent',
+      'Badge C+E en page Migration : les sélecteurs source et cible affichent un badge "Sources C+E ✓" quand les deux éditions sont disponibles, et la recherche est étendue aux sources Enterprise',
+      'Limite de boucle outils augmentée : range(10) → range(25) itérations + garde anti-répétition (>3 appels identiques → erreur explicite) pour les requêtes complexes nécessitant de nombreux appels d\'outils',
+      'Correction chemin modules Enterprise : les modules Enterprise (ex: helpdesk) sont à la racine enterprise/<module>/, pas sous addons/ — les outils de recherche et de lecture gèrent désormais les deux structures',
+    ],
+  },
+  {
+    version: '0.26.0',
+    date: '2026-05-15',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Horloge système en temps réel dans la topbar : date ISO + heure HH:MM:SS dans des blocs mono bordés (masqués sous 1100px)',
       'Séparateur vertical supprimé entre les groupes de navigation — seul l\'espace suffit',
