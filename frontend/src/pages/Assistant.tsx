@@ -402,12 +402,17 @@ export default function Assistant() {
   const messageListRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
   const [isScrolled, setIsScrolled] = useState(false)
+  const streamingRef = useRef(false)
 
-  // Collapse top bar when user scrolls down in the chat (> 40px)
+  // Keep streamingRef in sync so the scroll handler never reads stale state
+  useEffect(() => { streamingRef.current = streaming }, [streaming])
+
+  // Collapse top bar on scroll — frozen during streaming to prevent header oscillation
   useEffect(() => {
     const el = messageListRef.current
     if (!el) return
     const onScroll = () => {
+      if (streamingRef.current) return
       const top = el.scrollTop
       setIsScrolled(prev => {
         if (!prev && top > 80) return true
