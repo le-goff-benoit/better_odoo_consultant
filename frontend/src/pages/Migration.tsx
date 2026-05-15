@@ -1625,25 +1625,7 @@ export default function Migration() {
 
   return (
     <div className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
-      <PageHeader
-        title={c.title}
-        description={c.description}
-        action={
-          <button
-            onClick={resetConversation}
-            title={c.clearConversation}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
-              background: t.bgMuted, border: `1px solid ${t.border}`,
-              fontSize: 12, color: t.muted, fontWeight: 600,
-            }}
-          >
-            <ArrowRightLeft size={13} />
-            {c.newAnalysis}
-          </button>
-        }
-      />
+      <PageHeader title={c.title} description={c.description} />
 
 
       <div className="migration-content-row">
@@ -1668,6 +1650,16 @@ export default function Migration() {
             />
 
             <div style={{ flex: 1 }} />
+
+            {/* New analysis button — always visible so it survives header collapse on scroll */}
+            <button
+              onClick={resetConversation}
+              title={c.clearConversation}
+              className="assistant-soft-action"
+            >
+              <ArrowRightLeft size={13} />
+              <span>{c.newAnalysis}</span>
+            </button>
 
             {/* History button */}
             {(messages.length > 0 || migHistory.length > 0) && (
