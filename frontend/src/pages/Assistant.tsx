@@ -911,10 +911,6 @@ export default function Assistant() {
           {/* Project tabs */}
           {profiles.map(p => {
             const isActive = p.id === profileId
-            const profileCompanies = parseCompanies(p.company_ids)
-            const profileCountry = profileCompanies.find(c => c.id === p.selected_company_id)?.country_code
-              ?? profileCompanies[0]?.country_code
-            const tabFlag = countryFlag(profileCountry)
             const tabSigEntry = streamingSignals.getAll().find(([k]) => k === String(p.id))
             const tabSig = tabSigEntry?.[1]
             return (
@@ -924,7 +920,6 @@ export default function Assistant() {
                   : <Building2 size={14} />
                 }
                 {p.name}
-                {tabFlag && <span style={{ fontSize: 12, lineHeight: 1, opacity: 0.85 }}>{tabFlag}</span>}
                 {tabSig && <span className={`stream-dot stream-dot--${tabSig.status}`} aria-hidden />}
               </button>
             )
@@ -1193,8 +1188,10 @@ export default function Assistant() {
       {/* History panel */}
       {showHistory && convKey && (
         <div className="assistant-history-panel">
-          <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{c.history}</span>
+          <div style={{ padding: '12px 14px 10px', borderBottom: `var(--neo-border-w) solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: t.text, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+              <History size={14} /> {c.history}
+            </span>
             <button onClick={() => setShowHistory(false)} className="ui-icon-button" aria-label={c.close} title={c.close}><X size={15} /></button>
           </div>
           {(savedConvs[convKey] ?? []).length === 0

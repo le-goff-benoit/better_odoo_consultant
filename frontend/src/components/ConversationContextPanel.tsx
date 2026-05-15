@@ -96,11 +96,10 @@ export default function ConversationContextPanel({
     }
 
   const flag = countryFlag(countryCode)
-  const companyWithFlag = company && flag ? `${flag} ${company}` : company
   const selectionRows = [
     { label: c.project, value: project || c.general },
     { label: c.environment, value: environment },
-    { label: c.company, value: companyWithFlag },
+    { label: c.company, value: company },
     { label: c.complexity, value: complexity },
     { label: c.version, value: version || undefined },
     { label: c.target, value: targetVersion || undefined },

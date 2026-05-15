@@ -1919,8 +1919,10 @@ export default function Migration() {
       {/* History side panel */}
       {showHistory && (
         <div className="assistant-history-panel">
-          <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{lang === 'fr' ? 'Historique' : 'History'}</span>
+          <div style={{ padding: '12px 14px 10px', borderBottom: `var(--neo-border-w) solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: t.text, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+              <History size={14} /> {lang === 'fr' ? 'Historique' : 'History'}
+            </span>
             <button onClick={() => setShowHistory(false)} className="ui-icon-button" aria-label={lang === 'fr' ? 'Fermer' : 'Close'} title={lang === 'fr' ? 'Fermer' : 'Close'}><X size={15} /></button>
           </div>
           {migHistory.length === 0

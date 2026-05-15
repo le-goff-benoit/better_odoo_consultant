@@ -998,6 +998,9 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Breathing room so the side selectors / composer don't touch the
+     context panel's left border. */
+  padding-right: 16px;
 }
 
 /* ── Perspective toggle ─────────────────────────────────────────────────── */
@@ -2382,11 +2385,11 @@ textarea:focus-visible {
   flex-shrink: 0;
   overflow-y: auto;
   background: var(--th-bg-card);
-  border: 1px solid var(--th-border);
-  border-radius: 8px;
+  border: var(--neo-border-w) solid var(--th-border);
+  border-radius: 0;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--th-shadow);
+  box-shadow: none;
 }
 
 .assistant-company-bar {

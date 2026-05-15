@@ -7,10 +7,38 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.28.0',
+    version: '0.30.0',
     date: '2026-05-15',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Drapeau pays retiré des onglets projet (Assistant IA) et de la ligne Société du panneau de contexte — la localisation fiscale reste visible sur sa propre ligne',
+      'Panneau Historique réaligné sur le design neo-rétro : coins carrés, bordure franche, suppression de l\'ombre portée ; en-tête en police display majuscule avec icône — cohérent avec les panneaux de contexte',
+      'Page Migration : le panneau Cible et la zone de conversation ne sont plus collés au panneau de contexte (padding droit sur la colonne principale)',
+    ],
+  },
+  {
+    version: '0.29.0',
+    date: '2026-05-15',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Avertissement explicite quand les sources Odoo clonées ne correspondent pas à la version de l\'instance — fin du repli silencieux sur une autre version',
+      'Module base et cœur du framework (odoo/models.py, fields.py, api.py) adressables par les outils de recherche : repli automatique addons/base → odoo/addons/base, instructions corrigées',
+      'Liste des apps Odoo installées sur l\'instance injectée dans le contexte projet — l\'IA sait quelles apps tournent réellement avant de répondre',
+      'Routage du contexte markdown sur les 3 derniers tours utilisateur — une question de suivi courte garde le domaine de la conversation',
+      'Notes de version Odoo chargées uniquement pour les questions liées aux versions ou en mode migration — budget de contexte préservé',
+      'Localisation fiscale et complexité technique intégrées au budget de contexte comme blocs prioritaires — plus de troncature silencieuse',
+      'Détection Studio fiabilisée : basée sur les enregistrements studio_customization (fin des faux positifs sur les champs state=manual créés hors Studio)',
+      'inspect_studio dédupliqué : l\'outil live et l\'analyse de complexité partagent une seule implémentation (-176 lignes)',
+      'Confiance de l\'analyse de complexité abaissée quand Odoo n\'est pas joignable ; module studio_customization plus jamais compté comme dev custom',
+    ],
+  },
+  {
+    version: '0.28.0',
+    date: '2026-05-15',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Panneau "Conversation context" sticky sur Assistant IA et Migration : le panneau latéral reste visible pendant le scroll de la conversation, via une contrainte hauteur viewport sur migration-shell identique à assistant-shell',
       'Auto-scroll pendant le streaming restauré : la liste de messages descend automatiquement en bas au fil de la rédaction, sauf si l\'utilisateur a remonté manuellement pour lire',
