@@ -7,10 +7,25 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.27.0',
+    version: '0.28.0',
     date: '2026-05-15',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Panneau "Conversation context" sticky sur Assistant IA et Migration : le panneau latéral reste visible pendant le scroll de la conversation, via une contrainte hauteur viewport sur migration-shell identique à assistant-shell',
+      'Auto-scroll pendant le streaming restauré : la liste de messages descend automatiquement en bas au fil de la rédaction, sauf si l\'utilisateur a remonté manuellement pour lire',
+      'Markdown : listes numérotées (1. 2. 3.) rendues comme des items de liste stylisés — n\'apparaissaient plus comme du texte brut',
+      'Markdown : l\'italique (*texte*) est maintenant rendu en <em> dans les deux pages Assistant et Migration',
+      'Temps de réponse sur Migration : le chrono avec icône Timer apparaît sous chaque réponse IA, comme sur l\'Assistant IA',
+      'Anti-oscillation du header pendant le streaming : le collapse-on-scroll est gelé pendant une réponse en cours — plus de vibration du bloc de contexte et du header',
+      'Sources Enterprise dans le contexte migration (FR + EN) : règle critique documentée — toujours chercher dans enterprise/<module>/ pour comptabilité, rapprochement bancaire, helpdesk, abonnements, planning avant de conclure à une absence',
+    ],
+  },
+  {
+    version: '0.27.0',
+    date: '2026-05-15',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Streaming en arrière-plan : une requête lancée sur Assistant IA ou Migration continue de s\'exécuter même si on navigue vers une autre page — les messages s\'accumulent dans un buffer module-level hors du cycle React',
       'Indicateurs visuels de streaming dans la topbar : point animé (pulsant) sur les liens Assistant et Migration pendant une réponse en cours, point vert quand la réponse est disponible',

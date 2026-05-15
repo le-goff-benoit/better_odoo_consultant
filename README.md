@@ -5,7 +5,7 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.27.0** — streaming en arrière-plan · indicateurs nav · historique Migration · tints brand dynamiques
+> Version actuelle : **0.28.0** — context sticky · markdown complet · anti-oscillation header · sources Enterprise
 
 ---
 
@@ -130,6 +130,14 @@ La version 0.24 **optimise les coûts d'API IA** :
 - `search_odoo_source` : option `case_sensitive` (défaut `true` pour les patterns de code), retour distinct `files_count` vs `matches`, suggestions de fallback si 0 hit (insensible casse / sans accents / restreindre `path`) ;
 - `stop_reason` Claude `max_tokens` et `refusal` surfacés comme événement `warning` SSE et affichés en bulle grise — fin des troncatures silencieuses ;
 - inférence perspective côté serveur si un client envoie `perspective="auto"` — utile pour CLI / mobile.
+
+La version 0.28 **consolide l'expérience de conversation** :
+- **panneau "Conversation context" sticky** sur Assistant IA et Migration : le panneau reste visible pendant le scroll, via une contrainte hauteur viewport sur `migration-shell` calquée sur `assistant-shell` ;
+- **auto-scroll pendant le streaming** restauré : la liste de messages suit la rédaction automatiquement, sauf si l'utilisateur remonte pour lire ;
+- **markdown enrichi** : listes numérotées (`1. 2. 3.`) et italique (`*texte*`) rendus correctement dans les deux pages ;
+- **temps de réponse sur Migration** : le chrono avec icône Timer apparaît sous chaque réponse IA, comme sur l'Assistant ;
+- **anti-oscillation du header** : le collapse-on-scroll est gelé pendant le streaming — plus de vibration du bloc de contexte et du header ;
+- **sources Enterprise dans le contexte migration** (FR + EN) : règle critique documentée — toujours chercher dans `enterprise/<module>/` pour comptabilité, rapprochement bancaire, helpdesk, abonnements, planning.
 
 La version 0.27 **ajoute le streaming en arrière-plan et l'historique Migration** :
 - une requête lancée sur Assistant IA ou Migration **continue de s'exécuter** même si on navigue ailleurs — les messages s'accumulent dans un buffer module-level hors du cycle React et sont réinjectés au retour sur la page ;
