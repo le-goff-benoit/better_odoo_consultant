@@ -118,7 +118,7 @@ const STEPS = [
 const profilesCopy = {
   fr: {
     steps: ['Projet', 'Connexion', 'GitHub'],
-    title: 'Mes projets Odoo.sh',
+    title: 'Mes projets Odoo',
     description: 'Gérez vos connexions aux instances Odoo de vos clients.',
     newProject: 'Nouveau projet',
     editProject: (name: string) => `Modifier — ${name || 'projet'}`,
@@ -164,11 +164,11 @@ const profilesCopy = {
     complexityError: 'Impossible d’analyser la complexité',
     deleteTitle: 'Supprimer ce projet',
     noProject: 'Aucun projet configuré',
-    noProjectDesc: 'Ajoutez votre premier projet Odoo.sh pour commencer.',
+    noProjectDesc: 'Ajoutez votre premier projet Odoo pour commencer.',
   },
   en: {
     steps: ['Project', 'Connection', 'GitHub'],
-    title: 'My Odoo.sh projects',
+    title: 'My Odoo projects',
     description: 'Manage connections to your clients’ Odoo instances.',
     newProject: 'New project',
     editProject: (name: string) => `Edit — ${name || 'project'}`,
@@ -214,7 +214,7 @@ const profilesCopy = {
     complexityError: 'Unable to analyze complexity',
     deleteTitle: 'Delete this project',
     noProject: 'No project configured',
-    noProjectDesc: 'Add your first Odoo.sh project to get started.',
+    noProjectDesc: 'Add your first Odoo project to get started.',
   },
 }
 
@@ -528,7 +528,7 @@ export default function Profiles() {
                     }}
                   />
                 </Field>
-                <Field label="URL Odoo.sh (optionnel)" hint="Lien vers votre tableau de bord Odoo.sh" optional>
+                <Field label="URL tableau de bord (optionnel)" hint="Lien vers votre tableau de bord (Odoo.sh, SaaS, etc.)" optional>
                   <input style={styles.input} value={form.odoo_sh_url} onChange={set('odoo_sh_url')}
                     placeholder="https://www.odoo.sh/project/…" />
                 </Field>
@@ -1195,7 +1195,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
             <div className="project-section-title">{c.quickActions}</div>
             {(profile.odoo_sh_url || ghUrl) && (
               <div className="project-link-list project-link-list-compact">
-                {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon={<Cloud size={12} />} color={t.brand} />}
+                {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Dashboard" icon={<Cloud size={12} />} color={t.brand} />}
                 {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon={<GitBranch size={12} />} color={t.textSub} />}
               </div>
             )}
@@ -1343,7 +1343,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                     </select>
                   </div>
                   <div className="ui-field">
-                    <label style={styles.label}>Branche Odoo.sh <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
+                    <label style={styles.label}>Branche <span style={{ color: t.muted, fontWeight: 400 }}>(optionnel)</span></label>
                     <input style={styles.input} value={envForm.branch} onChange={setEnv('branch')} placeholder="staging" />
                   </div>
                 </div>
