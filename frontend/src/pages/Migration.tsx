@@ -1056,7 +1056,7 @@ function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: str
 
 function inlineMarkdown(text: string): React.ReactNode {
   return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} style={{ color: 'var(--brand)' }}>{part.slice(2, -2)}</strong>
     if (part.startsWith('`') && part.endsWith('`')) return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
     return part
   })
