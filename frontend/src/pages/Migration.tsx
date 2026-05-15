@@ -1630,11 +1630,8 @@ export default function Migration() {
 
       <div className="migration-content-row">
         <div className="migration-main-column">
-      {/* Context bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-        paddingBottom: 14, borderBottom: `1px solid ${t.border}`, marginBottom: 14,
-      }}>
+      {/* Context bar — mirrors assistant-control-row layout */}
+      <div className="assistant-control-row" style={{ borderBottom: `1px solid ${t.border}`, marginBottom: 14 }}>
         {configuredProviders.length === 0 ? (
           <span style={{ fontSize: 13, color: t.muted }}>
             {c.noProvider}
@@ -1649,29 +1646,29 @@ export default function Migration() {
               setModelId={setModelId}
             />
 
-            <div style={{ flex: 1 }} />
+            <div className="assistant-control-spacer" />
 
-            {/* New analysis button — always visible so it survives header collapse on scroll */}
-            <button
-              onClick={resetConversation}
-              title={c.clearConversation}
-              className="assistant-soft-action"
-            >
-              <ArrowRightLeft size={13} />
-              <span>{c.newAnalysis}</span>
-            </button>
-
-            {/* History button */}
-            {(messages.length > 0 || migHistory.length > 0) && (
+            <div className="assistant-control-group">
               <button
-                onClick={() => setShowHistory(h => !h)}
-                title={lang === 'fr' ? `Historique (${migHistory.length})` : `History (${migHistory.length})`}
-                className={`assistant-soft-action${showHistory ? ' is-active' : ''}`}
+                onClick={resetConversation}
+                title={c.clearConversation}
+                className="assistant-soft-action"
               >
-                <History size={13} />
-                <span>{lang === 'fr' ? 'Historique' : 'History'} ({migHistory.length})</span>
+                <ArrowRightLeft size={13} />
+                <span>{c.newAnalysis}</span>
               </button>
-            )}
+
+              {(messages.length > 0 || migHistory.length > 0) && (
+                <button
+                  onClick={() => setShowHistory(h => !h)}
+                  title={lang === 'fr' ? `Historique (${migHistory.length})` : `History (${migHistory.length})`}
+                  className={`assistant-soft-action${showHistory ? ' is-active' : ''}`}
+                >
+                  <History size={13} />
+                  <span>{lang === 'fr' ? 'Historique' : 'History'} ({migHistory.length})</span>
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
