@@ -1185,6 +1185,27 @@ export default function Assistant() {
       </div>
       </div>
 
+      {contextOpen && (
+        <ConversationContextPanel
+          mode={perspectiveMode}
+          effectivePerspective={perspective}
+          onModeChange={setPerspective}
+          disabled={streaming}
+          provider={currentProv?.label}
+          model={currentProv?.models.find(m => m.id === modelId)?.label}
+          project={isGeneralMode ? undefined : selectedProfile?.name}
+          environment={activeEnvObj?.name}
+          company={activeCompanyName}
+          countryCode={activeCompany?.country_code}
+          localization={activeCompanyLocalization}
+          complexity={activeComplexity}
+          version={activeVersion}
+          repo={activeEnvRepo}
+          contextFiles={contextFiles}
+          sources={conversationSources}
+          attachments={readyAttachments.map(a => a.name)}
+        />
+      )}
       {/* History panel */}
       {showHistory && convKey && (
         <div className="assistant-history-panel">
@@ -1226,27 +1247,6 @@ export default function Assistant() {
             ))
           }
         </div>
-      )}
-      {contextOpen && (
-        <ConversationContextPanel
-          mode={perspectiveMode}
-          effectivePerspective={perspective}
-          onModeChange={setPerspective}
-          disabled={streaming}
-          provider={currentProv?.label}
-          model={currentProv?.models.find(m => m.id === modelId)?.label}
-          project={isGeneralMode ? undefined : selectedProfile?.name}
-          environment={activeEnvObj?.name}
-          company={activeCompanyName}
-          countryCode={activeCompany?.country_code}
-          localization={activeCompanyLocalization}
-          complexity={activeComplexity}
-          version={activeVersion}
-          repo={activeEnvRepo}
-          contextFiles={contextFiles}
-          sources={conversationSources}
-          attachments={readyAttachments.map(a => a.name)}
-        />
       )}
       </div>
     </div>

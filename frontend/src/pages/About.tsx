@@ -7,10 +7,19 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.30.0',
+    version: '0.30.1',
     date: '2026-05-15',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Panneau Historique affiché de façon cohérente à droite du panneau de contexte sur l\'Assistant IA et Migration — l\'ordre des deux panneaux était inversé entre les deux pages',
+    ],
+  },
+  {
+    version: '0.30.0',
+    date: '2026-05-15',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Drapeau pays retiré des onglets projet (Assistant IA) et de la ligne Société du panneau de contexte — la localisation fiscale reste visible sur sa propre ligne',
       'Panneau Historique réaligné sur le design neo-rétro : coins carrés, bordure franche, suppression de l\'ombre portée ; en-tête en police display majuscule avec icône — cohérent avec les panneaux de contexte',
