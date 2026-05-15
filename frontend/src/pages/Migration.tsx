@@ -469,6 +469,9 @@ function SideSelector({
 
   const version = resolveVersion(cfg, profiles)
   const installed = sourcesInstalled(version, sourcesData)
+  const hasCommunity  = version ? (sourcesData?.[version]?.installed === true) : false
+  const hasEnterprise = version ? (sourcesData?.[`${version}-enterprise`]?.installed === true) : false
+  const editionLabel  = hasCommunity && hasEnterprise ? 'C+E' : hasCommunity ? 'C' : hasEnterprise ? 'E' : ''
 
   return (
     <div style={{
@@ -563,7 +566,7 @@ function SideSelector({
               border: `1px solid ${installed ? `${t.success}40` : '#f59e0b'}`,
             }}>
             {installed ? <Check size={10} /> : <TriangleAlert size={10} />}
-            {installed ? 'Sources ✓' : 'Sources ⚠'}
+            {installed ? `Sources${editionLabel ? ` ${editionLabel}` : ''} ✓` : 'Sources ⚠'}
           </span>
         </div>
       )}
@@ -1223,9 +1226,16 @@ export default function Migration() {
     targetVersion,
     migration: true,
   })
+  const srcComm   = sourceVersion ? (srcStatus[sourceVersion]?.installed === true) : false
+  const srcEnt    = sourceVersion ? (srcStatus[`${sourceVersion}-enterprise`]?.installed === true) : false
+  const tgtComm   = targetVersion ? (srcStatus[targetVersion]?.installed === true) : false
+  const tgtEnt    = targetVersion ? (srcStatus[`${targetVersion}-enterprise`]?.installed === true) : false
+  const srcEdition = srcComm && srcEnt ? 'C+E' : srcComm ? 'C' : srcEnt ? 'E' : ''
+  const tgtEdition = tgtComm && tgtEnt ? 'C+E' : tgtComm ? 'C' : tgtEnt ? 'E' : ''
+
   const conversationSources = [
-    sourceVersion && sourcesInstalled(sourceVersion, srcStatus) ? `Sources Odoo ${sourceVersion}` : null,
-    targetVersion && sourcesInstalled(targetVersion, srcStatus) ? `Sources cible ${targetVersion}` : null,
+    sourceVersion && (srcComm || srcEnt) ? `Sources Odoo ${sourceVersion}${srcEdition ? ` ${srcEdition}` : ''}` : null,
+    targetVersion && (tgtComm || tgtEnt) ? `Sources cible ${targetVersion}${tgtEdition ? ` ${tgtEdition}` : ''}` : null,
     sourceRepoName && sourceRepoIsCloned ? sourceRepoName.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
   ].filter(Boolean) as string[]
 

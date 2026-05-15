@@ -409,9 +409,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         version = req.version or "?"
         _gen_target_ver = req.target_version
         source_path: Optional[str] = None
-        candidate = str(Path.home() / ".odoo-consultant" / "sources" / version)
+        _src_base = Path.home() / ".odoo-consultant" / "sources"
+        candidate = str(_src_base / version)
         if _os.path.isdir(candidate):
             source_path = candidate
+        elif _os.path.isdir(str(_src_base / f"{version}-enterprise")):
+            source_path = str(_src_base / f"{version}-enterprise")
         context_md = load_context_for_prompt(
             version,
             target_version=_gen_target_ver,
@@ -424,9 +427,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         # Migration target resolution
         _gen_target_path = None
         if req.migration_mode and _gen_target_ver:
-            _tgt_c = str(Path.home() / ".odoo-consultant" / "sources" / _gen_target_ver)
+            _tgt_c = str(_src_base / _gen_target_ver)
+            _tgt_e = str(_src_base / f"{_gen_target_ver}-enterprise")
             if _os.path.isdir(_tgt_c):
                 _gen_target_path = _tgt_c
+            elif _os.path.isdir(_tgt_e):
+                _gen_target_path = _tgt_e
 
         async def generate_general():
             try:
@@ -477,9 +483,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
     source_path = None
     _version_to_use = _active_env.get("odoo_version") or profile.odoo_version
-    candidate = str(Path.home() / ".odoo-consultant" / "sources" / _version_to_use) if _version_to_use else ""
+    _sources_base = Path.home() / ".odoo-consultant" / "sources"
+    candidate = str(_sources_base / _version_to_use) if _version_to_use else ""
     if _version_to_use and _os.path.isdir(candidate):
         source_path = candidate
+    elif _version_to_use and _os.path.isdir(str(_sources_base / f"{_version_to_use}-enterprise")):
+        source_path = str(_sources_base / f"{_version_to_use}-enterprise")
     elif not source_path:
         # Fallback : chercher la version la plus récente installée
         sources_base = str(Path.home() / ".odoo-consultant" / "sources")
@@ -509,9 +518,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     _target_version = req.target_version
     if req.migration_mode:
         if _target_version:
-            _tgt_candidate = str(Path.home() / ".odoo-consultant" / "sources" / _target_version)
+            _tgt_candidate = str(_sources_base / _target_version)
+            _tgt_ent = str(_sources_base / f"{_target_version}-enterprise")
             if _os.path.isdir(_tgt_candidate):
                 target_path = _tgt_candidate
+            elif _os.path.isdir(_tgt_ent):
+                target_path = _tgt_ent
         elif req.target_profile_id:
             _tgt_profile = await session.get(Profile, req.target_profile_id)
             if _tgt_profile:
