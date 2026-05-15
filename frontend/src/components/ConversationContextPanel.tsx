@@ -1,7 +1,8 @@
+import type React from 'react'
 import { Bot, Database, FileText, FolderCode, Globe2, PanelRight, Sparkles, Workflow } from 'lucide-react'
 import { useUiLanguage } from '../i18n'
 import type { Perspective, PerspectiveMode } from './PerspectiveToggle'
-import PerspectiveToggle from './PerspectiveToggle'
+import PerspectiveToggle, { PERSPECTIVE_COLORS } from './PerspectiveToggle'
 import { perspectiveLabel } from '../utils/aiContext'
 import { countryFlag } from '../utils/countryFlag'
 
@@ -115,7 +116,8 @@ export default function ConversationContextPanel({
 
       <ContextBlock icon={<Sparkles size={15} />} label={c.profile}>
         <div className="conversation-profile-card">
-          <div className="conversation-profile-live">
+          <div className="conversation-profile-live"
+            style={{ '--persp-color': PERSPECTIVE_COLORS[effectivePerspective] } as React.CSSProperties}>
             <strong>{perspectiveLabel(effectivePerspective, lang)}</strong>
             <span>{mode === 'auto' ? c.automatic : c.manual}</span>
           </div>

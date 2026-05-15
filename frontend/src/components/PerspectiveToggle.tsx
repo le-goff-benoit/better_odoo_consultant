@@ -5,6 +5,14 @@ import { useUiLanguage } from '../i18n'
 export type Perspective = 'support' | 'business_analyst' | 'architect' | 'developer'
 export type PerspectiveMode = Perspective | 'auto'
 
+export const PERSPECTIVE_COLORS: Record<PerspectiveMode, string> = {
+  auto:             '#7c3aed',
+  support:          '#0f766e',
+  business_analyst: '#2563eb',
+  architect:        '#9333ea',
+  developer:        '#c0392b',
+}
+
 const STORAGE_PREFIX = 'perspective:'
 
 export function loadPerspective(scope: string, fallback: PerspectiveMode = 'auto'): PerspectiveMode {
@@ -65,13 +73,7 @@ export default function PerspectiveToggle({
     }
 
   // Accent colors per perspective. `auto` echoes the inferred perspective's color.
-  const colors: Record<PerspectiveMode, string> = {
-    auto: '#7c3aed',
-    support: '#0f766e',
-    business_analyst: '#2563eb',
-    architect: '#9333ea',
-    developer: '#0f172a',
-  }
+  const colors = PERSPECTIVE_COLORS
 
   const items = [
     { id: 'auto',             icon: <Sparkles  size={iconSize} />, title: lang === 'en' ? 'Automatic' : 'Automatique', label: copy.auto },

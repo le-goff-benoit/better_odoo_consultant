@@ -922,13 +922,13 @@ textarea:focus-visible {
   gap: 8px;
   width: 100%;
   padding: 7px 9px;
-  border: 1px solid var(--brand-20);
+  border: 1px solid color-mix(in srgb, var(--persp-color, var(--brand)) 25%, transparent);
   border-radius: var(--radius-md);
-  background: var(--brand-10);
+  background: color-mix(in srgb, var(--persp-color, var(--brand)) 10%, transparent);
 }
 
 .conversation-profile-live span {
-  color: var(--brand-muted-text);
+  color: color-mix(in srgb, var(--persp-color, var(--brand)) 80%, var(--th-text));
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
