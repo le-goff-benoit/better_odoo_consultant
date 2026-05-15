@@ -108,7 +108,10 @@ REPO_SCAN_EXCLUDED_DIRS = {
 
 
 def _is_odoo_author(author_lower: str) -> bool:
-    if not author_lower or author_lower == "odoo":
+    # Empty author ≠ Odoo. Only treat as Odoo if the string actually names Odoo.
+    if not author_lower:
+        return False
+    if author_lower == "odoo":
         return True
     return any(token in author_lower for token in ODOO_AUTHOR_TOKENS)
 

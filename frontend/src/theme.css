@@ -710,7 +710,8 @@ textarea:focus-visible {
 }
 
 .topbar-nav-separator {
-  width: 12px;
+  display: block;
+  width: 20px;
   flex-shrink: 0;
 }
 
@@ -842,6 +843,7 @@ textarea:focus-visible {
 
 .conversation-context {
   width: 308px;
+  padding: 16px 14px;
 }
 
 .workspace-context-header {
@@ -1008,6 +1010,7 @@ textarea:focus-visible {
 
 .page-grid-profiles {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  align-items: start;
 }
 
 .page-card {
@@ -2026,9 +2029,9 @@ textarea:focus-visible {
 .assistant-version-slot {
   display: flex;
   align-items: center;
-  padding: 0 12px;
+  justify-content: center;
+  padding: 6px 12px;
   flex-shrink: 0;
-  border-left: var(--neo-border-w) solid var(--th-border);
 }
 
 .assistant-control-row {
@@ -2165,43 +2168,38 @@ textarea:focus-visible {
 .assistant-dropdown-item:hover { background: var(--th-bg-muted); }
 .assistant-dropdown-item.is-active { background: var(--brand-10); border-left-color: var(--brand); font-weight: 700; }
 
-/* ── Topbar live clock ─────────────────────────────────────────── */
-.topbar-clock {
-  display: none;
+/* ── PageHeader live clock (replaces the section number block) ─── */
+.neo-section-clock {
+  display: inline-flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  padding: 0 10px 0 8px;
-  border-right: 1px solid var(--boa-topbar-border);
-  flex-shrink: 0;
+  gap: 2px;
+  margin-bottom: 12px;
 }
 
-@media (min-width: 1100px) {
-  .topbar-clock { display: flex; }
-}
-
-.topbar-clock-date {
+.neo-section-clock-date {
+  display: inline-block;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--boa-topbar-muted);
-  border: 1px solid var(--boa-topbar-border);
-  padding: 1px 6px;
-  background: var(--boa-topbar-bg);
+  letter-spacing: .1em;
+  color: var(--th-muted);
+  background: var(--th-bg-muted);
+  border: var(--neo-border-w) solid var(--th-border);
+  padding: 2px 8px;
   line-height: 1.5;
 }
 
-.topbar-clock-time {
+.neo-section-clock-time {
+  display: inline-block;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: .08em;
-  color: var(--boa-topbar-text);
-  border: 1px solid var(--boa-topbar-border);
-  padding: 1px 6px;
-  background: var(--boa-topbar-bg);
+  letter-spacing: .15em;
+  color: var(--th-text);
+  background: var(--th-bg-muted);
+  border: var(--neo-border-w) solid var(--th-border);
+  padding: 3px 10px;
   line-height: 1.5;
 }
 

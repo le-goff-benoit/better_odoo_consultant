@@ -1,31 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen } from 'lucide-react'
-import { useState, useEffect } from 'react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
-
-function useClock() {
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
-  return now
-}
-
-function LiveClock() {
-  const now = useClock()
-  const date = now.toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  return (
-    <div className="topbar-clock" aria-live="off" aria-label="Horloge système">
-      <span className="topbar-clock-date">{date}</span>
-      <span className="topbar-clock-time">{time}</span>
-    </div>
-  )
-}
 
 const labels = {
   fr: {
@@ -100,8 +78,6 @@ export default function Sidebar({
           <span>v{APP_VERSION} · CONSULTING WORKSPACE</span>
         </div>
       </div>
-
-      <LiveClock />
 
       <nav className="topbar-nav" aria-label="Navigation principale">
         {primaryLinks.map(l => {

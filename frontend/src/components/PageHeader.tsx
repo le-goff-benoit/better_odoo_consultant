@@ -1,30 +1,30 @@
-import { ReactNode } from 'react'
+import { ReactNode, useState, useEffect } from 'react'
 
-// Map of page → stable 8-digit code. Lets us number every section in the
-// HARRY.SYS / OPERATIONS.SYS aesthetic without forcing every caller to
-// pass a sectionId. Hash-based assignment from the title.
-function formatSectionId(seed: string | undefined): string {
-  if (!seed) return ''
-  if (/^\d+$/.test(seed)) return seed.padStart(8, '0')
-  // Deterministic small hash → 0001..9999, prefixed to 8 digits.
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) & 0xffff
-  const n = (h % 9999) + 1
-  return String(n).padStart(8, '0')
+function useClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return now
 }
 
-export default function PageHeader({ title, description, action, sectionId }: {
+export default function PageHeader({ title, description, action }: {
   title: string
   description?: string
   action?: ReactNode
-  /** Numeric or label section id. If omitted, derived from the title. */
-  sectionId?: string
 }) {
-  const id = formatSectionId(sectionId ?? title)
+  const now = useClock()
+  const date = now.toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
+  const time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
   return (
     <div className="page-header">
       <div className="page-header-meta">
-        {id && <div className="neo-section-number">{id}</div>}
+        <div className="neo-section-clock">
+          <span className="neo-section-clock-date">{date}</span>
+          <span className="neo-section-clock-time">{time}</span>
+        </div>
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>
