@@ -38,7 +38,11 @@ _TOOL_SEARCH_SRC = {
     "description": (
         "Rechercher dans le code source Odoo local (grep). "
         "Utilise pour trouver des modèles, méthodes, champs, modules, noms corrects de modèles. "
-        "Retourne les lignes correspondantes avec fichier et numéro de ligne."
+        "Retourne les lignes correspondantes avec fichier et numéro de ligne.\n"
+        "STRUCTURE DES SOURCES : les modules Community sont sous addons/<module>/, "
+        "mais les modules Enterprise sont directement à la racine enterprise/<module>/ (PAS sous addons/). "
+        "Exemples : community/addons/sale/, enterprise/helpdesk/, enterprise/account_accountant/. "
+        "Pour chercher dans un module enterprise, utilise path='enterprise/helpdesk' (pas 'addons/helpdesk')."
     ),
 }
 _TOOL_READ_SRC = {
@@ -304,7 +308,10 @@ _TOOL_SEARCH_TARGET = {
         "Rechercher dans le code source Odoo de la VERSION CIBLE de la migration. "
         "Utilise cet outil pour comparer l'implémentation dans la version d'arrivée : "
         "vérifier si un modèle/champ/méthode a changé, été supprimé ou renommé. "
-        "Retourne les lignes correspondantes avec fichier et numéro de ligne."
+        "Retourne les lignes correspondantes avec fichier et numéro de ligne.\n"
+        "STRUCTURE DES SOURCES : modules Community sous addons/<module>/, "
+        "modules Enterprise directement sous enterprise/<module>/ (pas sous addons/). "
+        "Ex : path='enterprise/helpdesk' pour le module Helpdesk enterprise."
     ),
 }
 _TOOL_READ_TARGET = {
@@ -1153,8 +1160,12 @@ def _safe_source_path(source_path: str, sub_path: str, include_enterprise: bool 
         if prefix and label != prefix:
             continue
         full = _safe_join(root, clean_path)
-        if full:
+        if full and os.path.exists(full):
             return full
+        if full and label == "enterprise" and clean_path.startswith("addons/"):
+            alt = _safe_join(root, clean_path[len("addons/"):])
+            if alt and os.path.exists(alt):
+                return alt
     return None
 
 
@@ -1171,6 +1182,12 @@ def _source_search_dirs(source_path: str, sub_path: str, include_enterprise: boo
         full = _safe_join(root, clean_path)
         if full and os.path.isdir(full):
             dirs.append(full)
+        elif label == "enterprise" and clean_path.startswith("addons/"):
+            # Enterprise modules live at root level, not under addons/
+            # e.g. "addons/helpdesk" → try "helpdesk" directly in enterprise root
+            alt = _safe_join(root, clean_path[len("addons/"):])
+            if alt and os.path.isdir(alt):
+                dirs.append(alt)
     return dirs
 
 
