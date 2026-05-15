@@ -1734,7 +1734,8 @@ async def _chat_claude(api_key: str, model_id: str, system, messages: list, odoo
     total_in = total_out = 0
     cache_create = cache_read = 0
 
-    for _ in range(10):
+    _seen_calls: list[tuple[str, str]] = []  # (name, args_json) — loop guard
+    for _ in range(25):
         response = await client.messages.create(
             model=model_id,
             max_tokens=_CLAUDE_MAX_OUTPUT_TOKENS,
@@ -1759,6 +1760,11 @@ async def _chat_claude(api_key: str, model_id: str, system, messages: list, odoo
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
+                    call_sig = (block.name, json.dumps(block.input, sort_keys=True, ensure_ascii=False))
+                    _seen_calls.append(call_sig)
+                    if _seen_calls.count(call_sig) >= 3:
+                        yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
+                        return
                     yield {"type": "tool_call", "name": block.name, "args": block.input}
                     result = await _run_tool(block.name, block.input, odoo, source_path, repo_path, target_path)
                     yield {"type": "tool_result", "name": block.name, **result}
@@ -1814,7 +1820,8 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
         tools = TOOLS_OPENAI
     oai_msgs = [{"role": "system", "content": system}] + messages
     total_in = total_out = 0
-    for _ in range(10):
+    _seen_calls_oai: list[tuple[str, str]] = []
+    for _ in range(25):
         response = await client.chat.completions.create(
             model=model_id, messages=oai_msgs, tools=tools,
         )
@@ -1826,6 +1833,11 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
             oai_msgs.append(choice.message)
             for tc in choice.message.tool_calls:
                 args = json.loads(tc.function.arguments)
+                call_sig = (tc.function.name, json.dumps(args, sort_keys=True, ensure_ascii=False))
+                _seen_calls_oai.append(call_sig)
+                if _seen_calls_oai.count(call_sig) >= 3:
+                    yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
+                    return
                 yield {"type": "tool_call", "name": tc.function.name, "args": args}
                 result = await _run_tool(tc.function.name, args, odoo, source_path, repo_path, target_path)
                 yield {"type": "tool_result", "name": tc.function.name, **result}
@@ -1906,7 +1918,8 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
     chat = model.start_chat(history=history)
     total_in = total_out = 0
 
-    for _ in range(10):
+    _seen_calls_gem: list[tuple[str, str]] = []
+    for _ in range(25):
         response = await loop.run_in_executor(None, lambda: chat.send_message(last_msg))
         if hasattr(response, "usage_metadata") and response.usage_metadata:
             total_in  += getattr(response.usage_metadata, "prompt_token_count",     0) or 0
@@ -1916,6 +1929,11 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
         if hasattr(part, "function_call") and part.function_call.name:
             fc = part.function_call
             args = dict(fc.args)
+            call_sig = (fc.name, json.dumps(args, sort_keys=True, ensure_ascii=False))
+            _seen_calls_gem.append(call_sig)
+            if _seen_calls_gem.count(call_sig) >= 3:
+                yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
+                return
             yield {"type": "tool_call", "name": fc.name, "args": args}
             result = await _run_tool(fc.name, args, odoo, source_path, repo_path, target_path)
             yield {"type": "tool_result", "name": fc.name, **result}
