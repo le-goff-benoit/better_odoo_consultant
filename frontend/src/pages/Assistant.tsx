@@ -382,6 +382,17 @@ export default function Assistant() {
   const [, _rerenderSig] = useState(0)
   useEffect(() => streamingSignals.subscribe(() => _rerenderSig(n => n + 1)), [])
 
+  // Track mount state so we know if the user is watching when a stream ends
+  const isMountedRef = useRef(true)
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false } }, [])
+
+  // Clear done signal as soon as user opens this page (they're now reading it)
+  useEffect(() => {
+    if (!convKey) return
+    const sig = streamingSignals.getAll().find(([k]) => k === convKey)?.[1]
+    if (sig?.status === 'done') streamingSignals.clear(convKey)
+  }, [convKey])
+
   const [input,     setInput]    = useState('')
   const [streaming, setStreaming] = useState(false)
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
@@ -771,7 +782,11 @@ export default function Assistant() {
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id ? { ...m, loading: false } : m
       ))
-      if (convKey) streamingSignals.done(convKey)
+      // If user is watching right now, no need for the "done" indicator — clear directly
+      if (convKey) {
+        if (isMountedRef.current) streamingSignals.clear(convKey)
+        else streamingSignals.done(convKey)
+      }
     }
   }
 

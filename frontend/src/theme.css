@@ -1061,17 +1061,17 @@ textarea:focus-visible {
   vertical-align: middle;
 }
 .stream-dot--streaming {
-  background: var(--brand);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 60%, transparent);
+  background: #f97316;
+  box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.55);
   animation: streamPulse 1.2s ease-in-out infinite;
 }
 .stream-dot--done {
   background: var(--th-success-fg, #6dcf85);
 }
 @keyframes streamPulse {
-  0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--brand) 55%, transparent); }
-  60%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 0%,  transparent); }
-  100% { box-shadow: 0 0 0 0   color-mix(in srgb, var(--brand) 0%,  transparent); }
+  0%   { box-shadow: 0 0 0 0   rgba(249, 115, 22, 0.55); }
+  60%  { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0);    }
+  100% { box-shadow: 0 0 0 0   rgba(249, 115, 22, 0);    }
 }
 
 .page-stack {

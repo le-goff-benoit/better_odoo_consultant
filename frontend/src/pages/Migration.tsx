@@ -1347,6 +1347,16 @@ export default function Migration() {
   const [, _rerenderSig] = useState(0)
   useEffect(() => streamingSignals.subscribe(() => _rerenderSig(n => n + 1)), [])
 
+  // Track mount state so we know if the user is watching when a stream ends
+  const isMountedRef = useRef(true)
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false } }, [])
+
+  // Clear done signal as soon as user opens this page / switches to this key
+  useEffect(() => {
+    const sig = streamingSignals.getAll().find(([k]) => k === migKey)?.[1]
+    if (sig?.status === 'done') streamingSignals.clear(migKey)
+  }, [migKey])
+
   const sourceLabel   = resolveLabel(source, profiles)
   const targetLabel   = resolveLabel(target, profiles)
   const sourceRepo    = resolveRepoPath(source, profiles)
@@ -1608,7 +1618,9 @@ export default function Migration() {
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id ? { ...m, loading: false } : m
       ))
-      streamingSignals.done(migKeyRef.current)
+      // If user is watching right now, no need for the "done" indicator — clear directly
+      if (isMountedRef.current) streamingSignals.clear(migKeyRef.current)
+      else streamingSignals.done(migKeyRef.current)
     }
   }
 
@@ -1678,7 +1690,7 @@ export default function Migration() {
         const sig = streamingSignals.getAll().find(([k]) => k === migKey)?.[1]
         if (!sig) return null
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: sig.status === 'streaming' ? 'var(--brand)' : 'var(--th-success-fg, #6dcf85)', fontWeight: 600 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: sig.status === 'streaming' ? '#f97316' : 'var(--th-success-fg, #6dcf85)', fontWeight: 600 }}>
             <span className={`stream-dot stream-dot--${sig.status}`} />
             {sig.status === 'streaming'
               ? (lang === 'fr' ? 'Réponse en cours…' : 'Generating response…')
