@@ -157,12 +157,16 @@ function _finalizeOrphaned(msgs: Message[]): Message[] {
 function loadMigActive(): Record<string, Message[]> {
   try {
     const raw: Record<string, Message[]> = JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}')
+    const activeKeys = new Set(streamingSignals.getAll().map(([k]) => k))
     const data: Record<string, Message[]> = {}
     let dirty = false
     for (const [k, msgs] of Object.entries(raw)) {
-      const cleaned = _finalizeOrphaned(msgs)
+      // Only finalize orphaned loaders when there is no live stream for this key.
+      // If a stream is still running (navigated away but not restarted), leave it alone.
+      const isLive = activeKeys.has(k)
+      const cleaned = isLive ? msgs : _finalizeOrphaned(msgs)
       data[k] = cleaned
-      if (cleaned !== msgs) dirty = true
+      if (!isLive && cleaned !== msgs) dirty = true
     }
     if (dirty) try { localStorage.setItem(LS_MIG_ACTIVE, JSON.stringify(data)) } catch { /* quota */ }
     // Seed the module buffer from localStorage so setMessages can read it even after unmount

@@ -150,12 +150,14 @@ function finalizeOrphanedMessages(msgs: Message[]): Message[] {
 function loadActiveConvs(): Record<string, Message[]> {
   try {
     const raw: Record<string, Message[]> = JSON.parse(localStorage.getItem(LS_ACTIVE) ?? '{}')
+    const activeKeys = new Set(streamingSignals.getAll().map(([k]) => k))
     const cleaned: Record<string, Message[]> = {}
     let dirty = false
     for (const [k, msgs] of Object.entries(raw)) {
-      const c = finalizeOrphanedMessages(msgs)
+      const isLive = activeKeys.has(k)
+      const c = isLive ? msgs : finalizeOrphanedMessages(msgs)
       cleaned[k] = c
-      if (c !== msgs) dirty = true
+      if (!isLive && c !== msgs) dirty = true
     }
     if (dirty) try { localStorage.setItem(LS_ACTIVE, JSON.stringify(cleaned)) } catch { /* quota */ }
     return cleaned
