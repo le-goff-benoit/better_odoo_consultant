@@ -137,12 +137,20 @@ function migAutoTitle(msgs: Message[]): string {
   const first = msgs.find(m => m.role === 'user')?.text ?? ''
   return first.length > 60 ? first.slice(0, 57) + '…' : first || 'Migration'
 }
+function _finalizeOrphaned(msgs: Message[]): Message[] {
+  return msgs.map(m => m.loading
+    ? { ...m, loading: false, events: [...(m.events ?? []), { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }] }
+    : m
+  )
+}
 function loadMigActive(): Record<string, Message[]> {
   try {
-    const data = JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}')
+    const raw: Record<string, Message[]> = JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}')
+    const data: Record<string, Message[]> = {}
+    for (const [k, msgs] of Object.entries(raw)) data[k] = _finalizeOrphaned(msgs)
     // Seed the module buffer from localStorage so setMessages can read it even after unmount
     for (const [k, msgs] of Object.entries(data)) {
-      if (!_migBuffer.has(k)) _migBuffer.set(k, msgs as Message[])
+      if (!_migBuffer.has(k)) _migBuffer.set(k, msgs)
     }
     return data
   } catch { return {} }

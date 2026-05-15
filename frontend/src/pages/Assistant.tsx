@@ -131,8 +131,19 @@ function technicalComplexityLabel(raw?: string) {
 function persistHistory(h: Record<string, SavedConv[]>) {
   try { localStorage.setItem(LS_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
 }
+function finalizeOrphanedMessages(msgs: Message[]): Message[] {
+  return msgs.map(m => m.loading
+    ? { ...m, loading: false, events: [...(m.events ?? []), { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }] }
+    : m
+  )
+}
 function loadActiveConvs(): Record<string, Message[]> {
-  try { return JSON.parse(localStorage.getItem(LS_ACTIVE) ?? '{}') } catch { return {} }
+  try {
+    const raw: Record<string, Message[]> = JSON.parse(localStorage.getItem(LS_ACTIVE) ?? '{}')
+    const cleaned: Record<string, Message[]> = {}
+    for (const [k, msgs] of Object.entries(raw)) cleaned[k] = finalizeOrphanedMessages(msgs)
+    return cleaned
+  } catch { return {} }
 }
 function persistActiveConvs(c: Record<string, Message[]>) {
   try { localStorage.setItem(LS_ACTIVE, JSON.stringify(c)) } catch { /* quota */ }
