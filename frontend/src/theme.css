@@ -713,6 +713,9 @@ textarea:focus-visible {
   display: block;
   width: 20px;
   flex-shrink: 0;
+  align-self: stretch;
+  border-left: 1px solid var(--boa-topbar-border);
+  margin: 8px 0;
 }
 
 .topbar-link,
