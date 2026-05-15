@@ -1136,8 +1136,9 @@ function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: str
 }
 
 function inlineMarkdown(text: string): React.ReactNode {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
+  return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} style={{ color: 'color-mix(in srgb, var(--brand) 40%, var(--th-text))' }}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) return <em key={i}>{part.slice(1, -1)}</em>
     if (part.startsWith('`') && part.endsWith('`')) return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
     return part
   })
@@ -1188,6 +1189,17 @@ function Markdown({ text }: { text: string }) {
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
           <span style={{ color: t.brand, flexShrink: 0 }}>•</span>
           <span>{inlineMarkdown(listMatch[1])}</span>
+        </div>
+      )
+      i++; continue
+    }
+
+    const olMatch = line.match(/^(\d+)\.\s+(.+)/)
+    if (olMatch) {
+      result.push(
+        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
+          <span style={{ color: t.brand, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
+          <span>{inlineMarkdown(olMatch[2])}</span>
         </div>
       )
       i++; continue
@@ -1342,6 +1354,15 @@ export default function Migration() {
     const el = assistantRefs.current.get(lastAssistantId)
     el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [lastAssistantId])
+
+  // During streaming, keep scrolling to bottom unless the user has scrolled up
+  useEffect(() => {
+    if (!streaming) return
+    const el = messageListRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (distFromBottom < 120) el.scrollTop = el.scrollHeight
+  }, [messages, streaming])
 
   // Subscribe to streaming signals so stream-dot indicators re-render
   const [, _rerenderSig] = useState(0)
