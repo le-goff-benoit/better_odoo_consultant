@@ -474,11 +474,19 @@ _SUPPORT_WEAK = (
     "lenteur", "freeze", "timeout",
     "ne fonctionne pas", "n'arrive pas", "ne marche pas", "ne charge pas",
     "résoudre", "fix", "corriger",
+    "erreur", "planté", "plantée", "bloqué", "bloque", "bloquée",
+    "connexion", "impossible",
 )
 _SUPPORT_STRONG = (
     "incident", "workaround", "ticket", "sla", "panne", "p1", "p2",
     "ne fonctionne pas", "ne marche pas",
     "bug",
+    "plante", "planté", "plantée",
+    "inaccessible",
+    "lenteur",
+    "page blanche", "écran blanc",
+    "erreur 500", "erreur 404", "erreur 403", "internal server error",
+    "connexion impossible", "impossible de se connecter", "login impossible",
 )
 _BA_WEAK = (
     "process", "processus", "métier", "metier", "fonctionnel",
@@ -525,13 +533,26 @@ _ARCH_WEAK = (
     "pattern", "patterns", "volumétrie",
     "haute disponibilité", "pra", "rto", "rpo",
     "indexation", "cluster", "load balanc",
-    "community vs enterprise", "oca vs",
+    "community vs enterprise", "community ou enterprise", "oca vs",
     "roadmap", "feuille de route", "gouvernance",
+    "hébergement", "hébergeur", "héberger",
+    "infrastructure", "on-premise", "on premise",
+    "déploiement", "deploiement",
+    "saas", "cloud", "dimensionnement",
+    "multi-pays", "multicompany", "multi pays",
+    "oca", "développement interne", "developpement interne",
+    "trajectoire",
 )
 _ARCH_STRONG = (
     "architecture", "architecte", "adr", "haute disponibilité",
     "multi-société", "multi-company", "stratégie de migration",
     "community vs enterprise", "oca vs", "scalabilité", "gouvernance",
+    "community ou enterprise",
+    "hébergeur",
+    "roadmap",
+    "trajectoire",
+    "choix technique",
+    "multi-pays",
 )
 _DEV_WEAK = (
     "snippet", "python", "xml", "javascript", "typescript", "sql",

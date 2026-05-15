@@ -36,14 +36,25 @@ const SUPPORT_TERMS = [
   'ne fonctionne pas', "n'arrive pas", "n'arrive plus", 'ne marche pas',
   'ne charge pas', 'pas accessible', 'inaccessible', "n'affiche", 'naffiche',
   'résoudre', 'resoudre', 'résolution', 'fix', 'corriger',
+  // common error/blocking vocabulary users actually write
+  'erreur', 'planté', 'plantée', 'bloqué', 'bloque', 'bloquée',
+  'connexion', 'impossible',
 ]
 
-// Strong support signals — almost always indicate a run/incident question.
+// Strong support signals — almost always indicate an incident question.
 const SUPPORT_STRONG = [
   'incident', 'workaround', 'contournement', 'ticket', 'sla', 'panne',
   'hors service', 'reproduire', 'p1', 'p2', "n'arrive plus",
   'ne fonctionne pas', 'ne marche pas',
-  'bug',  // in Odoo context "j'ai un bug" is almost always a support incident
+  'bug',
+  // Promote high-confidence single-word signals
+  'plante', 'planté', 'plantée',   // "odoo plante" = crash
+  'inaccessible',                   // "odoo inaccessible" = outage
+  'lenteur',                        // "lenteur extrême" = incident
+  // Multi-word patterns impossible to mistake for a BA question
+  'page blanche', 'écran blanc',
+  'erreur 500', 'erreur 404', 'erreur 403', 'internal server error',
+  'connexion impossible', 'impossible de se connecter', 'login impossible',
 ]
 
 const BA_TERMS = [
@@ -104,14 +115,28 @@ const ARCH_TERMS = [
   'indexation', 'cluster', 'load balanc',
   'oca vs', 'community vs enterprise', 'community ou enterprise',
   'roadmap', 'feuille de route', 'gouvernance',
-  // "audit" and "performance" stay but only as STRONG to avoid stealing
-  // from Support on a "performance lente" question.
+  // Infrastructure / hosting / deployment — always an architecture concern
+  'hébergement', 'hébergeur', 'héberger',
+  'infrastructure', 'on-premise', 'on premise',
+  'déploiement', 'deploiement',
+  'saas', 'cloud', 'dimensionnement',
+  // Multi-entity / multi-country
+  'multi-pays', 'multicompany', 'multi pays',
+  // Community ecosystem decision
+  'oca', 'développement interne', 'developpement interne',
 ]
 
 const ARCH_STRONG = [
   'architecture', 'architecte', 'adr', 'haute disponibilité', 'haute dispo',
   'multi-société', 'multi-company', 'stratégie de migration', 'community vs enterprise',
   'oca vs', 'scalabilité', 'scalability', 'gouvernance',
+  // Promote signals that reliably indicate an architecture decision question
+  'community ou enterprise',  // "community ou enterprise" = make/buy decision
+  'hébergeur',                // choosing a host = infra decision
+  'roadmap',                  // roadmap = planning = arch scope
+  'trajectoire',              // "trajectoire technique" = arch planning
+  'choix technique',          // "choix technique" = ADR = arch
+  'multi-pays',               // multi-country deployment = arch scope
 ]
 
 const DEV_TERMS = [
