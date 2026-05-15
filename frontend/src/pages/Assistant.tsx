@@ -359,7 +359,7 @@ export default function Assistant() {
 
   const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('assistant', 'auto'))
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
-  const perspective = useResolvedPerspective(perspectiveMode, perspectivePrompt, 'developer')
+  const perspective = useResolvedPerspective(perspectiveMode, perspectivePrompt, 'business_analyst')
   const setPerspective = (p: PerspectiveMode) => { setPerspectiveState(p); savePerspective('assistant', p) }
 
   // Init provider when providers load

@@ -478,6 +478,7 @@ _SUPPORT_WEAK = (
 _SUPPORT_STRONG = (
     "incident", "workaround", "ticket", "sla", "panne", "p1", "p2",
     "ne fonctionne pas", "ne marche pas",
+    "bug",
 )
 _BA_WEAK = (
     "process", "processus", "métier", "metier", "fonctionnel",
@@ -489,10 +490,31 @@ _BA_WEAK = (
     "comment faire", "how to", "cas d'usage", "use case",
     "qu'est-ce que", "what is", "à quoi sert",
     "point de vente", "note de frais", "feuille de temps",
+    # ── Odoo business domain vocabulary ────────────────────────────────────
+    # Accounting & Finance
+    "avoir", "avoirs", "acompte", "comptable",
+    "rapprochement", "lettrage", "trésorerie", "tresorerie",
+    "recouvrement", "encaissement", "relance",
+    "solde client", "solde fournisseur",
+    # Sales & CRM
+    "devis", "opportunité", "opportunite",
+    "commande client", "commandes client",
+    # Purchase
+    "fournisseur", "fournisseurs",
+    "bon de réception", "bon de reception",
+    # Inventory
+    "inventaire", "mouvement de stock",
+    # HR & Payroll
+    "congé", "conge", "absence", "employé", "employe",
+    "fiche de salaire", "bulletin de salaire",
 )
 _BA_STRONG = (
     "métier", "fonctionnel", "as-is", "to-be", "cas d'usage",
     "règle de gestion", "compte-rendu", "recette", "uat", "parcours utilisateur",
+    # Accounting domain — single mention is a reliable BA signal
+    "facture", "factures", "invoice", "invoices",
+    "comptabilité", "accounting",
+    "rapprochement bancaire", "plan comptable",
 )
 _ARCH_WEAK = (
     "architecture", "architecte", "scalabilité", "scalability",
@@ -528,6 +550,10 @@ _DEV_STRONG = (
     "_inherit", "_inherits", "_name", "_description", "@api",
     "__manifest__", "traceback", "stack trace", "self.env", "env[",
     "transactioncase", "recordset", "psycopg",
+    # Programming language mentions are unambiguous dev signals
+    "python", "javascript", "typescript", "sql",
+    # Override/inheritance vocabulary — always dev in French Odoo context
+    "surcharger", "hériter", "heriter",
 )
 
 
@@ -542,7 +568,7 @@ def _score_terms(text: str, weak: tuple[str, ...], strong: tuple[str, ...]) -> i
     return n
 
 
-def _infer_perspective(text: str, fallback: str = PERSPECTIVE_DEVELOPER) -> str:
+def _infer_perspective(text: str, fallback: str = PERSPECTIVE_BA) -> str:
     """Python mirror of frontend inferPerspective(). Best-effort fallback for
     clients sending `perspective="auto"`. Returns *fallback* below confidence."""
     if not text or not text.strip():
@@ -1058,14 +1084,98 @@ def build_system_general(
 
 # ── Source code tools ────────────────────────────────────────────
 
-def _safe_source_path(source_path: str, sub_path: str) -> Optional[str]:
-    """Return an absolute path only if it stays within source_path."""
+def _source_roots(source_path: str) -> list[tuple[str, str]]:
+    """Return labeled Community/Enterprise roots for an Odoo source version."""
     base = os.path.realpath(source_path)
-    full = os.path.realpath(os.path.join(source_path, sub_path)) if sub_path else base
-    return full if full.startswith(base) else None
+    parent = os.path.dirname(base)
+    name = os.path.basename(base.rstrip(os.sep))
+    if name.endswith("-enterprise"):
+        community_name = name.removesuffix("-enterprise")
+        roots = [("enterprise", base)]
+        community = os.path.join(parent, community_name)
+        if os.path.isdir(community):
+            roots.append(("community", os.path.realpath(community)))
+        return roots
+
+    roots = [("community", base)]
+    enterprise = os.path.join(parent, f"{name}-enterprise")
+    if os.path.isdir(enterprise):
+        roots.append(("enterprise", os.path.realpath(enterprise)))
+    return roots
 
 
-async def _search_odoo_source(args: dict, source_path: str) -> dict:
+def _safe_join(root: str, sub_path: str) -> Optional[str]:
+    root_real = os.path.realpath(root)
+    full = os.path.realpath(os.path.join(root_real, sub_path)) if sub_path else root_real
+    try:
+        return full if os.path.commonpath([root_real, full]) == root_real else None
+    except ValueError:
+        return None
+
+
+def _split_source_prefix(sub_path: str) -> tuple[Optional[str], str]:
+    clean = (sub_path or "").strip().strip("/")
+    if not clean:
+        return None, ""
+    first, _, rest = clean.partition("/")
+    if first in {"community", "enterprise"}:
+        return first, rest
+    return None, clean
+
+
+def _safe_source_path(source_path: str, sub_path: str, include_enterprise: bool = True) -> Optional[str]:
+    """Return an absolute path only if it stays within a known source root."""
+    if not include_enterprise:
+        return _safe_join(source_path, sub_path)
+    prefix, clean_path = _split_source_prefix(sub_path)
+    for label, root in _source_roots(source_path):
+        if prefix and label != prefix:
+            continue
+        full = _safe_join(root, clean_path)
+        if full:
+            return full
+    return None
+
+
+def _source_search_dirs(source_path: str, sub_path: str, include_enterprise: bool = True) -> list[str]:
+    if not include_enterprise:
+        full = _safe_join(source_path, sub_path)
+        return [full] if full and os.path.isdir(full) else []
+
+    prefix, clean_path = _split_source_prefix(sub_path)
+    dirs: list[str] = []
+    for label, root in _source_roots(source_path):
+        if prefix and label != prefix:
+            continue
+        full = _safe_join(root, clean_path)
+        if full and os.path.isdir(full):
+            dirs.append(full)
+    return dirs
+
+
+def _source_display_path(source_path: str, file_abs: str, include_enterprise: bool = True) -> str:
+    file_real = os.path.realpath(file_abs)
+    if not include_enterprise:
+        base = os.path.realpath(source_path)
+        try:
+            if os.path.commonpath([base, file_real]) == base:
+                return os.path.relpath(file_real, base)
+        except ValueError:
+            pass
+        return file_abs
+
+    roots = sorted(_source_roots(source_path), key=lambda item: len(item[1]), reverse=True)
+    for label, root in roots:
+        root_real = os.path.realpath(root)
+        try:
+            if os.path.commonpath([root_real, file_real]) == root_real:
+                return f"{label}/{os.path.relpath(file_real, root_real)}"
+        except ValueError:
+            continue
+    return file_abs
+
+
+async def _search_odoo_source(args: dict, source_path: str, include_enterprise: bool = True) -> dict:
     pattern    = args.get("pattern", "")
     sub_path   = args.get("path", "") or ""
     file_types = args.get("file_types") or ["*.py"]
@@ -1077,11 +1187,9 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
     if not pattern or not pattern.strip():
         return {"ok": False, "error": "pattern manquant"}
 
-    search_dir = _safe_source_path(source_path, sub_path)
-    if not search_dir:
+    search_dirs = _source_search_dirs(source_path, sub_path, include_enterprise=include_enterprise)
+    if not search_dirs:
         return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
-    if not os.path.isdir(search_dir):
-        return {"ok": False, "error": f"Dossier introuvable : {sub_path or source_path}"}
 
     includes = []
     for ft in file_types[:4]:  # max 4 types
@@ -1090,7 +1198,7 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
     grep_args = ["grep", "-r", "-n"]
     if not case_sensitive:
         grep_args.append("-i")
-    grep_args += ["-m", "200", *includes, pattern, search_dir]
+    grep_args += ["-m", "200", *includes, pattern, *search_dirs]
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -1104,7 +1212,6 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
 
     raw_lines = stdout.decode("utf-8", errors="replace").splitlines()
     total_lines = len(raw_lines)
-    base_real = os.path.realpath(source_path) + os.sep
 
     by_file: dict = {}
     for line in raw_lines[:200]:
@@ -1112,7 +1219,7 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
         if len(parts) < 3:
             continue
         file_abs, linenum, content = parts[0], parts[1], parts[2]
-        rel = file_abs.replace(base_real, "")
+        rel = _source_display_path(source_path, file_abs, include_enterprise=include_enterprise)
         if rel not in by_file:
             by_file[rel] = []
         by_file[rel].append({"line": int(linenum), "content": content.strip()})
@@ -1149,12 +1256,12 @@ async def _search_odoo_source(args: dict, source_path: str) -> dict:
     }
 
 
-async def _read_odoo_file(args: dict, source_path: str) -> dict:
+async def _read_odoo_file(args: dict, source_path: str, include_enterprise: bool = True) -> dict:
     rel_path   = args.get("path", "")
     start_line = max(1, int(args.get("start_line") or 1))
     end_line   = int(args.get("end_line") or 0)
 
-    file_abs = _safe_source_path(source_path, rel_path)
+    file_abs = _safe_source_path(source_path, rel_path, include_enterprise=include_enterprise)
     if not file_abs:
         return {"ok": False, "error": "Chemin invalide"}
     if not os.path.isfile(file_abs):
@@ -1316,7 +1423,7 @@ async def _inspect_studio(args: dict, odoo: "OdooClient") -> dict:
     async def _xids(model_name: str) -> list:
         xids = await loop.run_in_executor(None, lambda: odoo.search_read(
             "ir.model.data",
-            [["module", "in", ["studio_customization", "web_studio"]], ["model", "=", model_name]],
+            [["module", "=", "studio_customization"], ["model", "=", model_name]],
             ["res_id"],
             limit=500,
         ))
@@ -1524,12 +1631,12 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
         elif name == "search_project_source":
             if not repo_path:
                 return {"ok": False, "error": "Code source du projet non disponible — clonez le dépôt depuis la fiche projet"}
-            return await _search_odoo_source(args, repo_path)
+            return await _search_odoo_source(args, repo_path, include_enterprise=False)
 
         elif name == "read_project_file":
             if not repo_path:
                 return {"ok": False, "error": "Code source du projet non disponible"}
-            return await _read_odoo_file(args, repo_path)
+            return await _read_odoo_file(args, repo_path, include_enterprise=False)
 
         elif name == "search_target_source":
             if not target_path:

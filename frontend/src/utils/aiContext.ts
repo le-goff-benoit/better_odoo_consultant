@@ -43,29 +43,51 @@ const SUPPORT_STRONG = [
   'incident', 'workaround', 'contournement', 'ticket', 'sla', 'panne',
   'hors service', 'reproduire', 'p1', 'p2', "n'arrive plus",
   'ne fonctionne pas', 'ne marche pas',
+  'bug',  // in Odoo context "j'ai un bug" is almost always a support incident
 ]
 
 const BA_TERMS = [
   // business process & analysis vocabulary (NOT generic words like "client" / "user")
-  'process', 'processus', 'métier', 'metier', 'fonctionnel', 'fonctionnelle',
-  'as-is', 'to-be', 'workflow', 'parcours utilisateur', 'formation', 'trainee',
-  'recette', 'uat', 'besoin', 'besoins', 'requirement', 'requirements',
-  'règle de gestion', 'regle de gestion', 'gap', 'écart', 'ecart',
-  'compte-rendu', 'compte rendu', 'meeting', 'réunion', 'reunion',
-  'adoption', 'conduite du changement', 'change management', 'kpi',
+  ‘process’, ‘processus’, ‘métier’, ‘metier’, ‘fonctionnel’, ‘fonctionnelle’,
+  ‘as-is’, ‘to-be’, ‘workflow’, ‘parcours utilisateur’, ‘formation’, ‘trainee’,
+  ‘recette’, ‘uat’, ‘besoin’, ‘besoins’, ‘requirement’, ‘requirements’,
+  ‘règle de gestion’, ‘regle de gestion’, ‘gap’, ‘écart’, ‘ecart’,
+  ‘compte-rendu’, ‘compte rendu’, ‘meeting’, ‘réunion’, ‘reunion’,
+  ‘adoption’, ‘conduite du changement’, ‘change management’, ‘kpi’,
   // configuration / standard usage
-  'configurer', 'paramétrer', 'parametrer',
-  'comment faire', 'how to', "cas d'usage", 'use case',
-  "qu'est-ce que", 'qu’est-ce que', 'what is', 'à quoi sert', 'a quoi sert',
+  ‘configurer’, ‘paramétrer’, ‘parametrer’,
+  ‘comment faire’, ‘how to’, "cas d’usage", ‘use case’,
+  "qu’est-ce que", ‘qu’est-ce que’, ‘what is’, ‘à quoi sert’, ‘a quoi sert’,
   // multi-word functional phrases (preferred over single common nouns)
-  'point de vente', 'note de frais', 'feuille de temps', 'bon de livraison',
-  'bon de commande', 'tableau de bord',
+  ‘point de vente’, ‘note de frais’, ‘feuille de temps’, ‘bon de livraison’,
+  ‘bon de commande’, ‘tableau de bord’,
+  // ── Odoo business domain vocabulary ─────────────────────────────────────
+  // Accounting & Finance (specific enough to be unambiguous in context)
+  ‘avoir’, ‘avoirs’, ‘acompte’, ‘comptable’,
+  ‘rapprochement’, ‘lettrage’, ‘trésorerie’, ‘tresorerie’,
+  ‘recouvrement’, ‘encaissement’, ‘relance’,
+  ‘solde client’, ‘solde fournisseur’,
+  // Sales & CRM
+  ‘devis’, ‘opportunité’, ‘opportunite’,
+  ‘commande client’, ‘commandes client’,
+  // Purchase
+  ‘fournisseur’, ‘fournisseurs’,
+  ‘bon de réception’, ‘bon de reception’,
+  // Inventory / Warehouse
+  ‘inventaire’, ‘mouvement de stock’,
+  // HR & Payroll
+  ‘congé’, ‘conge’, ‘absence’, ‘employé’, ‘employe’,
+  ‘fiche de salaire’, ‘bulletin de salaire’,
 ]
 
 const BA_STRONG = [
-  'métier', 'metier', 'fonctionnel', 'as-is', 'to-be', "cas d'usage",
-  'règle de gestion', 'compte-rendu', 'compte rendu', 'recette', 'uat',
-  'parcours utilisateur',
+  ‘métier’, ‘metier’, ‘fonctionnel’, ‘as-is’, ‘to-be’, "cas d’usage",
+  ‘règle de gestion’, ‘compte-rendu’, ‘compte rendu’, ‘recette’, ‘uat’,
+  ‘parcours utilisateur’,
+  // Accounting domain — a single mention is a reliable BA signal
+  ‘facture’, ‘factures’, ‘invoice’, ‘invoices’,
+  ‘comptabilité’, ‘accounting’,
+  ‘rapprochement bancaire’, ‘plan comptable’,
 ]
 
 const ARCH_TERMS = [
@@ -113,6 +135,10 @@ const DEV_STRONG = [
   '_inherit', '_inherits', '_name', '_description', '@api', 'api.depends',
   '__manifest__', 'traceback', 'stack trace', 'self.env', 'env[',
   'transactioncase', 'recordset', 'psycopg',
+  // Programming language mentions are unambiguous dev signals
+  'python', 'javascript', 'typescript', 'sql',
+  // Override/inheritance vocabulary — always dev in French Odoo context
+  'surcharger', 'hériter', 'heriter',
 ]
 
 const MEETING_TERMS = ['compte-rendu', 'compte rendu', 'meeting minute', 'réunion', 'reunion', 'pv de réunion', 'pv de reunion']

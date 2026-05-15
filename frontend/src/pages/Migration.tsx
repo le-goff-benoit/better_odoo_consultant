@@ -1191,7 +1191,7 @@ export default function Migration() {
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
-  const perspective = useResolvedPerspective(perspectiveMode, perspectivePrompt, 'developer')
+  const perspective = useResolvedPerspective(perspectiveMode, perspectivePrompt, 'business_analyst')
 
   const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id ?? null
 
