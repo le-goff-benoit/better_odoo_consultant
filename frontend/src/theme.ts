@@ -1,9 +1,10 @@
 // Design tokens — colors use CSS custom properties for theme support
 export const t = {
-  // Brand (set dynamically via --brand CSS var) — Aperture-style orange.
-  brand:       'var(--brand, #FF6B00)',
-  brandDark:   '#d95a00',
-  brandLight:  '#fff5ec',
+  // Brand (set dynamically via --brand CSS var) — Better Odoo Assistant green.
+  brand:       'var(--brand, #33f06f)',
+  brandContrast: 'var(--brand-contrast, #0a0a0a)',
+  brandDark:   '#18b94b',
+  brandLight:  'color-mix(in srgb, var(--brand, #33f06f) 10%, white)',
   // Transparent brand variants — use these instead of ${t.brand}XX (invalid on CSS vars)
   brand10: 'var(--brand-10)',
   brand15: 'var(--brand-15)',
@@ -31,7 +32,7 @@ export const t = {
 
   // Borders
   border:      'var(--th-border, #e2e8f0)',
-  borderFocus: 'var(--brand, #0f766e)',
+  borderFocus: 'var(--brand, #33f06f)',
   borderLight: 'var(--th-border-light, #f1f5f9)',
 
   // Status (theme-aware foregrounds — adjust between light + dark so
@@ -43,6 +44,7 @@ export const t = {
   danger:    'var(--th-danger-fg, #c0392b)',
   dangerBg:  'var(--th-danger-bg, #fde8e8)',
   info:      'var(--th-info-fg, #1f4ec3)',
+  infoBg:    'var(--th-info-bg, #e8f0ff)',
   // Solid status colors — same value in both themes. Use as a BACKGROUND
   // with white text (e.g. small ★ / ✓ chips). The theme-aware vars above
   // are not safe as backgrounds with white text because the dark-mode
@@ -58,8 +60,8 @@ export const t = {
   shadowLg: '0 20px 48px rgba(0,0,0,.18)',
 
   // Aliases
-  action:      'var(--brand, #FF6B00)',
-  actionHover: '#d95a00',
+  action:      'var(--brand, #33f06f)',
+  actionHover: '#18b94b',
   white:       'var(--th-white, #ffffff)',
 
   // Shape
@@ -95,8 +97,8 @@ const neoButtonBase: React.CSSProperties = {
 export const btn = {
   primary: {
     ...neoButtonBase,
-    padding: '8px 18px', background: 'var(--brand, #FF6B00)', color: '#fff',
-    border: '2px solid var(--brand, #FF6B00)', fontSize: 14,
+    padding: '8px 18px', background: 'var(--brand, #33f06f)', color: 'var(--brand-contrast, #0a0a0a)',
+    border: '2px solid var(--brand, #33f06f)', fontSize: 14,
   } as React.CSSProperties,
   secondary: {
     ...neoButtonBase,

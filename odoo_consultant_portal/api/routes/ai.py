@@ -388,7 +388,9 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             raise HTTPException(400, f"Impossible d'obtenir le token Copilot : {exc}")
 
     import os as _os
-    user_prompt = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
+    # Context routing (skills / domain / localization) is keyword-based — feed it
+    # the last 3 user turns so a short follow-up keeps its conversation domain.
+    user_prompt = "\n".join([m.content for m in req.messages if m.role == "user"][-3:])
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     messages = _inject_attachments(messages, req.attachments)
 
@@ -484,14 +486,17 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     source_path = None
     _version_to_use = _active_env.get("odoo_version") or profile.odoo_version
     _sources_base = Path.home() / ".odoo-consultant" / "sources"
+    _source_version = None  # Odoo version the resolved sources actually correspond to
     candidate = str(_sources_base / _version_to_use) if _version_to_use else ""
     if _version_to_use and _os.path.isdir(candidate):
         source_path = candidate
+        _source_version = _version_to_use
     elif _version_to_use and _os.path.isdir(str(_sources_base / f"{_version_to_use}-enterprise")):
         source_path = str(_sources_base / f"{_version_to_use}-enterprise")
-    elif not source_path:
+        _source_version = _version_to_use
+    else:
         # Fallback : chercher la version la plus récente installée
-        sources_base = str(Path.home() / ".odoo-consultant" / "sources")
+        sources_base = str(_sources_base)
         if _os.path.isdir(sources_base):
             import re as _re
             _ver_re = _re.compile(r'^\d+\.\d+$')
@@ -501,8 +506,22 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             )
             if available:
                 source_path = _os.path.join(sources_base, available[0])
+                _source_version = available[0]
                 if not _version_to_use:
                     _version_to_use = available[0]
+
+    # Loud warning when the resolved sources do not match the instance version —
+    # never let the AI reason on the wrong Odoo version silently.
+    _source_warning = ""
+    if source_path and _version_to_use and _source_version and _source_version != _version_to_use:
+        _source_warning = (
+            "## ⚠️ Sources Odoo non alignées sur l'instance\n"
+            f"L'instance cible tourne en Odoo **{_version_to_use}**, mais ses sources ne sont "
+            f"pas installées localement. Les outils `search_odoo_source` / `read_odoo_file` "
+            f"interrogent à la place les sources Odoo **{_source_version}**.\n"
+            "→ Signale explicitement toute conclusion susceptible de dépendre de la version, "
+            f"et invite l'utilisateur à télécharger les sources {_version_to_use} depuis la page Sources."
+        )
 
     # Detect per-environment cloned repo
     repo_path = None
@@ -537,14 +556,9 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
                     if _os.path.isdir(_tgt_c):
                         target_path = _tgt_c
 
-    context_md = load_context_for_prompt(
-        _version_to_use,
-        target_version=_target_version,
-        migration=req.migration_mode,
-        user_prompt=user_prompt,
-        perspective=req.perspective or "developer",
-        locale=_context_locale,
-    )
+    # Localization and technical-complexity blocks are high priority: passed
+    # into the budget as priority blocks (alongside any source-version warning)
+    # so they are never silently truncated by the routed-context packer.
     localization_md = build_localization_context(
         profile.company_ids,
         active_company_id,
@@ -552,11 +566,16 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         user_prompt,
         req.perspective or "developer",
     )
-    if localization_md:
-        context_md = f"{context_md}\n\n---\n\n{localization_md}" if context_md else localization_md
     complexity_md = build_technical_complexity_context(profile.technical_complexity)
-    if complexity_md:
-        context_md = f"{context_md}\n\n---\n\n{complexity_md}" if context_md else complexity_md
+    context_md = load_context_for_prompt(
+        _version_to_use,
+        target_version=_target_version,
+        migration=req.migration_mode,
+        user_prompt=user_prompt,
+        perspective=req.perspective or "developer",
+        locale=_context_locale,
+        priority_blocks=[b for b in (_source_warning, localization_md, complexity_md) if b],
+    )
 
     async def generate():
         try:

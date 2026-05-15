@@ -983,12 +983,11 @@ function ContextEditor() {
 // ── User profile editor ──────────────────────────────────────────
 
 const ACCENT_PRESETS = [
-  { id: 'teal', color: '#0f766e', labelFr: 'Teal', labelEn: 'Teal' },
-  { id: 'blue', color: '#2563eb', labelFr: 'Bleu', labelEn: 'Blue' },
-  { id: 'indigo', color: '#4f46e5', labelFr: 'Indigo', labelEn: 'Indigo' },
-  { id: 'slate', color: '#475569', labelFr: 'Ardoise', labelEn: 'Slate' },
-  { id: 'emerald', color: '#059669', labelFr: 'Emeraude', labelEn: 'Emerald' },
-  { id: 'amber', color: '#b45309', labelFr: 'Ambre', labelEn: 'Amber' },
+  { id: 'boa-green', color: '#33f06f', labelFr: 'BOA vert', labelEn: 'BOA green' },
+  { id: 'boa-cyan', color: '#48e7ff', labelFr: 'BOA cyan', labelEn: 'BOA cyan' },
+  { id: 'boa-yellow', color: '#ffd735', labelFr: 'BOA jaune', labelEn: 'BOA yellow' },
+  { id: 'boa-red', color: '#ff3341', labelFr: 'BOA rouge', labelEn: 'BOA red' },
+  { id: 'boa-blue', color: '#114ee8', labelFr: 'BOA bleu', labelEn: 'BOA blue' },
 ]
 const selectStyle: React.CSSProperties = {
   width: '100%',
@@ -1196,7 +1195,7 @@ function UserProfileEditor() {
             <div style={{ fontSize: 11, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>{c.primaryColor}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8 }}>
               {ACCENT_PRESETS.map(accent => {
-                const active = (form.primaryColor ?? '#0f766e').toLowerCase() === accent.color.toLowerCase()
+                const active = (form.primaryColor ?? '#33f06f').toLowerCase() === accent.color.toLowerCase()
                 return (
                 <button key={accent.id} onClick={() => set('primaryColor', accent.color)} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
@@ -1216,7 +1215,7 @@ function UserProfileEditor() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: t.muted, lineHeight: 1.45 }}>{c.accentHint}</span>
               <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: t.muted, cursor: 'pointer' }}>
-                <input type="color" value={form.primaryColor ?? '#0f766e'}
+                <input type="color" value={form.primaryColor ?? '#33f06f'}
                   onChange={e => set('primaryColor', e.target.value)}
                   style={{ width: 28, height: 28, border: `1px solid ${t.border}`, borderRadius: 6, padding: 2, cursor: 'pointer', background: t.bgCard }} />
                 {c.customColor}
@@ -1265,8 +1264,8 @@ function UserProfileEditor() {
                   <button key={id} onClick={() => set('mascotType', id)} style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                     padding: '8px 12px', borderRadius: t.radius, cursor: 'pointer',
-                    border: `2px solid ${active ? (form.mascotColor ?? 'var(--brand, #0f766e)') : t.border}`,
-                    background: active ? `${form.mascotColor ?? 'var(--brand, #0f766e)'}15` : t.bgMuted,
+                    border: `2px solid ${active ? (form.mascotColor ?? 'var(--brand, #33f06f)') : t.border}`,
+                    background: active ? `${form.mascotColor ?? 'var(--brand, #33f06f)'}15` : t.bgMuted,
                     transition: 'all .15s',
                   }}>
                     <div style={{ height: 44, display: 'flex', alignItems: 'flex-end' }}>{preview}</div>

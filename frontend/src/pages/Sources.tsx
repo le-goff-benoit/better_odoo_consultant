@@ -109,7 +109,7 @@ const sourcesCopy = {
     copy: 'Copier',
     openGithubSsh: 'Ouvrez les paramètres SSH GitHub',
     pasteKey: 'Collez la clé et cliquez "Add SSH key"',
-    pasteKeyHelp: 'Champ Title : "Odoo Portal" — champ Key : collez la clé copiée.',
+    pasteKeyHelp: 'Champ Title : "Better Odoo Assistant" — champ Key : collez la clé copiée.',
     recheck: "J'ai ajouté la clé - vérifier l'accès",
     prefillAsk: 'Fais-moi un résumé clair des changements importants et leur impact potentiel pour un consultant Odoo.',
   },
@@ -161,7 +161,7 @@ const sourcesCopy = {
     copy: 'Copy',
     openGithubSsh: 'Open GitHub SSH settings',
     pasteKey: 'Paste the key and click "Add SSH key"',
-    pasteKeyHelp: 'Title field: "Odoo Portal" — Key field: paste the copied key.',
+    pasteKeyHelp: 'Title field: "Better Odoo Assistant" — Key field: paste the copied key.',
     recheck: 'I added the key - check access',
     prefillAsk: 'Give me a clear summary of the important changes and their potential impact for an Odoo consultant.',
   },
@@ -437,7 +437,7 @@ export default function Sources() {
 
       {/* Unified version cards grid */}
       <div className="page-grid page-grid-sources">
-        {allVersionDefs.map(({ version, label, badge, badgeEn, badgeColor, isMajor }) => {
+        {allVersionDefs.map(({ version, label, badge, badgeEn, isMajor }) => {
           const card     = cards[version]
           const status   = card?.status ?? 'idle'
           const pct      = card?.pct    ?? 0
@@ -496,7 +496,7 @@ export default function Sources() {
                     </div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {badge && (
-                        <Badge tone={badge === 'Stable' || badge === 'LTS' ? 'success' : 'brand'} style={{ color: badgeColor }}>
+                        <Badge tone={badge === 'Stable' || badge === 'LTS' ? 'success' : 'warning'}>
                           {lang === 'en' ? (badgeEn ?? badge) : badge}
                         </Badge>
                       )}
@@ -544,7 +544,7 @@ export default function Sources() {
                     <input type="checkbox"
                       checked={enterprise[version] ?? false}
                       onChange={e => setEnterprise(p => ({ ...p, [version]: e.target.checked }))}
-                      style={{ accentColor: 'var(--brand, #0f766e)', width: 14, height: 14 }} />
+                      style={{ accentColor: 'var(--brand, #33f06f)', width: 14, height: 14 }} />
                     <span style={{ color: t.muted }}>
                       {c.includeEnterprise}
                       {entInfo?.installed && (
@@ -640,38 +640,32 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
   }
 
   return (
-    <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${t.border}` }}>
+    <div className="source-installed-strip">
       {info.installed && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: entInfo?.installed ? 3 : 0 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: t.success, fontWeight: 700 }}>
+        <div className="source-repo-row">
+          <span className="source-repo-kind source-repo-kind-community">
             <CheckCircle2 size={12} /> Community
           </span>
-          <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{info.head}</span>
-          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(info.date, lang)}</span>
+          <span className="source-repo-sha">{info.head}</span>
+          <span className="source-repo-date">· {relativeDate(info.date, lang)}</span>
           {(info.behind ?? 0) > 0 && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, color: t.warning, background: t.warningBg,
-              border: `1px solid ${t.warning}30`, borderRadius: 3, padding: '1px 6px',
-            }}>{info.behind} {labels.behind}</span>
+            <span className="source-repo-warning">{info.behind} {labels.behind}</span>
           )}
         </div>
       )}
       {entInfo?.installed && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--brand-muted-text)', fontWeight: 700 }}>
+        <div className="source-repo-row">
+          <span className="source-repo-kind source-repo-kind-enterprise">
             <CheckCircle2 size={12} /> Enterprise
           </span>
-          <span style={{ fontSize: 11, color: t.muted, fontFamily: 'monospace' }}>{entInfo.head}</span>
-          <span style={{ fontSize: 11, color: t.muted }}>· {relativeDate(entInfo.date, lang)}</span>
+          <span className="source-repo-sha">{entInfo.head}</span>
+          <span className="source-repo-date">· {relativeDate(entInfo.date, lang)}</span>
           {(entInfo.behind ?? 0) > 0 && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, color: t.warning, background: t.warningBg,
-              border: `1px solid ${t.warning}30`, borderRadius: 3, padding: '1px 6px',
-            }}>{entInfo.behind} {labels.behind}</span>
+            <span className="source-repo-warning">{entInfo.behind} {labels.behind}</span>
           )}
         </div>
       )}
-      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+      <div className="source-installed-actions">
         {(info.recent_commits?.length ?? 0) > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={onToggleCommits}>
             {showCommits ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -683,7 +677,7 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
             <Bot size={13} /> {labels.aiSummary}
           </button>
         )}
-        <button className="btn btn-ghost btn-sm" onClick={onCheckUpdates} disabled={checking} style={{ marginLeft: 'auto' }}>
+        <button className="btn btn-ghost btn-sm source-check-button" onClick={onCheckUpdates} disabled={checking}>
           <RefreshCw size={13} style={checking ? { animation: 'spin .9s linear infinite' } : undefined} />
           {checking ? labels.checking : labels.check}
         </button>

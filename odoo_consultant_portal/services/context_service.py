@@ -313,11 +313,18 @@ def load_context_for_prompt(
     perspective: Optional[str] = None,
     locale: Optional[str] = None,
     target_version: Optional[str] = None,
+    priority_blocks: Optional[list[str]] = None,
 ) -> str:
-    """Return routed markdown context to inject into the AI system prompt."""
+    """Return routed markdown context to inject into the AI system prompt.
+
+    *priority_blocks* are pre-formatted markdown strings (localization,
+    technical complexity, source-version warnings). They are injected before
+    the routed sections and count against the budget so the total stays bounded.
+    """
     lang = normalize_locale(locale)
     titles = _SECTION_TITLES[lang]
     prompt = _normalize_text(user_prompt)
+    blocks = [b.strip() for b in (priority_blocks or []) if b and b.strip()]
     sections = []
     _skills_title = titles["skills"]
     try:
@@ -349,12 +356,16 @@ def load_context_for_prompt(
         except FileNotFoundError:
             pass
 
-    if odoo_version:
+    # Version release notes are heavy and only useful for version-sensitive
+    # questions (migration, breaking changes, "what's new"). Gate them on
+    # _VERSION_TERMS so a routine functional question keeps its budget.
+    _version_sensitive = migration or _has_any(prompt, _VERSION_TERMS)
+    if odoo_version and _version_sensitive:
         try:
             sections.append((titles["version"].format(version=odoo_version), read_file(f"odoo-{odoo_version}.md", lang)))
         except FileNotFoundError:
             pass
-    if target_version and target_version != odoo_version:
+    if target_version and target_version != odoo_version and _version_sensitive:
         try:
             sections.append((titles["version"].format(version=target_version), read_file(f"odoo-{target_version}.md", lang)))
         except FileNotFoundError:
@@ -364,7 +375,7 @@ def load_context_for_prompt(
             sections.append((titles["migration"], read_file("migration.md", lang)))
         except FileNotFoundError:
             pass
-    if not sections:
+    if not sections and not blocks:
         return ""
     # Skills and role profile are core — injected first so consultant rules and
     # role guidance are never pushed out of the budget by lower-priority content.
@@ -373,8 +384,14 @@ def load_context_for_prompt(
         core.add(_skills_title)
     if _profile_title:
         core.add(_profile_title)
-    fitted = _fit_context_budget(sections, core_sections=core or None)
-    return "\n\n---\n\n".join(f"## {title}\n\n{content.strip()}" for title, content in fitted)
+    # Priority blocks consume the budget first; the routed sections fit in what
+    # remains, so the assembled context never overflows MAX_CONTEXT_CHARS.
+    separator = "\n\n---\n\n"
+    blocks_len = sum(len(b) for b in blocks) + len(separator) * len(blocks)
+    routed_budget = max(0, _CONTEXT_BUDGET_CHARS - blocks_len)
+    fitted = _fit_context_budget(sections, budget=routed_budget, core_sections=core or None)
+    routed = separator.join(f"## {title}\n\n{content.strip()}" for title, content in fitted)
+    return separator.join(blocks + ([routed] if routed else []))
 
 
 # ── Default content ───────────────────────────────────────────────

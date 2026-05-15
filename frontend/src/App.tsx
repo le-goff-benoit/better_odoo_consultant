@@ -16,6 +16,19 @@ const HowItWorks = lazy(() => import('./pages/HowItWorks'))
 
 export function applyBrandColor(color: string) {
   document.documentElement.style.setProperty('--brand', color)
+  document.documentElement.style.setProperty('--brand-contrast', readableTextColor(color))
+}
+
+function readableTextColor(color: string) {
+  const match = color.trim().match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+  if (!match) return '#ffffff'
+  const [, r, g, b] = match.map((part, index) => index === 0 ? part : parseInt(part, 16)) as unknown as [string, number, number, number]
+  const linear = (channel: number) => {
+    const value = channel / 255
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  }
+  const luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+  return luminance > 0.36 ? '#0a0a0a' : '#ffffff'
 }
 
 export function applyThemeMode(mode?: string) {

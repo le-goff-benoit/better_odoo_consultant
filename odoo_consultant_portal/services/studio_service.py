@@ -12,7 +12,7 @@ async def inspect_studio_customizations(odoo, sections: Optional[list[str]] = No
     async def _xids(model_name: str) -> list:
         xids = await loop.run_in_executor(None, lambda: odoo.search_read(
             "ir.model.data",
-            [["module", "in", ["studio_customization", "web_studio"]], ["model", "=", model_name]],
+            [["module", "=", "studio_customization"], ["model", "=", model_name]],
             ["res_id"],
             limit=500,
         ))
@@ -20,29 +20,38 @@ async def inspect_studio_customizations(odoo, sections: Optional[list[str]] = No
 
     if do_all or "models" in sections_req:
         try:
-            domain: list = [["state", "=", "manual"]]
-            if model_filter:
-                domain.append(["model", "ilike", model_filter])
-            models = await loop.run_in_executor(None, lambda: odoo.search_read(
-                "ir.model", domain,
-                ["name", "model", "transient", "info"],
-                limit=300,
-            ))
+            # state="manual" matches ANY hand-created model (incl. technical UI
+            # without Studio). Restrict to studio_customization xmlids so this
+            # stays a Studio-specific signal, like views/menus below.
+            model_ids = await _xids("ir.model")
+            models = []
+            if model_ids:
+                domain: list = [["id", "in", model_ids]]
+                if model_filter:
+                    domain.append(["model", "ilike", model_filter])
+                models = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.model", domain,
+                    ["name", "model", "transient", "info"],
+                    limit=300,
+                ))
             result["custom_models"] = {"count": len(models), "items": models}
         except Exception as exc:
             result["custom_models"] = {"count": 0, "error": str(exc)}
 
     if do_all or "fields" in sections_req:
         try:
-            domain_f: list = [["state", "=", "manual"]]
-            if model_filter:
-                domain_f.append(["model", "ilike", model_filter])
-            fields = await loop.run_in_executor(None, lambda: odoo.search_read(
-                "ir.model.fields", domain_f,
-                ["name", "field_description", "ttype", "model_id", "required",
-                 "store", "index", "compute", "related", "selection"],
-                limit=1000,
-            ))
+            field_ids = await _xids("ir.model.fields")
+            fields = []
+            if field_ids:
+                domain_f: list = [["id", "in", field_ids]]
+                if model_filter:
+                    domain_f.append(["model", "ilike", model_filter])
+                fields = await loop.run_in_executor(None, lambda: odoo.search_read(
+                    "ir.model.fields", domain_f,
+                    ["name", "field_description", "ttype", "model_id", "required",
+                     "store", "index", "compute", "related", "selection"],
+                    limit=1000,
+                ))
             by_model: dict = {}
             for f in fields:
                 mid = f.get("model_id")

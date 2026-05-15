@@ -73,7 +73,7 @@ class OdooClient:
         return self.search_read(
             "ir.module.module",
             [["state", "=", "installed"]],
-            ["name", "shortdesc", "author", "installed_version"],
+            ["name", "shortdesc", "author", "installed_version", "application"],
             limit=500,
         )
 
