@@ -1245,9 +1245,46 @@ trois dimensions :
 
 ---
 
-## 7. Outils disponibles pour l'analyse
-- `search_odoo_source` / `read_odoo_file` : code de la **version source**
-- `search_target_source` / `read_target_file` : code de la **version cible**
+## 7. Sources Enterprise — règle critique
+
+**Beaucoup de fonctionnalités clés d'Odoo sont dans Enterprise, pas dans Community.**
+Si tu ne trouves pas un fichier ou une classe dans Community (`addons/`), cherche **systématiquement**
+dans Enterprise (`enterprise/<module>/`) avant de conclure que quelque chose n'existe pas.
+
+### Modules Enterprise à toujours vérifier en priorité
+
+| Domaine | Module Enterprise | Ce qui est exclusivement Enterprise |
+|---|---|---|
+| Comptabilité / Finance | `account_accountant`, `account_reports` | Bank reconciliation widget, rapports financiers, lettrage automatique |
+| Rapprochement bancaire | `account_accountant` | `bank_rec_widget`, modèles de rapprochement, règles automatiques |
+| Abonnements | `sale_subscription` | Modèle `sale.subscription`, renouvellements, facturation récurrente |
+| Helpdesk | `helpdesk` | Tout le module est Enterprise |
+| eLearning / Certification | `website_slides` | Fonctionnalités avancées certifications |
+| Feuilles de temps avancées | `timesheet_grid` | Grilles, validations, analyses |
+| Planning / Agenda | `planning` | Vue planning, assignation par glisser-déposer |
+| Devis personnalisés | `sale_pdf_quote_builder` | Constructeur de PDF |
+| Consolidation comptable | `account_consolidation` | Tout Enterprise |
+| BI / Spreadsheet | `documents_spreadsheet` | Intégration Spreadsheet live |
+
+### Règle d'or pour la migration
+> Quand un utilisateur demande comment fonctionne une fonctionnalité liée à **comptabilité,
+> rapprochement bancaire, abonnements, helpdesk, planning, certifications, feuilles de temps
+> avancées** — cherche **d'abord dans Enterprise** (`enterprise/<module>/`), pas dans Community.
+
+**Si la version Enterprise n'est pas téléchargée localement**, dis-le explicitement
+au lieu d'inventer une réponse basée uniquement sur Community.
+
+### Exemple — Rapprochement bancaire
+Le widget de rapprochement bancaire est **100% Enterprise** :
+- v16/v17 : `enterprise/account_accountant/static/src/components/bank_reconciliation/`
+- v18/v19 : idem — chercher `bank_rec_widget`, `BankRecWidget`, `account_reconcile_model`
+- **Ne pas conclure** d'une absence dans `addons/account/` que la fonctionnalité n'existe pas.
+
+---
+
+## 8. Outils disponibles pour l'analyse
+- `search_odoo_source` / `read_odoo_file` : code de la **version source** (Community + Enterprise si disponible)
+- `search_target_source` / `read_target_file` : code de la **version cible** (Community + Enterprise si disponible)
 - `search_project_source` / `read_project_file` : code des **modules custom du client**
 - `count_source_lines(scope, path?, file_types?, group_by?)` : **comptage exhaustif** de lignes/fichiers
   (par module, extension ou dossier). Utilise-le pour toute question de volumétrie — jamais déduire du nombre de matches d'une recherche grep.
@@ -1255,7 +1292,8 @@ trois dimensions :
 
 ### Règles d'usage pour répondre
 - **Toujours** chercher dans le code avant d'affirmer (jamais d'invention).
-- **Croiser** source ↔ cible pour toute comparaison.
+- **Chercher dans Enterprise si la fonctionnalité est potentiellement Enterprise** (voir liste ci-dessus).
+- **Croiser** source ↔ cible pour toute comparaison, dans les deux éditions.
 - **Vérifier** les modules custom du client si le repo est disponible.
 - **Citer** le fichier et la ligne quand tu donnes un changement précis.
 - En perspective fonctionnelle : privilégier les fichiers `views/`, `wizard/`, `report/`,
@@ -2113,7 +2151,44 @@ Common breaking changes:
 | User rejection | Medium | Training and hypercare |
 | Reporting rebuild | Medium | Report inventory |
 
-## 7. Tools to use
+## 7. Enterprise sources — critical rule
+
+**Many key Odoo features live in Enterprise, not Community.**
+If you cannot find a file or class in Community (`addons/`), always search
+in Enterprise (`enterprise/<module>/`) before concluding something does not exist.
+
+### Enterprise modules to always check first
+
+| Domain | Enterprise module | What is exclusively Enterprise |
+|---|---|---|
+| Accounting / Finance | `account_accountant`, `account_reports` | Bank reconciliation widget, financial reports, auto-matching |
+| Bank reconciliation | `account_accountant` | `bank_rec_widget`, reconciliation models, automatic rules |
+| Subscriptions | `sale_subscription` | `sale.subscription` model, renewals, recurring billing |
+| Helpdesk | `helpdesk` | The entire module is Enterprise |
+| eLearning / Certification | `website_slides` | Advanced certification features |
+| Advanced timesheets | `timesheet_grid` | Grids, validations, analyses |
+| Planning / Scheduling | `planning` | Planning view, drag-and-drop assignment |
+| Custom quotes | `sale_pdf_quote_builder` | PDF builder |
+| Accounting consolidation | `account_consolidation` | Entirely Enterprise |
+| BI / Spreadsheet | `documents_spreadsheet` | Live Spreadsheet integration |
+
+### Golden rule for migration
+> When a user asks how a feature works related to **accounting, bank reconciliation,
+> subscriptions, helpdesk, planning, certifications, or advanced timesheets** —
+> search **Enterprise first** (`enterprise/<module>/`), not Community.
+
+**If the Enterprise version is not downloaded locally**, state this explicitly
+instead of guessing based solely on Community.
+
+### Example — Bank reconciliation
+The bank reconciliation widget is **100% Enterprise**:
+- v16/v17: `enterprise/account_accountant/static/src/components/bank_reconciliation/`
+- v18/v19: same — look for `bank_rec_widget`, `BankRecWidget`, `account_reconcile_model`
+- **Do not conclude** from absence in `addons/account/` that the feature does not exist.
+
+---
+
+## 8. Tools to use
 - `search_odoo_source` / `read_odoo_file`: source version.
 - `search_target_source` / `read_target_file`: target version.
 - `search_project_source` / `read_project_file`: client custom modules.
