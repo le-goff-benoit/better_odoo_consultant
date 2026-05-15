@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
+import { streamingSignals, type StreamStatus } from '../utils/streamingSignals'
 
 const labels = {
   fr: {
@@ -56,6 +58,17 @@ export default function Sidebar({
   const { data } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile, staleTime: 60_000 })
   const location = useLocation()
   const up = data?.data ?? {}
+
+  // Subscribe to streaming signals so nav dots update live
+  const [, rerender] = useState(0)
+  useEffect(() => streamingSignals.subscribe(() => rerender(n => n + 1)), [])
+
+  const signalFor = (pageKey: 'assistant' | 'migration'): StreamStatus | null => {
+    const sigs = streamingSignals.forPage(pageKey)
+    if (sigs.some(s => s.status === 'streaming')) return 'streaming'
+    if (sigs.some(s => s.status === 'done')) return 'done'
+    return null
+  }
   const lang = normalizeUiLanguage(up.language)
   const tr = labels[lang]
   const avatarIsImg = (up.avatar as string | undefined)?.startsWith('data:')
@@ -96,6 +109,8 @@ export default function Sidebar({
         <span className="topbar-nav-separator" aria-hidden="true" />
         {workflowLinks.map(l => {
           const Icon = l.icon
+          const pageKey = l.labelKey as 'assistant' | 'migration'
+          const sig = signalFor(pageKey)
           return (
             <NavLink
               key={l.to}
@@ -104,6 +119,13 @@ export default function Sidebar({
             >
               <Icon size={16} aria-hidden />
               {tr[l.labelKey as keyof typeof tr]}
+              {sig && (
+                <span
+                  className={`stream-dot stream-dot--${sig}`}
+                  title={sig === 'streaming' ? 'Réponse en cours…' : 'Réponse disponible'}
+                  aria-hidden
+                />
+              )}
             </NavLink>
           )
         })}

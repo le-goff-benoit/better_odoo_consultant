@@ -27,6 +27,11 @@ import {
 } from '../utils/attachments'
 import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
 import { countryFlag } from '../utils/countryFlag'
+import { streamingSignals } from '../utils/streamingSignals'
+
+// Module-level buffer: message arrays survive component unmount so streams
+// that finish after navigation are captured and shown on remount.
+const _msgBuffer = new Map<string, Message[]>()
 
 function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
   const def = ODOO_APPS[name]
@@ -326,10 +331,27 @@ export default function Assistant() {
   const [showHistory,   setShowHistory]   = useState(false)
 
   const convKey = profileId !== null ? String(profileId) : null
+  // On convKey change: if the buffer has fresher messages (from a stream that
+  // completed while we were on another page), merge them into React state.
+  useEffect(() => {
+    if (!convKey) return
+    const buffered = _msgBuffer.get(convKey)
+    if (buffered && buffered.length > 0) {
+      setConversations(prev => {
+        const existing = prev[convKey] ?? []
+        if (buffered.length > existing.length) return { ...prev, [convKey]: buffered }
+        return prev
+      })
+    }
+  }, [convKey])
   const messages = convKey ? (conversations[convKey] ?? []) : []
 
   // Auto-persist active conversations to localStorage
   useEffect(() => { persistActiveConvs(conversations) }, [conversations])
+
+  // Subscribe to streaming signals so tab dots re-render when streams complete
+  const [, _rerenderSig] = useState(0)
+  useEffect(() => streamingSignals.subscribe(() => _rerenderSig(n => n + 1)), [])
 
   const [input,     setInput]    = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -501,10 +523,11 @@ export default function Assistant() {
 
   const setMessages = (fn: (prev: Message[]) => Message[]) => {
     if (!convKey) return
-    setConversations(prev => ({
-      ...prev,
-      [convKey]: fn(prev[convKey] ?? []),
-    }))
+    setConversations(prev => {
+      const next = fn(prev[convKey] ?? [])
+      _msgBuffer.set(convKey, next)  // survives unmount
+      return { ...prev, [convKey]: next }
+    })
   }
 
   const addAttachmentError = (file: File, error: string) => {
@@ -642,6 +665,10 @@ export default function Assistant() {
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
+    if (convKey) {
+      const sigLabel = isGeneralMode ? `Odoo ${generalVersion}` : (selectedProfile?.name ?? convKey)
+      streamingSignals.set(convKey, { status: 'streaming', label: sigLabel, pageKey: 'assistant' })
+    }
 
     const history = messages
       .filter(m => !m.loading)
@@ -708,13 +735,14 @@ export default function Assistant() {
         }
       }
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') return
+      if (err instanceof Error && err.name === 'AbortError') { if (convKey) streamingSignals.clear(convKey); return }
       appendEvent(assistantMsg.id, { type: 'error', msg: String(err) })
     } finally {
       setStreaming(false)
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id ? { ...m, loading: false } : m
       ))
+      if (convKey) streamingSignals.done(convKey)
     }
   }
 
@@ -754,7 +782,11 @@ export default function Assistant() {
     if (convKey && messages.length > 0) {
       saveToHistory(convKey, messages, isGeneralMode ? generalVersion : selectedProfile?.odoo_version)
     }
-    if (convKey) setConversations(prev => ({ ...prev, [convKey]: [] }))
+    if (convKey) {
+      setConversations(prev => ({ ...prev, [convKey]: [] }))
+      _msgBuffer.delete(convKey)
+      streamingSignals.clear(convKey)
+    }
     setStreaming(false)
   }
 
@@ -805,12 +837,14 @@ export default function Assistant() {
           {(() => {
             const isActive = isGeneralMode
             const msgCount = (conversations[GENERAL_KEY] ?? []).filter(m => m.role === 'user').length
+            const sig = streamingSignals.getAll().find(([k]) => k === GENERAL_KEY)?.[1]
             return (
               <button onClick={() => setProfileId(GENERAL_KEY)} className={`assistant-tab-button${isActive ? ' is-active' : ''}`}>
                 <Globe2 size={14} /> {c.general}
                 {msgCount > 0 && (
                   <span className="assistant-tab-count">{msgCount}</span>
                 )}
+                {sig && <span className={`stream-dot stream-dot--${sig.status}`} aria-hidden />}
               </button>
             )
           })()}
@@ -830,6 +864,8 @@ export default function Assistant() {
             const profileCountry = profileCompanies.find(c => c.id === p.selected_company_id)?.country_code
               ?? profileCompanies[0]?.country_code
             const tabFlag = countryFlag(profileCountry)
+            const tabSigEntry = streamingSignals.getAll().find(([k]) => k === String(p.id))
+            const tabSig = tabSigEntry?.[1]
             return (
               <button key={p.id} onClick={() => setProfileId(p.id)} className={`assistant-tab-button${isActive ? ' is-active' : ''}`}>
                 {p.company_logo
@@ -841,6 +877,7 @@ export default function Assistant() {
                 {msgCount > 0 && (
                   <span className="assistant-tab-count">{msgCount}</span>
                 )}
+                {tabSig && <span className={`stream-dot stream-dot--${tabSig.status}`} aria-hidden />}
               </button>
             )
           })}

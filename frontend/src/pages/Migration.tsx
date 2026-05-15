@@ -24,6 +24,8 @@ import {
   type AttachmentMeta,
 } from '../utils/attachments'
 import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
+import { streamingSignals } from '../utils/streamingSignals'
+import { History } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -116,6 +118,36 @@ interface Message {
   outputTokens?: number
 }
 
+interface MigSavedConv {
+  id: string; title: string
+  messages: Message[]
+  srcVersion?: string; tgtVersion?: string
+  createdAt: number; updatedAt: number
+}
+
+// ── Migration history (localStorage) ──────────────────────────────
+const LS_MIG_ACTIVE  = 'odoo-migration-active'
+const LS_MIG_HISTORY = 'odoo-migration-history'
+
+function migAutoTitle(msgs: Message[]): string {
+  const first = msgs.find(m => m.role === 'user')?.text ?? ''
+  return first.length > 60 ? first.slice(0, 57) + '…' : first || 'Migration'
+}
+function loadMigActive(): Record<string, Message[]> {
+  try { return JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}') } catch { return {} }
+}
+function persistMigActive(c: Record<string, Message[]>) {
+  try { localStorage.setItem(LS_MIG_ACTIVE, JSON.stringify(c)) } catch { /* quota */ }
+}
+function loadMigHistory(): MigSavedConv[] {
+  try { return JSON.parse(localStorage.getItem(LS_MIG_HISTORY) ?? '[]') } catch { return [] }
+}
+function persistMigHistory(h: MigSavedConv[]) {
+  try { localStorage.setItem(LS_MIG_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
+}
+
+// Module-level buffer: survives component unmount during streaming
+const _migBuffer = new Map<string, Message[]>()
 
 const SUGGESTIONS_MIGRATION_TECHNICAL = [
   'Quels champs ont changé sur sale.order entre les deux versions ?',
@@ -1169,7 +1201,14 @@ export default function Migration() {
   const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('migration', 'auto'))
   const setPerspective = (p: PerspectiveMode) => { setPerspectiveState(p); savePerspective('migration', p) }
 
-  const [messages, setMessages] = useState<Message[]>([])
+  const [migConvs, setMigConvs] = useState<Record<string, Message[]>>(() => loadMigActive())
+  const [migHistory, setMigHistory] = useState<MigSavedConv[]>(() => loadMigHistory())
+  const [showMigHistory, setShowMigHistory] = useState(false)
+
+  // Session key: derived from source+target config once versions are known
+  // Updated lazily — kept in ref so stream callbacks always see current value
+  const migKeyRef = useRef<string>('')
+
   const [input,     setInput]   = useState('')
   const [streaming, setStreaming] = useState(false)
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
@@ -1193,21 +1232,53 @@ export default function Migration() {
     onScroll()
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
+  const sourceVersion = resolveVersion(source, profiles)
+  const targetVersion = resolveVersion(target, profiles)
+
+  // Session key — regenerated when source/target change
+  const migKey = [
+    source.mode === 'environment' ? `p${source.profileId}-e${source.envId}` : (sourceVersion || 'src'),
+    target.mode === 'environment' ? `p${target.profileId}-e${target.envId}` : (targetVersion || 'tgt'),
+  ].join('__')
+  migKeyRef.current = migKey
+
+  // Merge buffer on key change (stream completed while navigated away)
+  useEffect(() => {
+    const buffered = _migBuffer.get(migKey)
+    if (buffered && buffered.length > 0) {
+      setMigConvs(prev => {
+        const existing = prev[migKey] ?? []
+        if (buffered.length > existing.length) return { ...prev, [migKey]: buffered }
+        return prev
+      })
+    }
+  }, [migKey])
+
+  const messages: Message[] = migConvs[migKey] ?? []
+
+  const setMessages = (fn: (prev: Message[]) => Message[]) => {
+    setMigConvs(prev => {
+      const next = fn(prev[migKey] ?? [])
+      _migBuffer.set(migKey, next)
+      persistMigActive({ ...prev, [migKey]: next })
+      return { ...prev, [migKey]: next }
+    })
+  }
+
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
   const perspective = useResolvedPerspective(perspectiveMode, perspectivePrompt, 'business_analyst')
 
   const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id ?? null
-
-  // When a brand-new assistant response appears, anchor the viewport at its TOP
-  // so the user sees the start of the response (not the bottom).
   useEffect(() => {
     if (!lastAssistantId) return
     const el = assistantRefs.current.get(lastAssistantId)
     el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [lastAssistantId])
 
-  const sourceVersion = resolveVersion(source, profiles)
-  const targetVersion = resolveVersion(target, profiles)
+  // Subscribe to streaming signals so stream-dot indicators re-render
+  const [, _rerenderSig] = useState(0)
+  useEffect(() => streamingSignals.subscribe(() => _rerenderSig(n => n + 1)), [])
+
   const sourceLabel   = resolveLabel(source, profiles)
   const targetLabel   = resolveLabel(target, profiles)
   const sourceRepo    = resolveRepoPath(source, profiles)
@@ -1249,9 +1320,30 @@ export default function Migration() {
 
   const ready = configuredProviders.length > 0 && !!(sourceVersion || targetVersion)
 
+  const saveToMigHistory = () => {
+    if (messages.filter(m => !m.loading).length === 0) return
+    const conv: MigSavedConv = {
+      id: Date.now().toString(),
+      title: migAutoTitle(messages),
+      messages: messages.filter(m => !m.loading),
+      srcVersion: sourceVersion ?? undefined,
+      tgtVersion: targetVersion ?? undefined,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    setMigHistory(prev => {
+      const updated = [conv, ...prev].slice(0, 50)
+      persistMigHistory(updated)
+      return updated
+    })
+  }
+
   const resetConversation = () => {
     abortRef.current?.abort()
-    setMessages([])
+    if (messages.length > 0) saveToMigHistory()
+    setMessages(() => [])
+    _migBuffer.delete(migKey)
+    streamingSignals.clear(migKey)
     setAttachments([])
     setStreaming(false)
   }
@@ -1337,6 +1429,11 @@ export default function Migration() {
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setInput('')
     setStreaming(true)
+    streamingSignals.set(migKeyRef.current, {
+      status: 'streaming',
+      label: `Migration ${sourceVersion ?? '?'} → ${targetVersion ?? '?'}`,
+      pageKey: 'migration',
+    })
 
     const history = messages
       .filter(m => !m.loading)
@@ -1416,13 +1513,17 @@ export default function Migration() {
         }
       }
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') return
+      if (err instanceof Error && err.name === 'AbortError') {
+        streamingSignals.clear(migKeyRef.current)
+        return
+      }
       appendEvent(assistantMsg.id, { type: 'error', msg: String(err) })
     } finally {
       setStreaming(false)
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id ? { ...m, loading: false } : m
       ))
+      streamingSignals.done(migKeyRef.current)
     }
   }
 
@@ -1443,24 +1544,89 @@ export default function Migration() {
         title={c.title}
         description={c.description}
         action={
-          <button
-            onClick={resetConversation}
-            title={c.clearConversation}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
-              background: t.bgMuted, border: `1px solid ${t.border}`,
-              fontSize: 12, color: t.muted, fontWeight: 600,
-              opacity: messages.length === 0 ? 0.4 : 1,
-              transition: 'opacity .15s',
-            }}
-            disabled={messages.length === 0}
-          >
-            <ArrowRightLeft size={13} />
-            {c.newAnalysis}
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {migHistory.length > 0 && (
+              <button
+                onClick={() => setShowMigHistory(v => !v)}
+                title={lang === 'fr' ? 'Historique' : 'History'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
+                  background: showMigHistory ? t.brand : t.bgMuted,
+                  border: `1px solid ${showMigHistory ? t.brand : t.border}`,
+                  fontSize: 12, color: showMigHistory ? '#fff' : t.muted, fontWeight: 600,
+                }}
+              >
+                <History size={13} />
+                {lang === 'fr' ? 'Historique' : 'History'}
+                <span style={{ background: showMigHistory ? 'rgba(255,255,255,.25)' : t.border, color: showMigHistory ? '#fff' : t.text, borderRadius: 999, padding: '0 5px', fontSize: 10 }}>{migHistory.length}</span>
+              </button>
+            )}
+            <button
+              onClick={resetConversation}
+              title={c.clearConversation}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
+                background: t.bgMuted, border: `1px solid ${t.border}`,
+                fontSize: 12, color: t.muted, fontWeight: 600,
+                opacity: messages.length === 0 ? 0.4 : 1,
+                transition: 'opacity .15s',
+              }}
+              disabled={messages.length === 0}
+            >
+              <ArrowRightLeft size={13} />
+              {c.newAnalysis}
+            </button>
+          </div>
         }
       />
+
+      {/* Migration history panel */}
+      {showMigHistory && migHistory.length > 0 && (
+        <div style={{
+          background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radius,
+          padding: '12px 16px', marginBottom: 14, maxHeight: 260, overflowY: 'auto',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            {lang === 'fr' ? 'Historique des migrations' : 'Migration history'}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {migHistory.map(conv => (
+              <button
+                key={conv.id}
+                onClick={() => {
+                  setMigConvs(prev => ({ ...prev, [migKey]: conv.messages }))
+                  _migBuffer.set(migKey, conv.messages)
+                  setShowMigHistory(false)
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+                  padding: '7px 10px', borderRadius: t.radius, cursor: 'pointer',
+                  background: 'transparent', border: `1px solid transparent`,
+                  color: t.text, fontSize: 13, width: '100%',
+                  transition: 'background .12s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = t.bgMuted)}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <ArrowRightLeft size={12} style={{ flexShrink: 0, color: t.muted }} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {conv.title}
+                </span>
+                {(conv.srcVersion || conv.tgtVersion) && (
+                  <span style={{ fontSize: 10, color: t.muted, flexShrink: 0 }}>
+                    {conv.srcVersion}{conv.tgtVersion ? ` → ${conv.tgtVersion}` : ''}
+                  </span>
+                )}
+                <span style={{ fontSize: 10, color: t.muted, flexShrink: 0 }}>
+                  {conv.messages.filter(m => m.role === 'user').length} msg
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="migration-content-row">
         <div className="migration-main-column">
@@ -1489,6 +1655,18 @@ export default function Migration() {
       </div>
 
       {/* Side selectors */}
+      {(() => {
+        const sig = streamingSignals.getAll().find(([k]) => k === migKey)?.[1]
+        if (!sig) return null
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: sig.status === 'streaming' ? 'var(--brand)' : 'var(--th-success-fg, #6dcf85)', fontWeight: 600 }}>
+            <span className={`stream-dot stream-dot--${sig.status}`} />
+            {sig.status === 'streaming'
+              ? (lang === 'fr' ? 'Réponse en cours…' : 'Generating response…')
+              : (lang === 'fr' ? 'Réponse disponible' : 'Response ready')}
+          </div>
+        )
+      })()}
       <div className="migration-side-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16, flexShrink: 0 }}>
         <SideSelector
           label={c.source}
