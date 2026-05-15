@@ -360,6 +360,89 @@ async def test_technical_complexity_does_not_flag_oca_modules_as_custom_dev(tmp_
     assert "account_financial_report" in result["installed_modules"]["community_modules"]
 
 
+class FakeWebStudioOnlyOdoo:
+    """Odoo instance with Studio installed but no studio_customization records."""
+
+    def get_installed_modules(self):
+        return [
+            {"name": "base", "author": "Odoo S.A."},
+            {"name": "web_studio", "author": "Odoo S.A."},
+        ]
+
+    def search_read(self, model, domain=None, fields=None, limit=80, offset=0, order=""):
+        if model == "ir.model.data":
+            # Regression guard: web_studio's own XML ids must not be counted as
+            # customer Studio customizations.
+            assert ["module", "=", "studio_customization"] in (domain or [])
+            return []
+        return []
+
+
+@pytest.mark.asyncio
+async def test_technical_complexity_does_not_flag_installed_web_studio_without_customizations(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: home)
+
+    result = await analyze_technical_complexity("Demo", None, FakeWebStudioOnlyOdoo(), None)
+
+    assert result["mode"] == "standard"
+    assert result["studio"]["signal_count"] == 0
+    assert result["installed_modules"]["studio_modules"] == ["web_studio"]
+
+
+@pytest.mark.asyncio
+async def test_technical_complexity_ignores_official_and_oca_manifests_in_repo(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    repo = home / ".odoo-consultant" / "repos" / "Demo" / "prod"
+    (repo / ".git").mkdir(parents=True)
+    official = repo / "sale"
+    oca = repo / "queue_job"
+    custom = repo / "custom_sale"
+    official.mkdir()
+    oca.mkdir()
+    custom.mkdir()
+    (official / "__manifest__.py").write_text("{'name': 'Sales', 'author': 'Odoo S.A.'}", encoding="utf-8")
+    (oca / "__manifest__.py").write_text("{'name': 'Queue Job', 'author': 'Odoo Community Association (OCA)'}", encoding="utf-8")
+    (custom / "__manifest__.py").write_text("{'name': 'Customer Sale'}", encoding="utf-8")
+    (custom / "models.py").write_text("from odoo import models\n", encoding="utf-8")
+
+    monkeypatch.setattr(Path, "home", lambda: home)
+
+    result = await analyze_technical_complexity("Demo", None, None, "org/demo")
+
+    assert result["mode"] == "dev"
+    assert result["dev"]["manifest_count"] == 1
+    assert result["dev"]["repositories"][0]["ignored_manifest_count"] == 2
+    assert result["dev"]["repositories"][0]["custom_modules"] == ["custom_sale"]
+
+
+def test_technical_complexity_context_is_injected_in_project_variable_prompt():
+    from types import SimpleNamespace
+    from odoo_consultant_portal.services.ai_service import build_system
+
+    raw = json.dumps({
+        "mode": "standard",
+        "label": "Pas de Studio ni Dev",
+        "confidence": "high",
+        "studio": {"detected": False, "signal_count": 0},
+        "dev": {"detected": False, "manifest_count": 0, "python_files": 0, "xml_files": 0},
+    })
+    complexity_context = build_technical_complexity_context(raw)
+    profile = SimpleNamespace(
+        db_url="https://demo.odoo.com",
+        db_name="demo",
+        odoo_version="18.0",
+        company_name="Demo",
+        project_context=None,
+    )
+
+    _stable, variable = build_system(profile, context_md=complexity_context)
+
+    assert "Complexité technique du projet" in variable
+    assert "Pas de Studio ni Dev" in variable
+    assert "demander confirmation avant d'inventer une couche Studio ou custom" in variable
+
+
 def test_trim_history_drops_orphan_tool_result_user_turn():
     # Build a long history where, after trimming to MAX_HISTORY_TURNS, the
     # first kept message would be an orphan Anthropic tool_result user turn.

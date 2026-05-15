@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, Globe2, History, Lock, Paperclip, Settings, Square, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, Globe2, History, Lock, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -83,6 +83,7 @@ interface Message {
   events?: AiEvent[]
   loading?: boolean
   timestamp?: number
+  startTime?: number
   inputTokens?: number
   outputTokens?: number
 }
@@ -585,7 +586,7 @@ export default function Assistant() {
     history.push({ role: 'user', content: prompt })
     const crNow = Date.now()
     const userMsg: Message = { id: String(crNow), role: 'user', text: '📋 Générer le compte-rendu de réunion', timestamp: crNow }
-    const assistantMsg: Message = { id: String(crNow + 1), role: 'assistant', events: [], loading: true }
+    const assistantMsg: Message = { id: String(crNow + 1), role: 'assistant', events: [], loading: true, startTime: crNow }
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
     abortRef.current?.abort()
@@ -637,7 +638,7 @@ export default function Assistant() {
     const now = Date.now()
     const attachedMeta = attached.map(attachmentMeta)
     const userMsg: Message      = { id: String(now), role: 'user', text, attachments: attachedMeta, timestamp: now }
-    const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true }
+    const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true, startTime: now }
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
@@ -956,7 +957,7 @@ export default function Assistant() {
                 ref={el => { assistantRefs.current.set(msg.id, el) }}
                 style={{ scrollMarginTop: 8 }}
               >
-                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} mascotType={userProfile?.mascotType} mascotColor={userProfile?.mascotColor} />
+                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} mascotType={userProfile?.mascotType} mascotColor={userProfile?.mascotColor} />
               </div>
             )
         ))}
@@ -1547,9 +1548,9 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, inputTokens, outputTokens, projectName, mascotType, mascotColor }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, mascotType, mascotColor }: {
   events: AiEvent[]; loading?: boolean; provider: string
-  timestamp?: number; inputTokens?: number; outputTokens?: number
+  timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
   mascotType?: 'robot' | 'cat' | 'dog'
   mascotColor?: string
@@ -1563,6 +1564,9 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
   const warningEvts = events.filter(e => e.type === 'warning')
   const time   = fmtTime(timestamp)
   const tokens = fmtTokens(inputTokens, outputTokens)
+  const elapsed = (timestamp && startTime && timestamp > startTime)
+    ? (() => { const s = (timestamp - startTime) / 1000; return s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` })()
+    : null
   const [copied, setCopied] = useState(false)
 
   function copyText() {
@@ -1649,9 +1653,10 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           </div>
         )}
 
-        {(time || tokens || textEvt?.content) && !loading && (
+        {(time || tokens || elapsed || textEvt?.content) && !loading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 10, color: t.muted, paddingLeft: 2 }}>
             {time && <span>{time}</span>}
+            {elapsed && <span title={lang === 'fr' ? 'Temps de réponse' : 'Response time'} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Timer size={10} />{elapsed}</span>}
             {tokens && <span title={c.tokens}>{tokens}</span>}
             {textEvt?.content && (
               <button

@@ -349,12 +349,12 @@ def load_context_for_prompt(
         except FileNotFoundError:
             pass
 
-    if odoo_version and (migration or not prompt or _has_any(prompt, _VERSION_TERMS)):
+    if odoo_version:
         try:
             sections.append((titles["version"].format(version=odoo_version), read_file(f"odoo-{odoo_version}.md", lang)))
         except FileNotFoundError:
             pass
-    if target_version and target_version != odoo_version and (migration or _has_any(prompt, _VERSION_TERMS)):
+    if target_version and target_version != odoo_version:
         try:
             sections.append((titles["version"].format(version=target_version), read_file(f"odoo-{target_version}.md", lang)))
         except FileNotFoundError:

@@ -59,46 +59,46 @@ const SUPPORT_STRONG = [
 
 const BA_TERMS = [
   // business process & analysis vocabulary (NOT generic words like "client" / "user")
-  ‘process’, ‘processus’, ‘métier’, ‘metier’, ‘fonctionnel’, ‘fonctionnelle’,
-  ‘as-is’, ‘to-be’, ‘workflow’, ‘parcours utilisateur’, ‘formation’, ‘trainee’,
-  ‘recette’, ‘uat’, ‘besoin’, ‘besoins’, ‘requirement’, ‘requirements’,
-  ‘règle de gestion’, ‘regle de gestion’, ‘gap’, ‘écart’, ‘ecart’,
-  ‘compte-rendu’, ‘compte rendu’, ‘meeting’, ‘réunion’, ‘reunion’,
-  ‘adoption’, ‘conduite du changement’, ‘change management’, ‘kpi’,
+  'process', 'processus', 'métier', 'metier', 'fonctionnel', 'fonctionnelle',
+  'as-is', 'to-be', 'workflow', 'parcours utilisateur', 'formation', 'trainee',
+  'recette', 'uat', 'besoin', 'besoins', 'requirement', 'requirements',
+  'règle de gestion', 'regle de gestion', 'gap', 'écart', 'ecart',
+  'compte-rendu', 'compte rendu', 'meeting', 'réunion', 'reunion',
+  'adoption', 'conduite du changement', 'change management', 'kpi',
   // configuration / standard usage
-  ‘configurer’, ‘paramétrer’, ‘parametrer’,
-  ‘comment faire’, ‘how to’, "cas d’usage", ‘use case’,
-  "qu’est-ce que", ‘qu’est-ce que’, ‘what is’, ‘à quoi sert’, ‘a quoi sert’,
+  'configurer', 'paramétrer', 'parametrer',
+  'comment faire', 'how to', "cas d'usage", 'use case',
+  "qu'est-ce que", 'what is', 'à quoi sert', 'a quoi sert',
   // multi-word functional phrases (preferred over single common nouns)
-  ‘point de vente’, ‘note de frais’, ‘feuille de temps’, ‘bon de livraison’,
-  ‘bon de commande’, ‘tableau de bord’,
+  'point de vente', 'note de frais', 'feuille de temps', 'bon de livraison',
+  'bon de commande', 'tableau de bord',
   // ── Odoo business domain vocabulary ─────────────────────────────────────
   // Accounting & Finance (specific enough to be unambiguous in context)
-  ‘avoir’, ‘avoirs’, ‘acompte’, ‘comptable’,
-  ‘rapprochement’, ‘lettrage’, ‘trésorerie’, ‘tresorerie’,
-  ‘recouvrement’, ‘encaissement’, ‘relance’,
-  ‘solde client’, ‘solde fournisseur’,
+  'avoir', 'avoirs', 'acompte', 'comptable',
+  'rapprochement', 'lettrage', 'trésorerie', 'tresorerie',
+  'recouvrement', 'encaissement', 'relance',
+  'solde client', 'solde fournisseur',
   // Sales & CRM
-  ‘devis’, ‘opportunité’, ‘opportunite’,
-  ‘commande client’, ‘commandes client’,
+  'devis', 'opportunité', 'opportunite',
+  'commande client', 'commandes client',
   // Purchase
-  ‘fournisseur’, ‘fournisseurs’,
-  ‘bon de réception’, ‘bon de reception’,
+  'fournisseur', 'fournisseurs',
+  'bon de réception', 'bon de reception',
   // Inventory / Warehouse
-  ‘inventaire’, ‘mouvement de stock’,
+  'inventaire', 'mouvement de stock',
   // HR & Payroll
-  ‘congé’, ‘conge’, ‘absence’, ‘employé’, ‘employe’,
-  ‘fiche de salaire’, ‘bulletin de salaire’,
+  'congé', 'conge', 'absence', 'employé', 'employe',
+  'fiche de salaire', 'bulletin de salaire',
 ]
 
 const BA_STRONG = [
-  ‘métier’, ‘metier’, ‘fonctionnel’, ‘as-is’, ‘to-be’, "cas d’usage",
-  ‘règle de gestion’, ‘compte-rendu’, ‘compte rendu’, ‘recette’, ‘uat’,
-  ‘parcours utilisateur’,
+  'métier', 'metier', 'fonctionnel', 'as-is', 'to-be', "cas d'usage",
+  'règle de gestion', 'compte-rendu', 'compte rendu', 'recette', 'uat',
+  'parcours utilisateur',
   // Accounting domain — a single mention is a reliable BA signal
-  ‘facture’, ‘factures’, ‘invoice’, ‘invoices’,
-  ‘comptabilité’, ‘accounting’,
-  ‘rapprochement bancaire’, ‘plan comptable’,
+  'facture', 'factures', 'invoice', 'invoices',
+  'comptabilité', 'accounting',
+  'rapprochement bancaire', 'plan comptable',
 ]
 
 const ARCH_TERMS = [
@@ -320,8 +320,8 @@ export function routedContextFiles(params: {
   if (params.migration) files.add('migration.md')
   if (hasAny(text, MEETING_TERMS)) files.add('meeting-minute.md')
   if (hasAny(text, STUDIO_TERMS)) files.add('studio.md')
-  if (params.version && (params.migration || !text || hasAny(text, VERSION_TERMS))) files.add(`odoo-${params.version}.md`)
-  if (params.targetVersion && params.targetVersion !== params.version && (params.migration || hasAny(text, VERSION_TERMS))) files.add(`odoo-${params.targetVersion}.md`)
+  if (params.version) files.add(`odoo-${params.version}.md`)
+  if (params.targetVersion && params.targetVersion !== params.version) files.add(`odoo-${params.targetVersion}.md`)
   return Array.from(files)
 }
 
