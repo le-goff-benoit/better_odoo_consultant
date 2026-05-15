@@ -924,17 +924,27 @@ textarea:focus-visible {
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  padding: 7px 9px;
-  border: 1px solid color-mix(in srgb, var(--persp-color, var(--brand)) 25%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--persp-color, var(--brand)) 10%, transparent);
+  padding: 6px 9px;
+  border: var(--neo-border-w) solid var(--th-border);
+  border-left: 3px solid var(--persp-color, var(--brand));
+  border-radius: 0;
+  background: var(--th-bg-muted);
+}
+
+.conversation-profile-live strong {
+  color: var(--persp-color, var(--brand));
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--font-display);
 }
 
 .conversation-profile-live span {
-  color: color-mix(in srgb, var(--persp-color, var(--brand)) 80%, var(--th-text));
+  color: var(--th-muted);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
+  font-family: var(--font-mono);
   text-transform: uppercase;
+  letter-spacing: .06em;
 }
 
 .conversation-selection-list {
@@ -981,13 +991,70 @@ textarea:focus-visible {
   flex-direction: column;
 }
 
-.perspective-auto-inferred {
-  animation: perspectivePulse 1.25s ease-in-out infinite;
+/* ── Perspective toggle ─────────────────────────────────────────────────── */
+.perspective-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  background: var(--th-bg-muted);
+  border: var(--neo-border-w) solid var(--th-border);
+  border-radius: 0;
+  padding: 2px;
+}
+
+.perspective-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--th-muted);
+  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s, color .12s, gap .12s, padding .12s;
+  flex-shrink: 0;
+  padding: 5px 7px;
+}
+.perspective-toggle--sm .perspective-toggle-btn {
+  font-size: 10px;
+  padding: 4px 6px;
+}
+
+.perspective-toggle-btn.has-label {
+  gap: 5px;
+  padding: 5px 9px;
+}
+.perspective-toggle--sm .perspective-toggle-btn.has-label {
+  gap: 4px;
+  padding: 4px 7px;
+}
+
+.perspective-toggle-btn.is-active {
+  background: var(--persp-accent);
+  color: #fff;
+}
+.perspective-toggle-btn.is-inferred {
+  background: color-mix(in srgb, var(--persp-accent) 12%, transparent);
+  color: var(--persp-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--persp-accent) 38%, transparent);
+  animation: perspectivePulse 1.3s ease-in-out infinite;
+}
+.perspective-toggle-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.perspective-toggle-btn:not(:disabled):not(.is-active):hover {
+  background: var(--th-bg-card);
+  color: var(--th-text);
 }
 
 @keyframes perspectivePulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(.92); }
+  50% { transform: scale(.91); }
 }
 
 .page-stack {

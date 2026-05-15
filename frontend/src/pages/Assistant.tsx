@@ -345,8 +345,12 @@ export default function Assistant() {
     const el = messageListRef.current
     if (!el) return
     const onScroll = () => {
-      const scrolled = el.scrollTop > 40
-      setIsScrolled(prev => prev !== scrolled ? scrolled : prev)
+      const top = el.scrollTop
+      setIsScrolled(prev => {
+        if (!prev && top > 80) return true
+        if (prev && top < 20) return false
+        return prev
+      })
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
@@ -1511,7 +1515,7 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
       <div style={{ maxWidth: '78%' }}>
         <div style={{
           padding: '10px 14px',
-          background: t.brand, color: '#fff',
+          background: 'var(--th-text)', color: 'var(--th-bg)',
           borderRadius: `${t.radiusLg} ${t.radiusLg} 4px ${t.radiusLg}`,
           fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap',
         }}>
@@ -1522,8 +1526,8 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
                 <span key={`${att.name}-${att.size}`} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '3px 7px', borderRadius: 999,
-                  background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.24)',
-                  color: '#fff', fontSize: 11, fontWeight: 650, maxWidth: 260,
+                  background: 'rgba(128,128,128,.18)', border: '1px solid rgba(128,128,128,.28)',
+                  color: 'var(--th-bg)', fontSize: 11, fontWeight: 650, maxWidth: 260,
                 }}>
                   <Paperclip size={12} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
