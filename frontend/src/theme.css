@@ -757,24 +757,18 @@ textarea:focus-visible {
   box-shadow: none;
 }
 
-/* Active link: crisp retro underline, modern contrast. */
+/* Active link: crisp retro underline via background — cannot overflow topbar border. */
 .topbar-link.active,
 .topbar-icon-link.active {
-  background: var(--boa-topbar-hover);
   color: var(--boa-topbar-text);
-}
-.topbar-link.active::after,
-.topbar-icon-link.active::after {
-  content: "";
-  position: absolute; left: 12px; right: 12px; bottom: 0; height: 3px;
   background:
-    linear-gradient(
-      90deg,
-      var(--boa-cyan) 0 25%,
-      var(--boa-green) 25% 50%,
+    linear-gradient(90deg,
+      var(--boa-cyan)   0 25%,
+      var(--boa-green)  25% 50%,
       var(--boa-yellow) 50% 75%,
-      var(--boa-red) 75% 100%
-    );
+      var(--boa-red)    75% 100%
+    ) left bottom / 100% 3px no-repeat,
+    var(--boa-topbar-hover);
 }
 
 .topbar-icon-link span {
