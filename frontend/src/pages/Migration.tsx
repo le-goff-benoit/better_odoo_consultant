@@ -128,13 +128,24 @@ interface MigSavedConv {
 // ── Migration history (localStorage) ──────────────────────────────
 const LS_MIG_ACTIVE  = 'odoo-migration-active'
 const LS_MIG_HISTORY = 'odoo-migration-history'
+const LS_MIG_SOURCE  = 'odoo-migration-source'
+const LS_MIG_TARGET  = 'odoo-migration-target'
+
+const _EMPTY_SIDE: SideConfig = { mode: 'version', version: '', profileId: null, envId: null }
 
 function migAutoTitle(msgs: Message[]): string {
   const first = msgs.find(m => m.role === 'user')?.text ?? ''
   return first.length > 60 ? first.slice(0, 57) + '…' : first || 'Migration'
 }
 function loadMigActive(): Record<string, Message[]> {
-  try { return JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}') } catch { return {} }
+  try {
+    const data = JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}')
+    // Seed the module buffer from localStorage so setMessages can read it even after unmount
+    for (const [k, msgs] of Object.entries(data)) {
+      if (!_migBuffer.has(k)) _migBuffer.set(k, msgs as Message[])
+    }
+    return data
+  } catch { return {} }
 }
 function persistMigActive(c: Record<string, Message[]>) {
   try { localStorage.setItem(LS_MIG_ACTIVE, JSON.stringify(c)) } catch { /* quota */ }
@@ -144,6 +155,15 @@ function loadMigHistory(): MigSavedConv[] {
 }
 function persistMigHistory(h: MigSavedConv[]) {
   try { localStorage.setItem(LS_MIG_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
+}
+function loadMigSource(): SideConfig {
+  try { return JSON.parse(localStorage.getItem(LS_MIG_SOURCE) ?? 'null') ?? _EMPTY_SIDE } catch { return _EMPTY_SIDE }
+}
+function loadMigTarget(): SideConfig {
+  try { return JSON.parse(localStorage.getItem(LS_MIG_TARGET) ?? 'null') ?? _EMPTY_SIDE } catch { return _EMPTY_SIDE }
+}
+function fmtDate(ts: number) {
+  return new Date(ts).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 // Module-level buffer: survives component unmount during streaming
@@ -1195,15 +1215,23 @@ export default function Migration() {
     setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
   }
 
-  const [source, setSource] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
-  const [target, setTarget] = useState<SideConfig>({ mode: 'version', version: '', profileId: null, envId: null })
+  const [source, setSourceState] = useState<SideConfig>(() => loadMigSource())
+  const [target, setTargetState] = useState<SideConfig>(() => loadMigTarget())
+  const setSource = (cfg: SideConfig) => {
+    setSourceState(cfg)
+    try { localStorage.setItem(LS_MIG_SOURCE, JSON.stringify(cfg)) } catch { /* quota */ }
+  }
+  const setTarget = (cfg: SideConfig) => {
+    setTargetState(cfg)
+    try { localStorage.setItem(LS_MIG_TARGET, JSON.stringify(cfg)) } catch { /* quota */ }
+  }
 
   const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('migration', 'auto'))
   const setPerspective = (p: PerspectiveMode) => { setPerspectiveState(p); savePerspective('migration', p) }
 
   const [migConvs, setMigConvs] = useState<Record<string, Message[]>>(() => loadMigActive())
   const [migHistory, setMigHistory] = useState<MigSavedConv[]>(() => loadMigHistory())
-  const [showMigHistory, setShowMigHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   // Session key: derived from source+target config once versions are known
   // Updated lazily — kept in ref so stream callbacks always see current value
@@ -1242,7 +1270,7 @@ export default function Migration() {
   ].join('__')
   migKeyRef.current = migKey
 
-  // Merge buffer on key change (stream completed while navigated away)
+  // On migKey change: merge buffer into React state + restore streaming indicator if still in progress
   useEffect(() => {
     const buffered = _migBuffer.get(migKey)
     if (buffered && buffered.length > 0) {
@@ -1252,17 +1280,28 @@ export default function Migration() {
         return prev
       })
     }
+    // Restore streaming state if a stream is still running for this key
+    const sig = streamingSignals.getAll().find(([k]) => k === migKey)?.[1]
+    if (sig?.status === 'streaming') setStreaming(true)
   }, [migKey])
 
   const messages: Message[] = migConvs[migKey] ?? []
 
   const setMessages = (fn: (prev: Message[]) => Message[]) => {
-    setMigConvs(prev => {
-      const next = fn(prev[migKey] ?? [])
-      _migBuffer.set(migKey, next)
-      persistMigActive({ ...prev, [migKey]: next })
-      return { ...prev, [migKey]: next }
-    })
+    const key = migKeyRef.current
+    // Read from module buffer — works even when component is unmounted
+    const cur = _migBuffer.get(key) ?? []
+    const next = fn(cur)
+    // Update buffer synchronously (survives unmount — React drops setState after unmount but not this)
+    _migBuffer.set(key, next)
+    // Persist to localStorage synchronously (also survives unmount)
+    try {
+      const all = JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}')
+      all[key] = next
+      localStorage.setItem(LS_MIG_ACTIVE, JSON.stringify(all))
+    } catch { /* quota */ }
+    // Update React state — no-op after unmount, but that's fine: buffer + LS are already updated
+    setMigConvs(prev => ({ ...prev, [key]: next }))
   }
 
   const perspectivePrompt = input.trim() || [...messages].reverse().find(m => m.role === 'user')?.text || ''
@@ -1314,7 +1353,7 @@ export default function Migration() {
   useEffect(() => {
     if (!sourceVersion || !targetVersion) return
     if (cmpVersion(targetVersion, sourceVersion) <= 0) {
-      setTarget(prev => ({ ...prev, version: '', envId: null }))
+      setTarget({ ...target, version: '', envId: null })
     }
   }, [sourceVersion])
 
@@ -1333,6 +1372,23 @@ export default function Migration() {
     }
     setMigHistory(prev => {
       const updated = [conv, ...prev].slice(0, 50)
+      persistMigHistory(updated)
+      return updated
+    })
+  }
+
+  const resumeConv = (conv: MigSavedConv) => {
+    if (messages.length > 0) saveToMigHistory()
+    setMessages(() => conv.messages)
+    if (conv.srcVersion) setSource({ mode: 'version', version: conv.srcVersion, profileId: null, envId: null })
+    if (conv.tgtVersion) setTarget({ mode: 'version', version: conv.tgtVersion, profileId: null, envId: null })
+    setShowHistory(false)
+    setStreaming(false)
+  }
+
+  const deleteConv = (id: string) => {
+    setMigHistory(prev => {
+      const updated = prev.filter(c => c.id !== id)
       persistMigHistory(updated)
       return updated
     })
@@ -1544,89 +1600,25 @@ export default function Migration() {
         title={c.title}
         description={c.description}
         action={
-          <div style={{ display: 'flex', gap: 6 }}>
-            {migHistory.length > 0 && (
-              <button
-                onClick={() => setShowMigHistory(v => !v)}
-                title={lang === 'fr' ? 'Historique' : 'History'}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
-                  background: showMigHistory ? t.brand : t.bgMuted,
-                  border: `1px solid ${showMigHistory ? t.brand : t.border}`,
-                  fontSize: 12, color: showMigHistory ? '#fff' : t.muted, fontWeight: 600,
-                }}
-              >
-                <History size={13} />
-                {lang === 'fr' ? 'Historique' : 'History'}
-                <span style={{ background: showMigHistory ? 'rgba(255,255,255,.25)' : t.border, color: showMigHistory ? '#fff' : t.text, borderRadius: 999, padding: '0 5px', fontSize: 10 }}>{migHistory.length}</span>
-              </button>
-            )}
-            <button
-              onClick={resetConversation}
-              title={c.clearConversation}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
-                background: t.bgMuted, border: `1px solid ${t.border}`,
-                fontSize: 12, color: t.muted, fontWeight: 600,
-                opacity: messages.length === 0 ? 0.4 : 1,
-                transition: 'opacity .15s',
-              }}
-              disabled={messages.length === 0}
-            >
-              <ArrowRightLeft size={13} />
-              {c.newAnalysis}
-            </button>
-          </div>
+          <button
+            onClick={resetConversation}
+            title={c.clearConversation}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
+              background: t.bgMuted, border: `1px solid ${t.border}`,
+              fontSize: 12, color: t.muted, fontWeight: 600,
+              opacity: messages.length === 0 ? 0.4 : 1,
+              transition: 'opacity .15s',
+            }}
+            disabled={messages.length === 0}
+          >
+            <ArrowRightLeft size={13} />
+            {c.newAnalysis}
+          </button>
         }
       />
 
-      {/* Migration history panel */}
-      {showMigHistory && migHistory.length > 0 && (
-        <div style={{
-          background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radius,
-          padding: '12px 16px', marginBottom: 14, maxHeight: 260, overflowY: 'auto',
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            {lang === 'fr' ? 'Historique des migrations' : 'Migration history'}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {migHistory.map(conv => (
-              <button
-                key={conv.id}
-                onClick={() => {
-                  setMigConvs(prev => ({ ...prev, [migKey]: conv.messages }))
-                  _migBuffer.set(migKey, conv.messages)
-                  setShowMigHistory(false)
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
-                  padding: '7px 10px', borderRadius: t.radius, cursor: 'pointer',
-                  background: 'transparent', border: `1px solid transparent`,
-                  color: t.text, fontSize: 13, width: '100%',
-                  transition: 'background .12s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = t.bgMuted)}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                <ArrowRightLeft size={12} style={{ flexShrink: 0, color: t.muted }} />
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {conv.title}
-                </span>
-                {(conv.srcVersion || conv.tgtVersion) && (
-                  <span style={{ fontSize: 10, color: t.muted, flexShrink: 0 }}>
-                    {conv.srcVersion}{conv.tgtVersion ? ` → ${conv.tgtVersion}` : ''}
-                  </span>
-                )}
-                <span style={{ fontSize: 10, color: t.muted, flexShrink: 0 }}>
-                  {conv.messages.filter(m => m.role === 'user').length} msg
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="migration-content-row">
         <div className="migration-main-column">
@@ -1650,6 +1642,18 @@ export default function Migration() {
             />
 
             <div style={{ flex: 1 }} />
+
+            {/* History button */}
+            {(messages.length > 0 || migHistory.length > 0) && (
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                title={lang === 'fr' ? `Historique (${migHistory.length})` : `History (${migHistory.length})`}
+                className={`assistant-soft-action${showHistory ? ' is-active' : ''}`}
+              >
+                <History size={13} />
+                <span>{lang === 'fr' ? 'Historique' : 'History'} ({migHistory.length})</span>
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1848,6 +1852,47 @@ export default function Migration() {
             attachments={readyAttachments.map(a => a.name)}
           />
         )}
+
+      {/* History side panel */}
+      {showHistory && (
+        <div className="assistant-history-panel">
+          <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{lang === 'fr' ? 'Historique' : 'History'}</span>
+            <button onClick={() => setShowHistory(false)} className="ui-icon-button" aria-label={lang === 'fr' ? 'Fermer' : 'Close'} title={lang === 'fr' ? 'Fermer' : 'Close'}><X size={15} /></button>
+          </div>
+          {migHistory.length === 0
+            ? <div style={{ padding: '20px 14px', fontSize: 12, color: t.muted, textAlign: 'center' }}>{lang === 'fr' ? 'Aucune conversation sauvegardée' : 'No saved conversations'}</div>
+            : migHistory.map(conv => (
+              <div key={conv.id} style={{
+                padding: '11px 14px', borderBottom: `1px solid ${t.borderLight}`,
+                display: 'flex', flexDirection: 'column', gap: 5,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 650, color: t.text, lineHeight: 1.4, flex: 1 }}
+                    title={conv.title}>{conv.title}</span>
+                  <button onClick={() => deleteConv(conv.id)}
+                    className="ui-icon-button" aria-label={lang === 'fr' ? 'Supprimer' : 'Delete'} title={lang === 'fr' ? 'Supprimer' : 'Delete'}><X size={14} /></button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10, color: t.muted }}>{fmtDate(conv.updatedAt)}</span>
+                  {(conv.srcVersion || conv.tgtVersion) && (
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.brand20, color: t.brand }}>
+                      {conv.srcVersion ?? '?'} → {conv.tgtVersion ?? '?'}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto' }}>
+                    {conv.messages.filter(m => m.role === 'user').length} msg
+                  </span>
+                </div>
+                <button className="btn btn-primary" onClick={() => resumeConv(conv)}
+                  style={{ marginTop: 3, fontSize: 11, padding: '5px 10px' }}>
+                  <History size={12} /> {lang === 'fr' ? 'Reprendre' : 'Resume'}
+                </button>
+              </div>
+            ))
+          }
+        </div>
+      )}
       </div>
     </div>
   )

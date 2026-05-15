@@ -836,14 +836,10 @@ export default function Assistant() {
           {/* General tab */}
           {(() => {
             const isActive = isGeneralMode
-            const msgCount = (conversations[GENERAL_KEY] ?? []).filter(m => m.role === 'user').length
             const sig = streamingSignals.getAll().find(([k]) => k === GENERAL_KEY)?.[1]
             return (
               <button onClick={() => setProfileId(GENERAL_KEY)} className={`assistant-tab-button${isActive ? ' is-active' : ''}`}>
                 <Globe2 size={14} /> {c.general}
-                {msgCount > 0 && (
-                  <span className="assistant-tab-count">{msgCount}</span>
-                )}
                 {sig && <span className={`stream-dot stream-dot--${sig.status}`} aria-hidden />}
               </button>
             )
@@ -856,10 +852,7 @@ export default function Assistant() {
 
           {/* Project tabs */}
           {profiles.map(p => {
-            const msgCount = (conversations[String(p.id)] ?? []).filter(m => m.role === 'user').length
             const isActive = p.id === profileId
-            // Pick a representative flag for the project: prefer the selected company,
-            // otherwise the first company in the profile's company_ids JSON.
             const profileCompanies = parseCompanies(p.company_ids)
             const profileCountry = profileCompanies.find(c => c.id === p.selected_company_id)?.country_code
               ?? profileCompanies[0]?.country_code
@@ -874,9 +867,6 @@ export default function Assistant() {
                 }
                 {p.name}
                 {tabFlag && <span style={{ fontSize: 12, lineHeight: 1, opacity: 0.85 }}>{tabFlag}</span>}
-                {msgCount > 0 && (
-                  <span className="assistant-tab-count">{msgCount}</span>
-                )}
                 {tabSig && <span className={`stream-dot stream-dot--${tabSig.status}`} aria-hidden />}
               </button>
             )
