@@ -1636,7 +1636,7 @@ export default function Migration() {
     : (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL)
 
   return (
-    <div className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+    <div className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`}>
       <PageHeader title={c.title} description={c.description} />
 
 
