@@ -1,5 +1,6 @@
 import json
 import asyncio
+import ast
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -90,6 +91,21 @@ STUDIO_SIGNAL_THRESHOLD = 3
 # meaningful.
 CUSTOM_MODULE_THRESHOLD = 1
 
+REPO_SCAN_EXCLUDED_DIRS = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+}
+
 
 def _is_odoo_author(author_lower: str) -> bool:
     if not author_lower or author_lower == "odoo":
@@ -107,6 +123,32 @@ def _looks_like_community_module(name: str) -> bool:
 
 def _repo_local_path(profile_name: str, env_id: str) -> Path:
     return Path.home() / ".odoo-consultant" / "repos" / profile_name / env_id
+
+
+def _is_excluded_repo_path(path: Path) -> bool:
+    return any(part in REPO_SCAN_EXCLUDED_DIRS for part in path.parts)
+
+
+def _read_manifest(path: Path) -> dict[str, Any]:
+    try:
+        value = ast.literal_eval(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _manifest_is_custom(path: Path) -> bool:
+    manifest = _read_manifest(path)
+    module_name = path.parent.name
+    name = str(manifest.get("name") or module_name)
+    author = str(manifest.get("author") or "").strip().lower()
+    if module_name.startswith("l10n_") or name.lower().startswith("l10n_"):
+        return False
+    if author and (_is_odoo_author(author) or _is_community_author(author)):
+        return False
+    if _looks_like_community_module(module_name):
+        return False
+    return True
 
 
 def _load_envs(environments: Optional[str]) -> list[dict[str, Any]]:
@@ -145,10 +187,15 @@ def _repo_summary(profile_name: str, envs: list[dict[str, Any]], fallback_github
             continue
         repo_path = _repo_local_path(profile_name, env_id)
         cloned = (repo_path / ".git").exists()
-        manifests = list(repo_path.rglob("__manifest__.py")) if cloned else []
-        py_count = len(list(repo_path.rglob("*.py"))) if cloned else 0
-        xml_count = len(list(repo_path.rglob("*.xml"))) if cloned else 0
-        total_manifests += len(manifests)
+        manifests = [
+            path for path in repo_path.rglob("__manifest__.py")
+            if not _is_excluded_repo_path(path.relative_to(repo_path))
+        ] if cloned else []
+        custom_manifests = [path for path in manifests if _manifest_is_custom(path)]
+        custom_dirs = [path.parent for path in custom_manifests]
+        py_count = sum(1 for module_dir in custom_dirs for path in module_dir.rglob("*.py") if not _is_excluded_repo_path(path.relative_to(repo_path))) if cloned else 0
+        xml_count = sum(1 for module_dir in custom_dirs for path in module_dir.rglob("*.xml") if not _is_excluded_repo_path(path.relative_to(repo_path))) if cloned else 0
+        total_manifests += len(custom_manifests)
         total_python += py_count
         total_xml += xml_count
         repos.append({
@@ -156,7 +203,10 @@ def _repo_summary(profile_name: str, envs: list[dict[str, Any]], fallback_github
             "env_name": env.get("name") or env_id,
             "github_repo": github_repo,
             "cloned": cloned,
-            "manifest_count": len(manifests),
+            "manifest_count": len(custom_manifests),
+            "all_manifest_count": len(manifests),
+            "ignored_manifest_count": len(manifests) - len(custom_manifests),
+            "custom_modules": [path.parent.name for path in custom_manifests[:30]],
             "python_files": py_count,
             "xml_files": xml_count,
             "local_path": str(repo_path) if cloned else None,
@@ -255,9 +305,14 @@ async def analyze_technical_complexity(profile_name: str, environments: Optional
     # somewhere should not classify the whole project as "Studio".
     studio_detected = studio_total >= STUDIO_SIGNAL_THRESHOLD
     custom_module_count = installed_modules.get("custom_module_count") or 0
-    # Dev requires either a configured custom repo with manifests
-    # OR a meaningful number of truly custom (non-OCA) modules installed.
-    dev_detected = bool(repo["detected"]) or custom_module_count >= CUSTOM_MODULE_THRESHOLD
+    odoo_connected = installed_modules.get("available", False)
+    # When Odoo is reachable, the installed-modules list is authoritative:
+    # a repo with manifests that aren't installed should not flag the project as "Dev".
+    # When Odoo is not reachable, fall back to the repo scan as a best-effort signal.
+    if odoo_connected:
+        dev_detected = custom_module_count >= CUSTOM_MODULE_THRESHOLD
+    else:
+        dev_detected = bool(repo["detected"])
     mode = _mode(studio_detected, dev_detected)
     return {
         "mode": mode,
@@ -311,8 +366,15 @@ def build_technical_complexity_context(raw: Optional[str]) -> str:
         f" ({studio.get('signal_count') or 0} signaux"
         f"{', module installé' if studio_modules else ''})",
         f"- Développement custom : {'présent' if dev.get('detected') else 'non détecté'}"
-        f" ({dev.get('manifest_count') or 0} manifests, {dev.get('python_files') or 0} fichiers Python, {dev.get('xml_files') or 0} fichiers XML)",
+        f" ({dev.get('manifest_count') or 0} manifests custom, {dev.get('python_files') or 0} fichiers Python, {dev.get('xml_files') or 0} fichiers XML)",
     ]
+    ignored_manifests = sum(
+        int(repo.get("ignored_manifest_count") or 0)
+        for repo in (dev.get("repositories") or [])
+        if isinstance(repo, dict)
+    )
+    if ignored_manifests:
+        lines.append(f"- Manifests ignorés car non custom/Odoo/OCA/l10n : {ignored_manifests}")
     if custom_module_count:
         sample = ", ".join(custom_modules[:10])
         suffix = f" : {sample}" if sample else ""
@@ -329,6 +391,14 @@ def build_technical_complexity_context(raw: Optional[str]) -> str:
         lines.append("- Stratégie : identifier si le comportement vient du standard, de Studio ou du code custom avant de recommander une action.")
     else:
         lines.append("- Stratégie : proposer d'abord les options standard Odoo/configuration, puis demander confirmation avant d'inventer une couche Studio ou custom.")
+    # Warn when repo has manifests but Odoo confirms no custom modules are installed.
+    repo_has_manifests = (dev.get("manifest_count") or 0) > 0
+    if repo_has_manifests and installed.get("available") and not custom_module_count:
+        lines.append(
+            "- Attention : le dépôt contient des modules custom "
+            "mais aucun n'est installé sur l'instance Odoo connectée ; "
+            "les modules repo peuvent être hors scope de cette instance."
+        )
     if studio.get("error"):
         lines.append("- Attention : analyse Studio incomplète ; demander confirmation si la réponse dépend de Studio.")
     if installed.get("error"):

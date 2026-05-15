@@ -7,18 +7,36 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.25.0',
-    date: '2026-05-14',
+    version: '0.26.0',
+    date: '2026-05-15',
     badge: 'Actuel',
     badgeColor: t.brand,
     items: [
-      'Refonte visuelle OPERATIONS.SYS : style neo-retro inspiré HARRY.SYS + Portal Aperture + Arc Raiders — bordures franches 2px, coins carrés, accents orange Aperture #FF6B00',
+      'Horloge système en temps réel dans la topbar : date ISO + heure HH:MM:SS dans des blocs mono bordés (masqués sous 1100px)',
+      'Séparateur vertical supprimé entre les groupes de navigation — seul l\'espace suffit',
+      'Hover sur lien actif supprimé : la ligne arc-en-ciel de l\'onglet actif n\'est plus écrasée par l\'ombre verte au survol',
+      'Sélecteurs topbar unifiés : EnvSelector, VersionDropdown et AiSelector partagent les classes assistant-env-trigger / assistant-version-trigger — coins carrés, font mono uppercase, hover theme-aware',
+      'Badge version statique (mode projet) converti en assistant-version-badge — carré, brand-aware',
+      'Panneau dropdown partagé : assistant-dropdown-panel + assistant-dropdown-item pour tous les sélecteurs de la barre de contrôle',
+      'Bouton Maintenance (carte projet) : converti de <details>/<summary> en toggle React avec ChevronDown/Up — même comportement qu\'Advanced Options dans Sources',
+      'Détection complexité technique corrigée : quand Odoo est connecté, la liste des modules installés prime sur le scan du repo — un repo avec des manifests non installés ne classe plus le projet en Dev',
+      'Avertissement IA : message explicite quand le repo contient des modules mais qu\'aucun n\'est installé sur l\'instance connectée',
+    ],
+  },
+  {
+    version: '0.25.0',
+    date: '2026-05-14',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Identité Better Odoo Assistant : topbar sobre, LED rouge et rappel cyan / vert / jaune / rouge en rail vertical gauche',
+      'Refonte visuelle neo-retro assouplie : bordures plus fines, coins légèrement adoucis, états hover/focus plus lisibles pour un usage web app quotidien',
       'Nouvelle typographie tri-rôle : Space Grotesk (titres / CTAs en uppercase), Inter (corps de texte), JetBrains Mono (codes / IDs / badges)',
-      'Topbar redesignée : logo carré [O.SYS], lien actif avec marqueur ▪ et soulignement orange 3px, séparateurs verticaux entre sections',
+      'Topbar redesignée : nom produit lisible, navigation contrastée, lien actif theme-aware et meilleure lisibilité responsive',
       'PageHeader : chaque page affiche désormais un identifiant section 00000NNN dérivé du titre (style HARRY.SYS)',
-      'Effet CRT dark mode : scanlines ultra-subtiles tintées orange à 2% + vignette radiale — uniquement en mode sombre pour préserver la lisibilité en réunion',
+      'Effet CRT dark mode : scanlines ultra-subtiles + vignette radiale — uniquement en mode sombre pour préserver la lisibilité en réunion',
       'Nouvelles classes utilitaires neo-retro : .neo-id, .neo-tag, .neo-section-number, .neo-frame, .neo-status-bar avec LED clignotante, .neo-bracket pour balises type [SYS]',
-      'Tokens CSS : palette repensée — light = blueprint off-white, dark = terminal #0a0a0a avec bordures blanches, plus aucune ombre — uniquement des bordures franches',
+      'Tokens CSS : palette repensée — light = blueprint off-white, dark = gris charbon, accent par défaut vert BOA et palette utilisateur toujours configurable',
     ],
   },
   {
@@ -372,7 +390,7 @@ export default function About() {
   const c = lang === 'en'
     ? {
       title: 'About',
-      description: 'Odoo Consultant Portal — productivity tool for Odoo consultants.',
+      description: 'Better Odoo Assistant — productivity tool for Odoo consultants.',
       version: 'Version',
       history: 'Version history',
       current: 'Current',
@@ -381,7 +399,7 @@ export default function About() {
     }
     : {
       title: 'À propos',
-      description: 'Odoo Consultant Portal — outil de productivité pour consultants Odoo.',
+      description: 'Better Odoo Assistant — outil de productivité pour consultants Odoo.',
       version: 'Version',
       history: 'Historique des versions',
       current: 'Actuel',

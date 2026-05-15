@@ -1,11 +1,11 @@
-# Odoo Consultant Portal
+# Better Odoo Assistant
 
 **Votre portail local pour travailler avec Odoo au quotidien.**
 
-L'Odoo Consultant Portal est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
+Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.25.0** — perspective 4 rôles end-to-end · cache prompts Anthropic optimisé · interface OPERATIONS.SYS neo-retro
+> Version actuelle : **0.26.0** — topbar avec horloge live · sélecteurs neo-retro unifiés · détection complexité technique fiabilisée
 
 ---
 
@@ -131,14 +131,14 @@ La version 0.24 **optimise les coûts d'API IA** :
 - `stop_reason` Claude `max_tokens` et `refusal` surfacés comme événement `warning` SSE et affichés en bulle grise — fin des troncatures silencieuses ;
 - inférence perspective côté serveur si un client envoie `perspective="auto"` — utile pour CLI / mobile.
 
-La version 0.25 **refond l'interface en style neo-retro OPERATIONS.SYS** :
-- inspirations HARRY.SYS + Portal Aperture + Arc Raiders ;
+La version 0.25 **refond l'interface en identité Better Odoo Assistant neo-retro** :
+- inspirations HARRY.SYS + Portal Aperture + Arc Raiders, avec une marque propre à l'app ;
 - typographie tri-rôle : **Space Grotesk** (titres / CTAs en uppercase), **Inter** (corps), **JetBrains Mono** (codes / IDs / badges) ;
-- palette : light = blueprint off-white, dark = terminal `#0a0a0a` avec bordures blanches ; brand orange Aperture `#FF6B00` ;
-- bordures **2px solides** partout, coins carrés, plus aucune ombre — uniquement des bordures franches ;
-- topbar redessinée : logo `[O.SYS]`, lien actif avec marqueur `▪` et soulignement orange 3px ;
+- palette : light = blueprint off-white, dark = terminal `#0a0a0a`, accent par défaut vert BOA, rappel cyan / vert / jaune / rouge dans la topbar ;
+- bordures fines, coins légèrement adoucis, états hover/focus uniformes pour garder le style retro sans nuire à l'ergonomie ;
+- topbar redessinée : logo `BOA`, nom **Better Odoo Assistant**, lien actif avec marqueur `▪` et soulignement multicolore ;
 - chaque page affiche désormais un **identifiant section `00000NNN`** au-dessus du titre ;
-- effet **CRT subtil en dark mode** : scanlines orange 2% + vignette radiale (light reste pur pour la lisibilité en réunion) ;
+- effet **CRT subtil en dark mode** : scanlines + vignette radiale (light reste pur pour la lisibilité en réunion) ;
 - nouvelles classes utilitaires : `.neo-id`, `.neo-tag`, `.neo-section-number`, `.neo-frame`, `.neo-status-bar`, `.neo-bracket`.
 
 ---

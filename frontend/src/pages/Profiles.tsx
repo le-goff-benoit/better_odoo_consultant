@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, Building2, Check, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Layers3, Loader2, Pencil, Play, Plus, RefreshCw, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
+import { Bot, Building2, Check, ChevronDown, ChevronUp, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Layers3, Loader2, MoreHorizontal, Pencil, Play, Plus, RefreshCw, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, refreshProfileLocalization, refreshProfileComplexity, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -144,6 +144,8 @@ const profilesCopy = {
     environments: 'Environnements',
     applications: 'Applications',
     linksActions: 'Liens & actions',
+    quickActions: 'Actions rapides',
+    maintenance: 'Maintenance',
     actions: 'Actions',
     edit: 'Modifier',
     test: 'Tester',
@@ -192,6 +194,8 @@ const profilesCopy = {
     environments: 'Environments',
     applications: 'Applications',
     linksActions: 'Links & actions',
+    quickActions: 'Quick actions',
+    maintenance: 'Maintenance',
     actions: 'Actions',
     edit: 'Edit',
     test: 'Test',
@@ -643,18 +647,18 @@ export default function Profiles() {
                   {showAccessWarning && accessInfo && (
                     <div style={{
                       marginTop: 10, padding: '12px 14px',
-                      background: accessInfo.is_system ? '#fef2f2' : '#fffbeb',
-                      border: `1px solid ${accessInfo.is_system ? '#fca5a5' : '#fcd34d'}`,
+                      background: accessInfo.is_system ? t.dangerBg : t.warningBg,
+                      border: `1px solid ${accessInfo.is_system ? t.danger : t.warning}`,
                       borderRadius: t.radius,
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                           <span style={{ fontSize: 20, flexShrink: 0 }}>{accessInfo.is_system ? '🔴' : '🟡'}</span>
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: accessInfo.is_system ? '#b91c1c' : '#92400e', marginBottom: 4 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: accessInfo.is_system ? t.danger : t.warning, marginBottom: 4 }}>
                               {accessInfo.is_system ? 'Administrateur système détecté' : 'Utilisateur avec droits d\'administration'}
                             </div>
-                            <div style={{ fontSize: 12, color: accessInfo.is_system ? '#991b1b' : '#78350f', lineHeight: 1.5 }}>
+                            <div style={{ fontSize: 12, color: accessInfo.is_system ? t.danger : t.warning, lineHeight: 1.5 }}>
                               {accessInfo.is_system
                                 ? <>L'utilisateur <strong>{accessInfo.user_name}</strong> a les droits d'administration technique (Paramètres complets). Pour une utilisation en production, préférez un utilisateur dédié avec des droits limités aux modèles nécessaires.</>
                                 : <>L'utilisateur <strong>{accessInfo.user_name}</strong> a des droits d'administration. Il est recommandé d'utiliser un compte avec des droits limités pour l'accès API.</>
@@ -856,6 +860,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   const accessInfo: AccessInfo | null = (() => { try { return profile.user_access_info ? JSON.parse(profile.user_access_info) : null } catch { return null } })()
   const complexityLabel = technicalComplexityLabel(profile.technical_complexity)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [envModal, setEnvModal] = useState<EnvModalState | null>(null)
   const [envForm, setEnvForm] = useState(EMPTY_ENV_FORM)
   const [envDiag, setEnvDiag] = useState<DiagResult | null>(null)
@@ -1186,40 +1191,49 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
 
         {/* ── Footer ── */}
         <div className="project-card-footer">
-          <div className="project-section-title" style={{ marginBottom: 8 }}>
-            {(profile.odoo_sh_url || ghUrl) ? c.linksActions : c.actions}
+          <div className="project-footer-row">
+            <div className="project-section-title">{c.quickActions}</div>
+            {(profile.odoo_sh_url || ghUrl) && (
+              <div className="project-link-list project-link-list-compact">
+                {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon={<Cloud size={12} />} color={t.brand} />}
+                {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon={<GitBranch size={12} />} color={t.textSub} />}
+              </div>
+            )}
           </div>
-          {/* External links */}
-          {(profile.odoo_sh_url || ghUrl) && (
-            <div className="project-link-list" style={{ marginBottom: 8 }}>
-              {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Odoo.sh" icon={<Cloud size={12} />} color={t.brand} />}
-              {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon={<GitBranch size={12} />} color="#24292f" />}
-            </div>
-          )}
-          {/* Action buttons */}
-          <div className="project-action-list">
+
+          <div className="project-action-list project-action-list-primary">
             <button className="btn btn-outline btn-sm" onClick={onEdit} title={c.edit}><Pencil size={13} /> {c.edit}</button>
             <button className="btn btn-outline btn-sm" onClick={onTest} title={c.test}><Play size={13} /> {c.test}</button>
-            <button className="btn btn-outline btn-sm" onClick={openWorkspace} disabled={workspaceOpening} title={c.vscodeTitle}>
+            <button className="btn btn-outline btn-sm project-workspace-action" onClick={openWorkspace} disabled={workspaceOpening} title={c.vscodeTitle}>
               {workspaceOpening ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Code2 size={13} />} {c.vscode}
             </button>
-            <button className="btn btn-outline btn-sm" onClick={onCheckAccess} disabled={checkingAccess} title="Vérifier les droits d'accès">
-              {checkingAccess ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Search size={13} />} {c.access}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={onRefreshLocalization} disabled={refreshingLocalization} title={c.localizationTitle}>
-              {refreshingLocalization ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <RefreshCw size={13} />} {c.localization}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={onRefreshComplexity} disabled={refreshingComplexity} title={c.complexityTitle}>
-              {refreshingComplexity ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Layers3 size={13} />} {c.complexity}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={onContext} title="Fichier de contexte de ce projet"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <ClipboardList size={13} /> {c.context}
-              {profile.project_context && (
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.successSolid, display: 'inline-block', flexShrink: 0 }} />
+          </div>
+
+          <div className="project-action-list project-action-list-secondary">
+            <div className={`project-maintenance-menu${maintenanceOpen ? ' is-open' : ''}`}>
+              <button className="btn btn-outline-muted btn-sm" onClick={() => setMaintenanceOpen(o => !o)}>
+                {maintenanceOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} {c.maintenance}
+              </button>
+              {maintenanceOpen && (
+                <div className="project-maintenance-actions">
+                  <button className="btn btn-outline-muted btn-sm" onClick={onCheckAccess} disabled={checkingAccess} title="Vérifier les droits d'accès">
+                    {checkingAccess ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Search size={13} />} {c.access}
+                  </button>
+                  <button className="btn btn-outline-muted btn-sm" onClick={onRefreshLocalization} disabled={refreshingLocalization} title={c.localizationTitle}>
+                    {refreshingLocalization ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <RefreshCw size={13} />} {c.localization}
+                  </button>
+                  <button className="btn btn-outline-muted btn-sm" onClick={onRefreshComplexity} disabled={refreshingComplexity} title={c.complexityTitle}>
+                    {refreshingComplexity ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Layers3 size={13} />} {c.complexity}
+                  </button>
+                  <button className="btn btn-outline-muted btn-sm" onClick={onContext} title="Fichier de contexte de ce projet">
+                    <ClipboardList size={13} /> {c.context}
+                    {profile.project_context && (
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.successSolid, display: 'inline-block', flexShrink: 0 }} />
+                    )}
+                  </button>
+                </div>
               )}
-            </button>
-            <div style={{ flex: 1 }} />
+            </div>
             <button onClick={() => setConfirmDelete(true)} title={c.deleteTitle}
               className="project-delete-action"><Trash2 size={15} /></button>
           </div>
@@ -1367,7 +1381,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                               {repoStatus.message && <span style={{ color: t.textSub }} title={repoStatus.date ?? ''}>{repoStatus.message.slice(0, 40)}</span>}
                             </>
                           ) : repoStatus?.github_repo ? (
-                            <span style={{ color: '#b45309', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><TriangleAlert size={13} /> Non cloné</span>
+                            <span style={{ color: t.warning, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><TriangleAlert size={13} /> Non cloné</span>
                           ) : null}
                         </div>
                         <button

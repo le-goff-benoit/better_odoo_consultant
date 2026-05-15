@@ -1,9 +1,31 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
+
+function useClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return now
+}
+
+function LiveClock() {
+  const now = useClock()
+  const date = now.toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
+  const time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return (
+    <div className="topbar-clock" aria-live="off" aria-label="Horloge système">
+      <span className="topbar-clock-date">{date}</span>
+      <span className="topbar-clock-time">{time}</span>
+    </div>
+  )
+}
 
 const labels = {
   fr: {
@@ -31,10 +53,13 @@ const labels = {
 }
 
 const primaryLinks = [
+  { to: '/sources',   labelKey: 'sources',   icon: Database },
+  { to: '/profiles',  labelKey: 'profiles',  icon: FolderKanban },
+]
+
+const workflowLinks = [
   { to: '/assistant', labelKey: 'assistant', icon: Bot },
   { to: '/migration', labelKey: 'migration', icon: ArrowRightLeft },
-  { to: '/profiles',  labelKey: 'profiles',  icon: FolderKanban },
-  { to: '/sources',   labelKey: 'sources',   icon: Database },
 ]
 
 const secondaryLinks = [
@@ -62,25 +87,38 @@ export default function Sidebar({
   return (
     <header className="app-topbar">
       <div className="topbar-status" title="System operational" aria-label="System operational">
-        <span className="hal-eye">
-          <span className="hal-iris" />
-          <span className="hal-glint" />
+        <span className="topbar-led">
+          <span className="topbar-led-core" />
+          <span className="topbar-led-glint" />
         </span>
       </div>
       <div className="topbar-brand">
-        <div className="topbar-logo" aria-hidden>
-          O
-        </div>
         <div className="topbar-title">
           <div>
-            ODOO.CONSULTANT <span className="neo-bracket">SYS</span>
+            Better Odoo Assistant
           </div>
-          <span>v{APP_VERSION} · OPERATIONAL</span>
+          <span>v{APP_VERSION} · CONSULTING WORKSPACE</span>
         </div>
       </div>
 
+      <LiveClock />
+
       <nav className="topbar-nav" aria-label="Navigation principale">
         {primaryLinks.map(l => {
+          const Icon = l.icon
+          return (
+            <NavLink
+              key={l.to}
+              to={l.to}
+              className={({ isActive }) => `topbar-link${isActive ? ' active' : ''}`}
+            >
+              <Icon size={16} aria-hidden />
+              {tr[l.labelKey as keyof typeof tr]}
+            </NavLink>
+          )
+        })}
+        <span className="topbar-nav-separator" aria-hidden="true" />
+        {workflowLinks.map(l => {
           const Icon = l.icon
           return (
             <NavLink
@@ -132,7 +170,7 @@ export default function Sidebar({
         </div>
         <div className="topbar-user-text">
           <div>
-            {up.name || 'Odoo Portal'}
+            {up.name || 'Better Odoo Assistant'}
           </div>
           <span>
             {up.title || tr.consultant}

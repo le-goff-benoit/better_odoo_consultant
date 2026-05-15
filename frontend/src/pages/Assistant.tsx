@@ -851,14 +851,10 @@ export default function Assistant() {
                 sourcesStatus={sourcesStatus}
               />
             ) : activeVersion ? (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '3px 10px', borderRadius: t.radiusFull, fontSize: 11, fontWeight: 600,
-                background: t.brand20, border: `1px solid ${t.brand40}`, color: t.brand,
-              }}>
+              <span className="assistant-version-badge">
                 Odoo {activeVersion}
                 {(communityInstalled || enterpriseInstalled) && (
-                  <span style={{ fontSize: 10, color: t.muted, fontWeight: 400 }}>
+                  <span style={{ fontSize: 9, opacity: 0.7 }}>
                     {communityInstalled && enterpriseInstalled ? 'C+E' : communityInstalled ? 'C' : 'E'}
                   </span>
                 )}
@@ -935,7 +931,7 @@ export default function Assistant() {
           <TriangleAlert size={17} />
           <div style={{ fontSize: 12, flex: 1 }}>
             <strong>{c.sourceWarningStrong(activeVersion)}</strong> — {c.sourceWarning}{' '}
-            <Link to="/sources" style={{ color: '#b45309', fontWeight: 600 }}>{c.installSources}</Link>
+            <Link to="/sources" style={{ color: t.warning, fontWeight: 600 }}>{c.installSources}</Link>
           </div>
         </div>
       )}
@@ -994,13 +990,13 @@ export default function Assistant() {
             {!activeCompanyAccessible && (
               <div style={{
                 flexShrink: 0, padding: '10px 14px', marginBottom: 4,
-                background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: t.radius,
+                background: t.dangerBg, border: `1px solid ${t.danger}`, borderRadius: t.radius,
                 display: 'flex', alignItems: 'center', gap: 10,
               }}>
                 <Lock size={18} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>{c.inaccessibleCompany}</div>
-                  <div style={{ fontSize: 12, color: '#991b1b' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: t.danger, marginBottom: 2 }}>{c.inaccessibleCompany}</div>
+                  <div style={{ fontSize: 12, color: t.danger }}>
                     {c.inaccessibleDetail(accessInfo?.user_name ?? '')}
                   </div>
                 </div>
@@ -1202,10 +1198,7 @@ function EnvSelector({ profile, activeEnvId, onChange }: {
 
   if (envs.length === 1) {
     return (
-      <span style={{
-        fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: t.radiusFull,
-        background: t.bgMuted, border: `1px solid ${t.border}`, color: t.textSub,
-      }}>
+      <span className="assistant-env-trigger" style={{ cursor: 'default', pointerEvents: 'none' }}>
         {currentEnv.name}
       </span>
     )
@@ -1213,69 +1206,44 @@ function EnvSelector({ profile, activeEnvId, onChange }: {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '3px 10px', borderRadius: t.radiusFull, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-        background: isOverridden ? '#fff8ed' : isProd ? t.bgMuted : '#fff8ed',
-        border: `1px solid ${isOverridden ? '#f59e0b' : isProd ? t.border : '#f59e0b'}`,
-        color: isOverridden ? '#b45309' : isProd ? t.textSub : '#b45309',
-        transition: 'all .15s',
-      }}>
+      <button onClick={() => setOpen(o => !o)} className={`assistant-env-trigger${isOverridden ? ' is-override' : ''}`}>
         {isOverridden && <span style={{ fontSize: 9 }}>⚡</span>}
         {currentEnv.name}
         {currentEnv.odoo_version && (
           <span style={{ fontSize: 9, opacity: 0.7 }}>v{currentEnv.odoo_version.split('.')[0]}</span>
         )}
-        <ChevronDown size={12} style={{ opacity: 0.6 }} />
+        <ChevronDown size={11} style={{ opacity: 0.6 }} />
       </button>
 
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 300,
-          background: t.bgCard, border: `1px solid ${t.border}`,
-          borderRadius: t.radiusLg, boxShadow: t.shadowMd, minWidth: 200,
-        }}>
-          <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: t.muted }}>
-            {c.activeEnv}
-          </div>
+        <div className="assistant-dropdown-panel align-right" style={{ minWidth: 220 }}>
+          <div className="assistant-dropdown-header">{c.activeEnv}</div>
           {envs.map(env => {
             const isActive = env.id === currentId
             const isDefault = env.id === defaultId
             return (
               <button key={env.id}
                 onClick={() => { onChange(env.id === defaultId ? null : env.id); setOpen(false) }}
-                style={{
-                  width: '100%', textAlign: 'left', padding: '8px 12px',
-                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                  background: isActive ? `${t.brand}10` : 'transparent',
-                  borderLeft: isActive ? `3px solid ${t.brand}` : '3px solid transparent',
-                  transition: 'background .1s',
-                }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = t.bgMuted }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                className={`assistant-dropdown-item${isActive ? ' is-active' : ''}`}
               >
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? t.brand : t.text }}>
-                      {env.name}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%' }}>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{env.name}</span>
+                  {isDefault && (
+                    <span style={{ fontSize: 9, color: t.muted, background: t.bgMuted, padding: '1px 5px', fontFamily: 'var(--font-mono)' }}>
+                      {c.default}
                     </span>
-                    {isDefault && (
-                      <span style={{ fontSize: 9, color: t.muted, background: t.bgMuted, padding: '1px 5px', borderRadius: 3 }}>
-                        {c.default}
-                      </span>
-                    )}
-                    {isActive && !isDefault && (
-                      <span style={{ fontSize: 9, color: '#b45309', background: '#fff8ed', padding: '1px 5px', borderRadius: 3, border: '1px solid #f59e0b' }}>
-                        override
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 10, color: t.muted, marginTop: 1 }}>
-                    {env.db_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                    {env.odoo_version && ` · Odoo ${env.odoo_version}`}
-                  </div>
+                  )}
+                  {isActive && !isDefault && (
+                    <span style={{ fontSize: 9, color: t.warning, background: t.warningBg, padding: '1px 5px', fontFamily: 'var(--font-mono)' }}>
+                      ⚡
+                    </span>
+                  )}
+                  {isActive && <Check size={11} />}
                 </div>
-                {isActive && <Check size={12} color={t.brand} />}
+                <div style={{ fontSize: 10, color: t.muted, fontFamily: 'var(--font-mono)' }}>
+                  {env.db_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                  {env.odoo_version && ` · v${env.odoo_version.split('.')[0]}`}
+                </div>
               </button>
             )
           })}
@@ -1315,36 +1283,22 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: 'flex', alignItems: 'center', gap: 7,
-        padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
-        background: t.bgCard, border: `1px solid ${t.border}`,
-        transition: 'border-color .15s',
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: currentProv.color }}>{currentProv.label}</span>
-        <span style={{ color: t.border, fontSize: 13 }}>·</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{currentModel?.label}</span>
+      <button onClick={() => setOpen(o => !o)} className="assistant-env-trigger">
+        <span style={{ fontWeight: 700, color: currentProv.color }}>{currentProv.label}</span>
+        <span style={{ color: t.border }}>·</span>
+        <span style={{ fontWeight: 600 }}>{currentModel?.label}</span>
         {currentModel?.recommended && (
-          <span style={{ fontSize: 9, background: t.successSolid, color: '#fff', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>★</span>
+          <span style={{ fontSize: 9, background: t.successSolid, color: '#fff', padding: '1px 4px', fontWeight: 700 }}>★</span>
         )}
-        <ChevronDown size={12} color={t.muted} style={{ marginLeft: 1 }} />
+        <ChevronDown size={11} color={t.muted} style={{ marginLeft: 1 }} />
       </button>
 
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 300,
-          background: t.bgCard, border: `1px solid ${t.border}`,
-          borderRadius: t.radiusLg, boxShadow: t.shadowMd,
-          minWidth: 300, maxHeight: 420, overflowY: 'auto',
-        }}>
+        <div className="assistant-dropdown-panel" style={{ minWidth: 300, maxHeight: 420, overflowY: 'auto' }}>
           {providers.map((prov, pi) => (
             <div key={prov.id}>
               {pi > 0 && <div style={{ height: 1, background: t.border }} />}
-              <div style={{
-                padding: '8px 14px 4px', fontSize: 10, fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.08em',
-                color: prov.color, background: `${prov.color}08`,
-              }}>
+              <div className="assistant-dropdown-header" style={{ color: prov.color, background: `${prov.color}08` }}>
                 {prov.label}
               </div>
               {prov.models.map(m => {
@@ -1352,20 +1306,16 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
                 return (
                   <button key={m.id}
                     onClick={() => { if (provider !== prov.id) switchProvider(prov.id); setModelId(m.id); setOpen(false) }}
-                    style={{
-                      width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2,
-                      padding: '9px 14px', border: 'none', cursor: 'pointer',
+                    className={`assistant-dropdown-item${isSelected ? ' is-active' : ''}`}
+                    style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+                      borderLeftColor: isSelected ? prov.color : 'transparent',
                       background: isSelected ? `${prov.color}10` : 'transparent',
-                      borderLeft: isSelected ? `3px solid ${prov.color}` : '3px solid transparent',
-                      transition: 'background .1s',
                     }}
-                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = t.bgMuted }}
-                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontWeight: 600, fontSize: 12, color: isSelected ? prov.color : t.text }}>{m.label}</span>
                       {m.recommended && (
-                        <span style={{ fontSize: 9, background: t.successSolid, color: '#fff', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>{c.recommended}</span>
+                        <span style={{ fontSize: 9, background: t.successSolid, color: '#fff', padding: '1px 5px', fontWeight: 700 }}>{c.recommended}</span>
                       )}
                     </div>
                     {m.desc && <div style={{ fontSize: 11, color: t.muted }}>{m.desc}</div>}
@@ -1373,7 +1323,7 @@ function AiSelector({ providers, provider, modelId, switchProvider, setModelId }
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
                         {m.tags.map(tag => (
                           <span key={tag} style={{
-                            fontSize: 9, padding: '1px 6px', borderRadius: 10,
+                            fontSize: 9, padding: '1px 6px',
                             background: `${prov.color}18`, color: prov.color,
                             border: `1px solid ${prov.color}30`, fontWeight: 600,
                           }}>{tag}</span>
@@ -1496,42 +1446,25 @@ function VersionDropdown({ value, onChange, versions, sourcesStatus = {} }: {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '4px 11px', borderRadius: t.radiusFull,
-        background: '#6366f115', border: '1px solid #6366f1',
-        fontSize: 12, fontWeight: 700, color: '#6366f1', cursor: 'pointer',
-      }}>
+      <button onClick={() => setOpen(o => !o)} className="assistant-version-trigger">
         Odoo {value}
         {(currentC || currentE) && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', opacity: 0.7 }}>
+          <span style={{ fontSize: 9, opacity: 0.78 }}>
             {currentC && currentE ? 'C+E' : currentC ? 'C' : 'E'}
           </span>
         )}
-        <ChevronDown size={12} style={{ opacity: .6 }} />
+        <ChevronDown size={11} style={{ opacity: .6 }} />
       </button>
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 100,
-          background: t.bgCard, border: `1px solid ${t.border}`,
-          borderRadius: t.radiusLg, boxShadow: t.shadowMd, minWidth: 160, overflow: 'hidden',
-        }}>
+        <div className="assistant-dropdown-panel align-right" style={{ minWidth: 160 }}>
           {versions.map(v => {
             const hasC = hasCommunity(v)
             const hasE = hasEnterprise(v)
             const isInter = isIntermediate(v)
             const isActive = v === value
             return (
-              <button key={v} onClick={() => { onChange(v); setOpen(false) }} style={{
-                width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
-                padding: '8px 12px', border: 'none', cursor: 'pointer',
-                background: isActive ? '#6366f110' : 'transparent',
-                borderLeft: isActive ? '3px solid #6366f1' : '3px solid transparent',
-                fontSize: 12, fontWeight: isActive ? 700 : 400,
-                color: isActive ? '#6366f1' : t.text,
-              }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = t.bgMuted }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+              <button key={v} onClick={() => { onChange(v); setOpen(false) }}
+                className={`assistant-dropdown-item${isActive ? ' is-active' : ''}`}
               >
                 <span style={{ flex: 1 }}>
                   {isInter ? <span style={{ fontSize: 11, color: t.muted }}>↳ </span> : null}
@@ -1539,16 +1472,10 @@ function VersionDropdown({ value, onChange, versions, sourcesStatus = {} }: {
                 </span>
                 <span style={{ display: 'flex', gap: 3 }}>
                   {hasC && (
-                    <span title="Community installé" style={{
-                      fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
-                      background: '#dbeafe', color: '#1d4ed8',
-                    }}>C</span>
+                    <span title="Community installé" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', background: t.infoBg, color: t.info }}>C</span>
                   )}
                   {hasE && (
-                    <span title="Enterprise installé" style={{
-                      fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
-                      background: '#fef3c7', color: '#92400e',
-                    }}>E</span>
+                    <span title="Enterprise installé" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', background: t.warningBg, color: t.warning }}>E</span>
                   )}
                 </span>
               </button>
@@ -1981,8 +1908,8 @@ function ToolCallGroup({ events, projectName }: { events: AiEvent[]; projectName
                 <span style={{
                   fontSize: 9, fontWeight: 600, padding: '1px 6px',
                   borderRadius: 3, flexShrink: 0,
-                  background: '#f9731620', color: '#ea6c0a',
-                  border: '1px solid #f9731640',
+                  background: t.warningBg, color: t.warning,
+                  border: `1px solid ${t.warning}`,
                   maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>↗ {projectName}</span>
               )}
