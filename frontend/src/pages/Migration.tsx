@@ -138,16 +138,33 @@ function migAutoTitle(msgs: Message[]): string {
   return first.length > 60 ? first.slice(0, 57) + '…' : first || 'Migration'
 }
 function _finalizeOrphaned(msgs: Message[]): Message[] {
-  return msgs.map(m => m.loading
-    ? { ...m, loading: false, events: [...(m.events ?? []), { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }] }
-    : m
-  )
+  return msgs.map(m => {
+    if (!m.loading) return m
+    const events = m.events ?? []
+    const calls   = events.filter(e => e.type === 'tool_call')
+    const results = events.filter(e => e.type === 'tool_result')
+    // Inject a synthetic tool_result for every tool_call that has no matching result
+    const extraResults: AiEvent[] = calls
+      .filter(c => !results.find(r => r.name === c.name))
+      .map(c => ({ type: 'tool_result' as const, name: c.name, ok: false }))
+    return {
+      ...m,
+      loading: false,
+      events: [...events, ...extraResults, { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }],
+    }
+  })
 }
 function loadMigActive(): Record<string, Message[]> {
   try {
     const raw: Record<string, Message[]> = JSON.parse(localStorage.getItem(LS_MIG_ACTIVE) ?? '{}')
     const data: Record<string, Message[]> = {}
-    for (const [k, msgs] of Object.entries(raw)) data[k] = _finalizeOrphaned(msgs)
+    let dirty = false
+    for (const [k, msgs] of Object.entries(raw)) {
+      const cleaned = _finalizeOrphaned(msgs)
+      data[k] = cleaned
+      if (cleaned !== msgs) dirty = true
+    }
+    if (dirty) try { localStorage.setItem(LS_MIG_ACTIVE, JSON.stringify(data)) } catch { /* quota */ }
     // Seed the module buffer from localStorage so setMessages can read it even after unmount
     for (const [k, msgs] of Object.entries(data)) {
       if (!_migBuffer.has(k)) _migBuffer.set(k, msgs)
@@ -1616,10 +1633,7 @@ export default function Migration() {
               padding: '5px 12px', borderRadius: t.radius, cursor: 'pointer',
               background: t.bgMuted, border: `1px solid ${t.border}`,
               fontSize: 12, color: t.muted, fontWeight: 600,
-              opacity: messages.length === 0 ? 0.4 : 1,
-              transition: 'opacity .15s',
             }}
-            disabled={messages.length === 0}
           >
             <ArrowRightLeft size={13} />
             {c.newAnalysis}

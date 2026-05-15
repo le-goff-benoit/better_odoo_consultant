@@ -132,16 +132,32 @@ function persistHistory(h: Record<string, SavedConv[]>) {
   try { localStorage.setItem(LS_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
 }
 function finalizeOrphanedMessages(msgs: Message[]): Message[] {
-  return msgs.map(m => m.loading
-    ? { ...m, loading: false, events: [...(m.events ?? []), { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }] }
-    : m
-  )
+  return msgs.map(m => {
+    if (!m.loading) return m
+    const events = m.events ?? []
+    const calls   = events.filter(e => e.type === 'tool_call')
+    const results = events.filter(e => e.type === 'tool_result')
+    const extraResults: AiEvent[] = calls
+      .filter(c => !results.find(r => r.name === c.name))
+      .map(c => ({ type: 'tool_result' as const, name: c.name, ok: false }))
+    return {
+      ...m,
+      loading: false,
+      events: [...events, ...extraResults, { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }],
+    }
+  })
 }
 function loadActiveConvs(): Record<string, Message[]> {
   try {
     const raw: Record<string, Message[]> = JSON.parse(localStorage.getItem(LS_ACTIVE) ?? '{}')
     const cleaned: Record<string, Message[]> = {}
-    for (const [k, msgs] of Object.entries(raw)) cleaned[k] = finalizeOrphanedMessages(msgs)
+    let dirty = false
+    for (const [k, msgs] of Object.entries(raw)) {
+      const c = finalizeOrphanedMessages(msgs)
+      cleaned[k] = c
+      if (c !== msgs) dirty = true
+    }
+    if (dirty) try { localStorage.setItem(LS_ACTIVE, JSON.stringify(cleaned)) } catch { /* quota */ }
     return cleaned
   } catch { return {} }
 }
