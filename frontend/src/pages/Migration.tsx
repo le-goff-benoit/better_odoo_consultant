@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, ArrowUp, ChevronDown, Check, CheckCheck, Copy, FileText, Paperclip, Square, TriangleAlert, X } from 'lucide-react'
+import { ArrowRightLeft, ArrowUp, ChevronDown, Check, CheckCheck, Copy, FileText, Paperclip, Square, Timer, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -114,6 +114,7 @@ interface Message {
   events?: AiEvent[]
   loading?: boolean
   timestamp?: number
+  startTime?: number
   inputTokens?: number
   outputTokens?: number
 }
@@ -696,22 +697,25 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, inputTokens, outputTokens, mascotType, mascotColor }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, mascotType, mascotColor }: {
   events: AiEvent[]; loading?: boolean; provider: string
-  timestamp?: number; inputTokens?: number; outputTokens?: number
+  timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   mascotType?: 'robot' | 'cat' | 'dog'
   mascotColor?: string
 }) {
   const lang = useUiLanguage()
   const c = lang === 'en'
-    ? { copyTitle: 'Copy answer', analyzing: 'Analyzing results and drafting the answer…', thinking: 'Analyzing…', tokens: 'Tokens used (input ↑ + output ↓)', copied: 'Copied!', copy: 'Copy' }
-    : { copyTitle: 'Copier la réponse', analyzing: 'Analyse des résultats et rédaction de la réponse…', thinking: 'Analyse en cours…', tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)', copied: 'Copié !', copy: 'Copier' }
+    ? { copyTitle: 'Copy answer', analyzing: 'Analyzing results and drafting the answer…', thinking: 'Analyzing…', tokens: 'Tokens used (input ↑ + output ↓)', copied: 'Copied!', copy: 'Copy', responseTime: 'Response time' }
+    : { copyTitle: 'Copier la réponse', analyzing: 'Analyse des résultats et rédaction de la réponse…', thinking: 'Analyse en cours…', tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)', copied: 'Copié !', copy: 'Copier', responseTime: 'Temps de réponse' }
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt    = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
   const errorEvt   = events.find(e => e.type === 'error')
   const time   = fmtTime(timestamp)
   const tokens = fmtTokens(inputTokens, outputTokens)
+  const elapsed = (timestamp && startTime && timestamp > startTime)
+    ? (() => { const s = (timestamp - startTime) / 1000; return s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` })()
+    : null
   const [copied, setCopied] = useState(false)
 
   function copyText() {
@@ -786,9 +790,10 @@ function AssistantBubble({ events, loading, provider, timestamp, inputTokens, ou
           </div>
         )}
 
-        {(time || tokens || textEvt?.content) && !loading && (
+        {(time || elapsed || tokens || textEvt?.content) && !loading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 10, color: t.muted, paddingLeft: 2 }}>
             {time && <span>{time}</span>}
+            {elapsed && <span title={c.responseTime} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Timer size={10} />{elapsed}</span>}
             {tokens && <span title={c.tokens}>{tokens}</span>}
             {textEvt?.content && (
               <button
@@ -1540,7 +1545,7 @@ export default function Migration() {
     const now = Date.now()
     const attachedMeta = attached.map(attachmentMeta)
     const userMsg: Message      = { id: String(now),     role: 'user',      text, attachments: attachedMeta, timestamp: now }
-    const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true }
+    const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true, startTime: now }
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setInput('')
@@ -1769,6 +1774,7 @@ export default function Migration() {
                 loading={m.loading}
                 provider={activeProvider}
                 timestamp={m.timestamp}
+                startTime={m.startTime}
                 inputTokens={m.inputTokens}
                 outputTokens={m.outputTokens}
                 mascotType={userProfile?.mascotType}
