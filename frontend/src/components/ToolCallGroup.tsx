@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ChevronDown, Check, Loader2 } from 'lucide-react'
-import { ODOO_APPS } from '../constants/odooApps'
 import { useUiLanguage } from '../i18n'
 import { getToolMeta, humanModel } from '../utils/toolMeta'
 
@@ -23,21 +22,6 @@ interface ToolCallItem {
   call: ToolEvent
   count: number
   key: string
-}
-
-function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
-  const def = ODOO_APPS[name]
-  if (!def) return null
-  return (
-    <img
-      src={def.iconUrl}
-      alt={def.label}
-      width={size}
-      height={size}
-      className="tool-chip-app-icon"
-      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-    />
-  )
 }
 
 function truncate(value: string, max = 52) {
@@ -154,25 +138,21 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
           const summary = toolSummary(call.name, call.args, lang)
 
           return (
-            <div
-              key={key}
-              className={`tool-timeline-step${idx === dedupedCalls.length - 1 ? ' is-last' : ''}`}
-              style={{ '--tool-color': meta.color } as CSSProperties}
-            >
-              <span className="tool-timeline-node" aria-hidden>{String(idx + 1).padStart(2, '0')}</span>
+            <div key={key} className={`tool-timeline-step${idx === dedupedCalls.length - 1 ? ' is-last' : ''}`}>
               <button
                 type="button"
                 className={`tool-chip${done ? ' is-done' : ' is-running'}${hasRecords ? ' is-clickable' : ''}`}
+                style={{ '--tool-color': meta.color } as CSSProperties}
                 onClick={() => hasRecords && setOpenKey(expanded ? null : key)}
                 aria-expanded={hasRecords ? expanded : undefined}
                 title={hasRecords ? (expanded ? c.close : c.open) : undefined}
               >
+                <span className="tool-chip-step" aria-hidden>{String(idx + 1).padStart(2, '0')}</span>
                 <span className="tool-chip-status" aria-hidden>
-                  {done ? <Check size={14} strokeWidth={2.4} /> : <Loader2 size={14} strokeWidth={2.4} />}
+                  {done ? <Check size={12} strokeWidth={2.4} /> : <Loader2 size={12} strokeWidth={2.4} />}
                 </span>
                 <span className="tool-chip-main">
                   <span className="tool-chip-titleline">
-                    {done && meta.appName ? <OdooAppIcon name={meta.appName} size={15} /> : <span className="tool-chip-emoji">{meta.icon}</span>}
                     <span className="tool-chip-title">{summary.title}</span>
                     <span className="tool-chip-state">{done ? c.done : c.running}</span>
                   </span>

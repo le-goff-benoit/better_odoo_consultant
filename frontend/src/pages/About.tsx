@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.2',
+    version: '0.35.3',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Timeline des outils IA compactée : numéro d\'étape intégré dans le bloc, suppression des pictogrammes, hauteur réduite et connecteurs plus discrets',
+      'Informations conservées mais densité améliorée : libellé, détail, statut, projet, résultats et répétitions restent visibles sans occuper autant d\'espace',
+    ],
+  },
+  {
+    version: '0.35.2',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Correctif « Plus de détail » : détection de sélection élargie à tout texte dans la réponse, pas seulement aux titres ou aux nœuds parents directs',
       'Position du bouton corrigée : affichage sous la sélection quand possible, sans double décalage vers le haut en mode réponse agrandie',

@@ -2446,48 +2446,30 @@ textarea:focus-visible {
 .tool-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 30px;
+  gap: 8px 22px;
   align-items: flex-start;
-  padding-left: 2px;
 }
 
 .tool-timeline-step {
-  --tool-color: var(--brand);
   position: relative;
   display: inline-flex;
-  align-items: stretch;
-  gap: 8px;
-  max-width: min(470px, 100%);
-}
-
-.tool-timeline-step::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  top: 34px;
-  bottom: -9px;
-  width: 1px;
-  background: repeating-linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--tool-color) 45%, transparent) 0 4px,
-    transparent 4px 8px
-  );
+  max-width: min(360px, 100%);
 }
 
 .tool-timeline-step::after {
   content: ">";
   position: absolute;
-  left: calc(100% + 8px);
+  left: calc(100% + 5px);
   top: 50%;
-  width: 14px;
-  height: 16px;
-  margin-top: -8px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: color-mix(in srgb, var(--tool-color) 78%, var(--th-muted));
+  color: var(--th-muted);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1;
 }
@@ -2496,47 +2478,21 @@ textarea:focus-visible {
   display: none;
 }
 
-.tool-timeline-step.is-last::before {
-  display: none;
-}
-
-.tool-timeline-node {
-  position: relative;
-  z-index: 1;
-  width: 26px;
-  height: 26px;
-  margin-top: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--tool-color);
-  background: var(--th-bg-card);
-  border: 1px solid color-mix(in srgb, var(--tool-color) 55%, var(--th-border));
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0;
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--tool-color) 10%, transparent),
-    inset 0 -2px 0 color-mix(in srgb, var(--tool-color) 12%, transparent);
-}
-
 .tool-chip {
-  min-width: 230px;
-  max-width: min(420px, 100%);
+  --tool-color: var(--brand);
+  min-width: 196px;
+  max-width: min(340px, 100%);
   display: inline-grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: auto 22px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px 8px 8px;
+  gap: 7px;
+  padding: 5px 8px 5px 6px;
   color: var(--th-text);
   background:
-    linear-gradient(90deg, var(--tool-color) 0 4px, transparent 4px),
+    linear-gradient(90deg, var(--tool-color) 0 3px, transparent 3px),
     color-mix(in srgb, var(--tool-color) 7%, var(--th-bg-card));
   border: 1px solid color-mix(in srgb, var(--tool-color) 28%, var(--th-border));
-  border-radius: 6px;
+  border-radius: 4px;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--th-text) 6%, transparent);
   cursor: default;
   text-align: left;
@@ -2555,16 +2511,33 @@ textarea:focus-visible {
   transform: translateY(-1px);
 }
 
+.tool-chip-step {
+  min-width: 24px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--tool-color);
+  background: color-mix(in srgb, var(--tool-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tool-color) 34%, transparent);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .tool-chip-status {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--tool-color);
   background: color-mix(in srgb, var(--tool-color) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--tool-color) 32%, transparent);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 .tool-chip.is-running .tool-chip-status svg {
@@ -2575,25 +2548,14 @@ textarea:focus-visible {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
 }
 
 .tool-chip-titleline {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.tool-chip-app-icon {
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.tool-chip-emoji {
-  flex-shrink: 0;
-  font-size: 13px;
-  line-height: 1;
+  gap: 5px;
 }
 
 .tool-chip-title {
@@ -2601,7 +2563,7 @@ textarea:focus-visible {
   overflow: hidden;
   color: var(--th-text);
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 750;
   letter-spacing: .02em;
   text-overflow: ellipsis;
@@ -2613,7 +2575,7 @@ textarea:focus-visible {
   flex-shrink: 0;
   color: var(--tool-color);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -2623,32 +2585,32 @@ textarea:focus-visible {
   min-width: 0;
   overflow: hidden;
   color: var(--th-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 560;
-  line-height: 1.25;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tool-chip-meta {
-  max-width: 160px;
+  max-width: 132px;
   display: inline-flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .tool-chip-badge {
-  max-width: 148px;
+  max-width: 124px;
   overflow: hidden;
-  padding: 2px 6px;
+  padding: 1px 5px;
   color: var(--tool-color);
   background: color-mix(in srgb, var(--tool-color) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--tool-color) 24%, transparent);
-  border-radius: 4px;
+  border-radius: 3px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
   line-height: 1.1;
   text-overflow: ellipsis;
@@ -2716,7 +2678,7 @@ textarea:focus-visible {
 
 @media (max-width: 720px) {
   .tool-chip-row {
-    gap: 10px;
+    gap: 8px;
   }
   .tool-timeline-step {
     width: 100%;
@@ -2728,10 +2690,10 @@ textarea:focus-visible {
   .tool-chip {
     width: 100%;
     min-width: 0;
-    grid-template-columns: 30px minmax(0, 1fr);
+    grid-template-columns: auto 22px minmax(0, 1fr);
   }
   .tool-chip-meta {
-    grid-column: 2;
+    grid-column: 3;
     justify-content: flex-start;
     max-width: 100%;
   }
