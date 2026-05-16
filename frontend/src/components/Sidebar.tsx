@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
 import { streamingSignals, type StreamStatus } from '../utils/streamingSignals'
+import { sourceSyncSignals } from '../utils/sourceSyncSignals'
 
 const labels = {
   fr: {
@@ -18,6 +19,7 @@ const labels = {
     about: 'À propos',
     consultant: 'Consultant',
     context: 'Contexte',
+    sourcesUpdating: 'Sources en cours',
   },
   en: {
     sources: 'Sources',
@@ -29,6 +31,7 @@ const labels = {
     about: 'About',
     consultant: 'Consultant',
     context: 'Context',
+    sourcesUpdating: 'Sources running',
   },
 }
 
@@ -78,9 +81,13 @@ export default function Sidebar({
   const location = useLocation()
   const up = data?.data ?? {}
 
-  // Subscribe to streaming signals so nav dots update live
+  // Subscribe to global activity signals so nav indicators update live.
   const [, rerender] = useState(0)
-  useEffect(() => streamingSignals.subscribe(() => rerender(n => n + 1)), [])
+  useEffect(() => {
+    const offStreaming = streamingSignals.subscribe(() => rerender(n => n + 1))
+    const offSourceSync = sourceSyncSignals.subscribe(() => rerender(n => n + 1))
+    return () => { offStreaming(); offSourceSync() }
+  }, [])
 
   const signalFor = (pageKey: 'assistant' | 'migration'): StreamStatus | null => {
     const sigs = streamingSignals.forPage(pageKey)
@@ -90,6 +97,7 @@ export default function Sidebar({
   }
   const lang = normalizeUiLanguage(up.language)
   const tr = labels[lang]
+  const sourceSyncRunning = sourceSyncSignals.running()
   const avatarIsImg = (up.avatar as string | undefined)?.startsWith('data:')
   const ContextIcon = contextOpen ? PanelRightClose : PanelRightOpen
   const showContextToggle = location.pathname === '/assistant' || location.pathname === '/migration'
@@ -114,6 +122,7 @@ export default function Sidebar({
       <nav className="topbar-nav" aria-label="Navigation principale">
         {primaryLinks.map(l => {
           const Icon = l.icon
+          const isSourcesLink = l.labelKey === 'sources'
           return (
             <NavLink
               key={l.to}
@@ -122,6 +131,13 @@ export default function Sidebar({
             >
               <Icon size={16} aria-hidden />
               {tr[l.labelKey as keyof typeof tr]}
+              {isSourcesLink && sourceSyncRunning.length > 0 && (
+                <span
+                  className="stream-dot stream-dot--streaming"
+                  title={tr.sourcesUpdating}
+                  aria-hidden
+                />
+              )}
             </NavLink>
           )
         })}
@@ -151,6 +167,14 @@ export default function Sidebar({
       </nav>
 
       <div className="topbar-spacer" />
+
+      {sourceSyncRunning.length > 0 && (
+        <NavLink to="/sources" className="topbar-sync-indicator" title={tr.sourcesUpdating}>
+          <RefreshCw size={13} aria-hidden />
+          <span>{tr.sources}</span>
+          <b>{sourceSyncRunning.length}</b>
+        </NavLink>
+      )}
 
       <TopbarClock />
 

@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.6',
+    version: '0.35.7',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Topbar : indicateur visuel de synchronisation des sources quand un téléchargement ou une mise à jour est en cours',
+      'La synchronisation des sources est maintenant suivie dans un store global frontend : on peut quitter la page Sources et y revenir sans perdre l’état courant',
+    ],
+  },
+  {
+    version: '0.35.6',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Page Sources : ajout d\'un bouton global « Mettre à jour les sources » à côté de « Version intermédiaire »',
       'Le bouton relance la synchronisation des versions déjà installées, en incluant Enterprise quand les sources Enterprise existent',

@@ -815,6 +815,49 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.topbar-sync-indicator {
+  min-height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-left: 1px solid var(--boa-topbar-border);
+  border-right: 1px solid var(--boa-topbar-border);
+  background:
+    linear-gradient(90deg, rgba(249, 115, 22, .10), transparent),
+    var(--boa-topbar-status-bg);
+  color: var(--boa-topbar-text);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topbar-sync-indicator svg {
+  color: #f97316;
+  animation: spin .9s linear infinite;
+}
+.topbar-sync-indicator b {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f97316;
+  color: #fff;
+  border: 1px solid color-mix(in srgb, #f97316 70%, var(--boa-topbar-border));
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+}
+.topbar-sync-indicator:hover {
+  background: var(--boa-topbar-hover);
+  text-decoration: none;
+}
+
 .topbar-clock-date,
 .topbar-clock-time {
   display: block;

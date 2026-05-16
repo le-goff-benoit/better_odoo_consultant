@@ -7,6 +7,7 @@ import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { Badge, Card, StatusPill } from '../components/ui'
 import { useUiLanguage, type UiLanguage } from '../i18n'
+import { sourceSyncSignals } from '../utils/sourceSyncSignals'
 
 // ── Version definitions ─────────────────────────────────────────
 
@@ -23,11 +24,6 @@ type VersionDef = { version: string; label: string; badge: string; badgeEn?: str
 // ── Types ───────────────────────────────────────────────────────
 
 type CardState = 'idle' | 'running' | 'done' | 'error'
-
-interface ProgressEvt {
-  type: 'start' | 'log' | 'progress' | 'done' | 'error' | 'separator' | 'end'
-  msg?: string; label?: string; pct?: number
-}
 
 interface VersionState {
   status: CardState; pct: number; currentLabel: string; logs: string[]; showLogs: boolean
@@ -192,7 +188,7 @@ export default function Sources() {
   const [updatesLoading, setUpdatesLoading] = useState<Record<string, boolean>>({})
   const [extraStatus,    setExtraStatus]    = useState<Record<string, RepoInfo>>({})
   const [updatingAll,    setUpdatingAll]    = useState(false)
-  const abortRefs = useRef<Record<string, AbortController>>({})
+  const [syncTick,       rerenderSync]      = useState(0)
 
   // SSH state
   const [sshStep,  setSshStep]  = useState<'idle' | 'generating' | 'done'>('idle')
@@ -217,6 +213,10 @@ export default function Sources() {
 
   const sshOk   = sshData?.data?.accessible === true
   const hasKeys = (keysData?.data?.keys?.length ?? 0) > 0
+  const syncByVersion = useMemo(() => Object.fromEntries(sourceSyncSignals.getAll()), [syncTick])
+  const anySourceSyncRunning = sourceSyncSignals.hasRunning()
+
+  useEffect(() => sourceSyncSignals.subscribe(() => rerenderSync(n => n + 1)), [])
 
   // Merged status for all versions (major + custom + overrides)
   const allVersionStatus: Record<string, RepoInfo> = useMemo(() => ({
@@ -338,58 +338,14 @@ export default function Sources() {
     const path = customPaths[version] || defaultPath(version)
     const ent  = includeEnterprise
 
-    abortRefs.current[version]?.abort()
-    const ctrl = new AbortController()
-    abortRefs.current[version] = ctrl
-
-    setCard(version, { status: 'running', pct: 0, currentLabel: c.start, logs: [], showLogs: false })
-
-    try {
-      const res = await fetch('/api/sources/sync-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version, path, community: true, enterprise: ent }),
-        signal: ctrl.signal,
-      })
-      if (!res.ok || !res.body) {
-        setCard(version, { status: 'error', currentLabel: `Erreur HTTP ${res.status}` }); return
-      }
-
-      const reader  = res.body.getReader()
-      const decoder = new TextDecoder()
-      let   buffer  = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n'); buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          let evt: ProgressEvt
-          try { evt = JSON.parse(line.slice(6)) } catch { continue }
-
-          if (evt.type === 'progress') {
-            setCard(version, { pct: evt.pct ?? 0, currentLabel: evt.label ?? '' })
-            if (evt.label) setCards(p => ({ ...p, [version]: { ...p[version], logs: [...(p[version]?.logs ?? []), evt.label!] } }))
-          } else if (evt.type === 'log' || evt.type === 'start') {
-            const msg = evt.msg ?? ''
-            setCard(version, { currentLabel: msg })
-            if (msg) setCards(p => ({ ...p, [version]: { ...p[version], logs: [...(p[version]?.logs ?? []), msg] } }))
-          } else if (evt.type === 'done') {
-            setCard(version, { status: 'done', pct: 100, currentLabel: evt.msg ?? c.done })
-            qc.invalidateQueries({ queryKey: ['sources-status'] })
-            if (!MAJOR_VERSIONS.some(v => v.version === version)) fetchCustomStatus(version)
-          } else if (evt.type === 'error') {
-            setCard(version, { status: 'error', currentLabel: evt.msg ?? c.error })
-          }
-        }
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') return
-      setCard(version, { status: 'error', currentLabel: String(err) })
-    }
+    await sourceSyncSignals.start({
+      version,
+      path,
+      enterprise: ent,
+      labels: { start: c.start, done: c.done, error: c.error },
+    })
+    qc.invalidateQueries({ queryKey: ['sources-status'] })
+    if (!MAJOR_VERSIONS.some(v => v.version === version)) fetchCustomStatus(version)
   }
 
   const updateAllInstalledSources = async () => {
@@ -430,7 +386,7 @@ export default function Sources() {
             <button
               className="btn btn-secondary"
               onClick={updateAllInstalledSources}
-              disabled={updatingAll || installedVersionsToUpdate.length === 0}
+              disabled={updatingAll || anySourceSyncRunning || installedVersionsToUpdate.length === 0}
               title={c.updateAllSources}
             >
               {updatingAll
@@ -479,7 +435,16 @@ export default function Sources() {
       {/* Unified version cards grid */}
       <div className="page-grid page-grid-sources">
         {allVersionDefs.map(({ version, label, badge, badgeEn, isMajor }) => {
-          const card     = cards[version]
+          const syncCard = syncByVersion[version]
+          const card     = syncCard
+            ? {
+              status: syncCard.status as CardState,
+              pct: syncCard.pct,
+              currentLabel: syncCard.label,
+              logs: syncCard.logs,
+              showLogs: cards[version]?.showLogs ?? false,
+            }
+            : cards[version]
           const status   = card?.status ?? 'idle'
           const pct      = card?.pct    ?? 0
           const isOpen   = advanced === version
@@ -624,8 +589,7 @@ export default function Sources() {
                 {/* Action button */}
                 <button
                   className="btn btn-primary"
-                  disabled={status === 'running'}
-                  onClick={() => status === 'running' ? abortRefs.current[version]?.abort() : startSync(version)}
+                  onClick={() => status === 'running' ? sourceSyncSignals.abort(version) : startSync(version)}
                   style={btnDownload(status, isInstalled)}
                 >
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginRight: 7, verticalAlign: '-2px' }}>
