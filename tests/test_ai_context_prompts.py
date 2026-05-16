@@ -714,6 +714,118 @@ def test_build_system_injects_access_rights():
     assert "utilisateur standard" in stable
 
 
+# ── View / report inspection tools ───────────────────────────────
+
+_SAMPLE_FORM_ARCH = (
+    "<form>"
+    '<field name="partner_id" readonly="1" domain="[]"/>'
+    '<field name="amount_total"/>'
+    '<button name="action_confirm" string="Confirmer" type="object"/>'
+    '<notebook><page string="Lignes"><field name="order_line"/></page></notebook>'
+    "</form>"
+)
+
+
+class FakeViewOdoo:
+    def search_read(self, model, domain=None, fields=None, limit=80, offset=0, order=""):
+        if model == "ir.ui.view":
+            wanted = next((d[2] for d in (domain or []) if d and d[0] == "model"), None)
+            if wanted == "sale.order":
+                return [{"type": "form"}, {"type": "list"}, {"type": "kanban"}]
+            return []
+        if model == "ir.actions.act_window":
+            return [{"id": 7, "name": "Commandes", "view_mode": "list,form"}]
+        if model == "ir.ui.menu":
+            return [{"complete_name": "Ventes/Commandes", "action": "ir.actions.act_window,7"}]
+        return []
+
+    def call(self, model, method, args=None, kwargs=None):
+        if method == "get_view":
+            return {"name": "sale.order.form", "id": 42, "arch": _SAMPLE_FORM_ARCH}
+        raise RuntimeError("unsupported method")
+
+
+def test_summarize_arch_extracts_field_config():
+    from odoo_consultant_portal.services.view_service import _summarize_arch
+
+    summary = _summarize_arch(_SAMPLE_FORM_ARCH)
+    fields = {f["name"]: f for f in summary["fields"]}
+    assert fields["partner_id"]["readonly"] == "1"
+    assert "domain" in fields["partner_id"]
+    assert "amount_total" in fields
+    assert summary["buttons"][0]["name"] == "action_confirm"
+    assert "Lignes" in summary["notebook_pages"]
+
+
+def test_summarize_arch_handles_bad_xml():
+    from odoo_consultant_portal.services.view_service import _summarize_arch
+
+    assert "parse_error" in _summarize_arch("<form><unclosed>")
+
+
+@pytest.mark.asyncio
+async def test_inspect_odoo_view_returns_structured_summary():
+    from odoo_consultant_portal.services.view_service import inspect_odoo_view
+
+    result = await inspect_odoo_view(FakeViewOdoo(), "sale.order", "form")
+    assert result["ok"] is True
+    assert set(result["available_view_types"]) == {"form", "list", "kanban"}
+    assert result["view"]["name"] == "sale.order.form"
+    fields = {f["name"]: f for f in result["arch_summary"]["fields"]}
+    assert fields["partner_id"]["readonly"] == "1"
+    assert result["access_paths"][0]["menus"] == ["Ventes/Commandes"]
+
+
+@pytest.mark.asyncio
+async def test_inspect_odoo_view_normalizes_tree_to_list():
+    from odoo_consultant_portal.services.view_service import inspect_odoo_view
+
+    result = await inspect_odoo_view(FakeViewOdoo(), "sale.order", "tree")
+    assert result["requested_view_type"] == "list"
+
+
+@pytest.mark.asyncio
+async def test_inspect_odoo_view_rejects_unknown_model():
+    from odoo_consultant_portal.services.view_service import inspect_odoo_view
+
+    result = await inspect_odoo_view(FakeViewOdoo(), "does.not.exist")
+    assert result["ok"] is False
+
+
+class FakeReportOdoo:
+    def search_read(self, model, domain=None, fields=None, limit=80, offset=0, order=""):
+        if model == "ir.actions.report":
+            return [{
+                "id": 1, "name": "Facture", "report_name": "account.report_invoice",
+                "model": "account.move", "report_type": "qweb-pdf",
+                "paperformat_id": [3, "A4"],
+            }]
+        if model == "ir.ui.view":
+            if any(d and d[0] == "inherit_id" for d in (domain or [])):
+                return [{"id": 9, "name": "Studio invoice tweak", "key": "studio_customization.x"}]
+            return [{"id": 5, "name": "Invoice", "key": "account.report_invoice"}]
+        if model == "report.paperformat":
+            return [{"name": "A4", "format": "A4", "orientation": "Portrait", "dpi": 90}]
+        if model == "res.company":
+            return [{"name": "Acme", "external_report_layout_id": [2, "Boxed"], "font": "Lato"}]
+        return []
+
+    def call(self, *a, **k):
+        raise RuntimeError("n/a")
+
+
+@pytest.mark.asyncio
+async def test_inspect_odoo_report_detail_mode():
+    from odoo_consultant_portal.services.view_service import inspect_odoo_report
+
+    result = await inspect_odoo_report(FakeReportOdoo(), report_name="account.report_invoice")
+    assert result["ok"] is True and result["mode"] == "detail"
+    assert result["report"]["report_name"] == "account.report_invoice"
+    assert result["qweb_templates"][0]["inherited_by"] == ["Studio invoice tweak"]
+    assert result["paperformat"]["orientation"] == "Portrait"
+    assert result["document_layout"]["external_report_layout_id"] == [2, "Boxed"]
+
+
 def test_infer_perspective_strong_signals():
     from odoo_consultant_portal.services.ai_service import _infer_perspective, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA, PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT
 

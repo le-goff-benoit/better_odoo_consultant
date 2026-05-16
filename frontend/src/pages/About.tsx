@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.31.0',
+    version: '0.32.0',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Nouvel outil inspect_odoo_view : inspecte une vue de l\'instance connectée — types de vues disponibles (form, list, kanban, activity…), arch assemblée après héritage (standard + modules + Studio + custom), configuration de chaque champ dans la vue (readonly, required, invisible, domain) et chemin d\'accès menu → action',
+      'Nouvel outil inspect_odoo_report : inspecte les rapports PDF / QWeb — action de rapport, template QWeb et son arbre d\'héritage, format papier et mise en page document de la société',
+      'Les deux outils d\'inspection sont disponibles en assistance projet comme en migration projet ; leur sortie est résumée et structurée (jamais le XML brut) pour éviter la dégradation du contexte',
+      'Affichage des outils : libellés humains et bilingues FR/EN, regroupés dans un module partagé — fin des noms techniques bruts et de la duplication entre Assistant IA et Migration',
+      'Performance : inspect_odoo_view groupe la requête des menus (3 allers-retours XML-RPC au lieu de ~23) ; inspect_odoo_report cible la mise en page de la société active en multi-société',
+    ],
+  },
+  {
+    version: '0.31.0',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Migration d\'un projet : le prompt reçoit désormais l\'instance source connectée, les droits Odoo et les notes métier du projet (project_context) — ces informations étaient perdues en mode migration',
       'Migration d\'un projet : les outils live (query_odoo, count_odoo, get_odoo_fields, inspect_studio) sont disponibles pour inspecter l\'instance source réelle — Studio et volumétrie déterminent l\'effort de migration',

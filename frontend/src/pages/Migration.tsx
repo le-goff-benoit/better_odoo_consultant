@@ -25,6 +25,7 @@ import {
 } from '../utils/attachments'
 import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
+import { getToolMeta } from '../utils/toolMeta'
 import { History } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -820,137 +821,8 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
 
 // ── Tool rendering ────────────────────────────────────────────────
 
-const ODOO_MODEL_LABELS: Record<string, string> = {
-  'account.move': 'Factures', 'account.payment': 'Paiements',
-  'sale.order': 'Commandes clients', 'crm.lead': 'Opportunités CRM',
-  'purchase.order': 'Commandes fournisseurs', 'stock.picking': 'Transferts de stock',
-  'stock.move': 'Mouvements de stock', 'stock.quant': 'Niveaux de stock',
-  'product.template': 'Produits', 'product.product': 'Variantes de produit',
-  'res.partner': 'Contacts', 'hr.employee': 'Employés',
-  'project.project': 'Projets', 'project.task': 'Tâches',
-  'mrp.production': 'Ordres de fabrication', 'mrp.bom': 'Nomenclatures',
-  'ir.model': 'Modèles techniques', 'ir.model.fields': 'Champs techniques',
-}
-
-function humanModel(model: string): string {
-  return ODOO_MODEL_LABELS[model] ?? model
-}
-
-function getToolMeta(name: string, args?: Record<string, unknown>) {
-  if (name === 'query_odoo') {
-    const model = (args?.model as string) ?? ''
-    const prefix = model.split('.')[0]
-    const app = ODOO_APPS[prefix]
-    const label = humanModel(model)
-    return {
-      icon: app ? app.icon : '🗄️', appName: app ? prefix : null,
-      color: app ? app.color : '#64748b',
-      loadingLabel: model ? `Requête base client — ${label}…` : 'Requête base client…',
-      doneLabel: label || 'Odoo', liveDb: true,
-    }
-  }
-  if (name === 'count_odoo') {
-    const model = (args?.model as string) ?? ''
-    const label = humanModel(model)
-    return {
-      icon: '🔢', appName: null, color: '#0891b2',
-      loadingLabel: model ? `Comptage — ${label}…` : 'Comptage…',
-      doneLabel: model ? `Comptage · ${label}` : 'Comptage', liveDb: true,
-    }
-  }
-  if (name === 'get_odoo_fields') {
-    const model = (args?.model as string) ?? ''
-    const label = humanModel(model)
-    return {
-      icon: '🔬', appName: null, color: '#059669',
-      loadingLabel: model ? `Champs — ${label}…` : 'Découverte des champs…',
-      doneLabel: model ? `Champs · ${label}` : 'Champs',
-    }
-  }
-  if (name === 'search_odoo_source') {
-    const ver = args?.version as string
-    const pat = (args?.pattern as string) ?? ''
-    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
-    return {
-      icon: '🔍', appName: null, color: '#2563EB',
-      loadingLabel: `Recherche sources${ver ? ` v${ver}` : ''}…`,
-      doneLabel: shortPat ? `« ${shortPat} » dans sources${ver ? ` v${ver}` : ''}` : `Sources Odoo${ver ? ` v${ver}` : ''}`,
-    }
-  }
-  if (name === 'read_odoo_file') {
-    const path = (args?.path as string) ?? ''
-    const file = path.split('/').pop() ?? 'fichier'
-    return {
-      icon: '📄', appName: null, color: '#2563EB',
-      loadingLabel: `Lecture — ${file}…`, doneLabel: file,
-    }
-  }
-  if (name === 'search_target_source') {
-    const ver = args?.version as string
-    const pat = (args?.pattern as string) ?? ''
-    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
-    return {
-      icon: '🎯', appName: null, color: '#9333ea',
-      loadingLabel: `Recherche sources cibles${ver ? ` v${ver}` : ''}…`,
-      doneLabel: shortPat ? `« ${shortPat} » dans sources${ver ? ` v${ver}` : ''}` : `Sources cible${ver ? ` v${ver}` : ''}`,
-    }
-  }
-  if (name === 'read_target_file') {
-    const path = (args?.path as string) ?? ''
-    const file = path.split('/').pop() ?? 'fichier'
-    return {
-      icon: '📄', appName: null, color: '#9333ea',
-      loadingLabel: `Lecture sources cibles — ${file}…`, doneLabel: file,
-    }
-  }
-  if (name === 'search_project_source') {
-    const pat = (args?.pattern as string) ?? ''
-    const shortPat = pat.length > 28 ? pat.slice(0, 28) + '…' : pat
-    return {
-      icon: '⎇', appName: null, color: '#0891b2',
-      loadingLabel: 'Recherche dans le code custom…',
-      doneLabel: shortPat ? `« ${shortPat} » dans code custom` : 'Code custom',
-    }
-  }
-  if (name === 'read_project_file') {
-    const path = (args?.path as string) ?? ''
-    const file = path.split('/').pop() ?? 'fichier'
-    return {
-      icon: '📁', appName: null, color: '#0891b2',
-      loadingLabel: `Lecture code custom — ${file}…`, doneLabel: file,
-    }
-  }
-  if (name === 'count_source_lines') {
-    const scope = (args?.scope as string) ?? ''
-    const path  = (args?.path as string) ?? ''
-    const groupBy = (args?.group_by as string) ?? 'extension'
-    const groupByLabels: Record<string, string> = { extension: 'par type', module: 'par module', directory: 'par dossier', none: 'total' }
-    const scopeLabels: Record<string, string> = { odoo: 'sources Odoo', target: 'sources cible', project: 'code custom' }
-    const scopeLbl = scopeLabels[scope] ?? scope
-    return {
-      icon: '📊', appName: null, color: '#0EA5E9',
-      loadingLabel: `Volumétrie — ${scopeLbl}${path ? ` / ${path}` : ''}…`,
-      doneLabel: `Volumétrie · ${scopeLbl}${path ? ` / ${path}` : ''} (${groupByLabels[groupBy] ?? groupBy})`,
-    }
-  }
-  if (name === 'inspect_studio') {
-    const sections = (args?.sections as string[]) ?? ['all']
-    const sectLabel = sections.includes('all') ? 'tout' : sections.join(', ')
-    const modelFilter = (args?.model_filter as string) ?? ''
-    return {
-      icon: '🎨', appName: null, color: '#7C3AED',
-      loadingLabel: `Inspection Studio — ${sectLabel}${modelFilter ? ` (${modelFilter})` : ''}…`,
-      doneLabel: `Personnalisations Studio${modelFilter ? ` · ${modelFilter}` : ''}`,
-      liveDb: true,
-    }
-  }
-  return {
-    icon: '⚙️', appName: null, color: '#64748b',
-    loadingLabel: `${name}…`, doneLabel: name,
-  }
-}
-
 function ToolCallGroup({ events }: { events: AiEvent[] }) {
+  const lang = useUiLanguage()
   const [open, setOpen] = useState(false)
   const calls   = events.filter(e => e.type === 'tool_call')
   const results = events.filter(e => e.type === 'tool_result')
@@ -970,7 +842,7 @@ function ToolCallGroup({ events }: { events: AiEvent[] }) {
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: open ? 8 : 0 }}>
         {dedupedCalls.map(({ call: c, count }, idx) => {
-          const meta = getToolMeta(c.name!, c.args)
+          const meta = getToolMeta(c.name!, c.args, lang)
           const res  = results.find(r => r.name === c.name)
           const done = !!res
           const hasRecords = done && res!.records && res!.records.length > 0

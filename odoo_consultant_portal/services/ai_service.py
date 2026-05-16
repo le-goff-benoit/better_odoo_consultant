@@ -118,6 +118,38 @@ _TOOL_COUNT_LINES = {
     ),
 }
 
+_TOOL_INSPECT_VIEW = {
+    "name": "inspect_odoo_view",
+    "description": (
+        "Inspecter une vue de l'instance Odoo connectée. Retourne : les types de vues "
+        "disponibles pour le modèle (form, list, kanban, activity, calendar, pivot, graph, "
+        "search), l'arch ASSEMBLÉE après héritage (standard + modules + Studio + custom), "
+        "la configuration de chaque champ DANS la vue (readonly, required, invisible, "
+        "domain, widget) et le chemin d'accès menu → action.\n"
+        "Utilise cet outil quand l'utilisateur demande : comment accéder à un écran, quels "
+        "champs sont visibles ou modifiables dans une vue, le nom correct d'une vue selon "
+        "la version Odoo, ou le paramétrage d'un champ tel qu'il apparaît à l'écran.\n"
+        "Paramètres : model (obligatoire, ex 'sale.order') ; view_type (optionnel : form, "
+        "list, kanban, activity, calendar, pivot, graph, search) ; view_id (optionnel)."
+    ),
+}
+
+_TOOL_INSPECT_REPORT = {
+    "name": "inspect_odoo_report",
+    "description": (
+        "Inspecter les rapports PDF / QWeb de l'instance Odoo connectée. Retourne : "
+        "l'action de rapport (ir.actions.report), le template QWeb et son arbre "
+        "d'héritage, le format papier (paperformat) et la mise en page document de la "
+        "société (layout, police, couleurs).\n"
+        "Utilise cet outil quand l'utilisateur demande comment un rapport PDF est "
+        "construit, pourquoi il a une certaine apparence, quel template ou layout est "
+        "utilisé, ou la liste des rapports d'un modèle.\n"
+        "Paramètres : report_name (optionnel, ex 'account.report_invoice' — mode détail) ; "
+        "model (optionnel, ex 'sale.order' — liste les rapports du modèle). Sans paramètre, "
+        "liste les rapports de l'instance."
+    ),
+}
+
 # ── Claude tool schemas ───────────────────────────────────────────
 
 TOOLS_CLAUDE = [
@@ -399,6 +431,37 @@ STUDIO_FUNCTION_DECLARATIONS = [
     {"name": "inspect_studio", "description": _TOOL_INSPECT_STUDIO["description"],
      "parameters": {"type": "object", "properties": {
          "sections": {"type": "array"}, "model_filter": {"type": "string"},
+     }}},
+]
+
+# ── View & report inspection tool schemas ────────────────────────
+
+_VIEW_PROPS = {
+    "model":     {"type": "string", "description": "Modèle Odoo, ex 'sale.order'"},
+    "view_type": {"type": "string", "description": "Type de vue : form, list, kanban, activity, calendar, pivot, graph, search", "default": ""},
+    "view_id":   {"type": "integer", "description": "ID d'une vue précise (optionnel)"},
+}
+_REPORT_PROPS = {
+    "report_name": {"type": "string", "description": "Nom technique du rapport, ex 'account.report_invoice' (mode détail)", "default": ""},
+    "model":       {"type": "string", "description": "Modèle pour lister ses rapports, ex 'sale.order'", "default": ""},
+}
+
+VIEW_TOOLS_CLAUDE = [
+    {**_TOOL_INSPECT_VIEW, "input_schema": {"type": "object", "required": ["model"], "properties": _VIEW_PROPS}},
+    {**_TOOL_INSPECT_REPORT, "input_schema": {"type": "object", "properties": _REPORT_PROPS}},
+]
+VIEW_TOOLS_OPENAI = [
+    {"type": "function", "function": {**_TOOL_INSPECT_VIEW, "parameters": {"type": "object", "required": ["model"], "properties": _VIEW_PROPS}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_REPORT, "parameters": {"type": "object", "properties": _REPORT_PROPS}}},
+]
+VIEW_FUNCTION_DECLARATIONS = [
+    {"name": "inspect_odoo_view", "description": _TOOL_INSPECT_VIEW["description"],
+     "parameters": {"type": "object", "required": ["model"], "properties": {
+         "model": {"type": "string"}, "view_type": {"type": "string"}, "view_id": {"type": "integer"},
+     }}},
+    {"name": "inspect_odoo_report", "description": _TOOL_INSPECT_REPORT["description"],
+     "parameters": {"type": "object", "properties": {
+         "report_name": {"type": "string"}, "model": {"type": "string"},
      }}},
 ]
 
@@ -1007,6 +1070,8 @@ def build_system(
         "- Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées quand le sujet est ambigu.\n"
         "- Présente les listes sous forme de tableaux Markdown.\n"
         "- Si tu ne connais pas les champs d'un modèle, utilise `get_odoo_fields` d'abord.\n"
+        "- Pour une question sur un écran ou une vue (champs visibles, lecture seule, accès), utilise `inspect_odoo_view` ; "
+        "pour un rapport PDF, utilise `inspect_odoo_report`.\n"
         "- Sois concis et orienté résultats."
     )
     if project_context:
@@ -1099,7 +1164,8 @@ def build_system_migration(
         stable_parts.append(
             "## Méthode de travail\n"
             "1. Inspecte d'abord l'INSTANCE SOURCE réelle : customisations Studio (`inspect_studio`), "
-            "modules installés et volumétrie (`query_odoo` / `count_odoo`) — c'est ce qui détermine l'effort de migration.\n"
+            "vues et rapports (`inspect_odoo_view` / `inspect_odoo_report`), modules installés et "
+            "volumétrie (`query_odoo` / `count_odoo`) — c'est ce qui détermine l'effort de migration.\n"
             "2. Cherche l'élément concerné dans la VERSION SOURCE avec `search_odoo_source`.\n"
             "3. Cherche le même élément dans la VERSION CIBLE avec `search_target_source`.\n"
             "4. Compare, explique les différences, et vérifie la compatibilité des modules custom du repo avec la version cible."
@@ -1613,6 +1679,20 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
                 return {"ok": False, "error": "Connexion Odoo requise pour inspecter Studio — ouvrez un projet depuis la page Projets"}
             return await _inspect_studio(args, odoo)
 
+        elif name == "inspect_odoo_view":
+            if odoo is None:
+                return {"ok": False, "error": "Connexion Odoo requise pour inspecter une vue — ouvrez un projet depuis la page Projets"}
+            from .view_service import inspect_odoo_view
+            return await inspect_odoo_view(
+                odoo, args.get("model", ""), args.get("view_type"), args.get("view_id"))
+
+        elif name == "inspect_odoo_report":
+            if odoo is None:
+                return {"ok": False, "error": "Connexion Odoo requise pour inspecter un rapport — ouvrez un projet depuis la page Projets"}
+            from .view_service import inspect_odoo_report
+            return await inspect_odoo_report(
+                odoo, args.get("model"), args.get("report_name"))
+
         return {"ok": False, "error": f"Outil inconnu: {name}"}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
@@ -1982,12 +2062,16 @@ async def stream_chat(
         tools_o = tools_o + COUNT_TOOLS_OPENAI
         tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + COUNT_FUNCTION_DECLARATIONS}]
 
-    # Append Studio inspection tool whenever a live Odoo connection is available
-    # — including project-mode migration, where Studio drives the migration effort.
+    # Append the live-instance inspection tools (Studio, views, reports) whenever
+    # a live Odoo connection is available — both project assistance and
+    # project-mode migration, where they drive the migration-effort analysis.
     if profile is not None:
-        tools_c = tools_c + STUDIO_TOOLS_CLAUDE
-        tools_o = tools_o + STUDIO_TOOLS_OPENAI
-        tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + STUDIO_FUNCTION_DECLARATIONS}]
+        tools_c = tools_c + STUDIO_TOOLS_CLAUDE + VIEW_TOOLS_CLAUDE
+        tools_o = tools_o + STUDIO_TOOLS_OPENAI + VIEW_TOOLS_OPENAI
+        tools_g = [{"function_declarations": (
+            tools_g[0]["function_declarations"]
+            + STUDIO_FUNCTION_DECLARATIONS + VIEW_FUNCTION_DECLARATIONS
+        )}]
 
     if provider == "claude":
         async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path, target_path):

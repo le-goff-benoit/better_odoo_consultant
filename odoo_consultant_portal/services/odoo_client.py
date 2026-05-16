@@ -69,6 +69,15 @@ class OdooClient:
             self.db, self.uid, self.api_key, model, "search_count", [domain or []], {"context": self._ctx()}
         )
 
+    def call(self, model: str, method: str, args: list = None, kwargs: dict = None) -> Any:
+        """Generic ORM method call — for public methods such as get_view /
+        fields_view_get. XML-RPC rejects private (underscore-prefixed) methods."""
+        call_kwargs = dict(kwargs or {})
+        call_kwargs.setdefault("context", self._ctx())
+        return self._models.execute_kw(
+            self.db, self.uid, self.api_key, model, method, args or [], call_kwargs
+        )
+
     def get_installed_modules(self) -> list[dict]:
         return self.search_read(
             "ir.module.module",
