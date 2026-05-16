@@ -144,7 +144,7 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
   return (
     <div className="tool-call-group">
       <div className="tool-chip-row">
-        {dedupedCalls.map(({ call, count, key }) => {
+        {dedupedCalls.map(({ call, count, key }, idx) => {
           const meta = getToolMeta(call.name!, call.args, lang)
           const result = results.find(r => r.name === call.name)
           const done = !!result
@@ -154,33 +154,38 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
           const summary = toolSummary(call.name, call.args, lang)
 
           return (
-            <button
+            <div
               key={key}
-              type="button"
-              className={`tool-chip${done ? ' is-done' : ' is-running'}${hasRecords ? ' is-clickable' : ''}`}
+              className={`tool-timeline-step${idx === dedupedCalls.length - 1 ? ' is-last' : ''}`}
               style={{ '--tool-color': meta.color } as CSSProperties}
-              onClick={() => hasRecords && setOpenKey(expanded ? null : key)}
-              aria-expanded={hasRecords ? expanded : undefined}
-              title={hasRecords ? (expanded ? c.close : c.open) : undefined}
             >
-              <span className="tool-chip-status" aria-hidden>
-                {done ? <Check size={14} strokeWidth={2.4} /> : <Loader2 size={14} strokeWidth={2.4} />}
-              </span>
-              <span className="tool-chip-main">
-                <span className="tool-chip-titleline">
-                  {done && meta.appName ? <OdooAppIcon name={meta.appName} size={15} /> : <span className="tool-chip-emoji">{meta.icon}</span>}
-                  <span className="tool-chip-title">{summary.title}</span>
-                  <span className="tool-chip-state">{done ? c.done : c.running}</span>
+              <span className="tool-timeline-node" aria-hidden>{String(idx + 1).padStart(2, '0')}</span>
+              <button
+                type="button"
+                className={`tool-chip${done ? ' is-done' : ' is-running'}${hasRecords ? ' is-clickable' : ''}`}
+                onClick={() => hasRecords && setOpenKey(expanded ? null : key)}
+                aria-expanded={hasRecords ? expanded : undefined}
+                title={hasRecords ? (expanded ? c.close : c.open) : undefined}
+              >
+                <span className="tool-chip-status" aria-hidden>
+                  {done ? <Check size={14} strokeWidth={2.4} /> : <Loader2 size={14} strokeWidth={2.4} />}
                 </span>
-                <span className="tool-chip-detail">{summary.detail}</span>
-              </span>
-              <span className="tool-chip-meta">
-                {meta.liveDb && projectName && <span className="tool-chip-badge tool-chip-badge-project">{c.project} · {projectName}</span>}
-                {done && result?.count !== undefined && <span className="tool-chip-badge">{result.count} {c.results}</span>}
-                {count > 1 && <span className="tool-chip-badge">{count} {c.calls}</span>}
-                {hasRecords && <ChevronDown className={`tool-chip-chevron${expanded ? ' is-open' : ''}`} size={16} />}
-              </span>
-            </button>
+                <span className="tool-chip-main">
+                  <span className="tool-chip-titleline">
+                    {done && meta.appName ? <OdooAppIcon name={meta.appName} size={15} /> : <span className="tool-chip-emoji">{meta.icon}</span>}
+                    <span className="tool-chip-title">{summary.title}</span>
+                    <span className="tool-chip-state">{done ? c.done : c.running}</span>
+                  </span>
+                  <span className="tool-chip-detail">{summary.detail}</span>
+                </span>
+                <span className="tool-chip-meta">
+                  {meta.liveDb && projectName && <span className="tool-chip-badge tool-chip-badge-project">{c.project} · {projectName}</span>}
+                  {done && result?.count !== undefined && <span className="tool-chip-badge">{result.count} {c.results}</span>}
+                  {count > 1 && <span className="tool-chip-badge">{count} {c.calls}</span>}
+                  {hasRecords && <ChevronDown className={`tool-chip-chevron${expanded ? ' is-open' : ''}`} size={16} />}
+                </span>
+              </button>
+            </div>
           )
         })}
       </div>

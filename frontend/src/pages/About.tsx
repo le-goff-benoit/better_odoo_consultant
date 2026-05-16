@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.0',
+    version: '0.35.1',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Affichage des outils IA en timeline neo-retro : numéro d\'étape, rail pointillé et flèche de progression entre les vérifications',
+      'Hiérarchie visuelle resserrée : la carte d\'outil reste lisible, mais la séquence d\'appels devient plus intuitive à suivre',
+    ],
+  },
+  {
+    version: '0.35.0',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Refonte UX des outils IA sur Assistant et Migration : les anciennes pills ambiguës deviennent des cartes compactes avec action, détail, état et badges séparés',
       'Libellés d\'outils clarifiés : Base client, Sources Odoo, Sources cible, Champs, Code custom, Vue Odoo, Rapport PDF, Studio, Volumétrie',

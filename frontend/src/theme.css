@@ -2446,12 +2446,84 @@ textarea:focus-visible {
 .tool-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px 30px;
   align-items: flex-start;
+  padding-left: 2px;
+}
+
+.tool-timeline-step {
+  --tool-color: var(--brand);
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 8px;
+  max-width: min(470px, 100%);
+}
+
+.tool-timeline-step::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 34px;
+  bottom: -9px;
+  width: 1px;
+  background: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--tool-color) 45%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+.tool-timeline-step::after {
+  content: ">";
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  width: 14px;
+  height: 16px;
+  margin-top: -8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--tool-color) 78%, var(--th-muted));
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.tool-timeline-step.is-last::after {
+  display: none;
+}
+
+.tool-timeline-step.is-last::before {
+  display: none;
+}
+
+.tool-timeline-node {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  margin-top: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--tool-color);
+  background: var(--th-bg-card);
+  border: 1px solid color-mix(in srgb, var(--tool-color) 55%, var(--th-border));
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--tool-color) 10%, transparent),
+    inset 0 -2px 0 color-mix(in srgb, var(--tool-color) 12%, transparent);
 }
 
 .tool-chip {
-  --tool-color: var(--brand);
   min-width: 230px;
   max-width: min(420px, 100%);
   display: inline-grid;
@@ -2643,6 +2715,16 @@ textarea:focus-visible {
 }
 
 @media (max-width: 720px) {
+  .tool-chip-row {
+    gap: 10px;
+  }
+  .tool-timeline-step {
+    width: 100%;
+    max-width: 100%;
+  }
+  .tool-timeline-step::after {
+    display: none;
+  }
   .tool-chip {
     width: 100%;
     min-width: 0;
