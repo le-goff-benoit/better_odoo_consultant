@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, Database, Eye, EyeOff, FileText, FolderOpen, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, ShieldCheck, UserRound, X } from 'lucide-react'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile, getDataDir, openDataFolder, getCreatorPasswordStatus, setCreatorPassword } from '../api/client'
+import { Check, Database, Eye, EyeOff, FileText, FolderOpen, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, UserRound, X } from 'lucide-react'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import RobotThinking from '../components/RobotThinking'
 import CatThinking from '../components/CatThinking'
@@ -91,7 +91,7 @@ interface CopilotFlowState {
   error?: string
 }
 
-type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage' | 'creator'
+type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage'
 
 export default function Settings() {
   const lang = useUiLanguage()
@@ -99,13 +99,13 @@ export default function Settings() {
   const c = {
     fr: {
       title: 'Paramètres',
-      tabs: { profile: 'Profil', api: 'Clés API', context: 'Contexte IA', interface: 'Interface', storage: 'Stockage', creator: 'Création' },
+      tabs: { profile: 'Profil', api: 'Clés API', context: 'Contexte IA', interface: 'Interface', storage: 'Stockage' },
       profileIntro: "Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.",
       contextIntro: "Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier.",
     },
     en: {
       title: 'Settings',
-      tabs: { profile: 'Profile', api: 'API keys', context: 'AI context', interface: 'Interface', storage: 'Storage', creator: 'Creator' },
+      tabs: { profile: 'Profile', api: 'API keys', context: 'AI context', interface: 'Interface', storage: 'Storage' },
       profileIntro: 'Customize your identity and interface appearance. Your name and role are injected into the AI assistant context.',
       contextIntro: 'These Markdown files are injected into the assistant system prompt. Edit them to adapt the business context.',
     },
@@ -117,7 +117,6 @@ export default function Settings() {
     { id: 'context' as const,   label: c.tabs.context, icon: <FileText size={15} /> },
     { id: 'interface' as const, label: c.tabs.interface, icon: <LayoutPanelTop size={15} /> },
     { id: 'storage' as const,   label: c.tabs.storage, icon: <Database size={15} /> },
-    { id: 'creator' as const,   label: c.tabs.creator, icon: <ShieldCheck size={15} /> },
   ]
 
   return (
@@ -149,8 +148,6 @@ export default function Settings() {
       {tab === 'interface' && <InterfaceSection />}
 
       {tab === 'storage' && <StorageSection />}
-
-      {tab === 'creator' && <CreatorSecuritySection />}
 
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
     </div>
@@ -272,93 +269,6 @@ function StorageSection() {
         borderRadius: t.radius, fontSize: 12, color: t.muted, lineHeight: 1.6,
       }}>
         <strong style={{ color: t.text }}>{c.securityTitle}</strong> {c.security}
-      </div>
-    </section>
-  )
-}
-
-// ── Creator security ──────────────────────────────────────────────
-
-function CreatorSecuritySection() {
-  const lang = useUiLanguage()
-  const c = lang === 'en'
-    ? {
-        intro: 'The Creator tool writes Studio-style changes directly to live Odoo databases. Access is gated by a dedicated password — separate from any Odoo or API key.',
-        statusSet: 'A Creator password is set.', statusUnset: 'No Creator password set yet.',
-        current: 'Current password', neu: 'New password', confirm: 'Confirm new password',
-        save: 'Save password', change: 'Change password', saved: 'Password saved ✓',
-        mismatch: 'The two passwords do not match.', tooShort: 'Password too short (min. 4 characters).',
-        title: 'Creator password',
-      }
-    : {
-        intro: "L'outil Création écrit des modifications de type Studio directement sur des bases Odoo en production. L'accès est protégé par un mot de passe dédié — distinct de tout mot de passe Odoo ou clé API.",
-        statusSet: 'Un mot de passe Creator est défini.', statusUnset: 'Aucun mot de passe Creator défini.',
-        current: 'Mot de passe actuel', neu: 'Nouveau mot de passe', confirm: 'Confirmer le nouveau mot de passe',
-        save: 'Enregistrer le mot de passe', change: 'Changer le mot de passe', saved: 'Mot de passe enregistré ✓',
-        mismatch: 'Les deux mots de passe ne correspondent pas.', tooShort: 'Mot de passe trop court (4 caractères minimum).',
-        title: 'Mot de passe Création',
-      }
-
-  const [isSet, setIsSet] = useState<boolean | null>(null)
-  const [current, setCurrent] = useState('')
-  const [pw1, setPw1] = useState('')
-  const [pw2, setPw2] = useState('')
-  const [err, setErr] = useState('')
-  const [ok, setOk] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    getCreatorPasswordStatus()
-      .then(res => setIsSet(Boolean(res.data?.set)))
-      .catch(() => setIsSet(false))
-  }, [])
-
-  const save = async () => {
-    setErr(''); setOk(false)
-    if (pw1.length < 4) { setErr(c.tooShort); return }
-    if (pw1 !== pw2) { setErr(c.mismatch); return }
-    setSaving(true)
-    try {
-      await setCreatorPassword(pw1, isSet ? current : undefined)
-      setIsSet(true)
-      setOk(true)
-      setCurrent(''); setPw1(''); setPw2('')
-    } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setErr(detail ?? (e instanceof Error ? e.message : String(e)))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <section className="settings-panel">
-      <p className="settings-intro">{c.intro}</p>
-      <div style={{ maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: t.textSub }}>
-          <ShieldCheck size={16} style={{ color: isSet ? 'var(--th-success, #1e7e34)' : 'var(--th-muted)' }} />
-          {isSet === null ? '…' : isSet ? c.statusSet : c.statusUnset}
-        </div>
-        <div className="ui-section-title">{c.title}</div>
-        {isSet && (
-          <input type="password" className="ui-input" placeholder={c.current}
-            value={current} onChange={e => setCurrent(e.target.value)} />
-        )}
-        <input type="password" className="ui-input" placeholder={c.neu}
-          value={pw1} onChange={e => setPw1(e.target.value)} />
-        <input type="password" className="ui-input" placeholder={c.confirm}
-          value={pw2} onChange={e => setPw2(e.target.value)} />
-        {err && <span style={{ color: 'var(--th-danger, #c0392b)', fontSize: 13 }}>{err}</span>}
-        {ok && <span style={{ color: 'var(--th-success, #1e7e34)', fontSize: 13 }}>{c.saved}</span>}
-        <button
-          type="button"
-          className="ui-button ui-button-primary"
-          onClick={save}
-          disabled={saving || !pw1 || !pw2 || (isSet === true && !current)}
-          style={{ alignSelf: 'flex-start' }}
-        >
-          {isSet ? c.change : c.save}
-        </button>
       </div>
     </section>
   )

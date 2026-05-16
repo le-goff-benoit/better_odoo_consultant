@@ -1,11 +1,8 @@
-"""Tests for the Creator tool: changeset parsing, password gate, executor."""
-
-import pytest
+"""Tests for the Creator tool: changeset parsing, executor, dry-run."""
 
 from odoo_consultant_portal.services.creator_service import (
     parse_analysis, build_analysis_message,
 )
-from odoo_consultant_portal.services import creator_auth
 from odoo_consultant_portal.services.creator_executor import apply_changeset
 
 
@@ -48,39 +45,6 @@ def test_build_analysis_message_includes_instructions():
     assert "Ajouter un onglet" in msg
     assert "le rendre rouge" in msg
     assert "Instructions complémentaires" in msg
-
-
-# ── Password gate ────────────────────────────────────────────────
-
-@pytest.fixture
-def memory_keyring(monkeypatch):
-    store: dict[str, str] = {}
-    monkeypatch.setattr(creator_auth, "store_secret",
-                        lambda k, v: store.__setitem__(k, v))
-    monkeypatch.setattr(creator_auth, "get_secret", store.get)
-    monkeypatch.setattr(creator_auth, "delete_secret",
-                        lambda k: store.pop(k, None))
-    return store
-
-
-def test_password_set_and_verify(memory_keyring):
-    assert not creator_auth.is_password_set()
-    creator_auth.set_password("s3cret")
-    assert creator_auth.is_password_set()
-    assert creator_auth.verify_password("s3cret")
-    assert not creator_auth.verify_password("wrong")
-
-
-def test_password_too_short_rejected(memory_keyring):
-    with pytest.raises(ValueError):
-        creator_auth.set_password("ab")
-
-
-def test_password_clear(memory_keyring):
-    creator_auth.set_password("s3cret")
-    creator_auth.clear_password()
-    assert not creator_auth.is_password_set()
-    assert not creator_auth.verify_password("s3cret")
 
 
 # ── Executor ─────────────────────────────────────────────────────
@@ -239,19 +203,14 @@ async def test_create_field_rejects_duplicate():
 
 # ── Route wiring ─────────────────────────────────────────────────
 
-async def test_route_password_status(client):
-    resp = await client.get("/api/creator/password-status")
-    assert resp.status_code == 200
-    assert isinstance(resp.json().get("set"), bool)
-
-
 async def test_route_projects_empty(client):
     resp = await client.get("/api/creator/projects")
     assert resp.status_code == 200
     assert resp.json() == []
 
 
-async def test_route_unlock_requires_password_configured(client, memory_keyring):
-    # No password set → unlock must be refused with a clear error.
-    resp = await client.post("/api/creator/unlock", json={"password": "x"})
+async def test_route_apply_rejects_empty_changeset(client):
+    resp = await client.post("/api/creator/apply", json={
+        "profile_id": 1, "request": "x", "operations": [],
+    })
     assert resp.status_code == 400

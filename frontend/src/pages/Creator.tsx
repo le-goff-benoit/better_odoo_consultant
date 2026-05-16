@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import {
-  Wand2, Lock, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Loader2,
+  Wand2, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Loader2,
   FileText, Download, RotateCcw, Pencil, Play, Hammer, Database, GitBranch,
-  FileCode2, ScanSearch,
+  FileCode2, ScanSearch, KeyRound,
 } from 'lucide-react'
 import {
-  getCreatorPasswordStatus, unlockCreator, getCreatorProjects, getAiProviders,
+  getCreatorProjects, getAiProviders,
   dryRunCreatorChangeset, applyCreatorChangeset, rejectCreatorRequest, documentCreatorChange,
 } from '../api/client'
 import { useUiLanguage } from '../i18n'
 import { PROVIDERS } from '../constants/providers'
+import { makeChallenge } from '../constants/creatorWords'
 import PageHeader from '../components/PageHeader'
 import { Button, Card, Field, Badge, Modal, EmptyState } from '../components/ui'
 import ToolCallGroup, { type ToolEvent } from '../components/ToolCallGroup'
@@ -48,7 +48,7 @@ interface ChangesetResult {
 }
 interface ContextInfo { odoo_version?: string; has_sources: boolean; has_repo: boolean }
 
-type Phase = 'lock' | 'setup' | 'analyzing' | 'review' | 'applying' | 'done'
+type Phase = 'gate' | 'setup' | 'analyzing' | 'review' | 'applying' | 'done'
 
 const OP_META: Record<string, { fr: string; en: string }> = {
   create_field:         { fr: 'Nouveau champ',           en: 'New field' },
@@ -72,21 +72,16 @@ export default function Creator() {
   const c = useMemo(() => ({
     title: en ? 'Creator' : 'Création',
     description: en
-      ? 'Apply Studio-style modifications to a live Odoo instance — analysed, previewed and validated before any write.'
-      : 'Appliquez des modifications de type Studio sur une instance Odoo en direct — analysées, prévisualisées et validées avant toute écriture.',
+      ? 'Apply Studio-style modifications to a live Odoo instance — analysed, previewed and confirmed before any write.'
+      : 'Appliquez des modifications de type Studio sur une instance Odoo en direct — analysées, prévisualisées et confirmées avant toute écriture.',
     steps: en ? ['Request', 'Analysis', 'Validation', 'Result'] : ['Demande', 'Analyse', 'Validation', 'Résultat'],
-    lockHint: en
-      ? 'The Creator writes directly to production or test databases. Enter the Creator password to continue.'
-      : 'Le Creator écrit directement sur des bases de production ou de test. Saisissez le mot de passe Creator pour continuer.',
-    locked: en ? 'Protected tool' : 'Outil protégé',
-    noPassword: en ? 'No Creator password set' : 'Aucun mot de passe Creator défini',
-    noPasswordHint: en
-      ? 'Set a dedicated Creator password in Settings → Creator before using this tool.'
-      : 'Définissez un mot de passe Creator dédié dans Paramètres → Création avant d\'utiliser cet outil.',
-    goSettings: en ? 'Open Settings' : 'Ouvrir les Paramètres',
-    password: en ? 'Password' : 'Mot de passe',
-    unlock: en ? 'Unlock' : 'Déverrouiller',
-    wrongPassword: en ? 'Incorrect password.' : 'Mot de passe incorrect.',
+    gateTitle: en ? 'Sensitive tool' : 'Outil sensible',
+    gateHint: en
+      ? 'The Creator writes directly to production or test databases. Type the confirmation code below to enter.'
+      : 'Le Creator écrit directement sur des bases de production ou de test. Tapez le code de confirmation ci-dessous pour entrer.',
+    gateChallenge: en ? 'Type this code to continue:' : 'Tapez ce code pour continuer :',
+    enter: en ? 'Enter the tool' : 'Accéder à l\'outil',
+    challengePlaceholder: en ? 'Type the code…' : 'Tapez le code…',
     project: en ? 'Project' : 'Projet',
     selectProject: en ? 'Select a Studio project' : 'Sélectionner un projet Studio',
     environment: en ? 'Environment' : 'Environnement',
@@ -134,9 +129,9 @@ export default function Creator() {
       ? 'The dry-run found problems — nothing will be written. Refine the request and try again.'
       : 'Le dry-run a détecté des problèmes — rien ne sera écrit. Modifiez la demande et réessayez.',
     onInstance: en ? 'Target instance' : 'Instance cible',
-    confirmHint: en
-      ? 'Re-enter the Creator password to write these changes to the instance.'
-      : 'Saisissez à nouveau le mot de passe Creator pour écrire ces modifications sur l\'instance.',
+    confirmChallenge: en
+      ? 'To write these changes to the instance, type the confirmation code:'
+      : 'Pour écrire ces modifications sur l\'instance, tapez le code de confirmation :',
     confirmApply: en ? 'Apply now' : 'Appliquer maintenant',
     applying: en ? 'Applying…' : 'Application en cours…',
     appliedOk: en ? 'Modification applied' : 'Modification appliquée',
@@ -152,10 +147,9 @@ export default function Creator() {
     willCreate: en ? 'Will create' : 'Va créer',
   }), [en])
 
-  const [phase, setPhase] = useState<Phase>('lock')
-  const [passwordSet, setPasswordSet] = useState<boolean | null>(null)
-  const [unlockPw, setUnlockPw] = useState('')
-  const [unlockErr, setUnlockErr] = useState('')
+  const [phase, setPhase] = useState<Phase>('gate')
+  const [gatePhrase] = useState(() => makeChallenge())
+  const [gateTyped, setGateTyped] = useState('')
 
   const [provider, setProvider] = useState('')
   const [projectId, setProjectId] = useState<number | ''>('')
@@ -177,7 +171,8 @@ export default function Creator() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [preflight, setPreflight] = useState<ChangesetResult | null>(null)
   const [preflightLoading, setPreflightLoading] = useState(false)
-  const [applyPw, setApplyPw] = useState('')
+  const [applyPhrase, setApplyPhrase] = useState('')
+  const [applyTyped, setApplyTyped] = useState('')
   const [applyErr, setApplyErr] = useState('')
   const [applyResult, setApplyResult] = useState<ChangesetResult | null>(null)
   const [requestId, setRequestId] = useState<number | null>(null)
@@ -188,12 +183,6 @@ export default function Creator() {
   const abortRef = useRef<AbortController | null>(null)
 
   // ── data ────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    getCreatorPasswordStatus()
-      .then(res => setPasswordSet(Boolean(res.data?.set)))
-      .catch(() => setPasswordSet(false))
-  }, [])
 
   const { data: providersData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
   const availableProviders = useMemo(() => {
@@ -210,7 +199,7 @@ export default function Creator() {
   const { data: projectsData } = useQuery({
     queryKey: ['creator-projects'],
     queryFn: getCreatorProjects,
-    enabled: phase !== 'lock',
+    enabled: phase !== 'gate',
   })
   const projects: CreatorProject[] = useMemo(
     () => ((projectsData?.data ?? []) as CreatorProject[]).filter(p => p.eligible),
@@ -234,18 +223,6 @@ export default function Creator() {
     setEnvId(selectedProject.active_env_id ?? envs[0]?.id ?? null)
     setCompanyId(selectedProject.selected_company_id ?? null)
   }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── unlock ──────────────────────────────────────────────────────
-
-  const doUnlock = async () => {
-    setUnlockErr('')
-    try {
-      await unlockCreator(unlockPw)
-      setPhase('setup')
-    } catch {
-      setUnlockErr(c.wrongPassword)
-    }
-  }
 
   // ── analysis ────────────────────────────────────────────────────
 
@@ -343,7 +320,8 @@ export default function Creator() {
     setShowConfirm(true)
     setPreflight(null)
     setApplyErr('')
-    setApplyPw('')
+    setApplyTyped('')
+    setApplyPhrase(makeChallenge())
     setPreflightLoading(true)
     try {
       const res = await dryRunCreatorChangeset({
@@ -361,13 +339,14 @@ export default function Creator() {
     }
   }
 
+  const applyMatches = applyTyped.trim() === applyPhrase
+
   const doApply = async () => {
-    if (projectId === '' || !analysis) return
+    if (projectId === '' || !analysis || !applyMatches) return
     setApplyErr('')
     setPhase('applying')
     try {
       const res = await applyCreatorChangeset({
-        password: applyPw,
         provider,
         profile_id: projectId,
         env_id: envId ?? undefined,
@@ -379,7 +358,6 @@ export default function Creator() {
         operations: analysis,
       })
       if (res.data.stage === 'preflight') {
-        // server-side preflight blocked the write
         setPreflight(res.data.preflight as ChangesetResult)
         setPhase('review')
         return
@@ -387,7 +365,7 @@ export default function Creator() {
       setApplyResult(res.data.result as ChangesetResult)
       setRequestId(res.data.request_id as number)
       setShowConfirm(false)
-      setApplyPw('')
+      setApplyTyped('')
       setPhase('done')
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -426,6 +404,7 @@ export default function Creator() {
     setPreflight(null)
     setApplyResult(null)
     setApplyErr('')
+    setApplyTyped('')
     setRequestId(null)
     setDocumentation('')
     setShowModify(false)
@@ -470,51 +449,41 @@ export default function Creator() {
     URL.revokeObjectURL(url)
   }
 
-  // ── render: lock ────────────────────────────────────────────────
+  // ── render: gate ────────────────────────────────────────────────
 
-  if (phase === 'lock') {
+  if (phase === 'gate') {
+    const gateMatches = gateTyped.trim() === gatePhrase
     return (
       <div className="page-stack">
         <PageHeader title={c.title} description={c.description} />
         <Card className="page-card">
           <div className="page-card-body">
-            {passwordSet === false ? (
-              <EmptyState
-                icon={<Lock size={28} />}
-                title={c.noPassword}
-                description={c.noPasswordHint}
-                action={<Link to="/settings"><Button variant="primary">{c.goSettings}</Button></Link>}
-              />
-            ) : (
-              <div style={{ maxWidth: 380, margin: '24px auto', textAlign: 'center' }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: 'var(--brand)' }}>
-                  <ShieldCheck size={34} />
-                </div>
-                <div className="ui-section-title" style={{ justifyContent: 'center' }}>{c.locked}</div>
-                <p style={{ fontSize: 13, color: 'var(--th-muted)', margin: '6px 0 16px' }}>{c.lockHint}</p>
-                <input
-                  type="password"
-                  className="ui-input"
-                  value={unlockPw}
-                  autoFocus
-                  placeholder={c.password}
-                  onChange={e => setUnlockPw(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') doUnlock() }}
-                />
-                {unlockErr && (
-                  <p style={{ color: 'var(--th-danger, #c0392b)', fontSize: 13, margin: '8px 0 0' }}>{unlockErr}</p>
-                )}
-                <Button
-                  variant="primary"
-                  icon={<Lock size={15} />}
-                  onClick={doUnlock}
-                  disabled={!unlockPw || passwordSet === null}
-                  style={{ marginTop: 14, width: '100%' }}
-                >
-                  {c.unlock}
-                </Button>
+            <div style={{ maxWidth: 400, margin: '20px auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: 'var(--brand)' }}>
+                <ShieldCheck size={34} />
               </div>
-            )}
+              <div className="ui-section-title" style={{ justifyContent: 'center' }}>{c.gateTitle}</div>
+              <p style={{ fontSize: 13, color: 'var(--th-muted)', margin: '6px 0 16px', textAlign: 'center' }}>
+                {c.gateHint}
+              </p>
+              <ChallengeBox
+                label={c.gateChallenge}
+                phrase={gatePhrase}
+                typed={gateTyped}
+                onTyped={setGateTyped}
+                placeholder={c.challengePlaceholder}
+                onEnter={() => { if (gateMatches) setPhase('setup') }}
+              />
+              <Button
+                variant="primary"
+                icon={<KeyRound size={15} />}
+                onClick={() => setPhase('setup')}
+                disabled={!gateMatches}
+                style={{ marginTop: 4, width: '100%' }}
+              >
+                {c.enter}
+              </Button>
+            </div>
           </div>
         </Card>
       </div>
@@ -841,7 +810,7 @@ export default function Creator() {
                   variant="danger"
                   icon={phase === 'applying' ? <Loader2 size={15} className="creator-spin" /> : <Play size={15} />}
                   onClick={doApply}
-                  disabled={!applyPw || phase === 'applying'}
+                  disabled={!applyMatches || phase === 'applying'}
                 >
                   {phase === 'applying' ? c.applying : c.confirmApply}
                 </Button>
@@ -883,23 +852,21 @@ export default function Creator() {
                 <div style={{ marginTop: 16, borderTop: '1px solid var(--th-border, #e3e3e3)', paddingTop: 14 }}>
                   <div style={{
                     fontSize: 12.5, background: 'var(--th-bg-muted, #f5f5f5)', borderRadius: 8,
-                    padding: '8px 12px', marginBottom: 12,
+                    padding: '8px 12px', marginBottom: 14,
                   }}>
                     <span style={{ color: 'var(--th-muted)' }}>{c.onInstance} : </span>
                     <strong>{selectedProject?.name}</strong>
                     {activeEnv && <> · {activeEnv.name}</>}
                     {activeVersion && <> · Odoo {activeVersion}</>}
                   </div>
-                  <p style={{ fontSize: 13, margin: '0 0 8px' }}>{c.confirmHint}</p>
-                  <input
-                    type="password"
-                    className="ui-input"
-                    value={applyPw}
-                    autoFocus
-                    placeholder={c.password}
+                  <ChallengeBox
+                    label={c.confirmChallenge}
+                    phrase={applyPhrase}
+                    typed={applyTyped}
+                    onTyped={setApplyTyped}
+                    placeholder={c.challengePlaceholder}
                     disabled={phase === 'applying'}
-                    onChange={e => setApplyPw(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && applyPw && phase !== 'applying') doApply() }}
+                    onEnter={doApply}
                   />
                 </div>
               )}
@@ -907,6 +874,38 @@ export default function Creator() {
           )}
         </Modal>
       )}
+    </div>
+  )
+}
+
+// ── Challenge box (type-to-confirm) ───────────────────────────────
+
+function ChallengeBox({ label, phrase, typed, onTyped, placeholder, disabled, onEnter }: {
+  label: string
+  phrase: string
+  typed: string
+  onTyped: (v: string) => void
+  placeholder: string
+  disabled?: boolean
+  onEnter?: () => void
+}) {
+  return (
+    <div>
+      <p style={{ fontSize: 13, margin: '0 0 6px' }}>{label}</p>
+      <code className="creator-challenge-code">{phrase}</code>
+      <input
+        type="text"
+        className="ui-input"
+        value={typed}
+        autoFocus
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={e => onTyped(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && onEnter) onEnter() }}
+      />
     </div>
   )
 }

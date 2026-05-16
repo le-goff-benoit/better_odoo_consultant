@@ -79,9 +79,6 @@ export const saveContextFile = (name: string, content: string, locale = 'fr') =>
 export const deleteContextFile = (name: string, locale = 'fr') => api.delete(`/context/file/${name}?locale=${encodeURIComponent(locale)}`)
 
 // Creator
-export const getCreatorPasswordStatus = () => api.get('/creator/password-status')
-export const setCreatorPassword = (password: string, current?: string) => api.post('/creator/password', { password, current })
-export const unlockCreator = (password: string) => api.post('/creator/unlock', { password })
 export const getCreatorProjects = () => api.get('/creator/projects')
 export const dryRunCreatorChangeset = (data: object) => api.post('/creator/dry-run', data)
 export const applyCreatorChangeset = (data: object) => api.post('/creator/apply', data)

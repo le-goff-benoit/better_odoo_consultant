@@ -1,10 +1,10 @@
 """Creator — apply Odoo Studio-style modifications to a live instance.
 
-Flow: the consultant unlocks the tool with a dedicated password, picks a
-project / environment, writes a functional request; the AI investigates the
-live instance and proposes a structured changeset; the consultant validates
-it and the executor applies it via XML-RPC. Restricted to projects where
-Studio is in use (technical-complexity mode ``studio`` or ``studio_dev``).
+Flow: the consultant picks a project / environment, writes a functional
+request; the AI investigates the live instance and proposes a structured
+changeset; a dry-run previews it; the consultant confirms with a
+type-to-confirm challenge and the executor applies it via XML-RPC. Restricted
+to projects where Studio is in use (complexity mode ``studio`` / ``studio_dev``).
 """
 
 import json
@@ -29,7 +29,6 @@ from ...services.localization_service import build_localization_context
 from ...services.technical_complexity_service import (
     build_technical_complexity_context, parse_technical_complexity,
 )
-from ...services import creator_auth
 from ...services.creator_service import (
     build_analysis_message, parse_analysis, build_documentation_message,
 )
@@ -40,40 +39,6 @@ router = APIRouter()
 
 # Only projects where Studio is actually used may be modified by the Creator.
 ELIGIBLE_MODES = {"studio", "studio_dev"}
-
-
-# ── Password gate ────────────────────────────────────────────────
-
-class PasswordBody(BaseModel):
-    password: str
-    current: Optional[str] = None
-
-
-@router.get("/password-status")
-async def password_status():
-    return {"set": creator_auth.is_password_set()}
-
-
-@router.post("/password")
-async def set_password(body: PasswordBody):
-    """Set or change the Creator password. Changing it requires the current one."""
-    if creator_auth.is_password_set():
-        if not body.current or not creator_auth.verify_password(body.current):
-            raise HTTPException(403, "Mot de passe actuel incorrect.")
-    try:
-        creator_auth.set_password(body.password)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    return {"ok": True}
-
-
-@router.post("/unlock")
-async def unlock(body: PasswordBody):
-    if not creator_auth.is_password_set():
-        raise HTTPException(400, "Aucun mot de passe Creator défini — configurez-le dans les Paramètres.")
-    if not creator_auth.verify_password(body.password):
-        raise HTTPException(403, "Mot de passe incorrect.")
-    return {"ok": True}
 
 
 # ── Eligible projects ────────────────────────────────────────────
@@ -209,8 +174,6 @@ class AnalyzeBody(BaseModel):
 
 @router.post("/analyze")
 async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session)):
-    if not creator_auth.is_password_set():
-        raise HTTPException(400, "Mot de passe Creator non défini.")
     if not body.request.strip():
         raise HTTPException(400, "La demande fonctionnelle est vide.")
 
@@ -276,7 +239,6 @@ class Operation(BaseModel):
 
 
 class ApplyBody(BaseModel):
-    password: str
     provider: Optional[str] = None
     model: Optional[str] = None
     profile_id: int
@@ -291,8 +253,6 @@ class ApplyBody(BaseModel):
 
 @router.post("/apply")
 async def apply(body: ApplyBody, session: AsyncSession = Depends(get_session)):
-    if not creator_auth.is_password_set() or not creator_auth.verify_password(body.password):
-        raise HTTPException(403, "Mot de passe incorrect.")
     if not body.operations:
         raise HTTPException(400, "Aucune opération à appliquer.")
 

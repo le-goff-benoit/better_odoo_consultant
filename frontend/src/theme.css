@@ -3472,3 +3472,20 @@ input::placeholder, textarea::placeholder {
 /* Creator — spinner */
 @keyframes spin { to { transform: rotate(360deg); } }
 .creator-spin { animation: spin .8s linear infinite; }
+
+/* Creator — type-to-confirm challenge phrase */
+.creator-challenge-code {
+  display: block;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 11px 14px;
+  margin: 4px 0 12px;
+  background: var(--th-bg-muted, #f4f4f4);
+  border: 1px dashed var(--brand);
+  border-radius: 8px;
+  color: var(--th-text, #1a1a1a);
+  user-select: all;
+}
