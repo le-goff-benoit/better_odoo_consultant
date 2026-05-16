@@ -1,0 +1,233 @@
+"""Prompt building and changeset parsing for the Creator tool.
+
+The Creator reuses the project-mode AI pipeline (``stream_chat``) so the model
+investigates the live instance with the existing read-only tools (inspect_studio,
+inspect_odoo_view, get_odoo_fields, query_odoo, search_odoo_source…). The only
+Creator-specific parts live here:
+
+- the instruction that turns a functional request into a strict JSON changeset;
+- the parser that extracts that changeset from the model's final answer;
+- the prompt that turns an applied changeset into end-user documentation.
+"""
+
+import json
+import re
+from typing import Any, Optional
+
+# Operation types the executor knows how to apply.
+_OP_TYPES = (
+    "create_field", "modify_view", "create_server_action",
+    "create_automation", "create_cron", "modify_report",
+)
+
+CHANGESET_INSTRUCTIONS = """\
+# Mode CRÉATION — préparation d'une modification de type Odoo Studio
+
+Tu prépares une modification qui sera appliquée EN ÉCRITURE sur l'instance Odoo \
+connectée (production ou test). C'est une opération sensible : sois rigoureux et \
+exhaustif.
+
+## Étape 1 — Investigation
+Avant de proposer quoi que ce soit, inspecte l'instance réelle avec tes outils :
+- `inspect_studio` pour les personnalisations existantes,
+- `inspect_odoo_view` pour l'arch assemblée des vues concernées (récupère le \
+`view_db_id` du parent à hériter),
+- `get_odoo_fields` / `query_odoo` pour les modèles et champs existants,
+- `search_odoo_source` pour vérifier les noms exacts côté code Odoo.
+N'invente jamais un nom de modèle, de champ ou de vue : vérifie-le.
+
+## Étape 2 — Conception, conventions Studio OBLIGATOIRES
+- Tout nouveau champ est préfixé `x_` et créé en `state=manual`.
+- Toute modification de vue ou de rapport passe par une vue HÉRITÉE (xpath), \
+JAMAIS d'édition en place.
+- Réutilise les modèles et champs standard quand ils existent ; ne crée du \
+custom que si nécessaire.
+- Le résultat doit être globalement identique à ce que produirait Odoo Studio.
+
+## Étape 3 — Réponse
+Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, \
+sans bloc de code markdown. Structure exacte :
+
+{
+  "functional_analysis": "Analyse fonctionnelle en Markdown : ce que veut \
+l'utilisateur, le comportement attendu, les impacts métier, les limites.",
+  "technical_analysis": "Analyse technique en Markdown : modèles/vues/champs \
+concernés, choix d'implémentation, héritages utilisés, risques.",
+  "operations": [ ...liste ordonnée des opérations... ]
+}
+
+Si la demande est impossible, hors périmètre Studio, ou trop ambiguë pour être \
+exécutée sans risque, renvoie `"operations": []` et explique pourquoi dans \
+`functional_analysis`.
+
+### Schéma des opérations
+Chaque opération : `{"type": <type>, "summary": <résumé FR court et précis>, \
+"params": { ... }}`.
+
+- **create_field** — nouveau champ custom.
+  params : `model`, `name` (préfixe `x_`), `field_description` (libellé), \
+`ttype` (char|text|html|integer|float|monetary|boolean|date|datetime|\
+selection|many2one|one2many|many2many|binary), \
+`relation` (modèle cible si relationnel), `relation_field` (champ inverse si \
+one2many), `selection` ([[valeur,libellé], …] si selection), \
+`required`/`help`/`store` (optionnels).
+
+- **modify_view** — vue héritée (ajout d'onglet, de champ, de bouton, de groupe…).
+  params : `model`, `view_type` (form|list|kanban|search|…), \
+`inherit_id` (id numérique de la vue parente, depuis `inspect_odoo_view`) OU \
+`inherit_xmlid`, `name` (nom de la vue héritée), \
+`arch` (XML COMPLET de la vue héritée : un `<data>` contenant des `<xpath …>`).
+
+- **modify_report** — rapport QWeb hérité.
+  params : `template_key` (clé du template, ex `account.report_invoice_document`) \
+OU `inherit_xmlid`, `name`, `arch` (XML héritage QWeb avec `<xpath>`).
+
+- **create_server_action** — action serveur.
+  params : `model`, `name`, `state` (`code` par défaut), `code` (Python si \
+state=code), `binding` (true pour l'afficher dans le menu Action du modèle).
+
+- **create_automation** — action automatisée (base.automation).
+  params : `model`, `name`, `trigger` (on_create|on_write|on_create_or_write|\
+on_unlink|on_time), `code` (Python exécuté), `filter_domain` (domaine optionnel).
+
+- **create_cron** — action planifiée (ir.cron).
+  params : `model`, `name`, `code` (Python), `interval_number`, \
+`interval_type` (minutes|hours|days|weeks|months).
+
+Les `arch` doivent être du XML valide et bien formé. Sois précis : la liste des \
+opérations EST ce qui sera exécuté littéralement.\
+"""
+
+
+def build_analysis_message(request: str, instructions: Optional[list[str]] = None) -> str:
+    """Assemble the user turn: the functional request plus any follow-up
+    instructions the consultant added when asking for a revised proposal."""
+    parts = [CHANGESET_INSTRUCTIONS, "", "## Demande fonctionnelle", request.strip()]
+    if instructions:
+        parts.append("")
+        parts.append("## Instructions complémentaires de l'utilisateur")
+        for i, instruction in enumerate(instructions, start=1):
+            text = (instruction or "").strip()
+            if text:
+                parts.append(f"{i}. {text}")
+        parts.append("")
+        parts.append(
+            "Reprends ton analyse en intégrant ces instructions et produis un "
+            "nouveau changeset complet."
+        )
+    return "\n".join(parts)
+
+
+def _extract_json_object(text: str) -> Optional[str]:
+    """Pull the first balanced top-level JSON object out of *text*.
+
+    Tolerant of ```json fences and of leading/trailing prose, since models
+    occasionally wrap the object despite the instruction not to."""
+    if not text:
+        return None
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if fenced:
+        return fenced.group(1)
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
+
+
+def parse_analysis(text: str) -> dict[str, Any]:
+    """Parse the model's final answer into a structured analysis.
+
+    Returns ``{"ok": bool, ...}``. On success: ``functional_analysis``,
+    ``technical_analysis`` and ``operations`` (validated). On failure: ``error``
+    and the ``raw`` text so the caller can surface it.
+    """
+    raw = (text or "").strip()
+    blob = _extract_json_object(raw)
+    if not blob:
+        return {"ok": False, "error": "Aucun changeset JSON trouvé dans la réponse de l'IA.",
+                "raw": raw}
+    try:
+        data = json.loads(blob)
+    except json.JSONDecodeError as exc:
+        return {"ok": False, "error": f"Changeset JSON invalide : {exc}", "raw": raw}
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "Le changeset n'est pas un objet JSON.", "raw": raw}
+
+    operations = data.get("operations")
+    if not isinstance(operations, list):
+        operations = []
+    clean_ops: list[dict] = []
+    for idx, op in enumerate(operations):
+        if not isinstance(op, dict):
+            return {"ok": False, "error": f"Opération #{idx + 1} mal formée.", "raw": raw}
+        op_type = (op.get("type") or "").strip()
+        if op_type not in _OP_TYPES:
+            return {"ok": False,
+                    "error": f"Opération #{idx + 1} : type inconnu « {op_type} ».",
+                    "raw": raw}
+        if not isinstance(op.get("params"), dict):
+            return {"ok": False,
+                    "error": f"Opération #{idx + 1} : 'params' manquant ou invalide.",
+                    "raw": raw}
+        clean_ops.append({
+            "type": op_type,
+            "summary": (op.get("summary") or op_type).strip(),
+            "params": op["params"],
+        })
+
+    return {
+        "ok": True,
+        "functional_analysis": (data.get("functional_analysis") or "").strip(),
+        "technical_analysis": (data.get("technical_analysis") or "").strip(),
+        "operations": clean_ops,
+    }
+
+
+def build_documentation_message(
+    request: str,
+    functional_analysis: str,
+    technical_analysis: str,
+    apply_result: dict,
+) -> str:
+    """Prompt asking the AI to write end-user documentation for a change that
+    has just been applied to the instance."""
+    applied = [
+        f"- [{o.get('type')}] {o.get('summary')}"
+        for o in (apply_result.get("operations") or [])
+        if o.get("status") == "success"
+    ]
+    detail = "\n".join(applied) if applied else "(aucune opération appliquée)"
+    return (
+        "Une modification de type Studio vient d'être APPLIQUÉE avec succès sur "
+        "l'instance Odoo. Rédige une documentation claire, en Markdown, destinée "
+        "à l'équipe et au client.\n\n"
+        "Structure attendue : un titre, un résumé fonctionnel, la liste des "
+        "modifications techniques réellement effectuées, l'impact pour les "
+        "utilisateurs, et les éventuelles précautions ou étapes de vérification.\n"
+        "Réponds uniquement avec la documentation Markdown, sans préambule.\n\n"
+        f"## Demande initiale\n{request.strip()}\n\n"
+        f"## Analyse fonctionnelle\n{functional_analysis.strip()}\n\n"
+        f"## Analyse technique\n{technical_analysis.strip()}\n\n"
+        f"## Opérations appliquées\n{detail}\n"
+    )

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react'
+import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, Wand2, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
@@ -14,6 +14,7 @@ const labels = {
     profiles: 'Mes projets',
     assistant: 'Assistant IA',
     migration: 'Migration',
+    creator: 'Création',
     how: 'Fonctionnement',
     settings: 'Paramètres',
     about: 'À propos',
@@ -26,6 +27,7 @@ const labels = {
     profiles: 'Projects',
     assistant: 'AI Assistant',
     migration: 'Migration',
+    creator: 'Creator',
     how: 'How it works',
     settings: 'Settings',
     about: 'About',
@@ -43,6 +45,7 @@ const primaryLinks = [
 const workflowLinks = [
   { to: '/assistant', labelKey: 'assistant', icon: Bot },
   { to: '/migration', labelKey: 'migration', icon: ArrowRightLeft },
+  { to: '/creator',   labelKey: 'creator',   icon: Wand2 },
 ]
 
 const secondaryLinks = [
@@ -89,8 +92,8 @@ export default function Sidebar({
     return () => { offStreaming(); offSourceSync() }
   }, [])
 
-  const signalFor = (pageKey: 'assistant' | 'migration'): StreamStatus | null => {
-    const sigs = streamingSignals.forPage(pageKey)
+  const signalFor = (pageKey: string): StreamStatus | null => {
+    const sigs = streamingSignals.forPage(pageKey as 'assistant' | 'migration' | 'creator')
     if (sigs.some(s => s.status === 'streaming')) return 'streaming'
     if (sigs.some(s => s.status === 'done')) return 'done'
     return null
@@ -144,7 +147,7 @@ export default function Sidebar({
         <span className="topbar-nav-separator" aria-hidden="true" />
         {workflowLinks.map(l => {
           const Icon = l.icon
-          const pageKey = l.labelKey as 'assistant' | 'migration'
+          const pageKey = l.labelKey
           const sig = signalFor(pageKey)
           return (
             <NavLink

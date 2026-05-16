@@ -6,7 +6,7 @@ export type StreamStatus = 'streaming' | 'done'
 export interface StreamSignal {
   status: StreamStatus
   label: string
-  pageKey: 'assistant' | 'migration'
+  pageKey: 'assistant' | 'migration' | 'creator'
 }
 
 const map = new Map<string, StreamSignal>()
@@ -32,7 +32,7 @@ export const streamingSignals = {
   /** All entries as array */
   getAll(): Array<[string, StreamSignal]> { return [...map.entries()] },
   /** Any stream active or done for a given page */
-  forPage(pageKey: 'assistant' | 'migration'): StreamSignal[] {
+  forPage(pageKey: 'assistant' | 'migration' | 'creator'): StreamSignal[] {
     return [...map.values()].filter(s => s.pageKey === pageKey)
   },
   /** Subscribe to changes. Returns unsubscribe function. */

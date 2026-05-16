@@ -1,0 +1,398 @@
+"""Deterministic executor for Creator changesets.
+
+The AI never writes to Odoo directly. It proposes a structured changeset — a
+list of typed operations — which the consultant validates literally. This
+module then applies that exact list via XML-RPC, operation by operation,
+following Odoo Studio conventions:
+
+- new fields are ``x_``-prefixed and created as ``state=manual``;
+- view / report changes go through an INHERITED view (xpath), never in place;
+- every created record is registered under an ``x_creator`` pseudo-module in
+  ``ir.model.data`` — traceable and removable, exactly like Studio tags its
+  own records under ``studio_customization``.
+
+Any partial failure rolls back every record created during the run, so the
+target instance is never left in a half-applied state.
+"""
+
+import asyncio
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from typing import Any
+
+CREATOR_MODULE = "x_creator"
+
+_RELATIONAL = {"many2one", "one2many", "many2many"}
+
+# Operation types accepted in a changeset → executor method name.
+HANDLERS = {
+    "create_field": "op_create_field",
+    "modify_view": "op_modify_view",
+    "create_server_action": "op_create_server_action",
+    "create_automation": "op_create_automation",
+    "create_cron": "op_create_cron",
+    "modify_report": "op_modify_report",
+}
+
+
+class OperationError(Exception):
+    """A changeset operation could not be applied (bad params or Odoo refusal)."""
+
+
+async def _run(fn):
+    """Run a blocking XML-RPC call off the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, fn)
+
+
+def _req(params: dict, key: str) -> Any:
+    val = params.get(key)
+    if val is None or (isinstance(val, str) and not val.strip()):
+        raise OperationError(f"Paramètre obligatoire manquant : '{key}'")
+    return val
+
+
+def _pairs(selection: list) -> list[tuple]:
+    """Normalise a selection definition into (value, label) pairs."""
+    out: list[tuple] = []
+    for item in selection or []:
+        if isinstance(item, dict):
+            out.append((item.get("value"), item.get("label") or item.get("name")))
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            out.append((item[0], item[1]))
+    if not out:
+        raise OperationError("Définition 'selection' invalide ou vide.")
+    return out
+
+
+def _validate_xml(arch: str) -> None:
+    try:
+        ET.fromstring(arch)
+    except ET.ParseError as exc:
+        raise OperationError(f"Arch XML invalide : {exc}")
+
+
+def _clean(values: dict) -> dict:
+    """Drop None values — the XML-RPC marshaller rejects them (allow_none off)."""
+    return {k: v for k, v in values.items() if v is not None}
+
+
+class _Executor:
+    def __init__(self, odoo, dry: bool = False):
+        self.odoo = odoo
+        self.dry = dry                         # preflight: validate, never write
+        self.created: list[dict] = []          # {model, res_id, label} — newest last
+        self._model_cache: dict[str, int] = {}
+        self._dry_counter = 0
+
+    # ── shared helpers ───────────────────────────────────────────
+
+    async def model_id(self, model_name: str) -> int:
+        if model_name in self._model_cache:
+            return self._model_cache[model_name]
+        rows = await _run(lambda: self.odoo.search_read(
+            "ir.model", [["model", "=", model_name]], ["id"], limit=1))
+        if not rows:
+            raise OperationError(f"Modèle Odoo introuvable : '{model_name}'")
+        self._model_cache[model_name] = rows[0]["id"]
+        return rows[0]["id"]
+
+    async def resolve_xmlid(self, xmlid: str, expected_model: str | None = None) -> int:
+        if not xmlid or "." not in xmlid:
+            raise OperationError(f"Identifiant XML invalide : '{xmlid}'")
+        module, name = xmlid.split(".", 1)
+        domain = [["module", "=", module], ["name", "=", name]]
+        if expected_model:
+            domain.append(["model", "=", expected_model])
+        rows = await _run(lambda: self.odoo.search_read(
+            "ir.model.data", domain, ["res_id"], limit=1))
+        if not rows:
+            raise OperationError(f"Référence XML introuvable : '{xmlid}'")
+        return rows[0]["res_id"]
+
+    async def _create(self, model: str, values: dict, label: str) -> int:
+        # Dry-run: every read above still ran (so targets are validated), but
+        # no record is written. A synthetic negative id keeps handlers happy.
+        if self.dry:
+            self._dry_counter -= 1
+            return self._dry_counter
+        res_id = await _run(lambda: self.odoo.create(model, _clean(values)))
+        self.created.append({"model": model, "res_id": res_id, "label": label})
+        await self._register_xmlid(model, res_id)
+        return res_id
+
+    async def _register_xmlid(self, model: str, res_id: int) -> None:
+        """Tag the new record under the x_creator pseudo-module — best effort."""
+        name = f"creator_{model.replace('.', '_')}_{res_id}"
+        try:
+            await _run(lambda: self.odoo.create("ir.model.data", {
+                "module": CREATOR_MODULE, "name": name,
+                "model": model, "res_id": res_id, "noupdate": True,
+            }))
+        except Exception:
+            pass  # traceability tag is non-blocking
+
+    async def rollback(self) -> list[str]:
+        """Unlink every record created during this run, newest first."""
+        errors: list[str] = []
+        for rec in reversed(self.created):
+            try:
+                await _run(lambda r=rec: self.odoo.unlink(r["model"], [r["res_id"]]))
+            except Exception as exc:
+                errors.append(f"{rec['model']}#{rec['res_id']} : {exc}")
+        return errors
+
+    async def _resolve_parent_view(self, p: dict, model: str, view_type: str) -> int:
+        if p.get("inherit_xmlid"):
+            return await self.resolve_xmlid(p["inherit_xmlid"], "ir.ui.view")
+        if p.get("inherit_id"):
+            return int(p["inherit_id"])
+        rows = await _run(lambda: self.odoo.search_read(
+            "ir.ui.view",
+            [["model", "=", model], ["type", "=", view_type], ["mode", "=", "primary"]],
+            ["id"], limit=1, order="priority asc"))
+        if not rows:
+            raise OperationError(
+                f"Aucune vue primaire '{view_type}' trouvée pour le modèle '{model}'.")
+        return rows[0]["id"]
+
+    # ── operation handlers ───────────────────────────────────────
+
+    async def op_create_field(self, p: dict) -> dict:
+        model = _req(p, "model")
+        name = _req(p, "name")
+        if not name.startswith("x_"):
+            name = "x_" + name
+        ttype = _req(p, "ttype")
+        values = {
+            "name": name,
+            "model_id": await self.model_id(model),
+            "field_description": p.get("field_description") or p.get("label") or name,
+            "ttype": ttype,
+            "state": "manual",
+        }
+        for opt in ("required", "help", "store", "copied", "index", "tracking"):
+            if p.get(opt) is not None:
+                values[opt] = p[opt]
+        if ttype in _RELATIONAL:
+            relation = p.get("relation")
+            if not relation:
+                raise OperationError(f"Champ relationnel '{name}' : 'relation' manquant.")
+            values["relation"] = relation
+            if ttype == "one2many":
+                rel_field = p.get("relation_field")
+                if not rel_field:
+                    raise OperationError(
+                        f"Champ one2many '{name}' : 'relation_field' manquant.")
+                values["relation_field"] = rel_field
+        if ttype == "selection":
+            values["selection_ids"] = [
+                [0, 0, {"value": str(v), "name": str(lbl), "sequence": (i + 1) * 10}]
+                for i, (v, lbl) in enumerate(_pairs(p.get("selection")))
+            ]
+        existing = await _run(lambda: self.odoo.search_read(
+            "ir.model.fields", [["model", "=", model], ["name", "=", name]],
+            ["id"], limit=1))
+        if existing:
+            raise OperationError(
+                f"Le champ '{name}' existe déjà sur le modèle '{model}'.")
+        field_id = await self._create(
+            "ir.model.fields", values, f"Champ {name} sur {model}")
+        return {"field": name, "model": model, "field_id": field_id, "ttype": ttype,
+                "plan": f"Champ « {name} » de type {ttype} sur le modèle {model}."}
+
+    async def op_modify_view(self, p: dict) -> dict:
+        model = _req(p, "model")
+        view_type = p.get("view_type") or "form"
+        arch = _req(p, "arch")
+        _validate_xml(arch)
+        inherit_id = await self._resolve_parent_view(p, model, view_type)
+        values = {
+            "name": p.get("name") or f"{model} {view_type} — Creator",
+            "model": model,
+            "type": view_type,
+            "inherit_id": inherit_id,
+            "mode": "extension",
+            "priority": int(p.get("priority") or 99),
+            "arch": arch,
+        }
+        view_id = await self._create(
+            "ir.ui.view", values, f"Vue héritée {model} ({view_type})")
+        return {"view_id": view_id, "model": model, "view_type": view_type,
+                "inherit_id": inherit_id,
+                "plan": f"Vue {view_type} héritée du modèle {model} "
+                        f"(vue parente #{inherit_id})."}
+
+    async def op_modify_report(self, p: dict) -> dict:
+        arch = _req(p, "arch")
+        _validate_xml(arch)
+        if p.get("inherit_xmlid"):
+            inherit_id = await self.resolve_xmlid(p["inherit_xmlid"], "ir.ui.view")
+        else:
+            key = p.get("template_key") or p.get("report_name")
+            if not key:
+                raise OperationError(
+                    "Rapport : 'inherit_xmlid' ou 'template_key' requis.")
+            rows = await _run(lambda: self.odoo.search_read(
+                "ir.ui.view", [["key", "=", key], ["type", "=", "qweb"]],
+                ["id"], limit=1))
+            if not rows:
+                raise OperationError(f"Template QWeb introuvable : '{key}'")
+            inherit_id = rows[0]["id"]
+        values = {
+            "name": p.get("name") or f"Rapport — Creator",
+            "type": "qweb",
+            "inherit_id": inherit_id,
+            "mode": "extension",
+            "priority": int(p.get("priority") or 99),
+            "arch": arch,
+        }
+        view_id = await self._create("ir.ui.view", values, "Rapport QWeb hérité")
+        return {"view_id": view_id, "inherit_id": inherit_id,
+                "plan": f"Vue QWeb héritée (template parent #{inherit_id})."}
+
+    async def op_create_server_action(self, p: dict) -> dict:
+        model = _req(p, "model")
+        model_id = await self.model_id(model)
+        state = p.get("state") or "code"
+        values = {
+            "name": _req(p, "name"),
+            "model_id": model_id,
+            "state": state,
+        }
+        if state == "code":
+            values["code"] = p.get("code") or ""
+        if p.get("binding"):
+            values["binding_model_id"] = model_id
+            values["binding_type"] = "action"
+        if isinstance(p.get("extra"), dict):
+            values.update(p["extra"])
+        action_id = await self._create(
+            "ir.actions.server", values, f"Action serveur « {values['name']} »")
+        return {"action_id": action_id, "model": model, "state": state,
+                "plan": f"Action serveur « {values['name']} » (état {state}) "
+                        f"sur le modèle {model}."}
+
+    async def op_create_cron(self, p: dict) -> dict:
+        model = _req(p, "model")
+        values = {
+            "name": _req(p, "name"),
+            "model_id": await self.model_id(model),
+            "state": "code",
+            "code": p.get("code") or "",
+            "interval_number": int(p.get("interval_number") or 1),
+            "interval_type": p.get("interval_type") or "days",
+            "active": bool(p.get("active", True)),
+            "nextcall": p.get("nextcall")
+            or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        if isinstance(p.get("extra"), dict):
+            values.update(p["extra"])
+        cron_id = await self._create(
+            "ir.cron", values, f"Action planifiée « {values['name']} »")
+        return {"cron_id": cron_id, "model": model,
+                "plan": f"Action planifiée « {values['name']} » sur {model}, "
+                        f"toutes les {values['interval_number']} "
+                        f"{values['interval_type']}."}
+
+    async def op_create_automation(self, p: dict) -> dict:
+        model = _req(p, "model")
+        model_id = await self.model_id(model)
+        name = _req(p, "name")
+        trigger = p.get("trigger") or "on_create"
+        values = {
+            "name": name,
+            "model_id": model_id,
+            "trigger": trigger,
+            "active": bool(p.get("active", True)),
+        }
+        if p.get("filter_domain"):
+            values["filter_domain"] = p["filter_domain"]
+        fields = await _run(lambda: self.odoo.fields_get("base.automation", ["type"]))
+        linked_action_id = None
+        if "action_server_ids" in fields:
+            # Odoo 17+ : the automation references separate server actions.
+            action_id = await self._create("ir.actions.server", {
+                "name": f"{name} — action",
+                "model_id": model_id,
+                "state": "code",
+                "code": p.get("code") or "",
+            }, f"Action serveur de l'automatisation « {name} »")
+            values["action_server_ids"] = [[6, 0, [action_id]]]
+            linked_action_id = action_id
+        else:
+            # Odoo 16 : base.automation delegates to ir.actions.server inline.
+            values["state"] = "code"
+            values["code"] = p.get("code") or ""
+        if isinstance(p.get("extra"), dict):
+            values.update(p["extra"])
+        automation_id = await self._create(
+            "base.automation", values, f"Automatisation « {name} »")
+        return {"automation_id": automation_id, "model": model, "trigger": trigger,
+                "server_action_id": linked_action_id,
+                "plan": f"Automatisation « {name} » (déclencheur {trigger}) "
+                        f"sur le modèle {model}."}
+
+
+async def apply_changeset(odoo, operations: list[dict],
+                          rollback_on_failure: bool = True,
+                          dry_run: bool = False) -> dict:
+    """Apply (or preflight) a validated changeset, operation by operation.
+
+    With ``dry_run=True`` nothing is written: every target is resolved and
+    validated against the live instance and each operation reports the exact
+    change it *would* make (its ``plan``). All operations are checked so every
+    problem surfaces in a single pass.
+
+    With ``dry_run=False`` the changeset is applied for real; on any failure,
+    every record created during the run is rolled back (unless disabled) and
+    the previously successful operations are reported as ``rolled_back``.
+    """
+    executor = _Executor(odoo, dry=dry_run)
+    results: list[dict] = []
+    failed = False
+
+    for index, op in enumerate(operations or []):
+        op_type = (op.get("type") or "").strip()
+        summary = op.get("summary") or op_type
+        # Real run: once something failed, skip the rest (rollback undoes it).
+        # Dry run: keep validating so every problem surfaces at once.
+        if failed and not dry_run:
+            results.append({"index": index, "type": op_type, "summary": summary,
+                            "status": "skipped"})
+            continue
+        handler_name = HANDLERS.get(op_type)
+        if not handler_name:
+            results.append({"index": index, "type": op_type, "summary": summary,
+                            "status": "failed",
+                            "error": f"Type d'opération inconnu : '{op_type}'"})
+            failed = True
+            continue
+        try:
+            detail = await getattr(executor, handler_name)(op.get("params") or {})
+            results.append({"index": index, "type": op_type, "summary": summary,
+                            "status": "ok" if dry_run else "success",
+                            "plan": detail.get("plan"), "detail": detail})
+        except Exception as exc:
+            results.append({"index": index, "type": op_type, "summary": summary,
+                            "status": "failed", "error": str(exc)})
+            failed = True
+
+    rolled_back = False
+    rollback_errors: list[str] = []
+    if not dry_run and failed and rollback_on_failure and executor.created:
+        rollback_errors = await executor.rollback()
+        rolled_back = True
+        for r in results:
+            if r["status"] == "success":
+                r["status"] = "rolled_back"
+
+    return {
+        "ok": not failed,
+        "dry_run": dry_run,
+        "operations": results,
+        "created": executor.created,
+        "rolled_back": rolled_back,
+        "rollback_errors": rollback_errors,
+        "applied_at": datetime.utcnow().isoformat(),
+    }

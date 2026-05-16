@@ -78,6 +78,22 @@ class OdooClient:
             self.db, self.uid, self.api_key, model, method, args or [], call_kwargs
         )
 
+    def create(self, model: str, values: dict) -> int:
+        """Create a record. Used by the Creator tool for Studio-style writes."""
+        return self._models.execute_kw(
+            self.db, self.uid, self.api_key, model, "create", [values], {"context": self._ctx()}
+        )
+
+    def write(self, model: str, ids: list[int], values: dict) -> bool:
+        return self._models.execute_kw(
+            self.db, self.uid, self.api_key, model, "write", [ids, values], {"context": self._ctx()}
+        )
+
+    def unlink(self, model: str, ids: list[int]) -> bool:
+        return self._models.execute_kw(
+            self.db, self.uid, self.api_key, model, "unlink", [ids], {"context": self._ctx()}
+        )
+
     def get_installed_modules(self) -> list[dict]:
         return self.search_read(
             "ir.module.module",

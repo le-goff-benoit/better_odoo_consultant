@@ -1,0 +1,488 @@
+"""Creator — apply Odoo Studio-style modifications to a live instance.
+
+Flow: the consultant unlocks the tool with a dedicated password, picks a
+project / environment, writes a functional request; the AI investigates the
+live instance and proposes a structured changeset; the consultant validates
+it and the executor applies it via XML-RPC. Restricted to projects where
+Studio is in use (technical-complexity mode ``studio`` or ``studio_dev``).
+"""
+
+import json
+import os
+import re
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...core.database import get_session
+from ...core.models import Profile, CreatorRequest
+from ...services.odoo_client import OdooClient
+from ...services.profile_manager import get_active_env_from_json, get_active_api_key
+from ...services.ai_service import stream_chat
+from ...services.context_service import load_context_for_prompt
+from ...services.localization_service import build_localization_context
+from ...services.technical_complexity_service import (
+    build_technical_complexity_context, parse_technical_complexity,
+)
+from ...services import creator_auth
+from ...services.creator_service import (
+    build_analysis_message, parse_analysis, build_documentation_message,
+)
+from ...services.creator_executor import apply_changeset
+from .ai import _ai_key, _sse, _exchange_copilot_token, _PROVIDERS
+
+router = APIRouter()
+
+# Only projects where Studio is actually used may be modified by the Creator.
+ELIGIBLE_MODES = {"studio", "studio_dev"}
+
+
+# ── Password gate ────────────────────────────────────────────────
+
+class PasswordBody(BaseModel):
+    password: str
+    current: Optional[str] = None
+
+
+@router.get("/password-status")
+async def password_status():
+    return {"set": creator_auth.is_password_set()}
+
+
+@router.post("/password")
+async def set_password(body: PasswordBody):
+    """Set or change the Creator password. Changing it requires the current one."""
+    if creator_auth.is_password_set():
+        if not body.current or not creator_auth.verify_password(body.current):
+            raise HTTPException(403, "Mot de passe actuel incorrect.")
+    try:
+        creator_auth.set_password(body.password)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True}
+
+
+@router.post("/unlock")
+async def unlock(body: PasswordBody):
+    if not creator_auth.is_password_set():
+        raise HTTPException(400, "Aucun mot de passe Creator défini — configurez-le dans les Paramètres.")
+    if not creator_auth.verify_password(body.password):
+        raise HTTPException(403, "Mot de passe incorrect.")
+    return {"ok": True}
+
+
+# ── Eligible projects ────────────────────────────────────────────
+
+@router.get("/projects")
+async def list_eligible_projects(session: AsyncSession = Depends(get_session)):
+    """Projects whose technical-complexity mode is studio / studio_dev."""
+    result = await session.execute(select(Profile))
+    out = []
+    for p in result.scalars().all():
+        complexity = parse_technical_complexity(p.technical_complexity)
+        mode = (complexity or {}).get("mode")
+        out.append({
+            "id": p.id,
+            "name": p.name,
+            "company_name": p.company_name,
+            "company_logo": p.company_logo,
+            "odoo_version": p.odoo_version,
+            "environments": p.environments,
+            "active_env_id": p.active_env_id,
+            "company_ids": p.company_ids,
+            "selected_company_id": p.selected_company_id,
+            "technical_complexity": p.technical_complexity,
+            "studio_mode": mode,
+            "eligible": mode in ELIGIBLE_MODES,
+        })
+    return out
+
+
+# ── Shared project runtime ───────────────────────────────────────
+
+def _resolve_provider_key(provider: str) -> str:
+    if provider not in _PROVIDERS:
+        raise HTTPException(400, f"Fournisseur inconnu : {provider}")
+    api_key = _ai_key(provider)
+    if not api_key:
+        raise HTTPException(400, f"Clé API '{provider}' non configurée — ajoutez-la dans les Paramètres.")
+    return api_key
+
+
+def _build_runtime(profile: Profile, env_id: Optional[str], company_id: Optional[int]):
+    """Build the live OdooClient + resolve local sources and client repo.
+
+    Mirrors the project-mode setup of /api/ai/chat so the Creator gets the same
+    contextual + source assistance as the Assistant and Migration tools.
+    Returns (odoo, source_path, repo_path, version, env, active_company_id).
+    """
+    fallback = {"db_url": profile.db_url, "db_name": profile.db_name,
+                "login": profile.login, "odoo_version": profile.odoo_version}
+    env = get_active_env_from_json(profile.environments, env_id or profile.active_env_id, fallback)
+    odoo_key = get_active_api_key(profile.name, env.get("id", "prod"))
+    if not odoo_key:
+        raise HTTPException(400, "Clé API Odoo introuvable pour ce projet.")
+
+    active_company_id = company_id or profile.selected_company_id or None
+    odoo = OdooClient(
+        env.get("db_url") or profile.db_url,
+        env.get("db_name") or profile.db_name,
+        env.get("login") or profile.login,
+        odoo_key, company_id=active_company_id,
+    )
+
+    version = env.get("odoo_version") or profile.odoo_version
+    source_path = None
+    sources_base = Path.home() / ".odoo-consultant" / "sources"
+    if version and os.path.isdir(str(sources_base / version)):
+        source_path = str(sources_base / version)
+    elif version and os.path.isdir(str(sources_base / f"{version}-enterprise")):
+        source_path = str(sources_base / f"{version}-enterprise")
+    elif sources_base.is_dir():
+        ver_re = re.compile(r"^\d+\.\d+$")
+        available = sorted(
+            [d for d in os.listdir(sources_base)
+             if ver_re.match(d) and os.path.isdir(sources_base / d)],
+            reverse=True)
+        if available:
+            source_path = str(sources_base / available[0])
+
+    # Per-environment cloned client repo — gives the AI search_project_source /
+    # read_project_file, exactly like the Assistant and Migration tools.
+    repo_path = None
+    if env.get("github_repo"):
+        repo_local = (Path.home() / ".odoo-consultant" / "repos"
+                      / profile.name / env.get("id", "prod"))
+        if repo_local.is_dir() and (repo_local / ".git").exists():
+            repo_path = str(repo_local)
+
+    return odoo, source_path, repo_path, version, env, active_company_id
+
+
+def _eligible_or_403(profile: Profile) -> None:
+    complexity = parse_technical_complexity(profile.technical_complexity)
+    mode = (complexity or {}).get("mode")
+    if mode not in ELIGIBLE_MODES:
+        raise HTTPException(
+            403, "Ce projet n'a pas Studio activé — le Creator est réservé aux "
+                 "projets Studio ou Studio + Dev.")
+
+
+def _company_name(profile: Profile, company_id: Optional[int]) -> Optional[str]:
+    if not company_id or not profile.company_ids:
+        return None
+    try:
+        for c in json.loads(profile.company_ids):
+            if c.get("id") == company_id:
+                return c.get("name")
+    except Exception:
+        pass
+    return None
+
+
+def _build_context_md(profile: Profile, version, user_prompt, company_id):
+    localization_md = build_localization_context(
+        profile.company_ids, company_id, version, user_prompt, "developer")
+    complexity_md = build_technical_complexity_context(profile.technical_complexity)
+    return load_context_for_prompt(
+        version, user_prompt=user_prompt, perspective="developer", locale="fr",
+        creation=True,
+        priority_blocks=[b for b in (localization_md, complexity_md) if b])
+
+
+# ── Analyze (SSE) ────────────────────────────────────────────────
+
+class AnalyzeBody(BaseModel):
+    provider: str
+    model: Optional[str] = None
+    profile_id: int
+    env_id: Optional[str] = None
+    company_id: Optional[int] = None
+    request: str
+    instructions: list[str] = Field(default_factory=list)
+
+
+@router.post("/analyze")
+async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session)):
+    if not creator_auth.is_password_set():
+        raise HTTPException(400, "Mot de passe Creator non défini.")
+    if not body.request.strip():
+        raise HTTPException(400, "La demande fonctionnelle est vide.")
+
+    api_key = _resolve_provider_key(body.provider)
+    if body.provider == "copilot":
+        try:
+            api_key = await _exchange_copilot_token(api_key)
+        except Exception as exc:
+            raise HTTPException(400, f"Impossible d'obtenir le token Copilot : {exc}")
+
+    profile = await session.get(Profile, body.profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable.")
+    _eligible_or_403(profile)
+
+    odoo, source_path, repo_path, version, env, company_id = _build_runtime(
+        profile, body.env_id, body.company_id)
+    context_md = _build_context_md(profile, version, body.request, company_id)
+    user_message = build_analysis_message(body.request, body.instructions)
+    messages = [{"role": "user", "content": user_message}]
+    company_name = _company_name(profile, company_id)
+
+    async def generate():
+        # Announce the contextual assistance in play — Odoo version, local
+        # source code, client repo — so the UI mirrors Assistant / Migration.
+        yield _sse({"type": "context", "odoo_version": version,
+                    "has_sources": bool(source_path), "has_repo": bool(repo_path)})
+        collected: list[str] = []
+        try:
+            async for evt in stream_chat(
+                body.provider, api_key, body.model, odoo, profile, messages,
+                source_path, context_md, version, None, company_name,
+                repo_path, None, False, None, "developer", "fr",
+            ):
+                etype = evt.get("type")
+                if etype == "text":
+                    collected.append(evt.get("content") or "")
+                elif etype in ("tool_call", "tool_result", "warning"):
+                    yield _sse(evt)
+                elif etype == "error":
+                    yield _sse(evt)
+            analysis = parse_analysis("".join(collected))
+            if analysis.get("ok"):
+                yield _sse({"type": "analysis", **analysis})
+            else:
+                yield _sse({"type": "error",
+                            "msg": analysis.get("error") or "Analyse illisible."})
+        except Exception as exc:
+            yield _sse({"type": "error", "msg": str(exc)})
+        yield _sse({"type": "end"})
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Apply ────────────────────────────────────────────────────────
+
+class Operation(BaseModel):
+    type: str
+    summary: str = ""
+    params: dict = Field(default_factory=dict)
+
+
+class ApplyBody(BaseModel):
+    password: str
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    profile_id: int
+    env_id: Optional[str] = None
+    company_id: Optional[int] = None
+    request: str
+    instructions: list[str] = Field(default_factory=list)
+    functional_analysis: str = ""
+    technical_analysis: str = ""
+    operations: list[Operation]
+
+
+@router.post("/apply")
+async def apply(body: ApplyBody, session: AsyncSession = Depends(get_session)):
+    if not creator_auth.is_password_set() or not creator_auth.verify_password(body.password):
+        raise HTTPException(403, "Mot de passe incorrect.")
+    if not body.operations:
+        raise HTTPException(400, "Aucune opération à appliquer.")
+
+    profile = await session.get(Profile, body.profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable.")
+    _eligible_or_403(profile)
+
+    odoo, _src, _repo, _ver, env, company_id = _build_runtime(
+        profile, body.env_id, body.company_id)
+    operations = [op.model_dump() for op in body.operations]
+
+    # A dry-run always runs first: if the preflight finds a problem, nothing
+    # is written and the consultant gets the exact list of what failed.
+    try:
+        preflight = await apply_changeset(odoo, operations, dry_run=True)
+    except Exception as exc:
+        raise HTTPException(500, f"Échec du contrôle préalable : {exc}")
+    if not preflight.get("ok"):
+        return {"ok": False, "stage": "preflight", "preflight": preflight}
+
+    try:
+        result = await apply_changeset(odoo, operations)
+    except Exception as exc:
+        raise HTTPException(500, f"Échec de l'application : {exc}")
+
+    record = CreatorRequest(
+        profile_id=profile.id,
+        profile_name=profile.name,
+        env_id=env.get("id"),
+        env_label=env.get("name"),
+        company_id=company_id,
+        request_text=body.request,
+        instructions=json.dumps(body.instructions, ensure_ascii=False),
+        functional_analysis=body.functional_analysis,
+        technical_analysis=body.technical_analysis,
+        changeset=json.dumps(operations, ensure_ascii=False),
+        apply_result=json.dumps(result, ensure_ascii=False),
+        status="applied" if result.get("ok") else "failed",
+        provider=body.provider,
+        model=body.model,
+    )
+    session.add(record)
+    await session.commit()
+    await session.refresh(record)
+
+    return {"ok": result.get("ok"), "stage": "applied",
+            "request_id": record.id, "result": result, "preflight": preflight}
+
+
+# ── Dry-run (preflight) ──────────────────────────────────────────
+
+class DryRunBody(BaseModel):
+    profile_id: int
+    env_id: Optional[str] = None
+    company_id: Optional[int] = None
+    operations: list[Operation]
+
+
+@router.post("/dry-run")
+async def dry_run(body: DryRunBody, session: AsyncSession = Depends(get_session)):
+    """Preflight a changeset — resolve and validate every target against the
+    live instance without writing anything. Read-only, so no password required."""
+    if not body.operations:
+        raise HTTPException(400, "Aucune opération à contrôler.")
+    profile = await session.get(Profile, body.profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable.")
+    _eligible_or_403(profile)
+    odoo, _src, _repo, _ver, _env, _cid = _build_runtime(
+        profile, body.env_id, body.company_id)
+    try:
+        return await apply_changeset(
+            odoo, [op.model_dump() for op in body.operations], dry_run=True)
+    except Exception as exc:
+        raise HTTPException(500, f"Échec du contrôle préalable : {exc}")
+
+
+# ── Reject ───────────────────────────────────────────────────────
+
+class RejectBody(BaseModel):
+    profile_id: int
+    env_id: Optional[str] = None
+    company_id: Optional[int] = None
+    request: str
+    instructions: list[str] = Field(default_factory=list)
+    functional_analysis: str = ""
+    technical_analysis: str = ""
+    operations: list[Operation] = Field(default_factory=list)
+
+
+@router.post("/reject")
+async def reject(body: RejectBody, session: AsyncSession = Depends(get_session)):
+    """Log a rejected proposal — closes the request without touching Odoo."""
+    profile = await session.get(Profile, body.profile_id)
+    record = CreatorRequest(
+        profile_id=body.profile_id,
+        profile_name=profile.name if profile else None,
+        env_id=body.env_id,
+        company_id=body.company_id,
+        request_text=body.request,
+        instructions=json.dumps(body.instructions, ensure_ascii=False),
+        functional_analysis=body.functional_analysis,
+        technical_analysis=body.technical_analysis,
+        changeset=json.dumps([op.model_dump() for op in body.operations], ensure_ascii=False),
+        status="rejected",
+    )
+    session.add(record)
+    await session.commit()
+    await session.refresh(record)
+    return {"ok": True, "request_id": record.id}
+
+
+# ── Documentation ────────────────────────────────────────────────
+
+class DocumentBody(BaseModel):
+    request_id: Optional[int] = None
+    provider: str
+    model: Optional[str] = None
+    profile_id: int
+    env_id: Optional[str] = None
+    company_id: Optional[int] = None
+    request: str
+    functional_analysis: str = ""
+    technical_analysis: str = ""
+    apply_result: dict = Field(default_factory=dict)
+
+
+@router.post("/document")
+async def document(body: DocumentBody, session: AsyncSession = Depends(get_session)):
+    api_key = _resolve_provider_key(body.provider)
+    if body.provider == "copilot":
+        try:
+            api_key = await _exchange_copilot_token(api_key)
+        except Exception as exc:
+            raise HTTPException(400, f"Impossible d'obtenir le token Copilot : {exc}")
+
+    profile = await session.get(Profile, body.profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable.")
+
+    odoo, source_path, repo_path, version, _env, company_id = _build_runtime(
+        profile, body.env_id, body.company_id)
+    context_md = _build_context_md(profile, version, body.request, company_id)
+    message = build_documentation_message(
+        body.request, body.functional_analysis, body.technical_analysis, body.apply_result)
+
+    collected: list[str] = []
+    try:
+        async for evt in stream_chat(
+            body.provider, api_key, body.model, odoo, profile,
+            [{"role": "user", "content": message}],
+            source_path, context_md, version, None, _company_name(profile, company_id),
+            repo_path, None, False, None, "developer", "fr",
+        ):
+            if evt.get("type") == "text":
+                collected.append(evt.get("content") or "")
+            elif evt.get("type") == "error":
+                raise HTTPException(502, evt.get("msg") or "Erreur IA.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"Génération de la documentation impossible : {exc}")
+
+    documentation = "".join(collected).strip()
+    if body.request_id is not None:
+        record = await session.get(CreatorRequest, body.request_id)
+        if record:
+            record.documentation = documentation
+            session.add(record)
+            await session.commit()
+    return {"ok": True, "documentation": documentation}
+
+
+# ── History ──────────────────────────────────────────────────────
+
+@router.get("/history")
+async def history(limit: int = 50, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(
+        select(CreatorRequest).order_by(CreatorRequest.created_at.desc()).limit(limit))
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "profile_name": r.profile_name,
+            "env_label": r.env_label,
+            "request_text": r.request_text,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "has_documentation": bool(r.documentation),
+        }
+        for r in rows
+    ]

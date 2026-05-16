@@ -3468,3 +3468,7 @@ input::placeholder, textarea::placeholder {
   .topbar-led { width: 22px; height: 22px; }
   .topbar-led-core { width: 10px; height: 10px; }
 }
+
+/* Creator — spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.creator-spin { animation: spin .8s linear infinite; }
