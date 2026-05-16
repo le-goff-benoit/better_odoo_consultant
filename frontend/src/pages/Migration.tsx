@@ -9,8 +9,8 @@ import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
+import ToolCallGroup from '../components/ToolCallGroup'
 import { useWorkspaceContext } from '../components/Layout'
-import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
 import { useUiLanguage } from '../i18n'
 import {
@@ -27,7 +27,6 @@ import {
 } from '../utils/attachments'
 import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
-import { getToolMeta } from '../utils/toolMeta'
 import { History } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -362,19 +361,6 @@ function fmtTokens(input?: number, output?: number) {
   if (input)  parts.push(`↑${input.toLocaleString()}`)
   if (output) parts.push(`↓${output.toLocaleString()}`)
   return `${total.toLocaleString()} tokens (${parts.join(' · ')})`
-}
-
-// ── OdooAppIcon ───────────────────────────────────────────────────
-
-function OdooAppIcon({ name, size = 16 }: { name: string; size?: number }) {
-  const def = ODOO_APPS[name]
-  if (!def) return null
-  return (
-    <img src={def.iconUrl} alt={def.label} width={size} height={size}
-      style={{ objectFit: 'contain', flexShrink: 0 }}
-      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-    />
-  )
 }
 
 // ── AiSelector ────────────────────────────────────────────────────
@@ -865,142 +851,6 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
         )}
       </div>
     </div>
-  )
-}
-
-// ── Tool rendering ────────────────────────────────────────────────
-
-function ToolCallGroup({ events }: { events: AiEvent[] }) {
-  const lang = useUiLanguage()
-  const [open, setOpen] = useState(false)
-  const calls   = events.filter(e => e.type === 'tool_call')
-  const results = events.filter(e => e.type === 'tool_result')
-
-  const dedupedCalls = calls.reduce<{ call: AiEvent; count: number; key: string }[]>((acc, c) => {
-    const key = (c.name === 'search_odoo_source' || c.name === 'search_target_source')
-      ? `${c.name}:${c.args?.version ?? ''}`
-      : c.name === 'query_odoo'
-      ? `query_odoo:${c.args?.model ?? ''}`
-      : `${c.name}`
-    const existing = acc.find(a => a.key === key)
-    if (existing) { existing.count++; return acc }
-    return [...acc, { call: c, count: 1, key }]
-  }, [])
-
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: open ? 8 : 0 }}>
-        {dedupedCalls.map(({ call: c, count }, idx) => {
-          const meta = getToolMeta(c.name!, c.args, lang)
-          const res  = results.find(r => r.name === c.name)
-          const done = !!res
-          const hasRecords = done && res!.records && res!.records.length > 0
-
-          return (
-            <button
-              key={`${c.name}-${idx}`}
-              onClick={() => hasRecords && setOpen(p => !p)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: done ? `${meta.color}12` : `${meta.color}06`,
-                border: `1px solid ${done ? `${meta.color}45` : `${meta.color}30`}`,
-                borderRadius: t.radiusFull, padding: '5px 12px 5px 8px',
-                cursor: hasRecords ? 'pointer' : 'default',
-                fontSize: 12, color: done ? meta.color : t.textSub, fontWeight: done ? 600 : 500,
-                transition: 'all .2s', maxWidth: 340,
-              }}
-            >
-              {done ? (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 18, height: 18, borderRadius: '50%',
-                  background: meta.color, color: '#fff', fontSize: 9, fontWeight: 800, flexShrink: 0,
-                }}>
-                  {c.name === 'query_odoo' || c.name === 'count_odoo' ? 'O'
-                    : c.name === 'search_odoo_source' || c.name === 'search_target_source' ? '⌕'
-                    : c.name === 'read_odoo_file' || c.name === 'read_target_file' ? '§'
-                    : c.name === 'search_project_source' || c.name === 'read_project_file' ? '⎇'
-                    : '◈'}
-                </span>
-              ) : (
-                <span style={{
-                  display: 'inline-block', flexShrink: 0,
-                  width: 14, height: 14, borderRadius: '50%',
-                  border: `2px solid ${meta.color}`, borderTopColor: 'transparent',
-                  animation: 'migSpin .6s linear infinite',
-                }} />
-              )}
-
-              {'appName' in meta && meta.appName && done && <OdooAppIcon name={meta.appName as string} size={13} />}
-              {!(('appName' in meta) && meta.appName) && done && <span style={{ fontSize: 12, flexShrink: 0 }}>{meta.icon}</span>}
-
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {done ? meta.doneLabel : meta.loadingLabel}
-              </span>
-
-              {done && res!.count !== undefined && (
-                <span style={{
-                  background: `${meta.color}28`, borderRadius: 9999,
-                  padding: '1px 7px', fontSize: 10, fontWeight: 700, flexShrink: 0,
-                }}>
-                  {res!.count}
-                </span>
-              )}
-
-              {count > 1 && (
-                <span title={`${count} appels`} style={{
-                  background: `${meta.color}22`, borderRadius: 9999,
-                  padding: '1px 5px', fontSize: 10, flexShrink: 0,
-                }}>×{count}</span>
-              )}
-
-              {done && (
-                <span style={{ fontSize: 10, color: t.muted, flexShrink: 0 }}>
-                  {hasRecords ? (open ? '▲' : '▼') : '✓'}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {open && results.map((r, i) => r.records && r.records.length > 0 && (
-        <div key={i} style={{
-          background: 'var(--code-bg)', borderRadius: t.radius,
-          padding: '10px 12px', overflowX: 'auto', maxHeight: 220, overflowY: 'auto', marginTop: 4,
-        }}>
-          <RecordsTable records={r.records} />
-        </div>
-      ))}
-
-      <style>{`
-        @keyframes migPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
-        @keyframes migSpin  { to{transform:rotate(360deg)} }
-      `}</style>
-    </div>
-  )
-}
-
-function RecordsTable({ records }: { records: Record<string, unknown>[] }) {
-  if (!records.length) return null
-  const cols = Object.keys(records[0]).slice(0, 8)
-  return (
-    <table style={{ borderCollapse: 'collapse', fontSize: 11, color: 'var(--code-fg)', minWidth: '100%' }}>
-      <thead>
-        <tr>{cols.map(c => <th key={c} style={{ padding: '3px 10px', textAlign: 'left', borderBottom: '1px solid var(--code-border)', color: 'var(--code-accent)', fontWeight: 600 }}>{c}</th>)}</tr>
-      </thead>
-      <tbody>
-        {records.map((r, i) => (
-          <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--code-bg-alt)' }}>
-            {cols.map(c => (
-              <td key={c} style={{ padding: '3px 10px', borderBottom: '1px solid var(--code-border-soft)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {String(r[c] ?? '')}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
   )
 }
 

@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.34.1',
+    version: '0.35.0',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Refonte UX des outils IA sur Assistant et Migration : les anciennes pills ambiguës deviennent des cartes compactes avec action, détail, état et badges séparés',
+      'Libellés d\'outils clarifiés : Base client, Sources Odoo, Sources cible, Champs, Code custom, Vue Odoo, Rapport PDF, Studio, Volumétrie',
+      'Résultats d\'outils plus ergonomiques : clic uniquement quand des données sont consultables, chevron d\'ouverture explicite et tableau de résultats partagé entre les deux pages',
+      'Rendu partagé dans un composant commun ToolCallGroup pour garder Assistant IA et Migration parfaitement cohérents',
+    ],
+  },
+  {
+    version: '0.34.1',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Correctif modal Agrandir : rendu via portal au niveau document pour couvrir correctement la topbar, le composer et les panneaux latéraux',
       'Correctif « Plus de détail » : l\'action de sélection est maintenant disponible aussi dans la réponse agrandie, pas seulement dans la réponse inline',
