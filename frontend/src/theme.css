@@ -2480,10 +2480,10 @@ textarea:focus-visible {
 
 .tool-chip {
   --tool-color: var(--brand);
-  min-width: 196px;
-  max-width: min(340px, 100%);
+  min-width: 174px;
+  max-width: min(310px, 100%);
   display: inline-grid;
-  grid-template-columns: auto 22px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
   padding: 5px 8px 5px 6px;
@@ -2528,22 +2528,6 @@ textarea:focus-visible {
   letter-spacing: 0;
 }
 
-.tool-chip-status {
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--tool-color);
-  background: color-mix(in srgb, var(--tool-color) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tool-color) 32%, transparent);
-  border-radius: 3px;
-}
-
-.tool-chip.is-running .tool-chip-status svg {
-  animation: tool-chip-spin .8s linear infinite;
-}
-
 .tool-chip-main {
   min-width: 0;
   display: flex;
@@ -2569,16 +2553,6 @@ textarea:focus-visible {
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.tool-chip-state {
-  flex-shrink: 0;
-  color: var(--tool-color);
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
 }
 
 .tool-chip-detail {
@@ -2690,10 +2664,10 @@ textarea:focus-visible {
   .tool-chip {
     width: 100%;
     min-width: 0;
-    grid-template-columns: auto 22px minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
   }
   .tool-chip-meta {
-    grid-column: 3;
+    grid-column: 2;
     justify-content: flex-start;
     max-width: 100%;
   }

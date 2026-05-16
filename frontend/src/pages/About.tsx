@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.3',
+    version: '0.35.4',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Timeline des outils IA encore plus compacte : suppression du check et du libellé Vérifié / En cours pour gagner de la place horizontalement',
+      'Largeur minimale des blocs réduite tout en conservant numéro d\'étape, titre, détail, projet, résultats et chevron',
+    ],
+  },
+  {
+    version: '0.35.3',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Timeline des outils IA compactée : numéro d\'étape intégré dans le bloc, suppression des pictogrammes, hauteur réduite et connecteurs plus discrets',
       'Informations conservées mais densité améliorée : libellé, détail, statut, projet, résultats et répétitions restent visibles sans occuper autant d\'espace',

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { ChevronDown, Check, Loader2 } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useUiLanguage } from '../i18n'
 import { getToolMeta, humanModel } from '../utils/toolMeta'
 
@@ -115,8 +115,8 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
   const calls = events.filter(e => e.type === 'tool_call')
   const results = events.filter(e => e.type === 'tool_result')
   const c = lang === 'fr'
-    ? { running: 'En cours', done: 'Vérifié', results: 'résultats', calls: 'appels', project: 'Projet', open: 'Voir les résultats', close: 'Masquer les résultats' }
-    : { running: 'Running', done: 'Checked', results: 'results', calls: 'calls', project: 'Project', open: 'Show results', close: 'Hide results' }
+    ? { results: 'résultats', calls: 'appels', project: 'Projet', open: 'Voir les résultats', close: 'Masquer les résultats' }
+    : { results: 'results', calls: 'calls', project: 'Project', open: 'Show results', close: 'Hide results' }
 
   const dedupedCalls = calls.reduce<ToolCallItem[]>((acc, call) => {
     const key = toolKey(call)
@@ -148,13 +148,9 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
                 title={hasRecords ? (expanded ? c.close : c.open) : undefined}
               >
                 <span className="tool-chip-step" aria-hidden>{String(idx + 1).padStart(2, '0')}</span>
-                <span className="tool-chip-status" aria-hidden>
-                  {done ? <Check size={12} strokeWidth={2.4} /> : <Loader2 size={12} strokeWidth={2.4} />}
-                </span>
                 <span className="tool-chip-main">
                   <span className="tool-chip-titleline">
                     <span className="tool-chip-title">{summary.title}</span>
-                    <span className="tool-chip-state">{done ? c.done : c.running}</span>
                   </span>
                   <span className="tool-chip-detail">{summary.detail}</span>
                 </span>
