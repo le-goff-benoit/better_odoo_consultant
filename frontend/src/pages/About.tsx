@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.32.1',
+    version: '0.33.0',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bouton « Résumé 30 j » corrigé : il n\'analysait qu\'environ 1 commit Community à cause du clone superficiel des sources. L\'historique est désormais approfondi à la demande (git fetch --shallow-since) et le résumé couvre Community ET Enterprise, avec les fichiers modifiés par chaque commit',
+      'Nouvel endpoint /sources/commits-since — commits des N derniers jours avec leurs fichiers modifiés',
+      'Coquille de la page Migration homogénéisée avec l\'Assistant IA : barre de contrôle encadrée dans une carte de contexte, liste de messages et rangée de contenu alignées sur le même motif (suppression du correctif d\'espacement ad-hoc)',
+    ],
+  },
+  {
+    version: '0.32.1',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Couleurs des blocs de code et des tableaux de données centralisées en tokens de thème (--code-*) — fin des codes hexadécimaux dupliqués dans les pages',
       'Indicateur de streaming et alerte d\'expiration de clé passés sur des tokens sémantiques au lieu de couleurs en dur',

@@ -16,6 +16,8 @@ export const checkAllSources = () => api.get('/sources/check-all')
 export const checkSingleVersion = (version: string) => api.get(`/sources/check/${version}`)
 export const checkSourceUpdates = (version: string, path?: string) =>
   api.get(`/sources/check-updates/${version}${path ? `?path=${encodeURIComponent(path)}` : ''}`)
+export const getCommitsSince = (path: string, days = 30) =>
+  api.get(`/sources/commits-since?path=${encodeURIComponent(path)}&days=${days}`)
 
 // Profiles
 export const listProfiles = () => api.get('/profiles/')

@@ -1549,8 +1549,9 @@ export default function Migration() {
 
       <div className="migration-content-row">
         <div className="migration-main-column">
-      {/* Context bar — mirrors assistant-control-row layout */}
-      <div className="assistant-control-row" style={{ borderBottom: `1px solid ${t.border}`, marginBottom: 14 }}>
+      {/* Control bar — framed in the same context card as the Assistant page */}
+      <div className="assistant-context">
+      <div className="assistant-control-row">
         {configuredProviders.length === 0 ? (
           <span style={{ fontSize: 13, color: t.muted }}>
             {c.noProvider}
@@ -1591,6 +1592,7 @@ export default function Migration() {
           </>
         )}
       </div>
+      </div>
 
       {/* Side selectors */}
       {(() => {
@@ -1626,7 +1628,7 @@ export default function Migration() {
       </div>
 
       {/* Messages */}
-      <div ref={messageListRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 4, marginBottom: 12 }}>
+      <div ref={messageListRef} className="assistant-message-list">
         {messages.length === 0 && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
             <div style={{ textAlign: 'center', color: t.muted, maxWidth: 520 }}>

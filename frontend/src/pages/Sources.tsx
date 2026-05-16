@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bot, CheckCircle2, ChevronDown, ChevronUp, Copy, Download, KeyRound, Loader2, Plus, RefreshCw, Square, Trash2, TriangleAlert } from 'lucide-react'
-import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates, checkSingleVersion } from '../api/client'
+import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates, checkSingleVersion, getCommitsSince } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { Badge, Card, StatusPill } from '../components/ui'
@@ -38,6 +38,10 @@ interface RepoInfo {
   installed: boolean; path: string; head?: string; message?: string
   date?: string; behind?: number; branch?: string
   recent_commits?: RecentCommit[]; error?: string
+}
+interface CommitSince {
+  sha: string; author: string; date: string; subject: string
+  files: string[]; file_count: number
 }
 
 const defaultPath = (v: string) => `~/.odoo-consultant/sources/${v}`
@@ -626,17 +630,44 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
     )
   }
 
-  const thirtyDaysAgo = Date.now() - 30 * 86400000
-  const recentCommits = (info.recent_commits ?? []).filter(c => new Date(c.date).getTime() >= thirtyDaysAgo)
-  const hasAiData = recentCommits.length > 0
+  const [summaryLoading, setSummaryLoading] = useState(false)
 
-  const buildPrefill = () => {
-    const lines = recentCommits.map(c =>
-      `- \`${c.sha}\` ${c.message} (${relativeDate(c.date, lang)}, ${c.author})`
-    )
-    return lang === 'en'
-      ? `Here are the ${recentCommits.length} commits from **${label}** over the last 30 days:\n\n${lines.join('\n')}\n\n${labels.prefillAsk}`
-      : `Voici les ${recentCommits.length} commits de **${label}** des 30 derniers jours :\n\n${lines.join('\n')}\n\n${labels.prefillAsk}`
+  // Fetch 30 days of commits — with the files each one changed — for BOTH
+  // Community and Enterprise, then hand the assembled brief to the assistant.
+  const buildSummary = async () => {
+    setSummaryLoading(true)
+    try {
+      const targets: { kind: string; path: string }[] = []
+      if (info.installed && info.path) targets.push({ kind: 'Community', path: info.path })
+      if (entInfo?.installed && entInfo.path) targets.push({ kind: 'Enterprise', path: entInfo.path })
+      const sections: string[] = []
+      for (const tgt of targets) {
+        let commits: CommitSince[] = []
+        try {
+          const res = await getCommitsSince(tgt.path, 30)
+          commits = res.data?.commits ?? []
+        } catch { /* best-effort — leave empty */ }
+        if (commits.length === 0) {
+          sections.push(`### ${tgt.kind}\n${lang === 'en'
+            ? '_No commit in the last 30 days (or history unavailable)._'
+            : '_Aucun commit sur les 30 derniers jours (ou historique indisponible)._'}`)
+          continue
+        }
+        const lines = commits.map(c => {
+          const shown = (c.files ?? []).slice(0, 8)
+          const more = c.file_count > shown.length ? ` (+${c.file_count - shown.length})` : ''
+          const filesLbl = lang === 'en' ? 'Files' : 'Fichiers'
+          return `- \`${c.sha}\` ${c.subject} — ${c.date}, ${c.author}\n  ${filesLbl} : ${shown.join(', ') || '—'}${more}`
+        })
+        sections.push(`### ${tgt.kind} — ${commits.length} commit${commits.length > 1 ? 's' : ''}\n${lines.join('\n')}`)
+      }
+      const header = lang === 'en'
+        ? `Here are the commits of **${label}** over the last 30 days (Community + Enterprise), with the files each commit changed:`
+        : `Voici les commits de **${label}** des 30 derniers jours (Community + Enterprise), avec les fichiers modifiés par chaque commit :`
+      onAiSummary(`${header}\n\n${sections.join('\n\n')}\n\n${labels.prefillAsk}`)
+    } finally {
+      setSummaryLoading(false)
+    }
   }
 
   return (
@@ -672,11 +703,11 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
             {showCommits ? labels.hide : `${info.recent_commits!.length} commits`}
           </button>
         )}
-        {hasAiData && (
-          <button className="btn btn-outline btn-sm" onClick={() => onAiSummary(buildPrefill())}>
-            <Bot size={13} /> {labels.aiSummary}
-          </button>
-        )}
+        <button className="btn btn-outline btn-sm" onClick={buildSummary} disabled={summaryLoading}>
+          {summaryLoading
+            ? <RefreshCw size={13} style={{ animation: 'spin .9s linear infinite' }} />
+            : <Bot size={13} />} {labels.aiSummary}
+        </button>
         <button className="btn btn-ghost btn-sm source-check-button" onClick={onCheckUpdates} disabled={checking}>
           <RefreshCw size={13} style={checking ? { animation: 'spin .9s linear infinite' } : undefined} />
           {checking ? labels.checking : labels.check}

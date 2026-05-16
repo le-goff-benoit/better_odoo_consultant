@@ -81,3 +81,65 @@ def get_recent_commits(local_path: str, count: int = 10) -> list[dict]:
         ]
     except Exception:
         return []
+
+
+def get_commits_since(local_path: str, days: int = 30, max_commits: int = 120) -> dict:
+    """Return commits from the last *days* days, with the files each one changed.
+
+    Source repos are shallow clones (``--depth=1``) so they hold no history by
+    default. History is deepened on demand with ``git fetch --shallow-since``
+    before reading the log — best-effort: if the deepen fails the log still
+    returns whatever history is locally available.
+    """
+    path = Path(local_path)
+    if not (path / ".git").exists():
+        return {"available": False, "commits": []}
+    since = f"{days} days ago"
+
+    def _git(*args, timeout: int = 120):
+        return subprocess.run(
+            ["git", "-C", str(path), *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+
+    deepened = False
+    try:
+        branch = (_git("rev-parse", "--abbrev-ref", "HEAD", timeout=15).stdout or "").strip()
+        if branch and branch != "HEAD":
+            fetched = _git("fetch", "--quiet", f"--shallow-since={since}", "origin", branch, timeout=240)
+            deepened = fetched.returncode == 0
+    except Exception:
+        pass
+
+    try:
+        # \x1e starts each commit record, \x1f separates header fields; the
+        # changed-file paths follow on their own lines (--name-only).
+        out = _git(
+            "log", f"--since={since}", "--no-merges", "--date=short",
+            "--pretty=format:%x1e%H%x1f%an%x1f%ad%x1f%s",
+            "--name-only", timeout=90,
+        ).stdout or ""
+    except Exception as exc:
+        return {"available": False, "error": str(exc), "commits": []}
+
+    commits: list[dict] = []
+    for chunk in out.split("\x1e"):
+        chunk = chunk.strip("\n")
+        if not chunk:
+            continue
+        header, _, files_blob = chunk.partition("\n")
+        parts = header.split("\x1f")
+        if len(parts) < 4:
+            continue
+        files = [f for f in files_blob.split("\n") if f.strip()]
+        commits.append({
+            "sha": parts[0][:8],
+            "author": parts[1],
+            "date": parts[2],
+            "subject": parts[3],
+            "files": files[:15],
+            "file_count": len(files),
+        })
+        if len(commits) >= max_commits:
+            break
+    return {"available": True, "deepened": deepened, "days": days, "commits": commits}

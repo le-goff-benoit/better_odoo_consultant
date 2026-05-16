@@ -269,3 +269,12 @@ async def git_status(path: str):
 async def commits(path: str, count: int = 10):
     from ...services.source_manager import get_recent_commits
     return {"commits": get_recent_commits(path, count)}
+
+
+@router.get("/commits-since")
+async def commits_since(path: str, days: int = 30):
+    """Commits of the last N days with their changed files — deepens the
+    shallow clone on demand. Used by the 'Résumé 30 j' button."""
+    from ...services.source_manager import get_commits_since
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: get_commits_since(path, days))
