@@ -3,6 +3,12 @@ import { Sparkles } from 'lucide-react'
 
 interface Anchor { text: string; top: number; left: number }
 
+function nodeInside(container: HTMLElement, node: Node | null) {
+  if (!node) return false
+  const candidate = node.nodeType === Node.TEXT_NODE ? node.parentNode : node
+  return !!candidate && container.contains(candidate)
+}
+
 /** Floating "more detail" action shown when the user selects text inside a
  *  response. Clicking it builds a follow-up prompt and submits it. */
 export default function SelectionAskMore({ containerRef, onAsk, label, disabled }: {
@@ -23,9 +29,12 @@ export default function SelectionAskMore({ containerRef, onAsk, label, disabled 
         const text = sel.toString().trim()
         const container = containerRef.current
         const range = sel.getRangeAt(0)
-        const common = range.commonAncestorContainer
-        const selectionNode = common.nodeType === Node.TEXT_NODE ? common.parentNode : common
-        if (text.length < 12 || !container || !selectionNode || !container.contains(selectionNode)) {
+        const isInside = !!container && (
+          nodeInside(container, sel.anchorNode) ||
+          nodeInside(container, sel.focusNode) ||
+          range.intersectsNode(container)
+        )
+        if (text.length < 12 || !isInside) {
           setAnchor(null)
           return
         }
@@ -33,7 +42,9 @@ export default function SelectionAskMore({ containerRef, onAsk, label, disabled 
         const rect = rects[rects.length - 1] ?? range.getBoundingClientRect()
         if (!rect || (rect.width === 0 && rect.height === 0)) { setAnchor(null); return }
         const left = Math.min(window.innerWidth - 84, Math.max(84, rect.left + rect.width / 2))
-        const top = Math.max(58, rect.top - 40)
+        const below = rect.bottom + 10
+        const above = rect.top - 42
+        const top = below < window.innerHeight - 44 ? below : Math.max(58, above)
         setAnchor({ text, top, left })
       }, 0)
     }
@@ -55,7 +66,7 @@ export default function SelectionAskMore({ containerRef, onAsk, label, disabled 
     <button
       type="button"
       className="selection-ask-more"
-      style={{ position: 'fixed', top: anchor.top - 40, left: anchor.left }}
+      style={{ position: 'fixed', top: anchor.top, left: anchor.left }}
       // Keep the text selection alive through the click.
       onMouseDown={e => e.preventDefault()}
       onClick={() => {
