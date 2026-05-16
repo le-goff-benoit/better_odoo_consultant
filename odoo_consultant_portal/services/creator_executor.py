@@ -72,15 +72,50 @@ def _validate_xml(arch: str) -> None:
         raise OperationError(f"Arch XML invalide : {exc}")
 
 
+def _normalize_xpath(expr: str) -> str:
+    expr = (expr or "").strip()
+    if expr.startswith("//"):
+        return "." + expr
+    if expr.startswith("/"):
+        return "." + expr
+    return expr
+
+
+def _validate_xpath_targets(parent_arch: str, inherited_arch: str) -> None:
+    """Best-effort validation of inherited-view xpath targets.
+
+    Odoo performs the authoritative validation when creating the view. This
+    catches common Creator mistakes earlier, especially xpaths pointing to
+    fields/pages/groups that are not present in the inspected parent arch.
+    Unsupported ElementTree xpath expressions are ignored and left to Odoo.
+    """
+    try:
+        parent_root = ET.fromstring(parent_arch)
+        inherited_root = ET.fromstring(inherited_arch)
+    except ET.ParseError:
+        return
+    for node in inherited_root.iter("xpath"):
+        expr = node.attrib.get("expr")
+        if not expr:
+            continue
+        try:
+            matches = parent_root.findall(_normalize_xpath(expr))
+        except (SyntaxError, KeyError):
+            continue
+        if not matches:
+            raise OperationError(f"XPath sans cible dans la vue parente : {expr}")
+
+
 def _clean(values: dict) -> dict:
     """Drop None values — the XML-RPC marshaller rejects them (allow_none off)."""
     return {k: v for k, v in values.items() if v is not None}
 
 
 class _Executor:
-    def __init__(self, odoo, dry: bool = False):
+    def __init__(self, odoo, dry: bool = False, version: str | None = None):
         self.odoo = odoo
         self.dry = dry                         # preflight: validate, never write
+        self.version = version
         self.created: list[dict] = []          # {model, res_id, label} — newest last
         self._model_cache: dict[str, int] = {}
         self._dry_counter = 0
@@ -171,7 +206,8 @@ class _Executor:
             "ttype": ttype,
             "state": "manual",
         }
-        for opt in ("required", "help", "store", "copied", "index", "tracking"):
+        for opt in ("required", "help", "store", "copied", "index", "tracking",
+                    "compute", "depends"):
             if p.get(opt) is not None:
                 values[opt] = p[opt]
         if ttype in _RELATIONAL:
@@ -206,7 +242,20 @@ class _Executor:
         view_type = p.get("view_type") or "form"
         arch = _req(p, "arch")
         _validate_xml(arch)
+        try:
+            major = int(str(self.version or "").split(".", 1)[0])
+        except Exception:
+            major = 0
+        if major >= 17 and (" attrs=" in arch or " states=" in arch):
+            raise OperationError(
+                f"Vue incompatible Odoo {self.version} : attrs/states ne sont plus "
+                "acceptés en Odoo 17+ ; utiliser invisible/readonly/required avec "
+                "expressions natives.")
         inherit_id = await self._resolve_parent_view(p, model, view_type)
+        parent_rows = await _run(lambda: self.odoo.search_read(
+            "ir.ui.view", [["id", "=", inherit_id]], ["arch_db"], limit=1))
+        if parent_rows and parent_rows[0].get("arch_db"):
+            _validate_xpath_targets(parent_rows[0]["arch_db"], arch)
         values = {
             "name": p.get("name") or f"{model} {view_type} — Creator",
             "model": model,
@@ -336,7 +385,8 @@ class _Executor:
 
 async def apply_changeset(odoo, operations: list[dict],
                           rollback_on_failure: bool = True,
-                          dry_run: bool = False) -> dict:
+                          dry_run: bool = False,
+                          version: str | None = None) -> dict:
     """Apply (or preflight) a validated changeset, operation by operation.
 
     With ``dry_run=True`` nothing is written: every target is resolved and
@@ -348,7 +398,7 @@ async def apply_changeset(odoo, operations: list[dict],
     every record created during the run is rolled back (unless disabled) and
     the previously successful operations are reported as ``rolled_back``.
     """
-    executor = _Executor(odoo, dry=dry_run)
+    executor = _Executor(odoo, dry=dry_run, version=version)
     results: list[dict] = []
     failed = False
 

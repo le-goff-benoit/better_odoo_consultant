@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Wand2, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Loader2,
-  FileText, Download, RotateCcw, Pencil, Play, Hammer, Database,
-  ScanSearch, KeyRound, History, X,
+  FileText, Download, RotateCcw, Pencil, Play, Hammer, Database, GitBranch,
+  FileCode2, ScanSearch, KeyRound,
 } from 'lucide-react'
 import {
-  getCreatorProjects, getAiProviders, getModelConfig, checkAllSources, getCreatorHistory,
-  getCreatorHistoryEntry, dryRunCreatorChangeset, applyCreatorChangeset, rejectCreatorRequest, documentCreatorChange,
+  getCreatorProjects, getAiProviders,
+  dryRunCreatorChangeset, applyCreatorChangeset, rejectCreatorRequest, documentCreatorChange,
 } from '../api/client'
 import { useUiLanguage } from '../i18n'
 import { PROVIDERS } from '../constants/providers'
@@ -16,16 +16,11 @@ import PageHeader from '../components/PageHeader'
 import { Button, Card, Field, Badge, Modal, EmptyState } from '../components/ui'
 import ToolCallGroup, { type ToolEvent } from '../components/ToolCallGroup'
 import Markdown from '../components/Markdown'
-import AiSelector from '../components/AiSelector'
-import ConversationContextPanel from '../components/ConversationContextPanel'
-import { useWorkspaceContext } from '../components/Layout'
-import { routedContextFiles } from '../utils/aiContext'
-import { streamingSignals } from '../utils/streamingSignals'
 
 // ── Types ─────────────────────────────────────────────────────────
 
 interface EnvEntry { id: string; name: string; odoo_version?: string; github_repo?: string }
-interface CompanyEntry { id: number; name: string; country_code?: string; currency?: string }
+interface CompanyEntry { id: number; name: string }
 interface CreatorProject {
   id: number
   name: string
@@ -36,7 +31,6 @@ interface CreatorProject {
   company_ids?: string | null
   selected_company_id?: number | null
   studio_mode?: string | null
-  technical_complexity?: string | null
   eligible: boolean
 }
 interface Operation { type: string; summary: string; params: Record<string, unknown> }
@@ -53,28 +47,6 @@ interface ChangesetResult {
   rollback_errors: string[]
 }
 interface ContextInfo { odoo_version?: string; has_sources: boolean; has_repo: boolean }
-interface CreatorHistoryEntry {
-  id: number
-  profile_id?: number | null
-  profile_name?: string | null
-  env_id?: string | null
-  env_label?: string | null
-  company_id?: number | null
-  request_text: string
-  status: 'analyzed' | 'applied' | 'failed' | 'rejected' | string
-  provider?: string | null
-  model?: string | null
-  created_at?: string | null
-  has_documentation?: boolean
-}
-interface CreatorHistoryDetail extends CreatorHistoryEntry {
-  instructions?: string[]
-  functional_analysis?: string
-  technical_analysis?: string
-  changeset?: Operation[]
-  apply_result?: ChangesetResult | null
-  documentation?: string
-}
 
 type Phase = 'gate' | 'setup' | 'analyzing' | 'review' | 'applying' | 'done'
 
@@ -92,33 +64,10 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   try { return JSON.parse(raw) as T } catch { return fallback }
 }
 
-function companyLocalizationLabel(company?: CompanyEntry | null) {
-  if (!company) return undefined
-  const parts = [company.country_code, company.currency].filter(Boolean)
-  return parts.length ? parts.join(' · ') : undefined
-}
-
-function technicalComplexityLabel(raw?: string | null) {
-  try {
-    const value = JSON.parse(raw ?? '{}')
-    return value.label || value.mode || undefined
-  } catch {
-    return undefined
-  }
-}
-
-function fmtDate(raw?: string | null) {
-  if (!raw) return ''
-  const d = new Date(raw)
-  if (Number.isNaN(d.getTime())) return raw
-  return d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
-
 // ── Page ──────────────────────────────────────────────────────────
 
 export default function Creator() {
   const lang = useUiLanguage()
-  const { contextOpen } = useWorkspaceContext()
   const en = lang === 'en'
   const c = useMemo(() => ({
     title: en ? 'Creator' : 'Création',
@@ -138,12 +87,7 @@ export default function Creator() {
     environment: en ? 'Environment' : 'Environnement',
     company: en ? 'Company' : 'Société',
     allCompanies: en ? 'All companies' : 'Toutes les sociétés',
-    aiModel: en ? 'AI model' : 'Modèle IA',
-    noProvider: en ? 'No configured AI provider.' : 'Aucun fournisseur IA configuré.',
-    history: en ? 'History' : 'Historique',
-    emptyHistory: en ? 'No Creator history yet.' : 'Aucun historique Creator pour le moment.',
-    doneSignal: en ? 'Task complete' : 'Tâche terminée',
-    runningSignal: en ? 'Task running…' : 'Tâche en cours…',
+    aiModel: en ? 'AI provider' : 'Fournisseur IA',
     request: en ? 'Functional request' : 'Demande fonctionnelle',
     requestHint: en
       ? 'Describe the modification — e.g. "add an After-sales tab on the sale order form with a follow-up date field".'
@@ -199,21 +143,8 @@ export default function Creator() {
     genDocLoading: en ? 'Writing documentation…' : 'Rédaction de la documentation…',
     downloadDoc: en ? 'Download (.md)' : 'Télécharger (.md)',
     newRequest: en ? 'New request' : 'Nouvelle demande',
-    newCreation: en ? 'New creation' : 'Nouvelle création',
     instructionsApplied: en ? 'Instructions taken into account' : 'Instructions prises en compte',
     willCreate: en ? 'Will create' : 'Va créer',
-    statusApplied: en ? 'Applied' : 'Réalisé',
-    statusFailed: en ? 'Failed' : 'Échec',
-    statusRejected: en ? 'Rejected' : 'Rejeté',
-    statusAnalyzed: en ? 'Analysed' : 'Analysé',
-    resume: en ? 'Resume' : 'Reprendre',
-    missingFunctional: en
-      ? 'Functional analysis was not stored for this older history entry.'
-      : "L'analyse fonctionnelle n'a pas été enregistrée pour cette ancienne entrée d'historique.",
-    missingTechnical: en
-      ? 'Technical analysis was not stored for this older history entry.'
-      : "L'analyse technique n'a pas été enregistrée pour cette ancienne entrée d'historique.",
-    executionErrors: en ? 'Execution errors' : "Erreurs d'exécution",
   }), [en])
 
   const [phase, setPhase] = useState<Phase>('gate')
@@ -221,7 +152,6 @@ export default function Creator() {
   const [gateTyped, setGateTyped] = useState('')
 
   const [provider, setProvider] = useState('')
-  const [modelId, setModelId] = useState('')
   const [projectId, setProjectId] = useState<number | ''>('')
   const [envId, setEnvId] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<number | null>(null)
@@ -249,58 +179,22 @@ export default function Creator() {
 
   const [documentation, setDocumentation] = useState('')
   const [docLoading, setDocLoading] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
-  const [, rerenderSignal] = useState(0)
 
   const abortRef = useRef<AbortController | null>(null)
-  const restoringHistoryRef = useRef(false)
 
   // ── data ────────────────────────────────────────────────────────
 
   const { data: providersData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
-  const { data: modelCfg } = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
-  const { data: sourcesData } = useQuery({ queryKey: ['sources-all'], queryFn: checkAllSources, staleTime: 30_000 })
-  const { data: historyData, refetch: refetchHistory } = useQuery({
-    queryKey: ['creator-history'],
-    queryFn: () => getCreatorHistory(50),
-    enabled: phase !== 'gate',
-  })
-
-  const configuredProviders = useMemo(() => {
+  const availableProviders = useMemo(() => {
     const map = (providersData?.data ?? {}) as Record<string, boolean>
-    const config = (modelCfg?.data ?? {}) as Record<string, string[]>
-    return PROVIDERS
-      .filter(p => map[p.id])
-      .map(p => {
-        const enabled = config[p.id]
-        if (!enabled || enabled.length === 0) return p
-        return { ...p, models: p.models.filter(m => enabled.includes(m.id)) }
-      })
-      .filter(p => p.models.length > 0)
-  }, [providersData, modelCfg])
-
-  const activeProvider = provider || configuredProviders[0]?.id || ''
-  const activeProvDef = configuredProviders.find(p => p.id === activeProvider)
-  const activeModelId = modelId || activeProvDef?.models.find(m => m.recommended)?.id || activeProvDef?.models[0]?.id || ''
-  const srcStatus: Record<string, { installed: boolean }> = sourcesData?.data ?? {}
-  const historyRows: CreatorHistoryEntry[] = historyData?.data ?? []
+    return Object.keys(map).filter(p => map[p])
+  }, [providersData])
 
   useEffect(() => {
-    if (!provider && configuredProviders.length) {
-      const preferred = configuredProviders.find(p => p.id === 'claude') ?? configuredProviders[0]
-      setProvider(preferred.id)
-      setModelId(preferred.models.find(m => m.recommended)?.id ?? preferred.models[0]?.id ?? '')
+    if (!provider && availableProviders.length) {
+      setProvider(availableProviders.includes('claude') ? 'claude' : availableProviders[0])
     }
-  }, [configuredProviders, provider])
-
-  const switchProvider = (id: string) => {
-    const p = configuredProviders.find(pv => pv.id === id)
-    if (!p) return
-    setProvider(id)
-    setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0]?.id ?? '')
-  }
-
-  useEffect(() => streamingSignals.subscribe(() => rerenderSignal(n => n + 1)), [])
+  }, [availableProviders, provider])
 
   const { data: projectsData } = useQuery({
     queryKey: ['creator-projects'],
@@ -323,33 +217,9 @@ export default function Creator() {
   )
   const activeEnv = envs.find(e => e.id === envId) ?? null
   const activeVersion = activeEnv?.odoo_version ?? selectedProject?.odoo_version ?? null
-  const activeCompany = companies.find(c => c.id === companyId) ?? companies[0] ?? null
-  const activeEnvRepo = activeEnv?.github_repo ?? null
-  const activeComplexity = technicalComplexityLabel(selectedProject?.technical_complexity)
-  const activeCompanyLocalization = companyLocalizationLabel(activeCompany)
-  const complexityParsed = parseJson<Record<string, unknown>>(selectedProject?.technical_complexity, {})
-  const sourceRepoIsCloned = ((complexityParsed?.dev as { repositories?: Array<{ cloned: boolean }> } | undefined)?.repositories ?? []).some(r => r.cloned)
-  const sourceCommunity = activeVersion ? srcStatus[activeVersion]?.installed === true : false
-  const sourceEnterprise = activeVersion ? srcStatus[`${activeVersion}-enterprise`]?.installed === true : false
-  const sourceEdition = sourceCommunity && sourceEnterprise ? 'C+E' : sourceCommunity ? 'C' : sourceEnterprise ? 'E' : ''
-  const contextFiles = routedContextFiles({
-    prompt: request,
-    perspective: 'developer',
-    version: activeVersion,
-    migration: false,
-  })
-  const conversationSources = [
-    activeVersion && (sourceCommunity || sourceEnterprise) ? `Sources Odoo ${activeVersion}${sourceEdition ? ` ${sourceEdition}` : ''}` : null,
-    activeEnvRepo && sourceRepoIsCloned ? activeEnvRepo.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
-  ].filter(Boolean) as string[]
-  const creatorSignal = streamingSignals.getAll().find(([k]) => k === 'creator')?.[1]
 
   useEffect(() => {
     if (!selectedProject) return
-    if (restoringHistoryRef.current) {
-      restoringHistoryRef.current = false
-      return
-    }
     setEnvId(selectedProject.active_env_id ?? envs[0]?.id ?? null)
     setCompanyId(selectedProject.selected_company_id ?? null)
   }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -357,7 +227,7 @@ export default function Creator() {
   // ── analysis ────────────────────────────────────────────────────
 
   const runAnalysis = async (allInstructions: string[]) => {
-    if (projectId === '' || !activeProvider || !request.trim()) return
+    if (projectId === '' || !provider || !request.trim()) return
     setPhase('analyzing')
     setToolEvents([])
     setContextInfo(null)
@@ -369,11 +239,6 @@ export default function Creator() {
     abortRef.current?.abort()
     const ctrl = new AbortController()
     abortRef.current = ctrl
-    streamingSignals.set('creator', {
-      status: 'streaming',
-      label: selectedProject?.name ?? c.title,
-      pageKey: 'creator',
-    })
 
     try {
       const res = await fetch('/api/creator/analyze', {
@@ -381,8 +246,7 @@ export default function Creator() {
         headers: { 'Content-Type': 'application/json' },
         signal: ctrl.signal,
         body: JSON.stringify({
-          provider: activeProvider,
-          model: activeModelId || undefined,
+          provider,
           profile_id: projectId,
           env_id: envId ?? undefined,
           company_id: companyId ?? undefined,
@@ -398,7 +262,6 @@ export default function Creator() {
       const dec = new TextDecoder()
       let buf = ''
       let gotAnalysis = false
-      let gotError = false
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -420,12 +283,10 @@ export default function Creator() {
             setToolEvents(prev => [...prev, evt as unknown as ToolEvent])
           } else if (type === 'analysis') {
             gotAnalysis = true
-            setRequestId((evt.request_id as number | undefined) ?? null)
             setFuncAnalysis((evt.functional_analysis as string) ?? '')
             setTechAnalysis((evt.technical_analysis as string) ?? '')
             setAnalysis((evt.operations as Operation[]) ?? [])
           } else if (type === 'error') {
-            gotError = true
             setStreamErr((evt.msg as string) ?? 'Erreur inconnue')
           }
         }
@@ -434,17 +295,10 @@ export default function Creator() {
         setStreamErr(en ? 'No analysis returned.' : 'Aucune analyse retournée.')
       }
       setPhase('review')
-      if (gotAnalysis && !gotError) {
-        streamingSignals.done('creator')
-        refetchHistory()
-      } else {
-        streamingSignals.clear('creator')
-      }
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') return
       setStreamErr(e instanceof Error ? e.message : String(e))
       setPhase('review')
-      streamingSignals.clear('creator')
     }
   }
 
@@ -491,16 +345,9 @@ export default function Creator() {
     if (projectId === '' || !analysis || !applyMatches) return
     setApplyErr('')
     setPhase('applying')
-    streamingSignals.set('creator', {
-      status: 'streaming',
-      label: selectedProject?.name ?? c.title,
-      pageKey: 'creator',
-    })
     try {
       const res = await applyCreatorChangeset({
-        request_id: requestId ?? undefined,
-        provider: activeProvider,
-        model: activeModelId || undefined,
+        provider,
         profile_id: projectId,
         env_id: envId ?? undefined,
         company_id: companyId ?? undefined,
@@ -511,20 +358,8 @@ export default function Creator() {
         operations: analysis,
       })
       if (res.data.stage === 'preflight') {
-        const failedPreflight = res.data.preflight as ChangesetResult
-        setRequestId((res.data.request_id as number | undefined) ?? requestId)
-        setPreflight(failedPreflight)
-        setApplyResult(failedPreflight)
-        setApplyErr(
-          failedPreflight.operations
-            ?.filter(op => op.status === 'failed')
-            .map(op => op.error)
-            .filter(Boolean)
-            .join('\n') || c.preflightFail,
-        )
+        setPreflight(res.data.preflight as ChangesetResult)
         setPhase('review')
-        streamingSignals.clear('creator')
-        refetchHistory()
         return
       }
       setApplyResult(res.data.result as ChangesetResult)
@@ -532,13 +367,10 @@ export default function Creator() {
       setShowConfirm(false)
       setApplyTyped('')
       setPhase('done')
-      streamingSignals.done('creator')
-      refetchHistory()
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setApplyErr(detail ?? (e instanceof Error ? e.message : String(e)))
       setPhase('review')
-      streamingSignals.clear('creator')
     }
   }
 
@@ -546,7 +378,6 @@ export default function Creator() {
     if (projectId === '') return
     try {
       await rejectCreatorRequest({
-        request_id: requestId ?? undefined,
         profile_id: projectId,
         env_id: envId ?? undefined,
         company_id: companyId ?? undefined,
@@ -556,7 +387,6 @@ export default function Creator() {
         technical_analysis: techAnalysis,
         operations: analysis ?? [],
       })
-      refetchHistory()
     } catch { /* logging only */ }
     resetRequest()
   }
@@ -580,53 +410,7 @@ export default function Creator() {
     setShowModify(false)
     setShowConfirm(false)
     setModifyText('')
-    streamingSignals.clear('creator')
     setPhase('setup')
-  }
-
-  const resumeHistoryEntry = async (id: number) => {
-    try {
-      const res = await getCreatorHistoryEntry(id)
-      const row = res.data as CreatorHistoryDetail
-      abortRef.current?.abort()
-      restoringHistoryRef.current = true
-      setRequestId(row.id)
-      setProjectId(row.profile_id ?? '')
-      setEnvId(row.env_id ?? null)
-      setCompanyId(row.company_id ?? null)
-      setRequest(row.request_text ?? '')
-      setInstructions(row.instructions ?? [])
-      setFuncAnalysis((row.functional_analysis ?? '').trim())
-      setTechAnalysis((row.technical_analysis ?? '').trim())
-      setAnalysis(row.changeset ?? [])
-      setProvider(row.provider ?? activeProvider)
-      setModelId(row.model ?? activeModelId)
-      setToolEvents([])
-      setStreamErr('')
-      setPreflight(null)
-      setApplyErr('')
-      setApplyTyped('')
-      setShowModify(false)
-      setShowConfirm(false)
-      setShowHistory(false)
-      setDocumentation(row.documentation ?? '')
-      if (row.status === 'applied' && row.apply_result) {
-        setApplyResult(row.apply_result)
-        setPhase('done')
-      } else {
-        setApplyResult(row.apply_result ?? null)
-        if (row.status === 'failed') {
-          const failed = row.apply_result?.operations?.filter(op => op.status === 'failed') ?? []
-          setApplyErr(failed.map(op => op.error).filter(Boolean).join('\n') || c.appliedFail)
-        }
-        setPhase('review')
-      }
-      streamingSignals.clear('creator')
-    } catch (e: unknown) {
-      setStreamErr(e instanceof Error ? e.message : String(e))
-      setShowHistory(false)
-      setPhase('review')
-    }
   }
 
   // ── documentation ───────────────────────────────────────────────
@@ -637,8 +421,7 @@ export default function Creator() {
     try {
       const res = await documentCreatorChange({
         request_id: requestId ?? undefined,
-        provider: activeProvider,
-        model: activeModelId || undefined,
+        provider,
         profile_id: projectId,
         env_id: envId ?? undefined,
         company_id: companyId ?? undefined,
@@ -716,60 +499,14 @@ export default function Creator() {
     phase === 'setup' ? 1 : phase === 'analyzing' ? 2 : phase === 'done' ? 4 : 3
 
   return (
-    <div className="creator-shell">
-      <PageHeader title={c.title} description={c.description} />
+    <div className="page-stack">
+      <PageHeader
+        title={c.title}
+        description={c.description}
+        action={<Badge tone="brand" size="md"><Hammer size={13} /> Studio</Badge>}
+      />
 
-      <div className="creator-content-row">
-        <div className="creator-main-column">
       <StepBar steps={c.steps} current={currentStep} />
-
-      <div className="assistant-context">
-        <div className="assistant-control-row">
-          {configuredProviders.length === 0 ? (
-            <span style={{ fontSize: 13, color: 'var(--th-muted)' }}>{c.noProvider}</span>
-          ) : (
-            <AiSelector
-              providers={configuredProviders}
-              provider={activeProvider}
-              modelId={activeModelId}
-              switchProvider={switchProvider}
-              setModelId={setModelId}
-            />
-          )}
-          {creatorSignal && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: creatorSignal.status === 'streaming' ? 'var(--th-streaming-fg)' : 'var(--th-success-fg, #1e7e34)',
-              fontWeight: 650,
-            }}>
-              <span className={`stream-dot stream-dot--${creatorSignal.status}`} />
-              {creatorSignal.status === 'streaming' ? c.runningSignal : c.doneSignal}
-            </span>
-          )}
-          <div className="assistant-control-spacer" />
-          {(request.trim() || analysis || phase === 'review' || phase === 'done') && (
-            <button
-              type="button"
-              onClick={resetRequest}
-              className="assistant-soft-action"
-              disabled={busy}
-              title={c.newCreation}
-            >
-              <RotateCcw size={13} />
-              <span>{c.newCreation}</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowHistory(h => !h)}
-            className={`assistant-soft-action${showHistory ? ' is-active' : ''}`}
-            title={`${c.history} (${historyRows.length})`}
-          >
-            <History size={13} />
-            <span>{c.history} ({historyRows.length})</span>
-          </button>
-        </div>
-      </div>
 
       {/* Setup */}
       <Card className="page-card">
@@ -816,7 +553,28 @@ export default function Creator() {
                 {companies.map(co => <option key={co.id} value={co.id}>{co.name}</option>)}
               </select>
             </Field>
+            <Field label={c.aiModel}>
+              <select
+                className="ui-input"
+                value={provider}
+                disabled={busy}
+                onChange={e => setProvider(e.target.value)}
+              >
+                {availableProviders.map(p => (
+                  <option key={p} value={p}>{PROVIDERS.find(x => x.id === p)?.label ?? p}</option>
+                ))}
+              </select>
+            </Field>
           </div>
+
+          {selectedProject && (
+            <ContextStrip
+              version={activeVersion}
+              hasRepo={contextInfo ? contextInfo.has_repo : Boolean(activeEnv?.github_repo)}
+              hasSources={contextInfo?.has_sources ?? null}
+              c={c}
+            />
+          )}
 
           {projects.length === 0 && projectsData && (
             <div style={{ marginTop: 8 }}>
@@ -830,11 +588,10 @@ export default function Creator() {
                 className="ui-input"
                 rows={4}
                 value={request}
-                disabled={busy}
-                readOnly={locked}
+                disabled={locked}
                 placeholder={c.requestHint}
-                onChange={e => { if (!locked) setRequest(e.target.value) }}
-                style={{ resize: 'vertical', fontFamily: 'inherit', opacity: locked && !busy ? 0.85 : undefined }}
+                onChange={e => setRequest(e.target.value)}
+                style={{ resize: 'vertical', fontFamily: 'inherit' }}
               />
             </Field>
           </div>
@@ -857,7 +614,7 @@ export default function Creator() {
                 variant="primary"
                 icon={<Wand2 size={15} />}
                 onClick={startAnalysis}
-                disabled={projectId === '' || !activeProvider || !request.trim()}
+                disabled={projectId === '' || !provider || !request.trim()}
               >
                 {c.analyze}
               </Button>
@@ -892,49 +649,33 @@ export default function Creator() {
       )}
 
       {/* Review */}
-      {(phase === 'review' || phase === 'applying' || phase === 'done') && (analysis || funcAnalysis || techAnalysis) && (
+      {(phase === 'review' || phase === 'applying') && analysis && (
         <>
-          {(funcAnalysis || requestId) && (
+          {funcAnalysis && (
             <Card className="page-card">
               <div className="page-card-body">
                 <div className="ui-section-title"><FileText size={15} /> {c.functional}</div>
-                {funcAnalysis ? <Markdown text={funcAnalysis} /> : <p className="ui-empty-description">{c.missingFunctional}</p>}
+                <Markdown text={funcAnalysis} />
               </div>
             </Card>
           )}
-          {(techAnalysis || requestId) && (
+          {techAnalysis && (
             <Card className="page-card">
               <div className="page-card-body">
                 <div className="ui-section-title"><Hammer size={15} /> {c.technical}</div>
-                {techAnalysis ? <Markdown text={techAnalysis} /> : <p className="ui-empty-description">{c.missingTechnical}</p>}
+                <Markdown text={techAnalysis} />
               </div>
             </Card>
           )}
 
-          {phase !== 'done' && (applyErr || applyResult?.operations?.some(op => op.status === 'failed' || op.status === 'rolled_back')) && (
-            <Card className="page-card">
-              <div className="page-card-body">
-                <div className="ui-section-title"><AlertTriangle size={15} /> {c.executionErrors}</div>
-                {applyErr && (
-                  <pre className="ui-code-block" style={{ whiteSpace: 'pre-wrap', marginTop: 0, color: 'var(--th-danger, #c0392b)' }}>
-                    {applyErr}
-                  </pre>
-                )}
-                {applyResult?.operations
-                  ?.filter(op => op.status === 'failed' || op.status === 'rolled_back')
-                  .map(op => <ResultRow key={op.index} r={op} en={en} />)}
-              </div>
-            </Card>
-          )}
-
-          {phase !== 'done' && (
           <Card className="page-card">
             <div className="page-card-body">
               <div className="ui-section-title">
                 {c.operations}
+                {opCount > 0 && <Badge tone="brand">{opCount}</Badge>}
               </div>
               {opCount === 0 && <p className="ui-empty-description">{c.noOps}</p>}
-              {analysis?.map((op, i) => <OperationRow key={i} op={op} index={i} en={en} />)}
+              {analysis.map((op, i) => <OperationRow key={i} op={op} index={i} en={en} />)}
 
               {applyErr && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, color: 'var(--th-danger, #c0392b)', fontSize: 13 }}>
@@ -970,7 +711,6 @@ export default function Creator() {
               </div>
             </div>
           </Card>
-          )}
         </>
       )}
 
@@ -1003,7 +743,7 @@ export default function Creator() {
                 : (
                   <Button
                     variant="secondary"
-                    icon={docLoading ? <Loader2 size={15} className="creator-spin" /> : <FileText size={15} />}
+                    icon={<FileText size={15} />}
                     onClick={generateDoc}
                     disabled={docLoading}
                   >
@@ -1134,47 +874,6 @@ export default function Creator() {
           )}
         </Modal>
       )}
-        </div>
-
-        {contextOpen && (
-          <ConversationContextPanel
-            title={en ? 'Creator context' : 'Contexte Creator'}
-            mode="developer"
-            effectivePerspective="developer"
-            provider={activeProvDef?.label}
-            model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
-            project={selectedProject?.name}
-            environment={activeEnv?.name}
-            company={activeCompany?.name}
-            countryCode={activeCompany?.country_code}
-            localization={activeCompanyLocalization}
-            complexity={activeComplexity}
-            version={activeVersion}
-            repo={activeEnvRepo}
-            contextFiles={contextFiles}
-            sources={conversationSources}
-            attachments={[]}
-          />
-        )}
-
-        {showHistory && (
-          <CreatorHistoryPanel
-            rows={historyRows}
-            empty={c.emptyHistory}
-            title={c.history}
-            close={c.close}
-            labels={{
-              applied: c.statusApplied,
-              failed: c.statusFailed,
-              rejected: c.statusRejected,
-              analyzed: c.statusAnalyzed,
-            }}
-            resume={c.resume}
-            onResume={resumeHistoryEntry}
-            onClose={() => setShowHistory(false)}
-          />
-        )}
-      </div>
     </div>
   )
 }
@@ -1251,89 +950,36 @@ function StepBar({ steps, current }: { steps: string[]; current: number }) {
   )
 }
 
-// ── History panel ────────────────────────────────────────────────
+// ── Context strip ─────────────────────────────────────────────────
 
-function CreatorHistoryPanel({ rows, empty, title, close, labels, resume, onResume, onClose }: {
-  rows: CreatorHistoryEntry[]
-  empty: string
-  title: string
-  close: string
-  labels: Record<'applied' | 'failed' | 'rejected' | 'analyzed', string>
-  resume: string
-  onResume: (id: number) => void
-  onClose: () => void
+function ContextStrip({ version, hasRepo, hasSources, c }: {
+  version: string | null
+  hasRepo: boolean
+  hasSources: boolean | null
+  c: { ctxVersion: string; ctxSources: string; ctxRepo: string; ctxOn: string; ctxOff: string }
 }) {
-  const statusLabel = (status: string) => {
-    if (status === 'applied') return labels.applied
-    if (status === 'failed') return labels.failed
-    if (status === 'rejected') return labels.rejected
-    return labels.analyzed
-  }
-  const statusTone = (status: string) => {
-    if (status === 'applied') return 'success'
-    if (status === 'failed') return 'danger'
-    if (status === 'rejected') return 'neutral'
-    return 'info'
-  }
-  return (
-    <div className="assistant-history-panel">
-      <div style={{
-        padding: '12px 14px 10px',
-        borderBottom: 'var(--neo-border-w) solid var(--th-border, #e3e3e3)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
+  const pill = (icon: ReactNode, label: string, on: boolean | null) => (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600,
+      padding: '3px 9px', borderRadius: 999,
+      background: 'var(--th-bg-muted, #f4f4f4)',
+      color: on === false ? 'var(--th-muted, #999)' : 'var(--th-text, #222)',
+      border: '1px solid var(--th-border, #e3e3e3)',
+    }}>
+      {icon}{label}
+      {on !== null && (
         <span style={{
-          display: 'flex', alignItems: 'center', gap: 7,
-          fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700,
-          color: 'var(--th-text)', textTransform: 'uppercase', letterSpacing: '.06em',
-        }}>
-          <History size={14} /> {title}
-        </span>
-        <button onClick={onClose} className="ui-icon-button" aria-label={close} title={close}>
-          <X size={15} />
-        </button>
-      </div>
-      {rows.length === 0 ? (
-        <div style={{ padding: '20px 14px', fontSize: 12, color: 'var(--th-muted)', textAlign: 'center' }}>
-          {empty}
-        </div>
-      ) : rows.map(row => (
-        <div key={row.id} style={{
-          padding: '11px 14px',
-          borderBottom: '1px solid var(--th-border-light, #ededed)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--th-text)', lineHeight: 1.4, flex: 1 }}
-              title={row.request_text}>
-              {row.request_text.length > 95 ? `${row.request_text.slice(0, 95)}…` : row.request_text}
-            </span>
-            <Badge tone={statusTone(row.status) as 'success' | 'danger' | 'neutral' | 'info'}>
-              {statusLabel(row.status)}
-            </Badge>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 10, color: 'var(--th-muted)' }}>
-            <span>{fmtDate(row.created_at)}</span>
-            {row.profile_name && <span>{row.profile_name}</span>}
-            {row.env_label && <span>{row.env_label}</span>}
-            {row.has_documentation && <span>Documentation</span>}
-          </div>
-          {row.status !== 'rejected' && (
-            <Button
-              variant="secondary"
-              icon={<RotateCcw size={12} />}
-              onClick={() => onResume(row.id)}
-              style={{ marginTop: 2, fontSize: 11, padding: '5px 10px', width: 'fit-content' }}
-            >
-              {resume}
-            </Button>
-          )}
-        </div>
-      ))}
+          width: 6, height: 6, borderRadius: '50%',
+          background: on ? 'var(--th-success, #1e7e34)' : 'var(--th-muted, #bbb)',
+        }} />
+      )}
+    </span>
+  )
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+      {pill(<Database size={12} />, `${c.ctxVersion} ${version ?? '?'}`, null)}
+      {pill(<FileCode2 size={12} />, `${c.ctxSources} ${hasSources === null ? '' : hasSources ? c.ctxOn : c.ctxOff}`.trim(), hasSources)}
+      {pill(<GitBranch size={12} />, `${c.ctxRepo} ${hasRepo ? c.ctxOn : c.ctxOff}`, hasRepo)}
     </div>
   )
 }
@@ -1345,12 +991,9 @@ function OperationRow({ op, index, en }: { op: Operation; index: number; en: boo
   const label = meta ? (en ? meta.en : meta.fr) : op.type
   const params = op.params ?? {}
   const arch = typeof params.arch === 'string' ? params.arch : null
-  const codeBlocks = [
-    ['Python', typeof params.code === 'string' ? params.code : null],
-    [en ? 'Compute' : 'Calcul', typeof params.compute === 'string' ? params.compute : null],
-  ].filter(([, value]) => value) as Array<[string, string]>
+  const code = typeof params.code === 'string' ? params.code : null
   const scalarParams = Object.entries(params)
-    .filter(([k, v]) => !['arch', 'code', 'compute'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
+    .filter(([k, v]) => k !== 'arch' && k !== 'code' && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
 
   return (
     <div style={{
@@ -1373,18 +1016,14 @@ function OperationRow({ op, index, en }: { op: Operation; index: number; en: boo
           ))}
         </div>
       )}
-      {arch && (
+      {(arch || code) && (
         <details style={{ marginTop: 8, marginLeft: 30 }}>
-          <summary style={{ fontSize: 11, fontWeight: 700, color: 'var(--th-muted)', cursor: 'pointer' }}>XML</summary>
-          <pre className="ui-code-block" style={{ marginTop: 0, fontSize: 11.5 }}>{arch}</pre>
+          <summary style={{ fontSize: 12, cursor: 'pointer', color: 'var(--th-muted)' }}>
+            {arch ? 'XML' : 'Code'}
+          </summary>
+          <pre className="ui-code-block" style={{ marginTop: 6, fontSize: 11.5 }}>{arch ?? code}</pre>
         </details>
       )}
-      {codeBlocks.map(([codeLabel, value]) => (
-        <details key={codeLabel} style={{ marginTop: 8, marginLeft: 30 }}>
-          <summary style={{ fontSize: 11, fontWeight: 700, color: 'var(--th-muted)', cursor: 'pointer' }}>{codeLabel}</summary>
-          <pre className="ui-code-block" style={{ marginTop: 0, fontSize: 11.5 }}>{value}</pre>
-        </details>
-      ))}
     </div>
   )
 }

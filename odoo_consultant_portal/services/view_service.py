@@ -30,6 +30,85 @@ async def _run(fn):
     return await loop.run_in_executor(None, fn)
 
 
+# Tags kept in the structural skeleton — enough for xpath authoring.
+_SKELETON_TAGS = {
+    "form", "tree", "list", "kanban", "search", "graph", "pivot",
+    "sheet", "header", "footer", "notebook", "page", "group",
+    "div", "separator", "button", "field", "filter", "label",
+    "templates", "t",
+}
+# Attributes preserved on skeleton elements (identification + visibility).
+_SKELETON_ATTRS = {
+    "name", "string", "class", "id", "invisible", "groups",
+    "attrs", "colspan", "col", "widget", "position",
+}
+
+
+def _build_skeleton(arch: str, max_depth: int = 6) -> str:
+    """Return a compact structural skeleton of the view XML.
+
+    Keeps only structural/identifying tags and attributes so the AI can craft
+    valid xpath expressions. Large repeated field blocks are collapsed after a
+    few entries to keep output manageable.
+    """
+    try:
+        root = ET.fromstring(arch)
+    except ET.ParseError:
+        return ""
+
+    def _walk(el, depth: int) -> Optional[ET.Element]:
+        if depth > max_depth:
+            return None
+        tag = el.tag
+        if tag not in _SKELETON_TAGS:
+            # Still recurse — a <div> may contain a <notebook>
+            container = ET.Element(tag)
+            for attr in _SKELETON_ATTRS:
+                if el.get(attr) is not None:
+                    container.set(attr, el.get(attr))
+            children_added = 0
+            for child in el:
+                c = _walk(child, depth + 1)
+                if c is not None:
+                    container.append(c)
+                    children_added += 1
+            if children_added or tag in ("form", "sheet", "notebook", "page", "group"):
+                return container
+            return None
+        node = ET.Element(tag)
+        for attr in _SKELETON_ATTRS:
+            if el.get(attr) is not None:
+                node.set(attr, el.get(attr))
+        # For pages/groups: always recurse. For field: leaf.
+        if tag == "field":
+            return node
+        children_added = 0
+        field_count_in_group = 0
+        for child in el:
+            # Collapse long runs of fields inside a group/page
+            if child.tag == "field" and tag in ("group", "page", "div"):
+                field_count_in_group += 1
+                if field_count_in_group <= 5:
+                    c = _walk(child, depth + 1)
+                    if c is not None:
+                        node.append(c)
+                        children_added += 1
+                elif field_count_in_group == 6:
+                    placeholder = ET.Comment(f" ... +more fields ... ")
+                    node.append(placeholder)
+                continue
+            c = _walk(child, depth + 1)
+            if c is not None:
+                node.append(c)
+                children_added += 1
+        return node
+
+    skeleton_root = _walk(root, 0)
+    if skeleton_root is None:
+        return ""
+    return ET.tostring(skeleton_root, encoding="unicode", short_empty_elements=True)
+
+
 def _summarize_arch(arch: str) -> dict[str, Any]:
     """Parse an assembled view arch into a structured summary.
 
@@ -126,6 +205,9 @@ async def inspect_odoo_view(
         arch = raw.get("arch") or ""
         if arch:
             arch_summary = _summarize_arch(arch)
+            skeleton = _build_skeleton(arch)
+            if skeleton:
+                arch_summary["structural_skeleton"] = skeleton
     else:
         view_meta = {"type": vt, "error": f"Vue de type '{vt}' indisponible pour ce modèle."}
 

@@ -103,7 +103,7 @@ export default function Sidebar({
   const sourceSyncRunning = sourceSyncSignals.running()
   const avatarIsImg = (up.avatar as string | undefined)?.startsWith('data:')
   const ContextIcon = contextOpen ? PanelRightClose : PanelRightOpen
-  const showContextToggle = location.pathname === '/assistant' || location.pathname === '/migration'
+  const showContextToggle = location.pathname === '/assistant' || location.pathname === '/migration' || location.pathname === '/creator'
 
   return (
     <header className="app-topbar">
@@ -133,7 +133,7 @@ export default function Sidebar({
               className={({ isActive }) => `topbar-link${isActive ? ' active' : ''}`}
             >
               <Icon size={16} aria-hidden />
-              {tr[l.labelKey as keyof typeof tr]}
+              <span className="topbar-link-label">{tr[l.labelKey as keyof typeof tr]}</span>
               {isSourcesLink && sourceSyncRunning.length > 0 && (
                 <span
                   className="stream-dot stream-dot--streaming"
@@ -156,7 +156,7 @@ export default function Sidebar({
               className={({ isActive }) => `topbar-link${isActive ? ' active' : ''}`}
             >
               <Icon size={16} aria-hidden />
-              {tr[l.labelKey as keyof typeof tr]}
+              <span className="topbar-link-label">{tr[l.labelKey as keyof typeof tr]}</span>
               {sig && (
                 <span
                   className={`stream-dot stream-dot--${sig}`}

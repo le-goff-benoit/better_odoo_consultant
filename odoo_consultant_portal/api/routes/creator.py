@@ -197,12 +197,10 @@ async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session
     company_name = _company_name(profile, company_id)
 
     async def generate():
-        # Announce the contextual assistance in play — Odoo version, local
-        # source code, client repo — so the UI mirrors Assistant / Migration.
-        yield _sse({"type": "context", "odoo_version": version,
-                    "has_sources": bool(source_path), "has_repo": bool(repo_path)})
         collected: list[str] = []
         try:
+            yield _sse({"type": "context", "odoo_version": version,
+                        "has_sources": bool(source_path), "has_repo": bool(repo_path)})
             async for evt in stream_chat(
                 body.provider, api_key, body.model, odoo, profile, messages,
                 source_path, context_md, version, None, company_name,
@@ -217,7 +215,25 @@ async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session
                     yield _sse(evt)
             analysis = parse_analysis("".join(collected))
             if analysis.get("ok"):
-                yield _sse({"type": "analysis", **analysis})
+                record = CreatorRequest(
+                    profile_id=profile.id,
+                    profile_name=profile.name,
+                    env_id=env.get("id"),
+                    env_label=env.get("name"),
+                    company_id=company_id,
+                    request_text=body.request,
+                    instructions=json.dumps(body.instructions, ensure_ascii=False),
+                    functional_analysis=analysis.get("functional_analysis") or "",
+                    technical_analysis=analysis.get("technical_analysis") or "",
+                    changeset=json.dumps(analysis.get("operations") or [], ensure_ascii=False),
+                    status="analyzed",
+                    provider=body.provider,
+                    model=body.model,
+                )
+                session.add(record)
+                await session.commit()
+                await session.refresh(record)
+                yield _sse({"type": "analysis", "request_id": record.id, **analysis})
             else:
                 yield _sse({"type": "error",
                             "msg": analysis.get("error") or "Analyse illisible."})
@@ -239,6 +255,7 @@ class Operation(BaseModel):
 
 
 class ApplyBody(BaseModel):
+    request_id: Optional[int] = None
     provider: Optional[str] = None
     model: Optional[str] = None
     profile_id: int
@@ -261,43 +278,64 @@ async def apply(body: ApplyBody, session: AsyncSession = Depends(get_session)):
         raise HTTPException(404, "Projet introuvable.")
     _eligible_or_403(profile)
 
-    odoo, _src, _repo, _ver, env, company_id = _build_runtime(
+    odoo, _src, _repo, version, env, company_id = _build_runtime(
         profile, body.env_id, body.company_id)
     operations = [op.model_dump() for op in body.operations]
+
+    async def save_terminal(status: str, result: dict):
+        record = await session.get(CreatorRequest, body.request_id) if body.request_id else None
+        if not record:
+            record = CreatorRequest(profile_id=profile.id)
+        record.profile_id = profile.id
+        record.profile_name = profile.name
+        record.env_id = env.get("id")
+        record.env_label = env.get("name")
+        record.company_id = company_id
+        record.request_text = body.request
+        record.instructions = json.dumps(body.instructions, ensure_ascii=False)
+        record.functional_analysis = body.functional_analysis
+        record.technical_analysis = body.technical_analysis
+        record.changeset = json.dumps(operations, ensure_ascii=False)
+        record.apply_result = json.dumps(result, ensure_ascii=False)
+        record.status = status
+        record.provider = body.provider
+        record.model = body.model
+        session.add(record)
+        await session.commit()
+        await session.refresh(record)
+        return record
 
     # A dry-run always runs first: if the preflight finds a problem, nothing
     # is written and the consultant gets the exact list of what failed.
     try:
-        preflight = await apply_changeset(odoo, operations, dry_run=True)
+        preflight = await apply_changeset(odoo, operations, dry_run=True,
+                                          version=version)
     except Exception as exc:
-        raise HTTPException(500, f"Échec du contrôle préalable : {exc}")
+        result = {
+            "ok": False,
+            "dry_run": True,
+            "operations": [{"index": 0, "type": "preflight", "summary": "Contrôle préalable", "status": "failed", "error": str(exc)}],
+            "rolled_back": False,
+            "rollback_errors": [],
+        }
+        record = await save_terminal("failed", result)
+        return {"ok": False, "stage": "preflight", "request_id": record.id, "preflight": result}
     if not preflight.get("ok"):
-        return {"ok": False, "stage": "preflight", "preflight": preflight}
+        record = await save_terminal("failed", preflight)
+        return {"ok": False, "stage": "preflight", "request_id": record.id, "preflight": preflight}
 
     try:
-        result = await apply_changeset(odoo, operations)
+        result = await apply_changeset(odoo, operations, version=version)
     except Exception as exc:
-        raise HTTPException(500, f"Échec de l'application : {exc}")
+        result = {
+            "ok": False,
+            "dry_run": False,
+            "operations": [{"index": 0, "type": "apply", "summary": "Application", "status": "failed", "error": str(exc)}],
+            "rolled_back": False,
+            "rollback_errors": [],
+        }
 
-    record = CreatorRequest(
-        profile_id=profile.id,
-        profile_name=profile.name,
-        env_id=env.get("id"),
-        env_label=env.get("name"),
-        company_id=company_id,
-        request_text=body.request,
-        instructions=json.dumps(body.instructions, ensure_ascii=False),
-        functional_analysis=body.functional_analysis,
-        technical_analysis=body.technical_analysis,
-        changeset=json.dumps(operations, ensure_ascii=False),
-        apply_result=json.dumps(result, ensure_ascii=False),
-        status="applied" if result.get("ok") else "failed",
-        provider=body.provider,
-        model=body.model,
-    )
-    session.add(record)
-    await session.commit()
-    await session.refresh(record)
+    record = await save_terminal("applied" if result.get("ok") else "failed", result)
 
     return {"ok": result.get("ok"), "stage": "applied",
             "request_id": record.id, "result": result, "preflight": preflight}
@@ -322,11 +360,12 @@ async def dry_run(body: DryRunBody, session: AsyncSession = Depends(get_session)
     if not profile:
         raise HTTPException(404, "Projet introuvable.")
     _eligible_or_403(profile)
-    odoo, _src, _repo, _ver, _env, _cid = _build_runtime(
+    odoo, _src, _repo, version, _env, _cid = _build_runtime(
         profile, body.env_id, body.company_id)
     try:
         return await apply_changeset(
-            odoo, [op.model_dump() for op in body.operations], dry_run=True)
+            odoo, [op.model_dump() for op in body.operations], dry_run=True,
+            version=version)
     except Exception as exc:
         raise HTTPException(500, f"Échec du contrôle préalable : {exc}")
 
@@ -334,6 +373,7 @@ async def dry_run(body: DryRunBody, session: AsyncSession = Depends(get_session)
 # ── Reject ───────────────────────────────────────────────────────
 
 class RejectBody(BaseModel):
+    request_id: Optional[int] = None
     profile_id: int
     env_id: Optional[str] = None
     company_id: Optional[int] = None
@@ -348,18 +388,19 @@ class RejectBody(BaseModel):
 async def reject(body: RejectBody, session: AsyncSession = Depends(get_session)):
     """Log a rejected proposal — closes the request without touching Odoo."""
     profile = await session.get(Profile, body.profile_id)
-    record = CreatorRequest(
-        profile_id=body.profile_id,
-        profile_name=profile.name if profile else None,
-        env_id=body.env_id,
-        company_id=body.company_id,
-        request_text=body.request,
-        instructions=json.dumps(body.instructions, ensure_ascii=False),
-        functional_analysis=body.functional_analysis,
-        technical_analysis=body.technical_analysis,
-        changeset=json.dumps([op.model_dump() for op in body.operations], ensure_ascii=False),
-        status="rejected",
-    )
+    record = await session.get(CreatorRequest, body.request_id) if body.request_id else None
+    if not record:
+        record = CreatorRequest(profile_id=body.profile_id)
+    record.profile_id = body.profile_id
+    record.profile_name = profile.name if profile else None
+    record.env_id = body.env_id
+    record.company_id = body.company_id
+    record.request_text = body.request
+    record.instructions = json.dumps(body.instructions, ensure_ascii=False)
+    record.functional_analysis = body.functional_analysis
+    record.technical_analysis = body.technical_analysis
+    record.changeset = json.dumps([op.model_dump() for op in body.operations], ensure_ascii=False)
+    record.status = "rejected"
     session.add(record)
     await session.commit()
     await session.refresh(record)
@@ -429,20 +470,52 @@ async def document(body: DocumentBody, session: AsyncSession = Depends(get_sessi
 
 # ── History ──────────────────────────────────────────────────────
 
+def _json_or(value, fallback):
+    if not value:
+        return fallback
+    try:
+        return json.loads(value)
+    except Exception:
+        return fallback
+
+
+def _history_row(r: CreatorRequest, detailed: bool = False):
+    row = {
+        "id": r.id,
+        "profile_id": r.profile_id,
+        "profile_name": r.profile_name,
+        "env_id": r.env_id,
+        "env_label": r.env_label,
+        "company_id": r.company_id,
+        "request_text": r.request_text,
+        "status": r.status,
+        "provider": r.provider,
+        "model": r.model,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+        "has_documentation": bool(r.documentation),
+    }
+    if detailed:
+        row.update({
+            "instructions": _json_or(r.instructions, []),
+            "functional_analysis": r.functional_analysis or "",
+            "technical_analysis": r.technical_analysis or "",
+            "changeset": _json_or(r.changeset, []),
+            "apply_result": _json_or(r.apply_result, None),
+            "documentation": r.documentation or "",
+        })
+    return row
+
 @router.get("/history")
 async def history(limit: int = 50, session: AsyncSession = Depends(get_session)):
     result = await session.execute(
         select(CreatorRequest).order_by(CreatorRequest.created_at.desc()).limit(limit))
     rows = result.scalars().all()
-    return [
-        {
-            "id": r.id,
-            "profile_name": r.profile_name,
-            "env_label": r.env_label,
-            "request_text": r.request_text,
-            "status": r.status,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-            "has_documentation": bool(r.documentation),
-        }
-        for r in rows
-    ]
+    return [_history_row(r) for r in rows]
+
+
+@router.get("/history/{request_id}")
+async def history_detail(request_id: int, session: AsyncSession = Depends(get_session)):
+    record = await session.get(CreatorRequest, request_id)
+    if not record:
+        raise HTTPException(404, "Demande Creator introuvable.")
+    return _history_row(record, detailed=True)

@@ -85,6 +85,7 @@ export const applyCreatorChangeset = (data: object) => api.post('/creator/apply'
 export const rejectCreatorRequest = (data: object) => api.post('/creator/reject', data)
 export const documentCreatorChange = (data: object) => api.post('/creator/document', data)
 export const getCreatorHistory = (limit = 50) => api.get(`/creator/history?limit=${limit}`)
+export const getCreatorHistoryEntry = (id: number) => api.get(`/creator/history/${id}`)
 
 // User profile / settings
 export const getUserProfile = () => api.get('/settings/user-profile')

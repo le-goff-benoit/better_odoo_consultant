@@ -724,12 +724,7 @@ textarea:focus-visible {
 }
 
 .topbar-nav-separator {
-  display: block;
-  width: 20px;
-  flex-shrink: 0;
-  align-self: stretch;
-  border-left: 1px solid var(--boa-topbar-border);
-  margin: 8px 0;
+  display: none;
 }
 
 .topbar-link,
@@ -740,7 +735,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 8px 12px;
   border: none;
   border-right: 1px solid var(--boa-topbar-border);
   border-radius: 0;
@@ -754,7 +749,21 @@ textarea:focus-visible {
   text-decoration: none;
   white-space: nowrap;
   position: relative;
-  transition: background .14s, color .14s, box-shadow .14s;
+  transition: background .14s, color .14s, box-shadow .14s, padding .14s;
+}
+
+.topbar-link-label {
+  display: inline;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width .25s ease, opacity .2s ease;
+}
+.topbar-link:hover .topbar-link-label,
+.topbar-link:focus-within .topbar-link-label,
+.topbar-link.active .topbar-link-label {
+  max-width: 160px;
+  opacity: 1;
 }
 
 .topbar-link:hover,
@@ -1239,10 +1248,11 @@ textarea:focus-visible {
   border-radius: var(--radius-lg);
   box-shadow: var(--th-shadow);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
-.page-card-body { padding: var(--space-6); }
-.page-card-body-compact { padding: var(--space-5); }
+.page-card-body { padding: var(--space-6); min-width: 0; overflow-wrap: anywhere; }
+.page-card-body-compact { padding: var(--space-5); min-width: 0; overflow-wrap: anywhere; }
 
 .ui-section-title {
   margin: 0 0 var(--space-4);
@@ -2569,7 +2579,7 @@ textarea:focus-visible {
 .tool-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 22px;
+  gap: 12px 22px;
   align-items: flex-start;
 }
 
@@ -3488,4 +3498,36 @@ input::placeholder, textarea::placeholder {
   border-radius: 8px;
   color: var(--th-text, #1a1a1a);
   user-select: all;
+}
+
+/* Creator — workspace layout (main column + context panel) */
+.creator-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px);
+  min-height: 640px;
+  width: 100%;
+  max-width: 100%;
+}
+.creator-content-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+}
+.creator-main-column {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 2px 6px 10px 2px;
+}
+@media (max-width: 1100px) {
+  .creator-shell { height: auto; min-height: calc(100vh - 56px); }
+  .creator-content-row { flex-direction: column; overflow: visible; }
+  .creator-main-column { overflow: visible; }
 }
