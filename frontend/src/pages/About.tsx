@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.32.0',
+    version: '0.32.1',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Couleurs des blocs de code et des tableaux de données centralisées en tokens de thème (--code-*) — fin des codes hexadécimaux dupliqués dans les pages',
+      'Indicateur de streaming et alerte d\'expiration de clé passés sur des tokens sémantiques au lieu de couleurs en dur',
+      'Animation d\'entrée échelonnée sur les pages de contenu (révélation « boot » dans l\'esprit terminal) — désactivée si le système demande des mouvements réduits',
+    ],
+  },
+  {
+    version: '0.32.0',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Nouvel outil inspect_odoo_view : inspecte une vue de l\'instance connectée — types de vues disponibles (form, list, kanban, activity…), arch assemblée après héritage (standard + modules + Studio + custom), configuration de chaque champ dans la vue (readonly, required, invisible, domain) et chemin d\'accès menu → action',
       'Nouvel outil inspect_odoo_report : inspecte les rapports PDF / QWeb — action de rapport, template QWeb et son arbre d\'héritage, format papier et mise en page document de la société',

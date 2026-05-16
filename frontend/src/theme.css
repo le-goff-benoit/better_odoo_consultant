@@ -100,6 +100,20 @@
 
   /* Neo-retro border width — used by .ui-card, .ui-button, .ui-input, .neo-* */
   --neo-border-w: 1px;
+
+  /* Code blocks & raw-data tables — always dark (Catppuccin Mocha),
+     theme-independent so code stays legible in light / sepia themes. */
+  --code-bg: #1e1e2e;
+  --code-bg-alt: #1a1a2e;
+  --code-fg: #cdd6f4;
+  --code-accent: #89b4fa;
+  --code-border: #45475a;
+  --code-border-soft: #313244;
+  --code-ok: #a6e3a1;
+  --code-err: #f38ba8;
+
+  /* Semantic accent — "response streaming" indicator. */
+  --th-streaming-fg: #f97316;
 }
 
 [data-theme="dark"] {
@@ -1094,6 +1108,24 @@ textarea:focus-visible {
 
 .page-stack {
   width: 100%;
+}
+
+/* Staggered entry reveal — gives static content pages a composed "boot"
+   feel on navigation, in keeping with the terminal/lab aesthetic. */
+@keyframes pageReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-stack > * {
+  animation: pageReveal .34s cubic-bezier(.2, .6, .2, 1) both;
+}
+.page-stack > *:nth-child(2) { animation-delay: .05s; }
+.page-stack > *:nth-child(3) { animation-delay: .10s; }
+.page-stack > *:nth-child(4) { animation-delay: .15s; }
+.page-stack > *:nth-child(5) { animation-delay: .20s; }
+.page-stack > *:nth-child(n+6) { animation-delay: .24s; }
+@media (prefers-reduced-motion: reduce) {
+  .page-stack > * { animation: none; }
 }
 
 .page-section-card {

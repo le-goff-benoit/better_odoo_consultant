@@ -917,7 +917,7 @@ function ToolCallGroup({ events }: { events: AiEvent[] }) {
 
       {open && results.map((r, i) => r.records && r.records.length > 0 && (
         <div key={i} style={{
-          background: '#1e1e2e', borderRadius: t.radius,
+          background: 'var(--code-bg)', borderRadius: t.radius,
           padding: '10px 12px', overflowX: 'auto', maxHeight: 220, overflowY: 'auto', marginTop: 4,
         }}>
           <RecordsTable records={r.records} />
@@ -936,15 +936,15 @@ function RecordsTable({ records }: { records: Record<string, unknown>[] }) {
   if (!records.length) return null
   const cols = Object.keys(records[0]).slice(0, 8)
   return (
-    <table style={{ borderCollapse: 'collapse', fontSize: 11, color: '#cdd6f4', minWidth: '100%' }}>
+    <table style={{ borderCollapse: 'collapse', fontSize: 11, color: 'var(--code-fg)', minWidth: '100%' }}>
       <thead>
-        <tr>{cols.map(c => <th key={c} style={{ padding: '3px 10px', textAlign: 'left', borderBottom: '1px solid #45475a', color: '#89b4fa', fontWeight: 600 }}>{c}</th>)}</tr>
+        <tr>{cols.map(c => <th key={c} style={{ padding: '3px 10px', textAlign: 'left', borderBottom: '1px solid var(--code-border)', color: 'var(--code-accent)', fontWeight: 600 }}>{c}</th>)}</tr>
       </thead>
       <tbody>
         {records.map((r, i) => (
-          <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#1a1a2e' }}>
+          <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--code-bg-alt)' }}>
             {cols.map(c => (
-              <td key={c} style={{ padding: '3px 10px', borderBottom: '1px solid #313244', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <td key={c} style={{ padding: '3px 10px', borderBottom: '1px solid var(--code-border-soft)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {String(r[c] ?? '')}
               </td>
             ))}
@@ -1034,8 +1034,8 @@ function Markdown({ text }: { text: string }) {
       i++
       while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++ }
       result.push(
-        <pre key={i} style={{ background: '#1e1e2e', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
-          <code style={{ fontFamily: 'monospace', fontSize: 12, color: '#cdd6f4' }}>{codeLines.join('\n')}</code>
+        <pre key={i} style={{ background: 'var(--code-bg)', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
+          <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{codeLines.join('\n')}</code>
         </pre>
       )
       i++; continue
@@ -1597,7 +1597,7 @@ export default function Migration() {
         const sig = streamingSignals.getAll().find(([k]) => k === migKey)?.[1]
         if (!sig) return null
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: sig.status === 'streaming' ? '#f97316' : 'var(--th-success-fg, #6dcf85)', fontWeight: 600 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: sig.status === 'streaming' ? 'var(--th-streaming-fg)' : 'var(--th-success-fg, #6dcf85)', fontWeight: 600 }}>
             <span className={`stream-dot stream-dot--${sig.status}`} />
             {sig.status === 'streaming'
               ? (lang === 'fr' ? 'Réponse en cours…' : 'Generating response…')

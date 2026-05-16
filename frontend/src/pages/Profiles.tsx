@@ -1047,7 +1047,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
     const now = new Date()
     const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     if (diffDays <= 0) return { label: '⚠ Clé expirée', color: t.danger }
-    if (diffDays <= 30) return { label: `⚠ Expire dans ${diffDays}j`, color: '#F59E0B' }
+    if (diffDays <= 30) return { label: `⚠ Expire dans ${diffDays}j`, color: t.warning }
     return null
   })()
   const canRunEnvDiagnose = Boolean(

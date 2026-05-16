@@ -684,13 +684,13 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
       </div>
       {showCommits && info.recent_commits && (
         <div style={{
-          marginTop: 8, background: '#1e1e2e', borderRadius: t.radiusSm,
+          marginTop: 8, background: 'var(--code-bg)', borderRadius: t.radiusSm,
           padding: '8px 10px', maxHeight: 180, overflowY: 'auto',
         }}>
           {info.recent_commits.map(c => (
             <div key={c.sha} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
-              <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#89b4fa', flexShrink: 0, marginTop: 1 }}>{c.sha}</span>
-              <span style={{ fontSize: 11, color: '#cdd6f4', flex: 1, lineHeight: 1.4 }}>{c.message}</span>
+              <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--code-accent)', flexShrink: 0, marginTop: 1 }}>{c.sha}</span>
+              <span style={{ fontSize: 11, color: 'var(--code-fg)', flex: 1, lineHeight: 1.4 }}>{c.message}</span>
               <span style={{ fontSize: 10, color: '#585b70', flexShrink: 0 }}>{relativeDate(c.date, lang)}</span>
             </div>
           ))}
@@ -707,14 +707,14 @@ function LogBox({ logs }: { logs: string[] }) {
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight }, [logs])
   return (
     <div ref={ref} style={{
-      background: '#1e1e2e', borderRadius: t.radius, padding: '10px 12px',
+      background: 'var(--code-bg)', borderRadius: t.radius, padding: '10px 12px',
       maxHeight: 160, overflowY: 'auto', marginBottom: 10,
       fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
     }}>
       {logs.map((l, i) => {
         const isErr = l.startsWith('✗') || l.toLowerCase().includes('error') || l.toLowerCase().includes('fatal')
         return (
-          <div key={i} style={{ color: isErr ? '#f38ba8' : l.startsWith('✓') ? '#a6e3a1' : '#cdd6f4' }}>{l}</div>
+          <div key={i} style={{ color: isErr ? 'var(--code-err)' : l.startsWith('✓') ? 'var(--code-ok)' : 'var(--code-fg)' }}>{l}</div>
         )
       })}
     </div>
