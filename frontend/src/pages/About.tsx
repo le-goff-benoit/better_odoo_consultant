@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.5',
+    version: '0.35.6',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Page Sources : ajout d\'un bouton global « Mettre à jour les sources » à côté de « Version intermédiaire »',
+      'Le bouton relance la synchronisation des versions déjà installées, en incluant Enterprise quand les sources Enterprise existent',
+    ],
+  },
+  {
+    version: '0.35.5',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Migration : le sélecteur Source / Cible se replie au scroll en barre compacte pour libérer la zone de réponse',
       'Le repli reste possible pendant le streaming, sans réouvrir automatiquement les grandes cartes pendant la génération',

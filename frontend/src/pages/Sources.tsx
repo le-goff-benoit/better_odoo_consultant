@@ -71,6 +71,8 @@ const sourcesCopy = {
     add: 'Ajouter',
     cancel: 'Annuler',
     intermediateVersion: 'Version intermédiaire',
+    updateAllSources: 'Mettre à jour les sources',
+    updatingSources: 'Mise à jour…',
     customPlaceholder: 'ex: 19.1 ou 18.2',
     sshCheckingTitle: 'Vérification de la clé SSH…',
     sshCheckingDesc: 'Connexion à GitHub en cours',
@@ -123,6 +125,8 @@ const sourcesCopy = {
     add: 'Add',
     cancel: 'Cancel',
     intermediateVersion: 'Intermediate version',
+    updateAllSources: 'Update sources',
+    updatingSources: 'Updating…',
     customPlaceholder: 'e.g. 19.1 or 18.2',
     sshCheckingTitle: 'Checking SSH key…',
     sshCheckingDesc: 'Connecting to GitHub',
@@ -187,6 +191,7 @@ export default function Sources() {
   const [repoOverrides,  setRepoOverrides]  = useState<Record<string, RepoInfo>>({})
   const [updatesLoading, setUpdatesLoading] = useState<Record<string, boolean>>({})
   const [extraStatus,    setExtraStatus]    = useState<Record<string, RepoInfo>>({})
+  const [updatingAll,    setUpdatingAll]    = useState(false)
   const abortRefs = useRef<Record<string, AbortController>>({})
 
   // SSH state
@@ -272,6 +277,11 @@ export default function Sources() {
       return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
     })
   }, [customVersions])
+  const installedVersionsToUpdate = useMemo(() => (
+    allVersionDefs
+      .filter(({ version }) => allVersionStatus[version]?.installed || allVersionStatus[`${version}-enterprise`]?.installed)
+      .map(({ version }) => version)
+  ), [allVersionDefs, allVersionStatus])
 
   const genKey = useMutation({
     mutationFn: generateSshKey,
@@ -324,9 +334,9 @@ export default function Sources() {
     }
   }
 
-  const startSync = async (version: string) => {
+  const startSync = async (version: string, includeEnterprise = enterprise[version] ?? false) => {
     const path = customPaths[version] || defaultPath(version)
-    const ent  = enterprise[version] ?? false
+    const ent  = includeEnterprise
 
     abortRefs.current[version]?.abort()
     const ctrl = new AbortController()
@@ -382,13 +392,27 @@ export default function Sources() {
     }
   }
 
+  const updateAllInstalledSources = async () => {
+    if (updatingAll || installedVersionsToUpdate.length === 0) return
+    setUpdatingAll(true)
+    try {
+      for (const version of installedVersionsToUpdate) {
+        const entInstalled = allVersionStatus[`${version}-enterprise`]?.installed === true
+        await startSync(version, entInstalled || enterprise[version] === true)
+      }
+      qc.invalidateQueries({ queryKey: ['sources-status'] })
+    } finally {
+      setUpdatingAll(false)
+    }
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
         title={c.title}
         description={c.description}
         action={showAddForm ? (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="sources-header-actions">
             <input
               value={customInput}
               onChange={e => setCustomInput(e.target.value)}
@@ -402,9 +426,22 @@ export default function Sources() {
             <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setCustomInput('') }}>{c.cancel}</button>
           </div>
         ) : (
-          <button className="btn btn-secondary" onClick={() => setShowAddForm(true)}>
-            <Plus size={15} /> {c.intermediateVersion}
-          </button>
+          <div className="sources-header-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={updateAllInstalledSources}
+              disabled={updatingAll || installedVersionsToUpdate.length === 0}
+              title={c.updateAllSources}
+            >
+              {updatingAll
+                ? <Loader2 size={15} style={{ animation: 'spin .9s linear infinite' }} />
+                : <RefreshCw size={15} />}
+              {updatingAll ? c.updatingSources : c.updateAllSources}
+            </button>
+            <button className="btn btn-secondary" onClick={() => setShowAddForm(true)}>
+              <Plus size={15} /> {c.intermediateVersion}
+            </button>
+          </div>
         )}
       />
 

@@ -1177,6 +1177,14 @@ textarea:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 }
 
+.sources-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .page-grid-profiles {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   align-items: start;
