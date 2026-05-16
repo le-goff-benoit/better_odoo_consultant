@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, Globe2, History, Lock, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, Globe2, History, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -29,6 +29,8 @@ import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
 import { countryFlag } from '../utils/countryFlag'
 import { streamingSignals } from '../utils/streamingSignals'
 import { getToolMeta } from '../utils/toolMeta'
+import ResponseModal from '../components/ResponseModal'
+import SelectionAskMore from '../components/SelectionAskMore'
 
 // Module-level buffer: message arrays survive component unmount so streams
 // that finish after navigation are captured and shown on remount.
@@ -262,6 +264,9 @@ const assistantCopy = {
     tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)',
     copied: 'Copié !',
     copy: 'Copier',
+    expand: 'Agrandir',
+    expandTitle: 'Agrandir la réponse en plein écran',
+    askMore: 'Plus de détail',
   },
   en: {
     title: 'AI Assistant',
@@ -311,6 +316,9 @@ const assistantCopy = {
     tokens: 'Tokens used (input ↑ + output ↓)',
     copied: 'Copied!',
     copy: 'Copy',
+    expand: 'Expand',
+    expandTitle: 'Expand the answer to fullscreen',
+    askMore: 'More detail',
   },
 }
 
@@ -813,6 +821,16 @@ export default function Assistant() {
     await sendWithText(text, undefined, attached)
   }
 
+  // Selection → "more detail": build a follow-up prompt on the selected
+  // excerpt and submit it automatically.
+  const askMoreOnSelection = (selected: string) => {
+    if (streaming) return
+    const prompt = lang === 'fr'
+      ? `Donne-moi plus de détail sur ce point précis de ta réponse précédente :\n\n« ${selected} »`
+      : `Give me more detail on this specific point from your previous answer:\n\n"${selected}"`
+    sendWithText(prompt)
+  }
+
   const appendEvent = (msgId: string, evt: AiEvent) => {
     setMessages(prev => prev.map(m =>
       m.id === msgId ? { ...m, events: [...(m.events ?? []), evt] } : m
@@ -882,6 +900,13 @@ export default function Assistant() {
         title={c.title}
         description={c.description}
         action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}><Settings size={15} /> {c.settings}</Link>}
+      />
+
+      <SelectionAskMore
+        containerRef={messageListRef}
+        onAsk={askMoreOnSelection}
+        label={c.askMore}
+        disabled={streaming}
       />
 
       {/* ── Context bar ── */}
@@ -1651,6 +1676,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
     ? (() => { const s = (timestamp - startTime) / 1000; return s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` })()
     : null
   const [copied, setCopied] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   function copyText() {
     if (!textEvt?.content) return
@@ -1682,22 +1708,43 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
             padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
           }}>
-            <button
-              onClick={copyText}
-              title={c.copyTitle}
-              style={{
-                position: 'absolute', top: 8, right: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 26, height: 26, border: `1px solid ${t.border}`,
-                borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                color: copied ? t.success : t.muted, opacity: 0.8,
-                transition: 'opacity .15s, color .15s',
-              }}
-            >
-              {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
-            </button>
+            <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                title={c.expandTitle}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, border: `1px solid ${t.border}`,
+                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                  color: t.muted, opacity: 0.8, transition: 'opacity .15s, color .15s',
+                }}
+              >
+                <Maximize2 size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={copyText}
+                title={c.copyTitle}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, border: `1px solid ${t.border}`,
+                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                  color: copied ? t.success : t.muted, opacity: 0.8,
+                  transition: 'opacity .15s, color .15s',
+                }}
+              >
+                {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
+              </button>
+            </div>
             <Markdown text={textEvt.content} />
           </div>
+        )}
+
+        {expanded && textEvt?.content && (
+          <ResponseModal onClose={() => setExpanded(false)}>
+            <Markdown text={textEvt.content} />
+          </ResponseModal>
         )}
 
         {errorEvt && (
@@ -1742,20 +1789,36 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             {elapsed && <span title={lang === 'fr' ? 'Temps de réponse' : 'Response time'} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Timer size={10} />{elapsed}</span>}
             {tokens && <span title={c.tokens}>{tokens}</span>}
             {textEvt?.content && (
-              <button
-                onClick={copyText}
-                title={c.copyTitle}
-                style={{
-                  marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
-                  border: `1px solid ${t.border}`, borderRadius: t.radius,
-                  background: 'transparent', cursor: 'pointer', padding: '2px 7px',
-                  color: copied ? t.success : t.muted, fontSize: 10, fontWeight: 600,
-                  transition: 'color .15s',
-                }}
-              >
-                {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
-                {copied ? c.copied : c.copy}
-              </button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(true)}
+                  title={c.expandTitle}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    border: `1px solid ${t.border}`, borderRadius: t.radius,
+                    background: 'transparent', cursor: 'pointer', padding: '2px 7px',
+                    color: t.muted, fontSize: 10, fontWeight: 600, transition: 'color .15s',
+                  }}
+                >
+                  <Maximize2 size={11} /> {c.expand}
+                </button>
+                <button
+                  type="button"
+                  onClick={copyText}
+                  title={c.copyTitle}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    border: `1px solid ${t.border}`, borderRadius: t.radius,
+                    background: 'transparent', cursor: 'pointer', padding: '2px 7px',
+                    color: copied ? t.success : t.muted, fontSize: 10, fontWeight: 600,
+                    transition: 'color .15s',
+                  }}
+                >
+                  {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
+                  {copied ? c.copied : c.copy}
+                </button>
+              </div>
             )}
           </div>
         )}

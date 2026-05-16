@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.33.0',
+    version: '0.34.0',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Réponses IA agrandissables : bouton Agrandir ajouté à côté des boutons Copier en haut et en bas des réponses Assistant IA et Migration',
+      'Modal de lecture presque plein écran pour consulter confortablement les réponses longues, avec fermeture au clic extérieur ou Échap',
+      'Sélection de texte dans une réponse : action flottante « Plus de détail » qui crée et soumet automatiquement un prompt ciblé sur l\'extrait sélectionné',
+      'Horloge date/heure déplacée dans la topbar et retirée des en-têtes de pages pour libérer de l\'espace vertical partout dans l\'application',
+    ],
+  },
+  {
+    version: '0.33.0',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Bouton « Résumé 30 j » corrigé : il n\'analysait qu\'environ 1 commit Community à cause du clone superficiel des sources. L\'historique est désormais approfondi à la demande (git fetch --shallow-since) et le résumé couvre Community ET Enterprise, avec les fichiers modifiés par chaque commit',
       'Nouvel endpoint /sources/commits-since — commits des N derniers jours avec leurs fichiers modifiés',

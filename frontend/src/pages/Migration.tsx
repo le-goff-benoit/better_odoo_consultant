@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, ArrowUp, ChevronDown, Check, CheckCheck, Copy, FileText, Paperclip, Square, Timer, TriangleAlert, X } from 'lucide-react'
+import { ArrowRightLeft, ArrowUp, ChevronDown, Check, CheckCheck, Copy, FileText, Maximize2, Paperclip, Square, Timer, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
+import ResponseModal from '../components/ResponseModal'
+import SelectionAskMore from '../components/SelectionAskMore'
 import { useWorkspaceContext } from '../components/Layout'
 import { ODOO_APPS } from '../constants/odooApps'
 import { PROVIDERS } from '../constants/providers'
@@ -706,8 +708,8 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
 }) {
   const lang = useUiLanguage()
   const c = lang === 'en'
-    ? { copyTitle: 'Copy answer', analyzing: 'Analyzing results and drafting the answer…', thinking: 'Analyzing…', tokens: 'Tokens used (input ↑ + output ↓)', copied: 'Copied!', copy: 'Copy', responseTime: 'Response time' }
-    : { copyTitle: 'Copier la réponse', analyzing: 'Analyse des résultats et rédaction de la réponse…', thinking: 'Analyse en cours…', tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)', copied: 'Copié !', copy: 'Copier', responseTime: 'Temps de réponse' }
+    ? { copyTitle: 'Copy answer', analyzing: 'Analyzing results and drafting the answer…', thinking: 'Analyzing…', tokens: 'Tokens used (input ↑ + output ↓)', copied: 'Copied!', copy: 'Copy', responseTime: 'Response time', expand: 'Expand', expandTitle: 'Expand the answer to fullscreen' }
+    : { copyTitle: 'Copier la réponse', analyzing: 'Analyse des résultats et rédaction de la réponse…', thinking: 'Analyse en cours…', tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)', copied: 'Copié !', copy: 'Copier', responseTime: 'Temps de réponse', expand: 'Agrandir', expandTitle: 'Agrandir la réponse en plein écran' }
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt    = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
@@ -718,6 +720,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
     ? (() => { const s = (timestamp - startTime) / 1000; return s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` })()
     : null
   const [copied, setCopied] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   function copyText() {
     if (!textEvt?.content) return
@@ -749,22 +752,43 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
             padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
           }}>
-            <button
-              onClick={copyText}
-              title={c.copyTitle}
-              style={{
-                position: 'absolute', top: 8, right: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 26, height: 26, border: `1px solid ${t.border}`,
-                borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                color: copied ? t.success : t.muted, opacity: 0.8,
-                transition: 'opacity .15s, color .15s',
-              }}
-            >
-              {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
-            </button>
+            <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                title={c.expandTitle}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, border: `1px solid ${t.border}`,
+                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                  color: t.muted, opacity: 0.8, transition: 'opacity .15s, color .15s',
+                }}
+              >
+                <Maximize2 size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={copyText}
+                title={c.copyTitle}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, border: `1px solid ${t.border}`,
+                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                  color: copied ? t.success : t.muted, opacity: 0.8,
+                  transition: 'opacity .15s, color .15s',
+                }}
+              >
+                {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
+              </button>
+            </div>
             <Markdown text={textEvt.content} />
           </div>
+        )}
+
+        {expanded && textEvt?.content && (
+          <ResponseModal onClose={() => setExpanded(false)}>
+            <Markdown text={textEvt.content} />
+          </ResponseModal>
         )}
 
         {errorEvt && (
@@ -797,20 +821,36 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             {elapsed && <span title={c.responseTime} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Timer size={10} />{elapsed}</span>}
             {tokens && <span title={c.tokens}>{tokens}</span>}
             {textEvt?.content && (
-              <button
-                onClick={copyText}
-                title={c.copyTitle}
-                style={{
-                  marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
-                  border: `1px solid ${t.border}`, borderRadius: t.radius,
-                  background: 'transparent', cursor: 'pointer', padding: '2px 7px',
-                  color: copied ? t.success : t.muted, fontSize: 10, fontWeight: 600,
-                  transition: 'color .15s',
-                }}
-              >
-                {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
-                {copied ? c.copied : c.copy}
-              </button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(true)}
+                  title={c.expandTitle}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    border: `1px solid ${t.border}`, borderRadius: t.radius,
+                    background: 'transparent', cursor: 'pointer', padding: '2px 7px',
+                    color: t.muted, fontSize: 10, fontWeight: 600, transition: 'color .15s',
+                  }}
+                >
+                  <Maximize2 size={11} /> {c.expand}
+                </button>
+                <button
+                  type="button"
+                  onClick={copyText}
+                  title={c.copyTitle}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    border: `1px solid ${t.border}`, borderRadius: t.radius,
+                    background: 'transparent', cursor: 'pointer', padding: '2px 7px',
+                    color: copied ? t.success : t.muted, fontSize: 10, fontWeight: 600,
+                    transition: 'color .15s',
+                  }}
+                >
+                  {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
+                  {copied ? c.copied : c.copy}
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -1536,6 +1576,15 @@ export default function Migration() {
     if (text || readyAttachments.length > 0) sendWithText(text, readyAttachments)
   }
 
+  // Selection → "more detail": follow-up prompt on the selected excerpt.
+  const askMoreOnSelection = (selected: string) => {
+    if (streaming) return
+    const prompt = lang === 'fr'
+      ? `Donne-moi plus de détail sur ce point précis de ta réponse précédente :\n\n« ${selected} »`
+      : `Give me more detail on this specific point from your previous answer:\n\n"${selected}"`
+    sendWithText(prompt)
+  }
+
   const showSuggestions = messages.length === 0 && ready && !input.trim()
   const isFunctionalProfile = perspective === 'support' || perspective === 'business_analyst'
   const suggestionList = lang === 'en'
@@ -1546,6 +1595,12 @@ export default function Migration() {
     <div className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`}>
       <PageHeader title={c.title} description={c.description} />
 
+      <SelectionAskMore
+        containerRef={messageListRef}
+        onAsk={askMoreOnSelection}
+        label={lang === 'fr' ? 'Plus de détail' : 'More detail'}
+        disabled={streaming}
+      />
 
       <div className="migration-content-row">
         <div className="migration-main-column">

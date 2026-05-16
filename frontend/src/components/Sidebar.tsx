@@ -48,6 +48,25 @@ const secondaryLinks = [
   { to: '/about',     labelKey: 'about',     icon: Info },
 ]
 
+function TopbarClock() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const date = now.toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
+  const time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+  return (
+    <div className="topbar-clock" title={`${date} ${time}`} aria-label={`${date} ${time}`}>
+      <span className="topbar-clock-date">{date}</span>
+      <span className="topbar-clock-time">{time}</span>
+    </div>
+  )
+}
+
 export default function Sidebar({
   contextOpen,
   onToggleContext,
@@ -132,6 +151,8 @@ export default function Sidebar({
       </nav>
 
       <div className="topbar-spacer" />
+
+      <TopbarClock />
 
       <nav className="topbar-secondary" aria-label="Navigation secondaire">
         {secondaryLinks.map(l => {
