@@ -5,13 +5,17 @@ ai_service.py and context_service.py to avoid drift between the two files.
 """
 
 # ── Markdown context budget ───────────────────────────────────────
-# Maximum characters assembled by load_context_for_prompt() (≈ 9k tokens).
-CONTEXT_BUDGET_CHARS: int = 36_000
+# Maximum characters assembled by load_context_for_prompt() (≈ 8k tokens).
+# Kept deliberately tight: research on "context rot" shows LLM accuracy
+# degrades as input grows (and mid-context info is read least reliably), so
+# the routed context targets the smallest high-signal set rather than the
+# largest that fits.
+CONTEXT_BUDGET_CHARS: int = 32_000
 
 # Hard cap applied by _trim_context() before injection into the system prompt.
 # The extra 4k chars give room for the system-prompt scaffolding added around
 # the context block (headers, separators, project context overflow).
-MAX_CONTEXT_CHARS: int = 40_000
+MAX_CONTEXT_CHARS: int = 36_000
 
 # ── Project context ───────────────────────────────────────────────
 # Free-text per-project notes field — trimmed before injection.

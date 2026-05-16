@@ -370,20 +370,26 @@ def load_context_for_prompt(
             sections.append((titles["version"].format(version=target_version), read_file(f"odoo-{target_version}.md", lang)))
         except FileNotFoundError:
             pass
+    _migration_title = None
     if migration:
         try:
-            sections.append((titles["migration"], read_file("migration.md", lang)))
+            _migration_content = read_file("migration.md", lang)
+            _migration_title = titles["migration"]
+            sections.append((_migration_title, _migration_content))
         except FileNotFoundError:
             pass
     if not sections and not blocks:
         return ""
-    # Skills and role profile are core — injected first so consultant rules and
-    # role guidance are never pushed out of the budget by lower-priority content.
+    # Skills, role profile and (in migration mode) the migration methodology are
+    # core — injected first so they are never pushed out of the budget by
+    # lower-priority content.
     core: set[str] = set()
     if _skills_title:
         core.add(_skills_title)
     if _profile_title:
         core.add(_profile_title)
+    if _migration_title:
+        core.add(_migration_title)
     # Priority blocks consume the budget first; the routed sections fit in what
     # remains, so the assembled context never overflows MAX_CONTEXT_CHARS.
     separator = "\n\n---\n\n"

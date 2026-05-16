@@ -660,6 +660,58 @@ def test_build_system_migration_returns_tuple_with_target_path_in_stable():
     assert "ARCHITECTE" in variable
     # Migration-specific addon should be present in architect mode.
     assert "Spécifique migration" in variable
+    # Version-only migration (no profile) must not invent an instance block.
+    assert "Instance source connectée" not in stable
+    assert "Contexte projet" not in stable
+
+
+def test_build_system_migration_injects_project_when_profile_set():
+    """A project-mode migration must not be blind to the project: the source
+    instance, its access rights and the free-text project context flow in."""
+    from types import SimpleNamespace
+    from odoo_consultant_portal.services.ai_service import build_system_migration
+
+    profile = SimpleNamespace(
+        db_url="https://acme.odoo.com", db_name="acme", odoo_version="17.0",
+        company_name="Acme SA",
+        project_context="Client e-commerce — double validation des commandes.",
+        user_access_info='{"is_system": true, "user_name": "Admin"}',
+    )
+    stable, _ = build_system_migration(
+        "17.0", "19.0", source_path="/tmp/s/17.0", target_path="/tmp/s/19.0",
+        perspective="architect", profile=profile,
+        project_context=profile.project_context,
+    )
+    assert "Instance source connectée" in stable
+    assert "acme.odoo.com" in stable
+    assert "Contexte projet" in stable
+    assert "double validation" in stable
+    assert "administrateur système" in stable
+    # Live-instance method step exposes Studio inspection.
+    assert "inspect_studio" in stable
+
+
+def test_format_access_context_variants():
+    from odoo_consultant_portal.services.ai_service import _format_access_context
+
+    assert _format_access_context(None) == ""
+    assert _format_access_context("not json") == ""
+    assert "administrateur système" in _format_access_context('{"is_system": true, "user_name": "X"}')
+    assert "administrateur ERP" in _format_access_context('{"is_admin": true}')
+    assert "utilisateur standard" in _format_access_context('{"user_name": "Bob"}')
+
+
+def test_build_system_injects_access_rights():
+    from types import SimpleNamespace
+    from odoo_consultant_portal.services.ai_service import build_system
+
+    profile = SimpleNamespace(
+        db_url="https://x.odoo.com", db_name="x", odoo_version="18.0",
+        company_name="X", project_context=None,
+        user_access_info='{"is_system": false, "is_admin": false, "user_name": "Bob"}',
+    )
+    stable, _ = build_system(profile)
+    assert "utilisateur standard" in stable
 
 
 def test_infer_perspective_strong_signals():

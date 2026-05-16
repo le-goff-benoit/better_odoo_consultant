@@ -929,23 +929,30 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
     return "\n\n".join(parts)
 
 
-_COMMON_ODOO_MODELS_REF = """## Modèles Odoo fréquents (référence rapide — noms variant selon la version)
-- Factures clients     : account.move, domain [["move_type","in",["out_invoice","out_refund"]]]
-- Factures fournisseurs: account.move, domain [["move_type","in",["in_invoice","in_refund"]]]
-- Commandes ventes     : sale.order
-- Lignes de commande   : sale.order.line
-- Commandes achats     : purchase.order
-- Clients              : res.partner, domain [["customer_rank",">",0]]
-- Fournisseurs         : res.partner, domain [["supplier_rank",">",0]]
-- Produits             : product.template
-- Variantes produit    : product.product
-- Employés             : hr.employee
-- Congés               : hr.leave
-- CRM/Opportunités     : crm.lead
-- Tâches projet        : project.task
-- Routes stock         : stock.route (anciennement stock.location.route avant v16)
-- Règles de réapprovisionnement : stock.warehouse.orderpoint
-- Mouvements de stock  : stock.move"""
+def _format_access_context(raw: Optional[str]) -> str:
+    """One-line summary of the connected Odoo user's rights.
+
+    Affects how the AI must read query results: a restricted user only sees a
+    subset of records, so a count can be partial. Empty string when unknown.
+    """
+    if not raw:
+        return ""
+    try:
+        info = json.loads(raw)
+    except Exception:
+        return ""
+    if not isinstance(info, dict):
+        return ""
+    name = str(info.get("user_name") or "").strip()
+    who = f" ({name})" if name else ""
+    if info.get("is_system"):
+        return (f"- Droits Odoo{who} : administrateur système — accès total, "
+                "les requêtes voient tous les enregistrements (règles d'accès ignorées).")
+    if info.get("is_admin"):
+        return (f"- Droits Odoo{who} : administrateur ERP — droits étendus ; "
+                "quelques modèles techniques peuvent rester hors de portée.")
+    return (f"- Droits Odoo{who} : utilisateur standard — règles d'accès et multi-sociétés "
+            "restreignent ce qui est visible ; un comptage peut être partiel.")
 
 
 def build_system(
@@ -980,13 +987,17 @@ def build_system(
         "Tu es un assistant expert Odoo qui aide les consultants à analyser les données "
         "et le code source de leurs clients."
     )
-    stable_parts.append(
+    instance_block = (
         f"## Instance connectée\n"
         f"- URL : {profile.db_url}\n"
         f"- Version : {profile.odoo_version or 'inconnue'}\n"
         f"- Base : {profile.db_name}\n"
         f"{society_line}"
     )
+    access_line = _format_access_context(getattr(profile, "user_access_info", None))
+    if access_line:
+        instance_block += f"\n{access_line}"
+    stable_parts.append(instance_block)
     stable_parts.append(_source_instructions(source_path=source_path, repo_path=repo_path))
     stable_parts.append(
         "## Instructions générales\n"
@@ -998,7 +1009,6 @@ def build_system(
         "- Si tu ne connais pas les champs d'un modèle, utilise `get_odoo_fields` d'abord.\n"
         "- Sois concis et orienté résultats."
     )
-    stable_parts.append(_COMMON_ODOO_MODELS_REF)
     if project_context:
         stable_parts.append(f"## Contexte projet\n{_trim_project_context(project_context.strip())}")
 
@@ -1043,7 +1053,18 @@ def build_system_migration(
     response_language: str = "auto",
     *,
     user_ctx: str = "",
+    profile=None,
+    active_company_name: Optional[str] = None,
+    project_context: Optional[str] = None,
 ) -> tuple[str, str]:
+    """Build the migration system prompt.
+
+    When *profile* is set (the source side is a real project environment), the
+    connected source instance, its access rights and the free-text project
+    context are injected too — a project migration must not be blind to the
+    project it migrates.
+    """
+    has_instance = profile is not None
     stable_parts: list[str] = []
     if user_ctx:
         stable_parts.append(user_ctx.strip())
@@ -1057,21 +1078,50 @@ def build_system_migration(
         f"- Version SOURCE : {source_version}\n"
         f"- Version CIBLE  : {target_version}"
     )
+    if has_instance:
+        society_line = f"- Société : {profile.company_name or 'inconnue'}"
+        if active_company_name:
+            society_line += f"\n- Société active (filtre) : {active_company_name}"
+        instance_block = (
+            f"## Instance source connectée\n"
+            f"- URL : {profile.db_url}\n"
+            f"- Version : {profile.odoo_version or source_version}\n"
+            f"- Base : {profile.db_name}\n"
+            f"{society_line}"
+        )
+        access_line = _format_access_context(getattr(profile, "user_access_info", None))
+        if access_line:
+            instance_block += f"\n{access_line}"
+        stable_parts.append(instance_block)
+
     stable_parts.append(_source_instructions(source_path=source_path, repo_path=repo_path, target_path=target_path))
-    stable_parts.append(
-        "## Méthode de travail\n"
-        "1. Cherche d'abord dans la VERSION SOURCE avec `search_odoo_source`.\n"
-        "2. Cherche ensuite le même élément dans la VERSION CIBLE avec `search_target_source`.\n"
-        "3. Compare et explique les différences.\n"
-        "4. Si des modules custom sont fournis, vérifie leur compatibilité avec la version cible."
-    )
+    if has_instance:
+        stable_parts.append(
+            "## Méthode de travail\n"
+            "1. Inspecte d'abord l'INSTANCE SOURCE réelle : customisations Studio (`inspect_studio`), "
+            "modules installés et volumétrie (`query_odoo` / `count_odoo`) — c'est ce qui détermine l'effort de migration.\n"
+            "2. Cherche l'élément concerné dans la VERSION SOURCE avec `search_odoo_source`.\n"
+            "3. Cherche le même élément dans la VERSION CIBLE avec `search_target_source`.\n"
+            "4. Compare, explique les différences, et vérifie la compatibilité des modules custom du repo avec la version cible."
+        )
+    else:
+        stable_parts.append(
+            "## Méthode de travail\n"
+            "1. Cherche d'abord dans la VERSION SOURCE avec `search_odoo_source`.\n"
+            "2. Cherche ensuite le même élément dans la VERSION CIBLE avec `search_target_source`.\n"
+            "3. Compare et explique les différences.\n"
+            "4. Si des modules custom sont fournis, vérifie leur compatibilité avec la version cible."
+        )
     stable_parts.append(
         "## Instructions\n"
         "- Utilise SYSTÉMATIQUEMENT les outils de recherche avant de répondre — ne suppose jamais un comportement.\n"
         "- Si le contexte Markdown contredit le code source ou les données client, le code source et les données client gagnent.\n"
+        "- Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées.\n"
         "- Présente les comparaisons sous forme de tableaux (Source | Cible | Impact).\n"
         "- Signale clairement les breaking changes avec ⚠️."
     )
+    if project_context:
+        stable_parts.append(f"## Contexte projet\n{_trim_project_context(project_context.strip())}")
 
     stable = "\n\n".join(stable_parts).strip()
     variable = _build_variable_block(
@@ -1880,10 +1930,16 @@ async def stream_chat(
         stable, variable = build_system_migration(
             src_ver, tgt_ver, source_path, target_path, context_md, repo_path,
             perspective, response_language, user_ctx=user_ctx,
+            profile=profile,
+            active_company_name=active_company_name,
+            project_context=getattr(profile, "project_context", None) if profile else None,
         )
-        tools_c = TOOLS_CLAUDE_SRC
-        tools_o = TOOLS_OPENAI_SRC
-        tools_g = TOOLS_GEMINI_SRC
+        # Project-mode migration: the SOURCE side is a live instance — expose
+        # the live-data tools so the AI can inspect what it actually migrates.
+        if profile is not None:
+            tools_c, tools_o, tools_g = TOOLS_CLAUDE, TOOLS_OPENAI, TOOLS_GEMINI
+        else:
+            tools_c, tools_o, tools_g = TOOLS_CLAUDE_SRC, TOOLS_OPENAI_SRC, TOOLS_GEMINI_SRC
     elif profile is not None:
         stable, variable = build_system(
             profile, source_path, context_md, repo_path, perspective, response_language,
@@ -1926,8 +1982,9 @@ async def stream_chat(
         tools_o = tools_o + COUNT_TOOLS_OPENAI
         tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + COUNT_FUNCTION_DECLARATIONS}]
 
-    # Append Studio inspection tool when a live Odoo connection is available (profile mode)
-    if profile is not None and not migration_mode:
+    # Append Studio inspection tool whenever a live Odoo connection is available
+    # — including project-mode migration, where Studio drives the migration effort.
+    if profile is not None:
         tools_c = tools_c + STUDIO_TOOLS_CLAUDE
         tools_o = tools_o + STUDIO_TOOLS_OPENAI
         tools_g = [{"function_declarations": tools_g[0]["function_declarations"] + STUDIO_FUNCTION_DECLARATIONS}]

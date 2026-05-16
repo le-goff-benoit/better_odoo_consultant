@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.30.1',
-    date: '2026-05-15',
+    version: '0.31.0',
+    date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Migration d\'un projet : le prompt reçoit désormais l\'instance source connectée, les droits Odoo et les notes métier du projet (project_context) — ces informations étaient perdues en mode migration',
+      'Migration d\'un projet : les outils live (query_odoo, count_odoo, get_odoo_fields, inspect_studio) sont disponibles pour inspecter l\'instance source réelle — Studio et volumétrie déterminent l\'effort de migration',
+      'Droits de l\'utilisateur Odoo connecté (administrateur système / ERP / utilisateur restreint) injectés dans le contexte — l\'IA sait qu\'un comptage peut être partiel avec un utilisateur restreint',
+      'Anti « context rot » : référence de modèles redondante supprimée du prompt, budget de contexte resserré (36k → 32k caractères), migration.md protégé contre la troncature comme section prioritaire',
+      'Cohérence des instructions : séparation faits vérifiés / hypothèses / recommandations désormais explicite aussi en mode migration',
+    ],
+  },
+  {
+    version: '0.30.1',
+    date: '2026-05-15',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Panneau Historique affiché de façon cohérente à droite du panneau de contexte sur l\'Assistant IA et Migration — l\'ordre des deux panneaux était inversé entre les deux pages',
     ],
