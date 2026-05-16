@@ -242,7 +242,10 @@ const migrationCopy = {
     noProvider: 'Aucun fournisseur IA configuré — configurez une clé API dans les Paramètres',
     repoActive: 'Dépôt projet source actif',
     source: 'Source (version actuelle)',
+    sourceShort: 'Source',
     target: 'Cible (version de destination)',
+    targetShort: 'Cible',
+    editSelection: 'Modifier',
     emptyTitle: 'Assistant Migration Odoo',
     emptyText: 'Sélectionnez une version source et une version cible ci-dessus, puis posez votre question sur la migration.',
     configureProvider: 'Configurez un fournisseur IA dans les Paramètres',
@@ -266,7 +269,10 @@ const migrationCopy = {
     noProvider: 'No AI provider configured. Configure an API key in Settings',
     repoActive: 'Source project repository active',
     source: 'Source (current version)',
+    sourceShort: 'Source',
     target: 'Target (destination version)',
+    targetShort: 'Target',
+    editSelection: 'Edit',
     emptyTitle: 'Odoo Migration Assistant',
     emptyText: 'Select a source version and target version above, then ask your migration question.',
     configureProvider: 'Configure an AI provider in Settings',
@@ -1069,14 +1075,15 @@ export default function Migration() {
   // Keep streamingRef in sync so the scroll handler never reads stale state
   useEffect(() => { streamingRef.current = streaming }, [streaming])
 
-  // Collapse top bar on scroll — frozen during streaming to prevent header oscillation
+  // Collapse top bar on scroll. During streaming, allow collapsing when the user
+  // moves down, but avoid auto-expanding back up while new tokens arrive.
   useEffect(() => {
     const el = messageListRef.current
     if (!el) return
     const onScroll = () => {
-      if (streamingRef.current) return
       const top = el.scrollTop
       setIsScrolled(prev => {
+        if (streamingRef.current && top <= 80) return prev
         if (!prev && top > 80) return true
         if (prev && top < 20) return false
         return prev
@@ -1521,6 +1528,25 @@ export default function Migration() {
           </div>
         )
       })()}
+      <div className="migration-side-compact">
+        <span className="migration-side-compact-label">{c.sourceShort}</span>
+        <strong title={sourceLabel}>{sourceLabel}</strong>
+        <span className="migration-side-compact-version">{sourceVersion ?? '?'}</span>
+        <span className="migration-side-compact-arrow">→</span>
+        <span className="migration-side-compact-label">{c.targetShort}</span>
+        <strong title={targetLabel}>{targetLabel}</strong>
+        <span className="migration-side-compact-version">{targetVersion ?? '?'}</span>
+        <button
+          type="button"
+          className="migration-side-compact-edit"
+          onClick={() => {
+            setIsScrolled(false)
+            messageListRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+        >
+          {c.editSelection}
+        </button>
+      </div>
       <div className="migration-side-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16, flexShrink: 0 }}>
         <SideSelector
           label={c.source}

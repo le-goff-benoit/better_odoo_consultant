@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.4',
+    version: '0.35.5',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Migration : le sélecteur Source / Cible se replie au scroll en barre compacte pour libérer la zone de réponse',
+      'Le repli reste possible pendant le streaming, sans réouvrir automatiquement les grandes cartes pendant la génération',
+    ],
+  },
+  {
+    version: '0.35.4',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Timeline des outils IA encore plus compacte : suppression du check et du libellé Vérifié / En cours pour gagner de la place horizontalement',
       'Largeur minimale des blocs réduite tout en conservant numéro d\'étape, titre, détail, projet, résultats et chevron',
