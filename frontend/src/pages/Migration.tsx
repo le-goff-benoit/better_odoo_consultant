@@ -700,11 +700,12 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, mascotType, mascotColor }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, mascotType, mascotColor, onAskMore }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   mascotType?: 'robot' | 'cat' | 'dog'
   mascotColor?: string
+  onAskMore?: (selectedText: string) => void
 }) {
   const lang = useUiLanguage()
   const c = lang === 'en'
@@ -786,7 +787,15 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
         )}
 
         {expanded && textEvt?.content && (
-          <ResponseModal onClose={() => setExpanded(false)}>
+          <ResponseModal
+            onClose={() => setExpanded(false)}
+            onAskMore={selected => {
+              setExpanded(false)
+              onAskMore?.(selected)
+            }}
+            askMoreLabel={lang === 'fr' ? 'Plus de détail' : 'More detail'}
+            askMoreDisabled={loading}
+          >
             <Markdown text={textEvt.content} />
           </ResponseModal>
         )}
@@ -1717,6 +1726,7 @@ export default function Migration() {
                 outputTokens={m.outputTokens}
                 mascotType={userProfile?.mascotType}
                 mascotColor={userProfile?.mascotColor}
+                onAskMore={askMoreOnSelection}
               />
             </div>
           )

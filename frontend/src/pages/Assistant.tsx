@@ -1063,7 +1063,7 @@ export default function Assistant() {
                 ref={el => { assistantRefs.current.set(msg.id, el) }}
                 style={{ scrollMarginTop: 8 }}
               >
-                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} mascotType={userProfile?.mascotType} mascotColor={userProfile?.mascotColor} />
+                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} mascotType={userProfile?.mascotType} mascotColor={userProfile?.mascotColor} onAskMore={askMoreOnSelection} />
               </div>
             )
         ))}
@@ -1656,12 +1656,13 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, mascotType, mascotColor }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, mascotType, mascotColor, onAskMore }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
   mascotType?: 'robot' | 'cat' | 'dog'
   mascotColor?: string
+  onAskMore?: (selectedText: string) => void
 }) {
   const lang = useUiLanguage()
   const c = assistantCopy[lang]
@@ -1742,7 +1743,15 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
         )}
 
         {expanded && textEvt?.content && (
-          <ResponseModal onClose={() => setExpanded(false)}>
+          <ResponseModal
+            onClose={() => setExpanded(false)}
+            onAskMore={selected => {
+              setExpanded(false)
+              onAskMore?.(selected)
+            }}
+            askMoreLabel={c.askMore}
+            askMoreDisabled={loading}
+          >
             <Markdown text={textEvt.content} />
           </ResponseModal>
         )}

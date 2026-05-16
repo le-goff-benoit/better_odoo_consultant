@@ -15,26 +15,36 @@ export default function SelectionAskMore({ containerRef, onAsk, label, disabled 
 
   useEffect(() => {
     const clear = () => setAnchor(null)
-    const onMouseUp = () => {
+    const update = () => {
       // Defer one tick so the browser has finalised the selection.
       window.setTimeout(() => {
         const sel = window.getSelection()
         if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setAnchor(null); return }
         const text = sel.toString().trim()
         const container = containerRef.current
-        if (text.length < 12 || !container || !container.contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0)
+        const common = range.commonAncestorContainer
+        const selectionNode = common.nodeType === Node.TEXT_NODE ? common.parentNode : common
+        if (text.length < 12 || !container || !selectionNode || !container.contains(selectionNode)) {
           setAnchor(null)
           return
         }
-        const rect = sel.getRangeAt(0).getBoundingClientRect()
+        const rects = Array.from(range.getClientRects())
+        const rect = rects[rects.length - 1] ?? range.getBoundingClientRect()
         if (!rect || (rect.width === 0 && rect.height === 0)) { setAnchor(null); return }
-        setAnchor({ text, top: rect.top, left: rect.left + rect.width / 2 })
+        const left = Math.min(window.innerWidth - 84, Math.max(84, rect.left + rect.width / 2))
+        const top = Math.max(58, rect.top - 40)
+        setAnchor({ text, top, left })
       }, 0)
     }
+    const onMouseUp = () => update()
+    const onKeyUp = () => update()
     document.addEventListener('mouseup', onMouseUp)
+    document.addEventListener('keyup', onKeyUp)
     document.addEventListener('scroll', clear, true)
     return () => {
       document.removeEventListener('mouseup', onMouseUp)
+      document.removeEventListener('keyup', onKeyUp)
       document.removeEventListener('scroll', clear, true)
     }
   }, [containerRef])

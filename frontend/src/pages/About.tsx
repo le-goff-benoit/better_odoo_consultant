@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.34.0',
+    version: '0.34.1',
     date: '2026-05-16',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Correctif modal Agrandir : rendu via portal au niveau document pour couvrir correctement la topbar, le composer et les panneaux latéraux',
+      'Correctif « Plus de détail » : l\'action de sélection est maintenant disponible aussi dans la réponse agrandie, pas seulement dans la réponse inline',
+      'Positionnement de l\'action « Plus de détail » fiabilisé sur les sélections longues ou dans les tableaux, avec coordonnées bornées dans le viewport',
+    ],
+  },
+  {
+    version: '0.34.0',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Réponses IA agrandissables : bouton Agrandir ajouté à côté des boutons Copier en haut et en bas des réponses Assistant IA et Migration',
       'Modal de lecture presque plein écran pour consulter confortablement les réponses longues, avec fermeture au clic extérieur ou Échap',

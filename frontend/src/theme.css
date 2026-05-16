@@ -2417,7 +2417,7 @@ textarea:focus-visible {
 
 /* ── Selection "more detail" floating action ────────────────── */
 .selection-ask-more {
-  z-index: 900;
+  z-index: 10020;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2442,17 +2442,17 @@ textarea:focus-visible {
 .response-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2.5vh 2.5vw;
+  padding: 24px;
   background: color-mix(in srgb, var(--th-text) 48%, transparent);
 }
 .response-modal {
-  width: 100%;
-  max-width: 1280px;
-  height: 100%;
+  width: min(1560px, calc(100vw - 48px));
+  height: calc(100dvh - 48px);
+  max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
   background: var(--th-bg-card);
@@ -2477,11 +2477,21 @@ textarea:focus-visible {
 .response-modal-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   padding: 24px 30px;
   font-size: 14px;
   line-height: 1.75;
   color: var(--th-text);
+}
+
+@media (max-width: 720px) {
+  .response-modal-overlay { padding: 10px; }
+  .response-modal {
+    width: calc(100vw - 20px);
+    height: calc(100dvh - 20px);
+    max-height: calc(100vh - 20px);
+  }
+  .response-modal-body { padding: 18px 16px; }
 }
 
 .assistant-history-panel {
