@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, Globe2, History, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Code, Copy, FileText, Globe2, History, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
+import { copyRichText, copyMarkdown } from '../utils/clipboard'
 import PageHeader from '../components/PageHeader'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
@@ -243,12 +244,14 @@ const assistantCopy = {
     activeEnv: 'Environnement actif',
     default: 'défaut',
     recommended: 'Recommandé',
-    copyTitle: 'Copier la réponse',
+    copyTitle: 'Copier la réponse mise en forme (collage avec styles)',
     thinking: 'Réflexion en cours…',
     analyzing: 'Analyse des résultats et rédaction de la réponse…',
     tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)',
     copied: 'Copié !',
     copy: 'Copier',
+    copyMd: 'Copier MD',
+    copyMdTitle: 'Copier le texte Markdown brut',
     expand: 'Agrandir',
     expandTitle: 'Agrandir la réponse en plein écran',
     askMore: 'Plus de détail',
@@ -295,12 +298,14 @@ const assistantCopy = {
     activeEnv: 'Active environment',
     default: 'default',
     recommended: 'Recommended',
-    copyTitle: 'Copy answer',
+    copyTitle: 'Copy the formatted answer (paste keeps styling)',
     thinking: 'Thinking…',
     analyzing: 'Analyzing results and drafting the answer…',
     tokens: 'Tokens used (input ↑ + output ↓)',
     copied: 'Copied!',
     copy: 'Copy',
+    copyMd: 'Copy MD',
+    copyMdTitle: 'Copy the raw Markdown text',
     expand: 'Expand',
     expandTitle: 'Expand the answer to fullscreen',
     askMore: 'More detail',
@@ -1661,14 +1666,23 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
   const elapsed = (timestamp && startTime && timestamp > startTime)
     ? (() => { const s = (timestamp - startTime) / 1000; return s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` })()
     : null
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'' | 'rich' | 'md'>('')
   const [expanded, setExpanded] = useState(false)
+  const markdownRef = useRef<HTMLDivElement>(null)
 
-  function copyText() {
+  function copyStyled() {
     if (!textEvt?.content) return
-    navigator.clipboard.writeText(textEvt.content).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+    copyRichText(markdownRef.current, textEvt.content).then(() => {
+      setCopied('rich')
+      setTimeout(() => setCopied(''), 2000)
+    })
+  }
+
+  function copyMd() {
+    if (!textEvt?.content) return
+    copyMarkdown(textEvt.content).then(() => {
+      setCopied('md')
+      setTimeout(() => setCopied(''), 2000)
     })
   }
 
@@ -1710,20 +1724,34 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               </button>
               <button
                 type="button"
-                onClick={copyText}
+                onClick={copyStyled}
                 title={c.copyTitle}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   width: 26, height: 26, border: `1px solid ${t.border}`,
                   borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                  color: copied ? t.success : t.muted, opacity: 0.8,
+                  color: copied === 'rich' ? t.success : t.muted, opacity: 0.8,
                   transition: 'opacity .15s, color .15s',
                 }}
               >
-                {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
+                {copied === 'rich' ? <CheckCheck size={13} /> : <Copy size={13} />}
+              </button>
+              <button
+                type="button"
+                onClick={copyMd}
+                title={c.copyMdTitle}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, border: `1px solid ${t.border}`,
+                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                  color: copied === 'md' ? t.success : t.muted, opacity: 0.8,
+                  transition: 'opacity .15s, color .15s',
+                }}
+              >
+                {copied === 'md' ? <CheckCheck size={13} /> : <Code size={13} />}
               </button>
             </div>
-            <Markdown text={textEvt.content} />
+            <div ref={markdownRef}><Markdown text={textEvt.content} /></div>
           </div>
         )}
 
@@ -1799,18 +1827,33 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
                 </button>
                 <button
                   type="button"
-                  onClick={copyText}
+                  onClick={copyStyled}
                   title={c.copyTitle}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 4,
                     border: `1px solid ${t.border}`, borderRadius: t.radius,
                     background: 'transparent', cursor: 'pointer', padding: '2px 7px',
-                    color: copied ? t.success : t.muted, fontSize: 10, fontWeight: 600,
+                    color: copied === 'rich' ? t.success : t.muted, fontSize: 10, fontWeight: 600,
                     transition: 'color .15s',
                   }}
                 >
-                  {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
-                  {copied ? c.copied : c.copy}
+                  {copied === 'rich' ? <CheckCheck size={11} /> : <Copy size={11} />}
+                  {copied === 'rich' ? c.copied : c.copy}
+                </button>
+                <button
+                  type="button"
+                  onClick={copyMd}
+                  title={c.copyMdTitle}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    border: `1px solid ${t.border}`, borderRadius: t.radius,
+                    background: 'transparent', cursor: 'pointer', padding: '2px 7px',
+                    color: copied === 'md' ? t.success : t.muted, fontSize: 10, fontWeight: 600,
+                    transition: 'color .15s',
+                  }}
+                >
+                  {copied === 'md' ? <CheckCheck size={11} /> : <Code size={11} />}
+                  {copied === 'md' ? c.copied : c.copyMd}
                 </button>
               </div>
             )}
