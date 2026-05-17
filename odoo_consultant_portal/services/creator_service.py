@@ -174,6 +174,22 @@ exactes à l'aide de `query_odoo` : tu DOIS connaître leur `id` et leur \
 consultant doit voir précisément quelles fiches seront touchées. Vérifie les \
 noms et types de champs avec `get_odoo_fields`.
 
+Pour un travail de mise en cohérence sur un lot d'enregistrements (par exemple \
+rapprocher un fichier CSV joint avec les données de l'instance), interroge \
+Odoo de façon EXHAUSTIVE avant de conclure :
+- avec `query_odoo`, ne demande que les champs strictement nécessaires (ex. \
+`id`, `product_tmpl_id`, `partner_id`) — des résultats compacts restent \
+lisibles dans l'historique ;
+- utilise `count_odoo` pour connaître le volume, puis pagine avec `offset` et \
+`limit` (jusqu'à 500 par appel) afin de couvrir TOUS les enregistrements \
+concernés ;
+- filtre par les `id` précis issus du fichier (`[["id","in",[...]]]` ou \
+`[["product_tmpl_id","in",[...]]]`) plutôt que de tout balayer.
+Ne te fonde jamais sur un échantillon partiel : si tu n'as pas pu établir la \
+liste exhaustive et certaine des anomalies, renvoie `operations: []` et \
+explique-le. Effectue la requête de rapprochement juste avant de produire les \
+opérations, pour disposer de données fraîches et complètes.
+
 IMPORTANT — relations one2many : pour modifier le CONTENU d'une relation \
 `one2many` (par exemple les lignes fournisseur `seller_ids` d'un \
 `product.template`, ou les lignes d'un autre objet de configuration), n'agis \

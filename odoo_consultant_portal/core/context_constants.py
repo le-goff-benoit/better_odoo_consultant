@@ -34,6 +34,12 @@ MAX_HISTORY_TURNS: int = 20
 # copy stored in the ongoing conversation is compressed to prevent overflow.
 MAX_TOOL_RESULT_HISTORY_CHARS: int = 2_000
 
+# Record-bearing tool results (query_odoo) get a larger budget: the model
+# must keep the actual data it queried to reason precisely — e.g. the Creator
+# building a changeset record by record. Verbose tools (source grep, Studio
+# audit) keep the smaller cap above.
+MAX_DATA_TOOL_RESULT_HISTORY_CHARS: int = 12_000
+
 # ── Model output tokens ───────────────────────────────────────────
 # Claude was previously hard-coded to 4 096 tokens which silently truncated
 # Studio audits and long migration analyses.
