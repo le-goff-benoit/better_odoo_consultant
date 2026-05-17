@@ -921,6 +921,12 @@ hr.payslip | [["state","in",["draft","verify"]], ["date_from",">=","<début_mois
 champs: employee_id, date_from, date_to, struct_id
 ```
 
+### Réflexe Studio / Studio + Dev
+- Si la base utilise Studio ou Studio + Dev et qu'une anomalie apparaît lors d'une création, confirmation, annulation, duplication, archivage ou remise en brouillon, vérifier systématiquement les automatisations avant de conclure à un bug standard.
+- Contrôler en priorité `ir.actions.server`, `ir.cron`, `base.automation` et, si le symptôme dépend de l'utilisateur ou de la société active, `ir.rule`.
+- Rechercher les automatisations qui ciblent le modèle principal **et** les modèles liés au flux métier (ex. `sale.order`, `project.project`, `documents.document`, `stock.picking`).
+- Vérifier aussi les enregistrements archivés / en corbeille sur les objets liés quand une automatisation duplique, archive, restaure ou déplace des documents.
+
 ---
 
 ## Règles de sécurité et droits d'accès
@@ -2040,6 +2046,12 @@ hr.attendance | [["check_out","=",false]]
 # Blocked transfers
 stock.picking | [["state","in",["confirmed","assigned"]],["scheduled_date","<","<date_7d>"]]
 ```
+
+### Studio / Studio + Dev reflex
+- If the database uses Studio or Studio + Dev and an issue appears during create, confirm, cancel, duplicate, archive, or reset-to-draft flows, inspect automations before blaming standard Odoo.
+- Check `ir.actions.server`, `ir.cron`, `base.automation`, and `ir.rule` first when the symptom depends on the user or active company.
+- Look for automations targeting both the main model and related models in the flow (for example `sale.order`, `project.project`, `documents.document`, `stock.picking`).
+- Also inspect archived / trashed linked records when an automation duplicates, archives, restores, or moves documents.
 
 ## Security & Access Rights
 Important groups: `base.group_user`, `base.group_portal`, `account.group_account_user`,

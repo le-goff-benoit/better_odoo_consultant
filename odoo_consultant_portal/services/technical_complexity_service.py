@@ -441,11 +441,11 @@ def build_technical_complexity_context(raw: Optional[str]) -> str:
             f"- Apps Odoo installées sur l'instance ({len(installed_apps)}) : {sample}{more}"
         )
     if mode == "studio":
-        lines.append("- Stratégie : inspecter Studio avant de proposer du code ; privilégier configuration, vues, actions et champs Studio.")
+        lines.append("- Stratégie : inspecter Studio avant de proposer du code ; privilégier configuration, vues, actions et champs Studio, et en cas d'anomalie vérifier aussi les actions serveur, actions planifiées et automatisations.")
     elif mode == "dev":
         lines.append("- Stratégie : vérifier le repo client et les modules installés avant de conclure sur le standard Odoo.")
     elif mode == "studio_dev":
-        lines.append("- Stratégie : identifier si le comportement vient du standard, de Studio ou du code custom avant de recommander une action.")
+        lines.append("- Stratégie : identifier si le comportement vient du standard, de Studio ou du code custom avant de recommander une action ; sur un incident métier, contrôler aussi actions serveur, actions planifiées, automatisations et record rules.")
     else:
         lines.append("- Stratégie : proposer d'abord les options standard Odoo/configuration, puis demander confirmation avant d'inventer une couche Studio ou custom.")
     # Warn when repo has manifests but Odoo confirms no custom modules are installed.
