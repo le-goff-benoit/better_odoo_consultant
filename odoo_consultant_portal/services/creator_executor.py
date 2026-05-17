@@ -51,6 +51,7 @@ HANDLERS = {
     "modify_report": "op_modify_report",
     "create_record": "op_create_record",
     "update_record": "op_update_record",
+    "delete_record": "op_delete_record",
 }
 
 
@@ -151,6 +152,39 @@ def _to_writable(value: Any) -> Any:
     return value
 
 
+def _recreate_value(value: Any, ttype: str) -> Any:
+    """Normalise a search_read value so it can be passed to ``create``.
+
+    Used to rebuild a deleted record during rollback: many2one pairs become
+    bare ids, many2many id-lists become a ``(6, 0, ids)`` command.
+    """
+    if ttype == "many2one":
+        if isinstance(value, (list, tuple)) and value:
+            return value[0]
+        return value or False
+    if ttype == "many2many":
+        ids = [v for v in (value or []) if isinstance(v, int)]
+        return [(6, 0, ids)]
+    return value
+
+
+def _target_ids(params: dict, op_name: str) -> list[int]:
+    """Collect the record ids an op targets from ``targets`` / ``record_ids``."""
+    ids: list[int] = []
+    for target in (params.get("targets") or []):
+        if isinstance(target, dict) and target.get("id") is not None:
+            ids.append(int(target["id"]))
+        elif isinstance(target, int):
+            ids.append(target)
+    for rid in (params.get("record_ids") or []):
+        ids.append(int(rid))
+    ids = sorted(set(ids))
+    if not ids:
+        raise OperationError(
+            f"{op_name} : aucune fiche cible — renseigne 'targets'.")
+    return ids
+
+
 class _Executor:
     def __init__(self, odoo, dry: bool = False, version: str | None = None):
         self.odoo = odoo
@@ -158,6 +192,7 @@ class _Executor:
         self.version = version
         self.created: list[dict] = []          # {model, res_id, label} — newest last
         self.modified: list[dict] = []         # {model, res_id, before} — for rollback
+        self.deleted: list[dict] = []          # {model, snapshot, label} — for rollback
         self._model_cache: dict[str, int] = {}
         self._dry_counter = 0
 
@@ -209,7 +244,8 @@ class _Executor:
             pass  # traceability tag is non-blocking
 
     async def rollback(self) -> list[str]:
-        """Undo this run: restore updated records, then unlink created ones."""
+        """Undo this run: restore updated records, unlink created ones, and
+        re-create deleted ones (best-effort — re-created with fresh ids)."""
         errors: list[str] = []
         for rec in reversed(self.modified):
             try:
@@ -223,6 +259,13 @@ class _Executor:
                 await _run(lambda r=rec: self.odoo.unlink(r["model"], [r["res_id"]]))
             except Exception as exc:
                 errors.append(f"{rec['model']}#{rec['res_id']} : {exc}")
+        for rec in reversed(self.deleted):
+            try:
+                await _run(lambda r=rec:
+                           self.odoo.create(r["model"], _clean(r["snapshot"])))
+            except Exception as exc:
+                errors.append(
+                    f"{rec['model']} « {rec.get('label')} » (recréation) : {exc}")
         return errors
 
     async def _resolve_parent_view(self, p: dict, model: str, view_type: str) -> int:
@@ -462,19 +505,7 @@ class _Executor:
         if not isinstance(values, dict) or not values:
             raise OperationError("update_record : 'values' est manquant ou vide.")
 
-        ids: list[int] = []
-        for target in (p.get("targets") or []):
-            if isinstance(target, dict) and target.get("id") is not None:
-                ids.append(int(target["id"]))
-            elif isinstance(target, int):
-                ids.append(target)
-        for rid in (p.get("record_ids") or []):
-            ids.append(int(rid))
-        ids = sorted(set(ids))
-        if not ids:
-            raise OperationError(
-                "update_record : aucune fiche cible — renseigne 'targets'.")
-
+        ids = _target_ids(p, "update_record")
         field_list = list(values.keys())
         types = await self._field_types(model, field_list)
         bad = [f for f, t in types.items() if t in _NON_REVERSIBLE_TTYPES]
@@ -514,6 +545,48 @@ class _Executor:
         return {"model": model, "records": records, "values": values,
                 "plan": f"Mise à jour de {len(ids)} fiche(s) {model} — "
                         f"champs : {', '.join(field_list)}."}
+
+    async def op_delete_record(self, p: dict) -> dict:
+        model = _req(p, "model")
+        _guard_model(model)
+        ids = _target_ids(p, "delete_record")
+
+        meta = await _run(lambda: self.odoo.fields_get(
+            model, ["type", "readonly", "store"]))
+        # Snapshot only stored, writable, non-one2many fields — enough to
+        # re-create the record on rollback without dragging child records.
+        snap_fields = [
+            f for f, m in meta.items()
+            if m.get("store") and not m.get("readonly")
+            and m.get("type") != "one2many"
+        ]
+        rows = await _run(lambda: self.odoo.search_read(
+            model, [["id", "in", ids]], snap_fields + ["display_name"],
+            limit=len(ids)))
+        found = {r["id"]: r for r in rows}
+        missing = [i for i in ids if i not in found]
+        if missing:
+            raise OperationError(
+                f"Fiches introuvables sur '{model}' : {missing}.")
+
+        records = []
+        for rid in ids:
+            row = found[rid]
+            label = row.get("display_name") or f"{model}#{rid}"
+            if not self.dry:
+                snapshot = {
+                    f: _recreate_value(row.get(f), meta[f].get("type"))
+                    for f in snap_fields
+                }
+                self.deleted.append(
+                    {"model": model, "snapshot": snapshot, "label": label})
+            records.append({"id": rid, "display_name": label})
+
+        if not self.dry:
+            await _run(lambda: self.odoo.unlink(model, ids))
+
+        return {"model": model, "records": records,
+                "plan": f"Suppression de {len(ids)} fiche(s) {model}."}
 
 
 async def apply_changeset(odoo, operations: list[dict],
@@ -564,7 +637,7 @@ async def apply_changeset(odoo, operations: list[dict],
     rolled_back = False
     rollback_errors: list[str] = []
     if (not dry_run and failed and rollback_on_failure
-            and (executor.created or executor.modified)):
+            and (executor.created or executor.modified or executor.deleted)):
         rollback_errors = await executor.rollback()
         rolled_back = True
         for r in results:
@@ -577,6 +650,7 @@ async def apply_changeset(odoo, operations: list[dict],
         "operations": results,
         "created": executor.created,
         "modified": executor.modified,
+        "deleted": executor.deleted,
         "rolled_back": rolled_back,
         "rollback_errors": rollback_errors,
         "applied_at": datetime.utcnow().isoformat(),

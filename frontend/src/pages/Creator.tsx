@@ -92,15 +92,28 @@ const OP_META: Record<string, { fr: string; en: string }> = {
   modify_report:        { fr: 'Modification de rapport', en: 'Report change' },
   create_record:        { fr: 'Nouvel enregistrement',   en: 'New record' },
   update_record:        { fr: 'Mise à jour de fiches',   en: 'Record update' },
+  delete_record:        { fr: 'Suppression de fiches',   en: 'Record deletion' },
 }
 
 interface FieldChange { field: string; before: unknown; after: unknown }
-interface RecordChange { id: number; display_name: string; changes: FieldChange[] }
+interface RecordChange { id: number; display_name: string; changes?: FieldChange[] }
 
 function fmtCellValue(v: unknown): string {
   if (v === false || v === null || v === undefined || v === '') return '—'
   if (Array.isArray(v)) return v.length === 2 ? String(v[1]) : v.join(', ')
   return String(v)
+}
+
+function changesetCounts(ops: Operation[]) {
+  let created = 0, updated = 0, deleted = 0, studio = 0
+  for (const op of ops) {
+    const targets = Array.isArray(op.params?.targets) ? (op.params.targets as unknown[]).length : 0
+    if (op.type === 'create_record') created += 1
+    else if (op.type === 'update_record') updated += targets || 1
+    else if (op.type === 'delete_record') deleted += targets || 1
+    else studio += 1
+  }
+  return { created, updated, deleted, studio }
 }
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -1068,6 +1081,7 @@ export default function Creator() {
                 {c.operations}
               </div>
               {opCount === 0 && <p className="ui-empty-description">{c.noOps}</p>}
+              {analysis && analysis.length > 0 && <ChangesetSummary ops={analysis} en={en} />}
               {analysis?.map((op, i) => <OperationRow key={i} op={op} index={i} en={en} />)}
 
               {applyErr && (
@@ -1240,6 +1254,7 @@ export default function Creator() {
                 <span>{preflight.ok ? c.preflightOk : c.preflightFail}</span>
               </div>
 
+              {analysis && <ChangesetSummary ops={analysis} en={en} />}
               {preflight.operations.map(op => <PreflightRow key={op.index} op={op} en={en} willCreate={c.willCreate} />)}
 
               {preflight.ok && (
@@ -1603,6 +1618,31 @@ function ResultRow({ r, en }: { r: OpResult; en: boolean }) {
   )
 }
 
+// ── Changeset summary (record counts) ─────────────────────────────
+
+function ChangesetSummary({ ops, en }: { ops: Operation[]; en: boolean }) {
+  if (!ops.length) return null
+  const { created, updated, deleted, studio } = changesetCounts(ops)
+  const chips: Array<{ label: string; tone: string }> = []
+  if (created) chips.push({ label: en ? `${created} record(s) created` : `${created} fiche(s) créée(s)`, tone: 'var(--th-success, #1e7e34)' })
+  if (updated) chips.push({ label: en ? `${updated} record(s) updated` : `${updated} fiche(s) mise(s) à jour`, tone: 'var(--brand)' })
+  if (deleted) chips.push({ label: en ? `${deleted} record(s) deleted` : `${deleted} fiche(s) supprimée(s)`, tone: 'var(--th-danger, #c0392b)' })
+  if (studio) chips.push({ label: en ? `${studio} Studio change(s)` : `${studio} modification(s) Studio`, tone: 'var(--th-muted)' })
+  if (!chips.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0 10px' }}>
+      {chips.map(ch => (
+        <span key={ch.label} style={{
+          fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
+          border: `1px solid ${ch.tone}`, color: ch.tone,
+        }}>
+          {ch.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 // ── Record change view (create_record / update_record diff) ───────
 
 function RecordChangeView({ detail }: { detail?: Record<string, unknown> }) {
@@ -1616,7 +1656,7 @@ function RecordChangeView({ detail }: { detail?: Record<string, unknown> }) {
             {rec.display_name}{' '}
             <span style={{ color: 'var(--th-muted)', fontWeight: 400 }}>#{rec.id}</span>
           </div>
-          {rec.changes.map(ch => (
+          {(rec.changes ?? []).map(ch => (
             <div key={ch.field} style={{
               display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
               marginLeft: 8, marginTop: 2,

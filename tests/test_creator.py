@@ -104,7 +104,7 @@ class FakeOdoo:
 
     def fields_get(self, model, attributes=None):
         if model in self._field_types:
-            return {f: {"type": t, "string": f}
+            return {f: {"type": t, "string": f, "store": True, "readonly": False}
                     for f, t in self._field_types[model].items()}
         return self._automation_fields
 
@@ -316,6 +316,68 @@ async def test_update_record_rolls_back_on_later_failure():
     assert result["operations"][0]["status"] == "rolled_back"
     # the update was applied, then the snapshot ("ACME") was restored
     assert fake.written[-1] == ("res.partner", [7], {"name": "ACME"})
+
+
+def test_parse_analysis_accepts_delete_record():
+    text = (
+        '{"operations":[{"type":"delete_record","summary":"retire une ligne",'
+        '"params":{"model":"product.supplierinfo","targets":[{"id":50}]}}]}'
+    )
+    result = parse_analysis(text)
+    assert result["ok"]
+    assert result["operations"][0]["type"] == "delete_record"
+
+
+async def test_apply_delete_record():
+    fake = FakeOdoo(
+        records={"product.supplierinfo": [
+            {"id": 50, "partner_id": [4921, "Duo"], "price": 10.0,
+             "display_name": "Duo — P"}]},
+        field_types={"product.supplierinfo": {
+            "partner_id": "many2one", "price": "float"}})
+    ops = [{
+        "type": "delete_record", "summary": "supprime une ligne fournisseur",
+        "params": {"model": "product.supplierinfo",
+                   "targets": [{"id": 50, "display_name": "Duo — P"}]},
+    }]
+    result = await apply_changeset(fake, ops)
+    assert result["ok"]
+    assert ("product.supplierinfo", [50]) in fake.unlinked
+
+
+async def test_delete_record_refuses_blocked_model():
+    fake = FakeOdoo()
+    ops = [{
+        "type": "delete_record", "summary": "supprime une écriture",
+        "params": {"model": "account.move", "targets": [{"id": 1}]},
+    }]
+    result = await apply_changeset(fake, ops, dry_run=True)
+    assert not result["ok"]
+    assert "protégé" in (result["operations"][0].get("error") or "")
+    assert fake.unlinked == []
+
+
+async def test_delete_record_recreates_on_rollback():
+    fake = FakeOdoo(
+        records={"product.supplierinfo": [
+            {"id": 50, "partner_id": [4921, "Duo"], "price": 10.0,
+             "display_name": "Duo — P"}]},
+        field_types={"product.supplierinfo": {
+            "partner_id": "many2one", "price": "float"}})
+    ops = [
+        {"type": "delete_record", "summary": "supprime une ligne",
+         "params": {"model": "product.supplierinfo", "targets": [{"id": 50}]}},
+        {"type": "create_field", "summary": "ko",
+         "params": {"model": "ghost.model", "name": "x_b", "ttype": "char"}},
+    ]
+    result = await apply_changeset(fake, ops)
+    assert not result["ok"]
+    assert result["rolled_back"]
+    assert result["operations"][0]["status"] == "rolled_back"
+    # the deleted supplierinfo line was re-created from its snapshot
+    recreated = [c for c in fake.created if c[0] == "product.supplierinfo"]
+    assert len(recreated) == 1
+    assert recreated[0][1]["partner_id"] == 4921
 
 
 # ── Route wiring ─────────────────────────────────────────────────

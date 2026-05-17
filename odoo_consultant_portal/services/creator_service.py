@@ -18,7 +18,7 @@ from typing import Any, Optional
 _OP_TYPES = (
     "create_field", "modify_view", "create_server_action",
     "create_automation", "create_cron", "modify_report",
-    "create_record", "update_record",
+    "create_record", "update_record", "delete_record",
 )
 
 CHANGESET_INSTRUCTIONS = """\
@@ -168,21 +168,55 @@ sur un modèle transactionnel : `sale.order(.line)`, `account.move(.line)`, \
 Ces flux ventes / comptabilité / stock sont protégés ; si la demande l'exige, \
 renvoie `operations: []` et explique-le dans `functional_analysis`.
 
-Avant toute opération `update_record`, identifie les fiches exactes à l'aide \
-de `query_odoo` : tu DOIS connaître leur `id` et leur `display_name`. Ne \
-propose jamais une mise à jour « en aveugle » par domaine — le consultant doit \
-voir précisément quelles fiches seront touchées. Vérifie les noms et types de \
-champs avec `get_odoo_fields`.
+Avant toute opération `update_record` ou `delete_record`, identifie les fiches \
+exactes à l'aide de `query_odoo` : tu DOIS connaître leur `id` et leur \
+`display_name`. Ne propose jamais une opération « en aveugle » par domaine — le \
+consultant doit voir précisément quelles fiches seront touchées. Vérifie les \
+noms et types de champs avec `get_odoo_fields`.
 
-- **create_record** — créer un enregistrement.
-  params : `model`, `values` (objet `{champ: valeur}`), `label` (libellé court \
-et lisible de la fiche créée).
+IMPORTANT — relations one2many : pour modifier le CONTENU d'une relation \
+`one2many` (par exemple les lignes fournisseur `seller_ids` d'un \
+`product.template`, ou les lignes d'un autre objet de configuration), n'agis \
+JAMAIS sur le champ `one2many` du parent — il n'est pas modifiable via \
+`update_record`. Agis directement sur le MODÈLE ENFANT de la relation : \
+`create_record`, `update_record` ou `delete_record` sur ses enregistrements. \
+Exemple : pour les fournisseurs d'achat d'un produit, agis sur \
+`product.supplierinfo` (relié au produit par `product_tmpl_id`) — crée la \
+ligne manquante, corrige `partner_id` sur une ligne erronée, supprime une \
+ligne en trop. C'est la façon correcte et sûre de procéder.
+
+RÈGLES STRICTES — opérations records :
+- Une opération `create_record` crée UN SEUL enregistrement précis. Son \
+`values` est OBLIGATOIRE et doit contenir les valeurs concrètes des champs : \
+JAMAIS un objet vide, jamais un résumé. Pour créer N enregistrements, émets N \
+opérations `create_record` distinctes, chacune entièrement renseignée — \
+n'émets jamais une opération « lot » du type « créer les fiches manquantes ».
+- Ne crée JAMAIS un enregistrement qui pourrait déjà exister : vérifie d'abord \
+avec `query_odoo`. S'il existe, réutilise son `id` (comme valeur d'un champ \
+many2one, ou via `update_record`) — ne le recrée pas. Exemple : si un \
+fournisseur `res.partner` existe déjà dans l'instance, n'émets pas de \
+`create_record` pour lui ; relie-le avec son id.
+- N'émets une opération QUE si tu peux renseigner tous ses paramètres \
+concrètement (valeurs réelles, ids réels). Si une information manque ou est \
+incertaine, ne produis pas d'opération incomplète : renvoie `operations: []` \
+et explique précisément ce qui bloque dans `functional_analysis`.
+
+- **create_record** — créer UN enregistrement.
+  params : `model`, `values` (objet `{champ: valeur}` NON VIDE, valeurs \
+concrètes), `label` (libellé court et lisible de la fiche créée).
 
 - **update_record** — mettre à jour des enregistrements existants.
   params : `model`, `targets` (liste `[{"id": <id>, "display_name": <nom>}]` \
 des fiches résolues via `query_odoo`), `values` (objet `{champ: nouvelle \
 valeur}`). Pour un champ `many2one`, donne l'`id` numérique de la cible. Les \
 champs `one2many` et `many2many` ne sont PAS pris en charge en mise à jour.
+
+- **delete_record** — supprimer des enregistrements existants.
+  params : `model`, `targets` (liste `[{"id": <id>, "display_name": <nom>}]`). \
+Opération destructive : ne l'emploie que si la demande exige explicitement de \
+retirer une fiche (par exemple nettoyer une ligne fournisseur erronée). En cas \
+d'échec d'une autre opération du changeset, les fiches supprimées sont \
+recréées au mieux, mais avec de nouveaux identifiants.
 
 Les `arch` doivent être du XML valide et bien formé. Sois précis : la liste des \
 opérations EST ce qui sera exécuté littéralement.\
