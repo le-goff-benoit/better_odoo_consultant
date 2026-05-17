@@ -33,12 +33,18 @@ from ...services.creator_service import (
     build_analysis_message, parse_analysis, build_documentation_message,
 )
 from ...services.creator_executor import apply_changeset
+from ...services.attachment_service import ChatAttachment, inject_attachments
 from .ai import _ai_key, _sse, _exchange_copilot_token, _PROVIDERS
 
 router = APIRouter()
 
-# Only projects where Studio is actually used may be modified by the Creator.
+# Studio operations may only target projects where Studio is actually in use.
+# Record operations (create_record / update_record) carry no such restriction.
 ELIGIBLE_MODES = {"studio", "studio_dev"}
+STUDIO_OP_TYPES = {
+    "create_field", "modify_view", "create_server_action",
+    "create_automation", "create_cron", "modify_report",
+}
 
 
 # ── Eligible projects ────────────────────────────────────────────
@@ -129,13 +135,23 @@ def _build_runtime(profile: Profile, env_id: Optional[str], company_id: Optional
     return odoo, source_path, repo_path, version, env, active_company_id
 
 
-def _eligible_or_403(profile: Profile) -> None:
+def _check_operations_allowed(profile: Profile, operations: list[dict]) -> None:
+    """Gate a changeset by project eligibility.
+
+    Studio operations require a Studio / Studio + Dev project; record
+    operations (create_record / update_record) are allowed on any project.
+    """
+    has_studio_op = any(
+        (op.get("type") or "").strip() in STUDIO_OP_TYPES for op in operations)
+    if not has_studio_op:
+        return
     complexity = parse_technical_complexity(profile.technical_complexity)
     mode = (complexity or {}).get("mode")
     if mode not in ELIGIBLE_MODES:
         raise HTTPException(
-            403, "Ce projet n'a pas Studio activé — le Creator est réservé aux "
-                 "projets Studio ou Studio + Dev.")
+            403, "Les opérations de type Studio sont réservées aux projets "
+                 "Studio ou Studio + Dev. Ce projet n'a pas Studio activé — "
+                 "seules les modifications de records y sont possibles.")
 
 
 def _company_name(profile: Profile, company_id: Optional[int]) -> Optional[str]:
@@ -170,11 +186,12 @@ class AnalyzeBody(BaseModel):
     company_id: Optional[int] = None
     request: str
     instructions: list[str] = Field(default_factory=list)
+    attachments: list[ChatAttachment] = Field(default_factory=list)
 
 
 @router.post("/analyze")
 async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session)):
-    if not body.request.strip():
+    if not body.request.strip() and not body.attachments:
         raise HTTPException(400, "La demande fonctionnelle est vide.")
 
     api_key = _resolve_provider_key(body.provider)
@@ -187,13 +204,13 @@ async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session
     profile = await session.get(Profile, body.profile_id)
     if not profile:
         raise HTTPException(404, "Projet introuvable.")
-    _eligible_or_403(profile)
 
     odoo, source_path, repo_path, version, env, company_id = _build_runtime(
         profile, body.env_id, body.company_id)
     context_md = _build_context_md(profile, version, body.request, company_id)
     user_message = build_analysis_message(body.request, body.instructions)
-    messages = [{"role": "user", "content": user_message}]
+    messages = inject_attachments(
+        [{"role": "user", "content": user_message}], body.attachments)
     company_name = _company_name(profile, company_id)
 
     async def generate():
@@ -276,11 +293,12 @@ async def apply(body: ApplyBody, session: AsyncSession = Depends(get_session)):
     profile = await session.get(Profile, body.profile_id)
     if not profile:
         raise HTTPException(404, "Projet introuvable.")
-    _eligible_or_403(profile)
+
+    operations = [op.model_dump() for op in body.operations]
+    _check_operations_allowed(profile, operations)
 
     odoo, _src, _repo, version, env, company_id = _build_runtime(
         profile, body.env_id, body.company_id)
-    operations = [op.model_dump() for op in body.operations]
 
     async def save_terminal(status: str, result: dict):
         record = await session.get(CreatorRequest, body.request_id) if body.request_id else None
@@ -359,13 +377,13 @@ async def dry_run(body: DryRunBody, session: AsyncSession = Depends(get_session)
     profile = await session.get(Profile, body.profile_id)
     if not profile:
         raise HTTPException(404, "Projet introuvable.")
-    _eligible_or_403(profile)
+    operations = [op.model_dump() for op in body.operations]
+    _check_operations_allowed(profile, operations)
     odoo, _src, _repo, version, _env, _cid = _build_runtime(
         profile, body.env_id, body.company_id)
     try:
-        return await apply_changeset(
-            odoo, [op.model_dump() for op in body.operations], dry_run=True,
-            version=version)
+        return await apply_changeset(odoo, operations, dry_run=True,
+                                     version=version)
     except Exception as exc:
         raise HTTPException(500, f"Échec du contrôle préalable : {exc}")
 

@@ -52,15 +52,21 @@ def test_build_analysis_message_includes_instructions():
 class FakeOdoo:
     """Minimal XML-RPC client stand-in for executor tests."""
 
-    def __init__(self, models=None, automation_fields=None, existing_fields=None):
+    def __init__(self, models=None, automation_fields=None, existing_fields=None,
+                 records=None, field_types=None):
         self._next_id = 100
         self.created: list[tuple] = []
         self.unlinked: list[tuple] = []
+        self.written: list[tuple] = []
         self._models = models if models is not None else {"sale.order": 1}
         self._automation_fields = automation_fields or {
             "name": {}, "trigger": {}, "state": {}, "code": {}}
         # set of (model, field_name) already present on the instance
         self._existing_fields = set(existing_fields or ())
+        # {model: [row dicts]} — ordinary records the executor can read/update
+        self._records = records or {}
+        # {model: {field: ttype}} — field metadata for record operations
+        self._field_types = field_types or {}
 
     def search_read(self, model, domain=None, fields=None, limit=80,
                     offset=0, order=""):
@@ -74,6 +80,13 @@ class FakeOdoo:
             crit = {d[0]: d[2] for d in (domain or [])}
             key = (crit.get("model"), crit.get("name"))
             return [{"id": 9}] if key in self._existing_fields else []
+        if model in self._records:
+            rows = self._records[model]
+            for d in (domain or []):
+                if d[0] == "id" and d[1] == "in":
+                    wanted = set(d[2])
+                    rows = [r for r in rows if r.get("id") in wanted]
+            return [dict(r) for r in rows]
         return []
 
     def create(self, model, values):
@@ -85,7 +98,14 @@ class FakeOdoo:
         self.unlinked.append((model, ids))
         return True
 
+    def write(self, model, ids, values):
+        self.written.append((model, list(ids), dict(values)))
+        return True
+
     def fields_get(self, model, attributes=None):
+        if model in self._field_types:
+            return {f: {"type": t, "string": f}
+                    for f, t in self._field_types[model].items()}
         return self._automation_fields
 
 
@@ -199,6 +219,103 @@ async def test_create_field_rejects_duplicate():
     result = await apply_changeset(fake, ops, dry_run=True)
     assert not result["ok"]
     assert "existe déjà" in (result["operations"][0].get("error") or "")
+
+
+# ── Record operations ────────────────────────────────────────────
+
+def test_parse_analysis_accepts_record_ops():
+    text = (
+        '{"functional_analysis":"FA","operations":['
+        '{"type":"create_record","summary":"crée un contact",'
+        '"params":{"model":"res.partner","values":{"name":"ACME"}}},'
+        '{"type":"update_record","summary":"maj produit",'
+        '"params":{"model":"product.template","targets":[{"id":5}],'
+        '"values":{"list_price":42}}}]}'
+    )
+    result = parse_analysis(text)
+    assert result["ok"]
+    assert [o["type"] for o in result["operations"]] == ["create_record", "update_record"]
+
+
+async def test_apply_create_record():
+    fake = FakeOdoo(field_types={"res.partner": {"name": "char"}})
+    ops = [{
+        "type": "create_record", "summary": "nouveau contact",
+        "params": {"model": "res.partner", "values": {"name": "New Co"},
+                   "label": "New Co"},
+    }]
+    result = await apply_changeset(fake, ops)
+    assert result["ok"]
+    partner_creates = [c for c in fake.created if c[0] == "res.partner"]
+    assert len(partner_creates) == 1
+    assert partner_creates[0][1]["name"] == "New Co"
+
+
+async def test_apply_update_record_writes():
+    fake = FakeOdoo(
+        records={"res.partner": [
+            {"id": 7, "name": "ACME", "email": "old@x.com", "display_name": "ACME"}]},
+        field_types={"res.partner": {"name": "char", "email": "char"}})
+    ops = [{
+        "type": "update_record", "summary": "maj email",
+        "params": {"model": "res.partner",
+                   "targets": [{"id": 7, "display_name": "ACME"}],
+                   "values": {"email": "new@x.com"}},
+    }]
+    result = await apply_changeset(fake, ops)
+    assert result["ok"]
+    assert ("res.partner", [7], {"email": "new@x.com"}) in fake.written
+    detail = result["operations"][0]["detail"]
+    change = detail["records"][0]["changes"][0]
+    assert change["before"] == "old@x.com"
+    assert change["after"] == "new@x.com"
+
+
+async def test_update_record_refuses_blocked_model():
+    fake = FakeOdoo()
+    ops = [{
+        "type": "update_record", "summary": "maj commande",
+        "params": {"model": "sale.order", "targets": [{"id": 1}],
+                   "values": {"note": "x"}},
+    }]
+    result = await apply_changeset(fake, ops, dry_run=True)
+    assert not result["ok"]
+    assert "protégé" in (result["operations"][0].get("error") or "")
+    assert fake.written == []
+
+
+async def test_update_record_rejects_many2many_field():
+    fake = FakeOdoo(
+        records={"res.partner": [{"id": 7, "display_name": "ACME"}]},
+        field_types={"res.partner": {"category_id": "many2many"}})
+    ops = [{
+        "type": "update_record", "summary": "maj tags",
+        "params": {"model": "res.partner", "targets": [{"id": 7}],
+                   "values": {"category_id": [[6, 0, [1]]]}},
+    }]
+    result = await apply_changeset(fake, ops, dry_run=True)
+    assert not result["ok"]
+    assert "many2many" in (result["operations"][0].get("error") or "")
+
+
+async def test_update_record_rolls_back_on_later_failure():
+    fake = FakeOdoo(
+        records={"res.partner": [
+            {"id": 7, "name": "ACME", "display_name": "ACME"}]},
+        field_types={"res.partner": {"name": "char"}})
+    ops = [
+        {"type": "update_record", "summary": "maj nom",
+         "params": {"model": "res.partner", "targets": [{"id": 7}],
+                    "values": {"name": "Renamed"}}},
+        {"type": "create_field", "summary": "ko",
+         "params": {"model": "ghost.model", "name": "x_b", "ttype": "char"}},
+    ]
+    result = await apply_changeset(fake, ops)
+    assert not result["ok"]
+    assert result["rolled_back"]
+    assert result["operations"][0]["status"] == "rolled_back"
+    # the update was applied, then the snapshot ("ACME") was restored
+    assert fake.written[-1] == ("res.partner", [7], {"name": "ACME"})
 
 
 # ── Route wiring ─────────────────────────────────────────────────

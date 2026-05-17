@@ -24,6 +24,23 @@ CREATOR_MODULE = "x_creator"
 
 _RELATIONAL = {"many2one", "one2many", "many2many"}
 
+# Transactional models the Creator must never write records to: sales,
+# accounting and the stock / payment flows that feed them. Guarded in the
+# executor itself, not just in the prompt — a prompt-only rule is bypassable.
+BLOCKED_MODELS = {
+    "sale.order", "sale.order.line",
+    "account.move", "account.move.line",
+    "account.payment",
+    "stock.move", "stock.move.line", "stock.picking",
+    "stock.valuation.layer",
+    "account.bank.statement", "account.bank.statement.line",
+    "pos.order", "pos.order.line",
+}
+
+# Field types that cannot be snapshotted reliably for a rollback, so the
+# Creator refuses to update them (v1). Scalars and many2one are fine.
+_NON_REVERSIBLE_TTYPES = {"one2many", "many2many"}
+
 # Operation types accepted in a changeset → executor method name.
 HANDLERS = {
     "create_field": "op_create_field",
@@ -32,6 +49,8 @@ HANDLERS = {
     "create_automation": "op_create_automation",
     "create_cron": "op_create_cron",
     "modify_report": "op_modify_report",
+    "create_record": "op_create_record",
+    "update_record": "op_update_record",
 }
 
 
@@ -111,12 +130,34 @@ def _clean(values: dict) -> dict:
     return {k: v for k, v in values.items() if v is not None}
 
 
+def _guard_model(model: str) -> None:
+    """Refuse record writes on transactional models (sales / accounting / stock)."""
+    if (model or "").strip() in BLOCKED_MODELS:
+        raise OperationError(
+            f"Modèle protégé : '{model}'. Le Creator n'écrit pas de records sur "
+            "les modèles transactionnels (ventes, comptabilité, stock, paiements).")
+
+
+def _to_writable(value: Any) -> Any:
+    """Normalise a value read from search_read into something ``write`` accepts.
+
+    search_read returns a many2one as a ``[id, display_name]`` pair; ``write``
+    expects the bare id. Used when restoring a snapshot during rollback.
+    """
+    if isinstance(value, (list, tuple)):
+        if len(value) == 2 and isinstance(value[0], int):
+            return value[0]
+        return list(value)
+    return value
+
+
 class _Executor:
     def __init__(self, odoo, dry: bool = False, version: str | None = None):
         self.odoo = odoo
         self.dry = dry                         # preflight: validate, never write
         self.version = version
         self.created: list[dict] = []          # {model, res_id, label} — newest last
+        self.modified: list[dict] = []         # {model, res_id, before} — for rollback
         self._model_cache: dict[str, int] = {}
         self._dry_counter = 0
 
@@ -168,8 +209,15 @@ class _Executor:
             pass  # traceability tag is non-blocking
 
     async def rollback(self) -> list[str]:
-        """Unlink every record created during this run, newest first."""
+        """Undo this run: restore updated records, then unlink created ones."""
         errors: list[str] = []
+        for rec in reversed(self.modified):
+            try:
+                before = {k: _to_writable(v) for k, v in rec["before"].items()}
+                await _run(lambda r=rec, b=before:
+                           self.odoo.write(r["model"], [r["res_id"]], b))
+            except Exception as exc:
+                errors.append(f"{rec['model']}#{rec['res_id']} (restauration) : {exc}")
         for rec in reversed(self.created):
             try:
                 await _run(lambda r=rec: self.odoo.unlink(r["model"], [r["res_id"]]))
@@ -382,6 +430,91 @@ class _Executor:
                 "plan": f"Automatisation « {name} » (déclencheur {trigger}) "
                         f"sur le modèle {model}."}
 
+    # ── record operations (data, not Studio metadata) ────────────
+
+    async def _field_types(self, model: str, names: list[str]) -> dict:
+        """Return {field: ttype} for *names*, raising on any unknown field."""
+        meta = await _run(lambda: self.odoo.fields_get(model, ["type"]))
+        types: dict[str, str] = {}
+        for name in names:
+            info = meta.get(name)
+            if not info:
+                raise OperationError(f"Champ inconnu sur '{model}' : '{name}'.")
+            types[name] = info.get("type")
+        return types
+
+    async def op_create_record(self, p: dict) -> dict:
+        model = _req(p, "model")
+        _guard_model(model)
+        values = p.get("values")
+        if not isinstance(values, dict) or not values:
+            raise OperationError("create_record : 'values' est manquant ou vide.")
+        await self._field_types(model, list(values.keys()))
+        label = (p.get("label") or "").strip() or f"Enregistrement {model}"
+        res_id = await self._create(model, dict(values), label)
+        return {"model": model, "res_id": res_id, "values": values, "label": label,
+                "plan": f"Création d'une fiche « {label} » dans le modèle {model}."}
+
+    async def op_update_record(self, p: dict) -> dict:
+        model = _req(p, "model")
+        _guard_model(model)
+        values = p.get("values")
+        if not isinstance(values, dict) or not values:
+            raise OperationError("update_record : 'values' est manquant ou vide.")
+
+        ids: list[int] = []
+        for target in (p.get("targets") or []):
+            if isinstance(target, dict) and target.get("id") is not None:
+                ids.append(int(target["id"]))
+            elif isinstance(target, int):
+                ids.append(target)
+        for rid in (p.get("record_ids") or []):
+            ids.append(int(rid))
+        ids = sorted(set(ids))
+        if not ids:
+            raise OperationError(
+                "update_record : aucune fiche cible — renseigne 'targets'.")
+
+        field_list = list(values.keys())
+        types = await self._field_types(model, field_list)
+        bad = [f for f, t in types.items() if t in _NON_REVERSIBLE_TTYPES]
+        if bad:
+            raise OperationError(
+                f"Champs non pris en charge en mise à jour : {', '.join(bad)} "
+                "(les champs one2many / many2many ne sont pas rollback-safe en v1).")
+
+        rows = await _run(lambda: self.odoo.search_read(
+            model, [["id", "in", ids]], field_list + ["display_name"],
+            limit=len(ids)))
+        found = {r["id"]: r for r in rows}
+        missing = [i for i in ids if i not in found]
+        if missing:
+            raise OperationError(
+                f"Fiches introuvables sur '{model}' : {missing}.")
+
+        records = []
+        for rid in ids:
+            row = found[rid]
+            before = {f: row.get(f) for f in field_list}
+            if not self.dry:
+                self.modified.append(
+                    {"model": model, "res_id": rid, "before": before})
+            records.append({
+                "id": rid,
+                "display_name": row.get("display_name") or f"{model}#{rid}",
+                "changes": [
+                    {"field": f, "before": before[f], "after": values[f]}
+                    for f in field_list
+                ],
+            })
+
+        if not self.dry:
+            await _run(lambda: self.odoo.write(model, ids, dict(values)))
+
+        return {"model": model, "records": records, "values": values,
+                "plan": f"Mise à jour de {len(ids)} fiche(s) {model} — "
+                        f"champs : {', '.join(field_list)}."}
+
 
 async def apply_changeset(odoo, operations: list[dict],
                           rollback_on_failure: bool = True,
@@ -430,7 +563,8 @@ async def apply_changeset(odoo, operations: list[dict],
 
     rolled_back = False
     rollback_errors: list[str] = []
-    if not dry_run and failed and rollback_on_failure and executor.created:
+    if (not dry_run and failed and rollback_on_failure
+            and (executor.created or executor.modified)):
         rollback_errors = await executor.rollback()
         rolled_back = True
         for r in results:
@@ -442,6 +576,7 @@ async def apply_changeset(odoo, operations: list[dict],
         "dry_run": dry_run,
         "operations": results,
         "created": executor.created,
+        "modified": executor.modified,
         "rolled_back": rolled_back,
         "rollback_errors": rollback_errors,
         "applied_at": datetime.utcnow().isoformat(),

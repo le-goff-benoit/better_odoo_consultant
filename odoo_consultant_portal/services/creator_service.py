@@ -18,6 +18,7 @@ from typing import Any, Optional
 _OP_TYPES = (
     "create_field", "modify_view", "create_server_action",
     "create_automation", "create_cron", "modify_report",
+    "create_record", "update_record",
 )
 
 CHANGESET_INSTRUCTIONS = """\
@@ -152,6 +153,36 @@ on_unlink|on_time), `code` (Python exécuté), `filter_domain` (domaine optionne
 - **create_cron** — action planifiée (ir.cron).
   params : `model`, `name`, `code` (Python), `interval_number`, \
 `interval_type` (minutes|hours|days|weeks|months).
+
+### Opérations sur les données (records)
+En plus des personnalisations Studio ci-dessus, tu peux créer ou mettre à \
+jour des enregistrements Odoo ordinaires : contacts (`res.partner`), produits \
+(`product.template`, `product.product`), catégories, etc. C'est utile par \
+exemple pour mettre à jour des fiches produit à partir d'un document fourni \
+en pièce jointe.
+
+INTERDICTION ABSOLUE — ne propose JAMAIS `create_record` ni `update_record` \
+sur un modèle transactionnel : `sale.order(.line)`, `account.move(.line)`, \
+`account.payment`, `stock.move(.line)`, `stock.picking`, \
+`stock.valuation.layer`, `account.bank.statement(.line)`, `pos.order(.line)`. \
+Ces flux ventes / comptabilité / stock sont protégés ; si la demande l'exige, \
+renvoie `operations: []` et explique-le dans `functional_analysis`.
+
+Avant toute opération `update_record`, identifie les fiches exactes à l'aide \
+de `query_odoo` : tu DOIS connaître leur `id` et leur `display_name`. Ne \
+propose jamais une mise à jour « en aveugle » par domaine — le consultant doit \
+voir précisément quelles fiches seront touchées. Vérifie les noms et types de \
+champs avec `get_odoo_fields`.
+
+- **create_record** — créer un enregistrement.
+  params : `model`, `values` (objet `{champ: valeur}`), `label` (libellé court \
+et lisible de la fiche créée).
+
+- **update_record** — mettre à jour des enregistrements existants.
+  params : `model`, `targets` (liste `[{"id": <id>, "display_name": <nom>}]` \
+des fiches résolues via `query_odoo`), `values` (objet `{champ: nouvelle \
+valeur}`). Pour un champ `many2one`, donne l'`id` numérique de la cible. Les \
+champs `one2many` et `many2many` ne sont PAS pris en charge en mise à jour.
 
 Les `arch` doivent être du XML valide et bien formé. Sois précis : la liste des \
 opérations EST ce qui sera exécuté littéralement.\

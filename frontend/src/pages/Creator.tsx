@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Wand2, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Loader2,
   FileText, Download, RotateCcw, Pencil, Play, Hammer, Database,
-  ScanSearch, KeyRound, History, X,
+  ScanSearch, KeyRound, History, X, Paperclip, ArrowRight,
 } from 'lucide-react'
 import {
   getCreatorProjects, getAiProviders, getModelConfig, checkAllSources, getCreatorHistory,
@@ -21,6 +21,11 @@ import ConversationContextPanel from '../components/ConversationContextPanel'
 import { useWorkspaceContext } from '../components/Layout'
 import { routedContextFiles } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
+import {
+  ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_BYTES,
+  fileKind, fileToBase64, formatFileSize, attachmentPayload,
+  type AttachmentDraft,
+} from '../utils/attachments'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -85,6 +90,17 @@ const OP_META: Record<string, { fr: string; en: string }> = {
   create_automation:    { fr: 'Action automatisée',      en: 'Automated action' },
   create_cron:          { fr: 'Action planifiée',        en: 'Scheduled action' },
   modify_report:        { fr: 'Modification de rapport', en: 'Report change' },
+  create_record:        { fr: 'Nouvel enregistrement',   en: 'New record' },
+  update_record:        { fr: 'Mise à jour de fiches',   en: 'Record update' },
+}
+
+interface FieldChange { field: string; before: unknown; after: unknown }
+interface RecordChange { id: number; display_name: string; changes: FieldChange[] }
+
+function fmtCellValue(v: unknown): string {
+  if (v === false || v === null || v === undefined || v === '') return '—'
+  if (Array.isArray(v)) return v.length === 2 ? String(v[1]) : v.join(', ')
+  return String(v)
 }
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -123,8 +139,8 @@ export default function Creator() {
   const c = useMemo(() => ({
     title: en ? 'Creator' : 'Création',
     description: en
-      ? 'Apply Studio-style modifications to a live Odoo instance — analysed, previewed and confirmed before any write.'
-      : 'Appliquez des modifications de type Studio sur une instance Odoo en direct — analysées, prévisualisées et confirmées avant toute écriture.',
+      ? 'Apply Studio-style changes and record updates to a live Odoo instance — analysed, previewed and confirmed before any write.'
+      : 'Appliquez des modifications de type Studio et des mises à jour de records sur une instance Odoo en direct — analysées, prévisualisées et confirmées avant toute écriture.',
     steps: en ? ['Request', 'Analysis', 'Validation', 'Result'] : ['Demande', 'Analyse', 'Validation', 'Résultat'],
     gateTitle: en ? 'Sensitive tool' : 'Outil sensible',
     gateHint: en
@@ -134,7 +150,7 @@ export default function Creator() {
     enter: en ? 'Enter the tool' : 'Accéder à l\'outil',
     challengePlaceholder: en ? 'Type the code…' : 'Tapez le code…',
     project: en ? 'Project' : 'Projet',
-    selectProject: en ? 'Select a Studio project' : 'Sélectionner un projet Studio',
+    selectProject: en ? 'Select a project' : 'Sélectionner un projet',
     environment: en ? 'Environment' : 'Environnement',
     company: en ? 'Company' : 'Société',
     allCompanies: en ? 'All companies' : 'Toutes les sociétés',
@@ -146,14 +162,20 @@ export default function Creator() {
     runningSignal: en ? 'Task running…' : 'Tâche en cours…',
     request: en ? 'Functional request' : 'Demande fonctionnelle',
     requestHint: en
-      ? 'Describe the modification — e.g. "add an After-sales tab on the sale order form with a follow-up date field".'
-      : 'Décrivez la modification — ex. « ajouter un onglet SAV sur le bon de commande avec un champ date de suivi ».',
+      ? 'Describe the change — e.g. "add an After-sales tab on the sale order form", or "update the prices of these products from the attached file".'
+      : 'Décrivez la modification — ex. « ajouter un onglet SAV sur le bon de commande », ou « mettre à jour le prix de ces produits à partir du fichier joint ».',
     analyze: en ? 'Analyse the request' : 'Analyser la demande',
     analyzing: en ? 'Analysing the instance…' : 'Analyse de l\'instance…',
-    noProjects: en ? 'No eligible project' : 'Aucun projet éligible',
+    noProjects: en ? 'No project available' : 'Aucun projet disponible',
     noProjectsHint: en
-      ? 'The Creator is restricted to projects where Studio is in use (Studio or Studio + Dev). Run a technical-complexity analysis on a project first.'
-      : 'Le Creator est réservé aux projets utilisant Studio (Studio ou Studio + Dev). Lancez d\'abord une analyse de complexité technique sur un projet.',
+      ? 'No project is configured yet. Create a project first to use the Creator.'
+      : 'Aucun projet n\'est encore configuré. Créez d\'abord un projet pour utiliser le Creator.',
+    attach: en ? 'Attach a document' : 'Joindre un document',
+    attachHint: en
+      ? 'Optional — attach a PDF or text file (price list, product sheet…) the AI can use to prepare record updates.'
+      : 'Optionnel — joignez un PDF ou un fichier texte (liste de prix, fiche produit…) que l\'IA pourra exploiter pour préparer des mises à jour de records.',
+    removeAttachment: en ? 'Remove' : 'Retirer',
+    dropFiles: en ? 'Drop files here' : 'Déposez les fichiers ici',
     ctxVersion: en ? 'Odoo' : 'Odoo',
     ctxSources: en ? 'Source code' : 'Code source',
     ctxRepo: en ? 'Client repo' : 'Dépôt client',
@@ -179,8 +201,8 @@ export default function Creator() {
     preflightTitle: en ? 'Pre-flight check' : 'Contrôle préalable',
     preflightRunning: en ? 'Validating against the live instance…' : 'Validation sur l\'instance en direct…',
     preflightOk: en
-      ? 'Dry-run passed. Here is exactly what will be created:'
-      : 'Le dry-run est passé. Voici exactement ce qui va être créé :',
+      ? 'Dry-run passed. Here is exactly what will be applied:'
+      : 'Le dry-run est passé. Voici exactement ce qui va être appliqué :',
     preflightFail: en
       ? 'The dry-run found problems — nothing will be written. Refine the request and try again.'
       : 'Le dry-run a détecté des problèmes — rien ne sera écrit. Modifiez la demande et réessayez.',
@@ -201,7 +223,7 @@ export default function Creator() {
     newRequest: en ? 'New request' : 'Nouvelle demande',
     newCreation: en ? 'New creation' : 'Nouvelle création',
     instructionsApplied: en ? 'Instructions taken into account' : 'Instructions prises en compte',
-    willCreate: en ? 'Will create' : 'Va créer',
+    willCreate: en ? 'Preview' : 'Aperçu',
     statusApplied: en ? 'Applied' : 'Réalisé',
     statusFailed: en ? 'Failed' : 'Échec',
     statusRejected: en ? 'Rejected' : 'Rejeté',
@@ -226,6 +248,8 @@ export default function Creator() {
   const [envId, setEnvId] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<number | null>(null)
   const [request, setRequest] = useState('')
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [instructions, setInstructions] = useState<string[]>([])
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
@@ -308,7 +332,7 @@ export default function Creator() {
     enabled: phase !== 'gate',
   })
   const projects: CreatorProject[] = useMemo(
-    () => ((projectsData?.data ?? []) as CreatorProject[]).filter(p => p.eligible),
+    () => (projectsData?.data ?? []) as CreatorProject[],
     [projectsData],
   )
 
@@ -354,10 +378,61 @@ export default function Creator() {
     setCompanyId(selectedProject.selected_company_id ?? null)
   }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── attachments ─────────────────────────────────────────────────
+
+  const readyAttachments = attachments.filter(a => a.status === 'ready')
+
+  const addAttachmentError = (file: File, error: string) => {
+    setAttachments(prev => [
+      ...prev,
+      {
+        id: `${Date.now()}-${file.name}-error`,
+        name: file.name,
+        mime_type: file.type,
+        size: file.size,
+        kind: fileKind(file) ?? 'text',
+        status: 'error',
+        error,
+      },
+    ])
+  }
+
+  const addFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList)
+    if (!files.length || phase !== 'setup') return
+    const slots = ATTACHMENT_MAX_FILES - readyAttachments.length
+    if (slots <= 0) {
+      addAttachmentError(files[0], en ? `Maximum ${ATTACHMENT_MAX_FILES} files` : `Maximum ${ATTACHMENT_MAX_FILES} fichiers`)
+      return
+    }
+    for (const file of files.slice(0, slots)) {
+      const kind = fileKind(file)
+      if (!kind) { addAttachmentError(file, en ? 'Unsupported format' : 'Format non supporté'); continue }
+      if (file.size > ATTACHMENT_MAX_BYTES) { addAttachmentError(file, en ? 'File over 5 MB' : 'Fichier supérieur à 5 MB'); continue }
+      try {
+        const base = {
+          id: `${Date.now()}-${file.name}-${Math.random().toString(16).slice(2)}`,
+          name: file.name,
+          mime_type: file.type || (kind === 'pdf' ? 'application/pdf' : 'text/plain'),
+          size: file.size,
+          kind,
+          status: 'ready' as const,
+        }
+        const draft: AttachmentDraft = kind === 'pdf'
+          ? { ...base, content_base64: await fileToBase64(file) }
+          : { ...base, text: await file.text() }
+        setAttachments(prev => [...prev.filter(a => a.status === 'ready'), draft].slice(0, ATTACHMENT_MAX_FILES))
+      } catch (err) {
+        addAttachmentError(file, err instanceof Error ? err.message : (en ? 'Cannot read file' : 'Lecture impossible'))
+      }
+    }
+  }
+
   // ── analysis ────────────────────────────────────────────────────
 
   const runAnalysis = async (allInstructions: string[]) => {
-    if (projectId === '' || !activeProvider || !request.trim()) return
+    if (projectId === '' || !activeProvider) return
+    if (!request.trim() && readyAttachments.length === 0) return
     setPhase('analyzing')
     setToolEvents([])
     setContextInfo(null)
@@ -388,6 +463,7 @@ export default function Creator() {
           company_id: companyId ?? undefined,
           request,
           instructions: allInstructions,
+          attachments: readyAttachments.map(attachmentPayload),
         }),
       })
       if (!res.ok || !res.body) {
@@ -564,6 +640,7 @@ export default function Creator() {
   const resetRequest = () => {
     abortRef.current?.abort()
     setRequest('')
+    setAttachments([])
     setInstructions([])
     setToolEvents([])
     setContextInfo(null)
@@ -595,6 +672,7 @@ export default function Creator() {
       setEnvId(row.env_id ?? null)
       setCompanyId(row.company_id ?? null)
       setRequest(row.request_text ?? '')
+      setAttachments([])
       setInstructions(row.instructions ?? [])
       setFuncAnalysis((row.functional_analysis ?? '').trim())
       setTechAnalysis((row.technical_analysis ?? '').trim())
@@ -824,7 +902,15 @@ export default function Creator() {
             </div>
           )}
 
-          <div style={{ marginTop: 16 }}>
+          <div
+            style={{ marginTop: 16 }}
+            onDragOver={e => { if (phase === 'setup') e.preventDefault() }}
+            onDrop={e => {
+              if (phase !== 'setup') return
+              e.preventDefault()
+              if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
+            }}
+          >
             <Field label={c.request} hint={c.requestHint}>
               <textarea
                 className="ui-input"
@@ -837,6 +923,54 @@ export default function Creator() {
                 style={{ resize: 'vertical', fontFamily: 'inherit', opacity: locked && !busy ? 0.85 : undefined }}
               />
             </Field>
+            {phase === 'setup' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.csv,.json,.xml,.py,.log,.pdf"
+                  style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files) addFiles(e.target.files); e.currentTarget.value = '' }}
+                />
+                <button
+                  type="button"
+                  className="assistant-soft-action"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={readyAttachments.length >= ATTACHMENT_MAX_FILES}
+                  title={c.attach}
+                >
+                  <Paperclip size={13} />
+                  <span>{c.attach}</span>
+                </button>
+                <span style={{ fontSize: 11.5, color: 'var(--th-muted)' }}>{c.attachHint}</span>
+              </div>
+            )}
+            {attachments.length > 0 && (
+              <div className="assistant-attachments" style={{ marginTop: 8 }}>
+                {attachments.map(att => (
+                  <div
+                    key={att.id}
+                    className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`}
+                    title={att.error ?? att.name}
+                  >
+                    {att.kind === 'pdf' ? <FileText size={13} /> : <Paperclip size={13} />}
+                    <span className="assistant-attachment-name">{att.name}</span>
+                    <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
+                    {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
+                    {phase === 'setup' && (
+                      <button
+                        type="button"
+                        onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+                        aria-label={`${c.removeAttachment} ${att.name}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {instructions.length > 0 && (
@@ -857,7 +991,7 @@ export default function Creator() {
                 variant="primary"
                 icon={<Wand2 size={15} />}
                 onClick={startAnalysis}
-                disabled={projectId === '' || !activeProvider || !request.trim()}
+                disabled={projectId === '' || !activeProvider || (!request.trim() && readyAttachments.length === 0)}
               >
                 {c.analyze}
               </Button>
@@ -1351,6 +1485,10 @@ function OperationRow({ op, index, en }: { op: Operation; index: number; en: boo
   ].filter(([, value]) => value) as Array<[string, string]>
   const scalarParams = Object.entries(params)
     .filter(([k, v]) => !['arch', 'code', 'compute'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
+  const recordValues = params.values && typeof params.values === 'object' && !Array.isArray(params.values)
+    ? (params.values as Record<string, unknown>) : null
+  const recordTargets = Array.isArray(params.targets)
+    ? (params.targets as Array<{ id?: number; display_name?: string }>) : []
 
   return (
     <div style={{
@@ -1369,6 +1507,23 @@ function OperationRow({ op, index, en }: { op: Operation; index: number; en: boo
           {scalarParams.map(([k, v]) => (
             <span key={k} className="ui-badge ui-badge-neutral" style={{ fontSize: 11 }}>
               {k}: {String(v)}
+            </span>
+          ))}
+        </div>
+      )}
+      {recordTargets.length > 0 && (
+        <div style={{ marginTop: 6, marginLeft: 30, fontSize: 12 }}>
+          <span style={{ color: 'var(--th-muted)', fontWeight: 600 }}>{en ? 'Records' : 'Fiches'} : </span>
+          {recordTargets.map((t, i) => (
+            <span key={i}>{i > 0 ? ', ' : ''}{t.display_name ?? `#${t.id}`}</span>
+          ))}
+        </div>
+      )}
+      {recordValues && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, marginLeft: 30 }}>
+          {Object.entries(recordValues).map(([k, v]) => (
+            <span key={k} className="ui-badge ui-badge-neutral" style={{ fontSize: 11 }}>
+              {k}: {fmtCellValue(v)}
             </span>
           ))}
         </div>
@@ -1413,6 +1568,7 @@ function PreflightRow({ op, en, willCreate }: { op: OpResult; en: boolean; willC
             <span style={{ color: tone, fontWeight: 600 }}>{willCreate} : </span>{op.plan}
           </div>
         )}
+        {!failed && <RecordChangeView detail={op.detail} />}
         {op.error && (
           <div style={{ fontSize: 12.5, color: tone, marginTop: 2 }}>{op.error}</div>
         )}
@@ -1440,8 +1596,41 @@ function ResultRow({ r, en }: { r: OpResult; en: boolean }) {
         {r.plan && r.status === 'success' && (
           <div style={{ color: 'var(--th-muted)', marginTop: 2 }}>{r.plan}</div>
         )}
+        {r.status === 'success' && <RecordChangeView detail={r.detail} />}
         {r.error && <div style={{ color: tone, marginTop: 2 }}>{r.error}</div>}
       </div>
+    </div>
+  )
+}
+
+// ── Record change view (create_record / update_record diff) ───────
+
+function RecordChangeView({ detail }: { detail?: Record<string, unknown> }) {
+  const records = detail?.records as RecordChange[] | undefined
+  if (!records || records.length === 0) return null
+  return (
+    <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      {records.map(rec => (
+        <div key={rec.id} style={{ fontSize: 12 }}>
+          <div style={{ fontWeight: 650 }}>
+            {rec.display_name}{' '}
+            <span style={{ color: 'var(--th-muted)', fontWeight: 400 }}>#{rec.id}</span>
+          </div>
+          {rec.changes.map(ch => (
+            <div key={ch.field} style={{
+              display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+              marginLeft: 8, marginTop: 2,
+            }}>
+              <span className="ui-badge ui-badge-neutral" style={{ fontSize: 10.5 }}>{ch.field}</span>
+              <span style={{ color: 'var(--th-muted)', textDecoration: 'line-through' }}>
+                {fmtCellValue(ch.before)}
+              </span>
+              <ArrowRight size={11} style={{ color: 'var(--th-muted)', flexShrink: 0 }} />
+              <span style={{ fontWeight: 600 }}>{fmtCellValue(ch.after)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

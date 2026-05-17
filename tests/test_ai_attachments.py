@@ -1,7 +1,9 @@
 import pytest
 from fastapi import HTTPException
 
-from odoo_consultant_portal.api.routes.ai import ChatAttachment, _inject_attachments
+from odoo_consultant_portal.services.attachment_service import (
+    ChatAttachment, inject_attachments,
+)
 
 
 def test_inject_text_attachment_into_last_user_message():
@@ -16,7 +18,7 @@ def test_inject_text_attachment_into_last_user_message():
         )
     ]
 
-    patched = _inject_attachments(messages, attachments)
+    patched = inject_attachments(messages, attachments)
 
     assert patched[0]["content"].startswith("Résume ce fichier")
     assert "## Pièce jointe: notes.md" in patched[0]["content"]
@@ -37,7 +39,7 @@ def test_reject_unsupported_attachment_format():
     ]
 
     with pytest.raises(HTTPException) as exc:
-        _inject_attachments(messages, attachments)
+        inject_attachments(messages, attachments)
 
     assert exc.value.status_code == 400
     assert "Format non supporté" in exc.value.detail
