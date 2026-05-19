@@ -271,6 +271,21 @@ pas :
 - le **contenu** de ce contexte — le code source, les données, l'inventaire Studio — doit
   être **reconstitué à l'état courant** à chaque requête.
 
+```
+        DÉFINITION (stable)                  CONTENU (vivant)
+   ┌──────────────────────────┐     ┌────────────────────────────────┐
+   │ • Version Odoo : 16.0    │     │ • Code source 16.0      ──┐     │
+   │ • Édition : Enterprise   │     │ • Code custom du client   │ relu│
+   │ • Dépôt : acme-prod      │ ──► │ • Données de l'instance   ├─ à  │
+   │ • Profil : Architecte    │     │ • Personnalisations       │chaque
+   │ • Contexte projet : …    │     │   Studio                ──┘requête
+   └──────────────────────────┘     └────────────────────────────────┘
+     déclaré une fois, modifiable      jamais figé : rafraîchi en continu
+
+   NotebookLM fige les DEUX colonnes.  L'application ne fige que la GAUCHE :
+   la définition reste stable, le contenu est toujours repris à l'état courant.
+```
+
 | | NotebookLM / ChatGPT / Gemini | Better Odoo Assistant |
 |---|---|---|
 | **Définition** du contexte | Implicite, refaite à l'aveugle à chaque prompt | **Explicite et stable** : critères clés déclarés par environnement |
@@ -326,6 +341,23 @@ question**. Concrètement, avant de répondre, l'assistant rassemble :
 3. **Les guides pertinents** — la documentation méthodologique utile *à cette question*
    précise (voir §8.4).
 4. **Le profil de réponse et le mode** — qui orientent la forme et la méthode (voir §9).
+
+```
+   Question du consultant
+            │
+            ▼
+   ┌──────────────────────────────────────────────────────────────┐
+   │  RECOMPOSITION DU CONTEXTE  (refaite à chaque question)        │
+   │                                                                │
+   │   Environnement actif ──► version · édition · société · dépôt  │
+   │   Contenu frais ────────► code source · code custom · live     │
+   │   Guides pertinents ────► sélectionnés selon la question posée │
+   │   Profil + mode ────────► forme et méthode de la réponse       │
+   └──────────────────────────────────────────────────────────────┘
+            │
+            ▼
+   Réponse vérifiée contre l'état courant du projet
+```
 
 Le résultat : deux fois la même question, posée à deux semaines d'intervalle sur un projet
 qui a entre-temps été mis à jour, donne **deux réponses alignées sur la réalité du moment** —
@@ -411,6 +443,25 @@ gros volume de documentation possible, l'application vise le **plus petit ensemb
 signal** — parce que la précision d'un assistant IA *se dégrade* quand on le noie sous trop
 d'informations. Un contexte ciblé donne de meilleures réponses qu'un contexte exhaustif.
 
+### 8.5 Exemples — comment un critère modifie concrètement la réponse
+
+Pour rendre tangible l'effet de chaque critère, voici la **même nature de question** traitée
+*sans* le critère (ce que produit un outil de prompting standard) puis *avec* (ce que produit
+l'application).
+
+| Critère en jeu | Question type | Réponse **sans** le critère | Réponse **avec** le critère |
+|---|---|---|---|
+| **Version Odoo** | « Quel champ porte le total HT d'une commande ? » | Un nom *plausible en moyenne*, sans garantie de version (`amount_untaxed` ou `amount_subtotal`…) | Le nom réel, lu dans le code de la version exacte du client, avec le modèle où il figure |
+| **Dépôt custom** | « Pourquoi la remise affichée ne suit pas la liste de prix ? » | Une explication du fonctionnement *standard* des listes de prix — hors-sujet pour ce client | L'assistant trouve le module custom qui surcharge le calcul de remise et explique la *vraie* logique |
+| **Données live** | « Combien de commandes sont en brouillon depuis plus de 30 jours ? » | Aucune réponse chiffrée possible — au mieux, « voici comment le vérifier » | Le compte réel, obtenu en interrogeant l'instance |
+| **Studio** | « Quels champs ont été ajoutés sur la fiche client ? » | La liste des champs *standard* — les ajouts no-code sont ignorés | L'inventaire des champs Studio réellement créés sur l'instance |
+| **Société active** | « Quel est le chiffre d'affaires de l'année ? » | Un total qui agrège *toutes* les entités — faux si le groupe a plusieurs sociétés | Le calcul borné sur la bonne entité juridique |
+| **Contexte projet** | « Comment sont gérées les priorités d'expédition ? » | Une réponse générique sur le module Stock | L'assistant sait, par le contexte projet, que la priorité passe par un champ dédié — et répond juste du premier coup |
+
+Lecture : dans chaque ligne, ce n'est pas le *modèle IA* qui change — c'est le **critère de
+contexte** disponible. La performance d'une réponse vient de la disponibilité du bon critère
+au bon moment, pas de la puissance brute du moteur.
+
 ---
 
 ## 9. Référence fonctionnelle — les profils de réponse et les modes de travail
@@ -477,6 +528,35 @@ C'est la combinaison **critères projet (§8) × profil × mode** qui produit un
 *performante* : non pas « plausible », mais **vérifiée contre l'état courant du projet** et
 **formulée pour son destinataire réel**.
 
+### 9.5 Exemples supplémentaires — la même question selon le profil
+
+Tous les profils ne sont pas pertinents pour *toute* question : chaque question a un **profil
+naturel**, que l'assistant déduit de la formulation et que le consultant peut forcer. Deux
+exemples au-delà de celui de §9.2.
+
+**Exemple A — « Faut-il gérer cette nouvelle règle de remise via Studio ou via un module
+custom ? »** *(profil naturel : Architecte — c'est une décision)*
+
+| Profil activé | Ce que la réponse met en avant |
+|---|---|
+| **Architecte** | Décision argumentée : Studio = rapide mais limité et fragile en migration ; module custom = robuste mais coûteux. Recommandation + alternatives écartées et raison. |
+| **Développeur** | Faisabilité technique de chaque option, impact sur les vues, sur les modules custom existants et sur la prochaine migration. |
+| **Business Analyst** | Ce que chaque option change pour l'utilisateur final, le délai de mise à disposition, l'effort de formation. |
+| **Support** | Peu pertinent — l'assistant le signale et recadre vers le profil adapté. |
+
+**Exemple B — « Une facture affiche un montant de taxe incohérent. »** *(profil naturel :
+Support — c'est un incident)*
+
+| Profil activé | Ce que la réponse met en avant |
+|---|---|
+| **Support** | Diagnostic ordonné : position fiscale ? taux de taxe sur la ligne ? arrondi ? → vérifications concrètes, workaround, puis correction durable. |
+| **Développeur** | Où le calcul de taxe est effectué, ce qui peut produire l'écart, preuve vérifiable dans le code. |
+| **Business Analyst** | Le processus de taxation standard et le paramétrage qui le pilote, pour situer l'anomalie côté configuration. |
+| **Architecte** | Peu pertinent pour un incident ponctuel — sauf si l'anomalie révèle un défaut de conception. |
+
+Le profil ne crée pas d'information : il **oriente la même vérité** vérifiée vers le bon
+destinataire, avec le bon vocabulaire et le bon format.
+
 ---
 
 ## 10. Tableau comparatif récapitulatif
@@ -516,16 +596,16 @@ C'est la combinaison **critères projet (§8) × profil × mode** qui produit un
 
 ## 12. Questions ouvertes pour la suite
 
-1. **Captures / schémas** : intégrer des captures de la barre de contexte et des écrans de
-   sélection de profil/mode, ou conserver les schémas ASCII ?
-2. **Chiffrage** : ajouter un exemple chiffré (temps gagné par requête, taux d'hallucination
-   observé) ? Si oui, dispose-t-on de mesures réelles ou reste-t-on qualitatif ?
-3. **Étude de cas** : dérouler un cas concret de bout en bout (ex. « le client passe de 16.0
-   à 17.0 » → ce qui casse dans un notebook vs ce qui se met à jour dans l'app) ?
-4. **Profils de réponse** : faut-il une grille de correspondance « interlocuteur de la
-   réunion → profil à activer » pour aider les consultants à choisir le bon profil ?
-5. **Niveau de détail** : la référence fonctionnelle §8/§9 est-elle au bon grain pour le
-   manager n+1, ou faut-il encore développer certains critères ?
+Le document est complet pour son objet — référence fonctionnelle des modifications de
+contexte. Restent quelques **enrichissements optionnels, non bloquants** :
+
+- **Captures d'écran réelles** de la barre de contexte et des écrans de sélection
+  profil/mode, en complément des schémas fonctionnels (§7.2, §8.1).
+- **Chiffrage mesuré** (temps gagné par requête, taux d'hallucination observé) : il
+  nécessiterait une campagne de mesure dédiée. Tant que ces données n'existent pas, le
+  document reste **volontairement qualitatif** — aucun chiffre n'est inventé.
+- **Étude de cas narrative** déroulée de bout en bout (ex. migration 16.0 → 17.0) si un
+  format plus illustratif que les exemples des §8.5 et §9.5 est souhaité ultérieurement.
 
 ---
 
