@@ -7,6 +7,7 @@ from typing import AsyncIterator, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from ..services.odoo_client import OdooClient
 
+from .attachment_service import apply_provider_attachments
 from ..core.context_constants import (
     MAX_CONTEXT_CHARS as _MAX_CONTEXT_CHARS,
     MAX_PROJECT_CONTEXT_CHARS as _MAX_PROJECT_CONTEXT_CHARS,
@@ -2001,6 +2002,10 @@ async def stream_chat(
 
     # Trim conversation history to avoid context-window overflow on long sessions.
     messages = _trim_history(messages)
+
+    # Rewrite the last user turn into the provider's native multimodal format
+    # when it carries image / PDF attachments (no-op for text-only turns).
+    messages = apply_provider_attachments(messages, provider)
 
     user_ctx = ""
     if user_profile:

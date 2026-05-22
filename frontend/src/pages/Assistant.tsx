@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Code, Copy, FileText, Globe2, History, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Code, Copy, FileText, Globe2, History, Image as ImageIcon, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
@@ -14,11 +14,15 @@ import { useWorkspaceContext } from '../components/Layout'
 import { PROVIDERS } from '../constants/providers'
 import { useUiLanguage } from '../i18n'
 import {
+  ATTACHMENT_ACCEPT,
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_FILES,
+  ATTACHMENT_MAX_MB,
   ATTACHMENT_MAX_TOTAL_CHARS,
   attachmentMeta,
+  attachmentNeedsBase64,
   attachmentPayload,
+  defaultMimeType,
   fileKind,
   fileToBase64,
   formatFileSize,
@@ -617,7 +621,7 @@ export default function Assistant() {
         continue
       }
       if (file.size > ATTACHMENT_MAX_BYTES) {
-        addAttachmentError(file, 'Fichier supérieur à 5 MB')
+        addAttachmentError(file, `Fichier supérieur à ${ATTACHMENT_MAX_MB} MB`)
         continue
       }
 
@@ -625,12 +629,12 @@ export default function Assistant() {
         const base = {
           id: `${Date.now()}-${file.name}-${Math.random().toString(16).slice(2)}`,
           name: file.name,
-          mime_type: file.type || (kind === 'pdf' ? 'application/pdf' : 'text/plain'),
+          mime_type: defaultMimeType(file, kind),
           size: file.size,
           kind,
           status: 'ready' as const,
         }
-        const draft: AttachmentDraft = kind === 'pdf'
+        const draft: AttachmentDraft = attachmentNeedsBase64(kind)
           ? { ...base, content_base64: await fileToBase64(file) }
           : { ...base, text: await file.text() }
         setAttachments(prev => [...prev.filter(a => a.status === 'ready'), draft].slice(0, ATTACHMENT_MAX_FILES))
@@ -1124,7 +1128,7 @@ export default function Assistant() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".txt,.md,.csv,.json,.xml,.py,.log,.pdf,text/plain,text/markdown,text/csv,application/json,application/xml,text/xml,application/pdf"
+            accept={ATTACHMENT_ACCEPT}
             style={{ display: 'none' }}
             onChange={e => {
               if (e.target.files) addFiles(e.target.files)
@@ -1144,7 +1148,7 @@ export default function Assistant() {
             <div className="assistant-attachments">
               {attachments.map(att => (
                 <div key={att.id} className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`} title={att.error ?? att.name}>
-                  {att.kind === 'pdf' ? <FileText size={13} /> : <Paperclip size={13} />}
+                  {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={13} /> : att.kind === 'image' ? <ImageIcon size={13} /> : <Paperclip size={13} />}
                   <span className="assistant-attachment-name">{att.name}</span>
                   <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
                   {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
@@ -1628,7 +1632,7 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
                   background: 'rgba(0,0,0,.18)', border: '1px solid rgba(0,0,0,.22)',
                   color: 'var(--brand-contrast)', fontSize: 11, fontWeight: 650, maxWidth: 260,
                 }}>
-                  <Paperclip size={12} />
+                  {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={12} /> : att.kind === 'image' ? <ImageIcon size={12} /> : <Paperclip size={12} />}
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
                   <span style={{ opacity: .72, flexShrink: 0 }}>{formatFileSize(att.size)}</span>
                 </span>

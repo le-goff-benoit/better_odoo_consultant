@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.7',
-    date: '2026-05-16',
+    version: '0.37.0',
+    date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Pièces jointes images et PDF analysées visuellement (vision) sur Claude, OpenAI et Gemini — l’IA lit désormais le texte, la mise en page, les tableaux et les schémas, idéal pour reconstruire un rapport QWeb à partir d’une maquette ou repartir d’un écran modélisé par le client',
+      'Nouveaux formats pris en charge : classeurs Excel (.xlsx/.xls) convertis en tableaux Markdown, et davantage de formats texte (YAML, HTML, SQL, .po/.pot de traduction, INI, TOML…)',
+      'Assistant, Migration et Creator : glisser-déposer des pièces jointes, limite de taille portée à 10 MB par fichier',
+      'Dépôt client : les submodules Git sont désormais récupérés au clonage et resynchronisés à chaque mise à jour',
+    ],
+  },
+  {
+    version: '0.35.7',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Topbar : indicateur visuel de synchronisation des sources quand un téléchargement ou une mise à jour est en cours',
       'La synchronisation des sources est maintenant suivie dans un store global frontend : on peut quitter la page Sources et y revenir sans perdre l’état courant',

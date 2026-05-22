@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Wand2, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Loader2,
   FileText, Download, RotateCcw, Pencil, Play, Hammer, Database,
-  ScanSearch, KeyRound, History, X, Paperclip, ArrowRight,
+  ScanSearch, KeyRound, History, X, Paperclip, ArrowRight, Image as ImageIcon,
 } from 'lucide-react'
 import {
   getCreatorProjects, getAiProviders, getModelConfig, checkAllSources, getCreatorHistory,
@@ -22,8 +22,9 @@ import { useWorkspaceContext } from '../components/Layout'
 import { routedContextFiles } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
 import {
-  ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_ACCEPT, ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_MB,
   fileKind, fileToBase64, formatFileSize, attachmentPayload,
+  attachmentNeedsBase64, defaultMimeType,
   type AttachmentDraft,
 } from '../utils/attachments'
 
@@ -262,6 +263,7 @@ export default function Creator() {
   const [companyId, setCompanyId] = useState<number | null>(null)
   const [request, setRequest] = useState('')
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
+  const [draggingFiles, setDraggingFiles] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [instructions, setInstructions] = useState<string[]>([])
@@ -421,17 +423,17 @@ export default function Creator() {
     for (const file of files.slice(0, slots)) {
       const kind = fileKind(file)
       if (!kind) { addAttachmentError(file, en ? 'Unsupported format' : 'Format non supporté'); continue }
-      if (file.size > ATTACHMENT_MAX_BYTES) { addAttachmentError(file, en ? 'File over 5 MB' : 'Fichier supérieur à 5 MB'); continue }
+      if (file.size > ATTACHMENT_MAX_BYTES) { addAttachmentError(file, en ? `File over ${ATTACHMENT_MAX_MB} MB` : `Fichier supérieur à ${ATTACHMENT_MAX_MB} MB`); continue }
       try {
         const base = {
           id: `${Date.now()}-${file.name}-${Math.random().toString(16).slice(2)}`,
           name: file.name,
-          mime_type: file.type || (kind === 'pdf' ? 'application/pdf' : 'text/plain'),
+          mime_type: defaultMimeType(file, kind),
           size: file.size,
           kind,
           status: 'ready' as const,
         }
-        const draft: AttachmentDraft = kind === 'pdf'
+        const draft: AttachmentDraft = attachmentNeedsBase64(kind)
           ? { ...base, content_base64: await fileToBase64(file) }
           : { ...base, text: await file.text() }
         setAttachments(prev => [...prev.filter(a => a.status === 'ready'), draft].slice(0, ATTACHMENT_MAX_FILES))
@@ -916,9 +918,18 @@ export default function Creator() {
           )}
 
           <div
-            style={{ marginTop: 16 }}
-            onDragOver={e => { if (phase === 'setup') e.preventDefault() }}
+            style={{
+              marginTop: 16,
+              borderRadius: 10,
+              outline: draggingFiles ? '2px dashed var(--brand)' : '2px dashed transparent',
+              outlineOffset: 6,
+              transition: 'outline-color .12s',
+            }}
+            onDragEnter={e => { if (phase === 'setup') { e.preventDefault(); setDraggingFiles(true) } }}
+            onDragOver={e => { if (phase === 'setup') { e.preventDefault(); setDraggingFiles(true) } }}
+            onDragLeave={e => { if (e.currentTarget === e.target) setDraggingFiles(false) }}
             onDrop={e => {
+              setDraggingFiles(false)
               if (phase !== 'setup') return
               e.preventDefault()
               if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
@@ -942,7 +953,7 @@ export default function Creator() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".txt,.md,.csv,.json,.xml,.py,.log,.pdf"
+                  accept={ATTACHMENT_ACCEPT}
                   style={{ display: 'none' }}
                   onChange={e => { if (e.target.files) addFiles(e.target.files); e.currentTarget.value = '' }}
                 />
@@ -967,7 +978,7 @@ export default function Creator() {
                     className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`}
                     title={att.error ?? att.name}
                   >
-                    {att.kind === 'pdf' ? <FileText size={13} /> : <Paperclip size={13} />}
+                    {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={13} /> : att.kind === 'image' ? <ImageIcon size={13} /> : <Paperclip size={13} />}
                     <span className="assistant-attachment-name">{att.name}</span>
                     <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
                     {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}

@@ -7,7 +7,9 @@ import git
 def clone_project(remote_url: str, local_path: str) -> dict:
     path = Path(local_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    repo = git.Repo.clone_from(remote_url, path)
+    # --recurse-submodules: a client repo often vendors its addons (OCA modules,
+    # shared libraries) as Git submodules — they must be fetched too.
+    repo = git.Repo.clone_from(remote_url, path, multi_options=["--recurse-submodules"])
     return {"action": "cloned", "path": str(path), "head": repo.head.commit.hexsha[:8]}
 
 
@@ -18,6 +20,8 @@ def pull_project(local_path: str, branch: Optional[str] = None) -> dict:
         origin.pull(branch)
     else:
         origin.pull()
+    # Keep submodules in sync with the freshly pulled superproject commit.
+    repo.git.submodule("update", "--init", "--recursive")
     return {"action": "pulled", "path": local_path, "head": repo.head.commit.hexsha[:8]}
 
 

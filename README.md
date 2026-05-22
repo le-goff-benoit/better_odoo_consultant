@@ -96,6 +96,13 @@ Elle détaille comment le portail combine :
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
 
+La version 0.37 **enrichit les pièces jointes et le clonage de dépôt** :
+- **analyse visuelle des images et PDF** (vision) sur Claude, OpenAI et Gemini — l'IA lit le texte, la mise en page, les tableaux, les captures d'écran et les schémas ; idéal pour reconstruire un rapport QWeb à partir d'une maquette PDF ou repartir d'un écran déjà modélisé par le client ;
+- **classeurs Excel** (`.xlsx`, `.xls`) convertis en tableaux Markdown exploitables par l'IA ;
+- **formats texte élargis** : YAML, HTML, SQL, `.po`/`.pot` de traduction, INI, TOML, TSV, etc. ;
+- **glisser-déposer** des pièces jointes sur l'Assistant IA, la Migration et le Creator ; limite portée à **10 MB par fichier** ;
+- **submodules Git** : le dépôt client est cloné avec `--recurse-submodules` et les submodules sont resynchronisés à chaque mise à jour.
+
 La version 0.22 modernise l'interface :
 - navigation principale dans une **top bar responsive** ;
 - panneau **Contexte workspace** repliable avec profil, providers IA, projets et sources Odoo ;
