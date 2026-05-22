@@ -140,6 +140,12 @@ type FieldInfo = {
 }
 type FieldInfoMap = Record<string, FieldInfo>
 type SampleValues = Record<string, unknown>
+type RelatedRowsSample = {
+  ids?: unknown[]
+  count?: number
+  records?: Record<string, unknown>[]
+  field_info?: FieldInfoMap
+}
 
 type ViewSampleProps = {
   fieldInfo?: FieldInfoMap
@@ -396,6 +402,126 @@ function valueText(value: unknown, kind: FieldKind, info?: FieldInfo): string {
   return text.length > 72 ? `${text.slice(0, 69)}...` : text
 }
 
+function relatedRowsSample(value: unknown): RelatedRowsSample | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const obj = value as RelatedRowsSample
+  return Array.isArray(obj.records) || Array.isArray(obj.ids) ? obj : null
+}
+
+function embeddedListFieldElements(el: Element): Element[] {
+  const container = Array.from(el.children).find(child => {
+    const tag = child.tagName.toLowerCase()
+    return tag === 'tree' || tag === 'list'
+  }) || Array.from(el.children).find(child => child.tagName.toLowerCase() === 'form')
+  if (!container) return []
+  const tag = container.tagName.toLowerCase()
+  const selector = tag === 'form' ? 'field' : ':scope > field'
+  return Array.from(container.querySelectorAll(selector))
+    .filter(field => !isStaticInvisible(field))
+}
+
+function relatedColumns(el: Element, sample?: RelatedRowsSample) {
+  const fromArch = embeddedListFieldElements(el)
+    .map(field => {
+      const name = field.getAttribute('name') || ''
+      return name ? {
+        name,
+        label: field.getAttribute('string') || sample?.field_info?.[name]?.string || humanize(name),
+        kind: fieldKind(field, sample?.field_info),
+        info: sample?.field_info?.[name],
+      } : null
+    })
+    .filter(Boolean) as Array<{ name: string; label: string; kind: FieldKind; info?: FieldInfo }>
+  if (fromArch.length) return fromArch.slice(0, 8)
+  const first = sample?.records?.[0]
+  if (!first) return []
+  return Object.keys(first)
+    .filter(name => name !== 'id' && name !== 'display_name')
+    .slice(0, 8)
+    .map(name => ({
+      name,
+      label: sample?.field_info?.[name]?.string || humanize(name),
+      kind: kindFromOdooType(sample?.field_info?.[name]?.type) || 'char',
+      info: sample?.field_info?.[name],
+    }))
+}
+
+function X2ManyRows({ el, value, label }: {
+  el: Element
+  value: unknown
+  label: string
+}) {
+  const sample = relatedRowsSample(value)
+  const columns = relatedColumns(el, sample || undefined)
+  const records = sample?.records || []
+  const count = sample?.count ?? (Array.isArray(sample?.ids) ? sample.ids.length : records.length)
+  return (
+    <div style={{
+      border: `1px solid ${ODOO.border}`, background: ODOO.sheet,
+      borderRadius: 3, overflow: 'hidden', width: '100%',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '6px 8px', background: '#f6f6f8', borderBottom: `1px solid ${ODOO.border}`,
+      }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: ODOO.text }}>{label}</span>
+        <span style={{ fontSize: 9.5, color: ODOO.muted }}>{count ? `${count} ligne(s)` : 'Aucune ligne'}</span>
+      </div>
+      {columns.length ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
+          <thead>
+            <tr>
+              {columns.map(col => (
+                <th key={col.name} style={{
+                  textAlign: col.kind === 'numeric' ? 'right' : 'left',
+                  padding: '6px 8px', color: ODOO.muted, fontWeight: 700,
+                  borderBottom: `1px solid ${ODOO.border}`, whiteSpace: 'nowrap',
+                }}>{col.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {records.length ? records.map((record, i) => (
+              <tr key={String(record.id ?? i)}>
+                {columns.map(col => {
+                  const text = valueText(record[col.name], col.kind, col.info)
+                  return (
+                    <td key={col.name} style={{
+                      padding: '6px 8px', borderBottom: `1px solid ${ODOO.border}`,
+                      textAlign: col.kind === 'numeric' ? 'right' : 'left',
+                      color: ODOO.text, maxWidth: 180,
+                    }}>
+                      <span style={{
+                        display: 'block', overflow: 'hidden', textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>{text}</span>
+                    </td>
+                  )
+                })}
+              </tr>
+            )) : [0, 1].map(row => (
+              <tr key={row}>
+                {columns.map((col, i) => (
+                  <td key={col.name} style={{ padding: '7px 8px', borderBottom: `1px solid ${ODOO.border}` }}>
+                    <span style={{
+                      display: 'block', height: 8, borderRadius: 2, background: ODOO.field,
+                      width: `${50 + ((i + row) % 3) * 16}%`,
+                    }} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div style={{ padding: '10px 8px', color: ODOO.muted, fontSize: 10.5 }}>
+          {count ? `${count} ligne(s) liée(s)` : 'Sous-liste sans colonnes détectées.'}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** The schematic input control for a field, shaped by its kind. */
 function FieldValue({ kind, value, info }: { kind: FieldKind; value?: unknown; info?: FieldInfo }) {
   const text = valueText(value, kind, info)
@@ -492,6 +618,32 @@ function FieldRow({ el, added, fieldInfo, sampleValues }: {
   const info = fieldInfo?.[name]
   const value = sampleValues?.[name]
   const conditional = visibility === 'conditional'
+  const isRelationalRows = (info?.type === 'one2many' || info?.type === 'many2many')
+    && (embeddedListFieldElements(el).length > 0 || relatedRowsSample(value))
+  if (isRelationalRows) {
+    return (
+      <div data-preview-added={isNew ? 'true' : undefined} style={{
+        display: 'flex', flexDirection: 'column', gap: 6,
+        padding: isNew ? '7px' : '4px 0', borderRadius: 4,
+        outline: isNew ? `2px solid ${ODOO.added}` : 'none',
+        outlineOffset: isNew ? 1 : 0,
+        background: isNew ? ODOO.addedBg : 'transparent',
+        opacity: conditional && !isNew ? 0.5 : 1,
+      }}>
+        <div style={{
+          display: 'flex', gap: 5, alignItems: 'center',
+          fontSize: 10.5, color: ODOO.muted, fontWeight: 700,
+        }}>
+          {label}
+          {conditional && !isNew && (
+            <span title="Affichage conditionnel" style={{ fontSize: 9 }}>◇</span>
+          )}
+          {isNew && <NewBadge />}
+        </div>
+        <X2ManyRows el={el} value={value} label={label} />
+      </div>
+    )
+  }
   return (
     <div data-preview-added={isNew ? 'true' : undefined} style={{
       display: 'grid', gridTemplateColumns: 'minmax(64px, 36%) 1fr', gap: 10,

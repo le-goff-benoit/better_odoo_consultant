@@ -4,7 +4,6 @@ import { useUiLanguage } from '../i18n'
 import type { Perspective, PerspectiveMode } from './PerspectiveToggle'
 import PerspectiveToggle, { PERSPECTIVE_COLORS } from './PerspectiveToggle'
 import { perspectiveLabel } from '../utils/aiContext'
-import { countryFlag } from '../utils/countryFlag'
 
 interface ConversationContextPanelProps {
   title?: string
@@ -95,7 +94,6 @@ export default function ConversationContextPanel({
       target: 'Cible',
     }
 
-  const flag = countryFlag(countryCode)
   const localizationFile = localizationContextFile(countryCode)
   const selectionRows = [
     { label: c.project, value: project || c.general },
@@ -155,12 +153,10 @@ export default function ConversationContextPanel({
         <ContextBlock icon={<Globe2 size={15} />} label={c.localization}>
           <div className="context-pill-row">
             {localizationFile && (
-              <span className="ui-badge ui-badge-brand">
-                {flag && <span>{flag}</span>}
+              <span className="ui-badge" style={localizationBadgeStyle(countryCode)}>
                 {localizationFile}
               </span>
             )}
-            <span className="ui-badge ui-badge-neutral">{localization}</span>
           </div>
         </ContextBlock>
       )}
@@ -185,6 +181,24 @@ export default function ConversationContextPanel({
 function localizationContextFile(countryCode?: string | null) {
   const code = (countryCode || '').trim().toLowerCase()
   return /^[a-z]{2}$/.test(code) ? `l10n_${code}.md` : null
+}
+
+function localizationBadgeStyle(countryCode?: string | null): React.CSSProperties {
+  const tones: Record<string, { bg: string; fg: string }> = {
+    CH: { bg: '#ff3341', fg: '#ffffff' },
+    FR: { bg: '#114ee8', fg: '#ffffff' },
+    BE: { bg: '#ffd735', fg: '#1a1a1a' },
+    LU: { bg: '#48e7ff', fg: '#12313c' },
+  }
+  const tone = tones[(countryCode || '').toUpperCase()] ?? {
+    bg: 'var(--brand)',
+    fg: 'var(--brand-contrast)',
+  }
+  return {
+    background: tone.bg,
+    borderColor: tone.bg,
+    color: tone.fg,
+  }
 }
 
 function ContextBlock({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {

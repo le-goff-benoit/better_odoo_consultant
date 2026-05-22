@@ -42,6 +42,8 @@ PREVIEWABLE_OPS = {"modify_view", "modify_report"}
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 _SAMPLE_FIELD_LIMIT = 80
+_SAMPLE_X2MANY_ROWS = 5
+_SAMPLE_X2MANY_COLUMNS = 12
 
 
 async def _run(fn):
@@ -81,6 +83,35 @@ def _field_names_from_arch(*arches: str) -> list[str]:
                 seen.add(name)
                 names.append(name)
     return names
+
+
+def _x2many_columns_from_arch(*arches: str) -> dict[str, list[str]]:
+    """Return embedded list/form columns declared below relational fields."""
+    columns: dict[str, list[str]] = {}
+    for arch in arches:
+        if not arch:
+            continue
+        try:
+            root = ET.fromstring(arch)
+        except ET.ParseError:
+            continue
+        for field in root.iter("field"):
+            name = field.attrib.get("name")
+            if not name:
+                continue
+            child_names: list[str] = []
+            seen: set[str] = set()
+            for container in field:
+                if container.tag not in {"tree", "list", "form"}:
+                    continue
+                for child in container.iter("field"):
+                    child_name = child.attrib.get("name")
+                    if child_name and child_name not in seen:
+                        seen.add(child_name)
+                        child_names.append(child_name)
+            if child_names:
+                columns[name] = child_names[:_SAMPLE_X2MANY_COLUMNS]
+    return columns
 
 
 def _sample_value(value: Any) -> Any:
@@ -138,6 +169,49 @@ async def _sample_record_for_view(odoo, model: str, arches: list[str]) -> dict:
         for field in readable_fields
         if field in row
     }
+    embedded_columns = _x2many_columns_from_arch(*arches)
+    for field, columns in embedded_columns.items():
+        meta = fields_meta.get(field) or {}
+        if meta.get("type") not in {"one2many", "many2many"}:
+            continue
+        relation = meta.get("relation")
+        ids = row.get(field) if isinstance(row.get(field), list) else []
+        if not relation or not ids:
+            sample_values[field] = {"ids": _sample_value(ids), "count": len(ids), "records": []}
+            continue
+        try:
+            related_meta = await _run(lambda relation=relation: odoo.fields_get(
+                relation, ["string", "type", "selection", "relation"]))
+        except Exception as exc:  # noqa: BLE001
+            log.info("Aperçu vue — fields_get relation impossible pour %s : %s", relation, exc)
+            related_meta = {}
+        related_fields = [
+            col for col in columns
+            if col in related_meta and related_meta[col].get("type") not in {"binary", "html"}
+        ][: _SAMPLE_X2MANY_COLUMNS]
+        read_related = list(dict.fromkeys(["display_name", *related_fields]))
+        try:
+            related_rows = await _run(lambda relation=relation, ids=ids[:_SAMPLE_X2MANY_ROWS]: odoo.search_read(
+                relation, [["id", "in", ids]], read_related,
+                limit=_SAMPLE_X2MANY_ROWS, order="id asc"))
+        except Exception as exc:  # noqa: BLE001
+            log.info("Aperçu vue — lignes liées impossibles pour %s.%s : %s", model, field, exc)
+            related_rows = []
+        sample_values[field] = {
+            "ids": _sample_value(ids),
+            "count": len(ids),
+            "records": [_sample_value(r) for r in related_rows],
+            "field_info": {
+                name: {
+                    "string": meta.get("string") or name,
+                    "type": meta.get("type"),
+                    "selection": meta.get("selection") or [],
+                    "relation": meta.get("relation"),
+                }
+                for name, meta in related_meta.items()
+                if name in columns
+            },
+        }
     sample_id = row.get("id")
     sample_name = row.get("display_name") or (f"#{sample_id}" if sample_id else None)
     field_info = {

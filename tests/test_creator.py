@@ -182,8 +182,20 @@ class FakeOdoo:
 
     def fields_get(self, model, attributes=None):
         if model in self._field_types:
-            return {f: {"type": t, "string": f, "store": True, "readonly": False}
-                    for f, t in self._field_types[model].items()}
+            return {
+                f: ({
+                    "string": f,
+                    "store": True,
+                    "readonly": False,
+                    **t,
+                } if isinstance(t, dict) else {
+                    "type": t,
+                    "string": f,
+                    "store": True,
+                    "readonly": False,
+                })
+                for f, t in self._field_types[model].items()
+            }
         return self._automation_fields
 
 
@@ -242,6 +254,44 @@ async def test_view_preview_sample_record_uses_customer_data():
     assert result["sample_values"]["amount_total"] == 1240.5
     assert "image_128" not in result["sample_values"]
     assert result["field_info"]["partner_id"]["type"] == "many2one"
+
+
+async def test_view_preview_samples_embedded_x2many_lines():
+    fake = FakeOdoo(
+        records={
+            "sale.order": [{
+                "id": 42,
+                "display_name": "S/2026/0044",
+                "order_line": [338, 339, 340],
+            }],
+            "sale.order.line": [
+                {"id": 338, "display_name": "Line 1", "product_id": [10, "Service"], "product_uom_qty": 2.0, "price_subtotal": 300.0},
+                {"id": 339, "display_name": "Line 2", "product_id": [11, "Support"], "product_uom_qty": 1.0, "price_subtotal": 120.0},
+            ],
+        },
+        field_types={
+            "sale.order": {
+                "order_line": {"type": "one2many", "relation": "sale.order.line"},
+            },
+            "sale.order.line": {
+                "product_id": {"type": "many2one", "relation": "product.product"},
+                "product_uom_qty": "float",
+                "price_subtotal": "monetary",
+            },
+        },
+    )
+    arch = (
+        '<form><sheet><field name="order_line"><tree>'
+        '<field name="product_id"/><field name="product_uom_qty"/>'
+        '<field name="price_subtotal"/></tree></field></sheet></form>'
+    )
+
+    result = await _sample_record_for_view(fake, "sale.order", [arch])
+    lines = result["sample_values"]["order_line"]
+
+    assert lines["count"] == 3
+    assert lines["records"][0]["product_id"] == [10, "Service"]
+    assert lines["field_info"]["product_uom_qty"]["type"] == "float"
 
 
 async def test_apply_rolls_back_on_partial_failure():
