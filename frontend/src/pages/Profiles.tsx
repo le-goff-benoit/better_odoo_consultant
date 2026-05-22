@@ -5,6 +5,7 @@ import { Bot, Building2, Check, ChevronDown, ChevronUp, ClipboardList, Cloud, Co
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, refreshProfileLocalization, refreshProfileComplexity, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
+import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
 import { ODOO_APPS } from '../constants/odooApps'
 import { useUiLanguage } from '../i18n'
 import { countryFlag } from '../utils/countryFlag'
@@ -348,6 +349,8 @@ export default function Profiles() {
   const [contextText, setContextText] = useState('')
   const [contextSaving, setContextSaving] = useState(false)
   const [contextAutoFilling, setContextAutoFilling] = useState(false)
+  const { configured: aiConfigured } = useAiProvidersConfigured()
+  const [aiGuardOpen, setAiGuardOpen] = useState(false)
 
   const openContext = async (profileId: number) => {
     setContextProfileId(profileId)
@@ -376,6 +379,7 @@ export default function Profiles() {
 
   const doAutoFill = async () => {
     if (contextProfileId === null) return
+    if (!aiConfigured) { setAiGuardOpen(true); return }
     setContextAutoFilling(true)
     try {
       const res = await autoFillContext(contextProfileId)
@@ -445,6 +449,7 @@ export default function Profiles() {
 
   return (
     <div className="page-stack">
+      <AiProviderRequiredModal open={aiGuardOpen} onClose={() => setAiGuardOpen(false)} />
       <PageHeader
         title={c.title}
         description={c.description}

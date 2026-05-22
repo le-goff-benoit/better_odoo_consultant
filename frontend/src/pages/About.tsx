@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.37.0',
+    version: '0.38.0',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Creator : les vues héritées sont nommées automatiquement et de façon cohérente (« <vue parente> (Creator) ») — propres et identifiables côté Studio, sans suffixes empilés',
+      'Creator : pour modifier l’en-tête ou le pied de page d’un document, l’IA est guidée vers le bon template de mise en page (web.external_layout_*) au lieu du template du document',
+      'Garde « fournisseur IA requis » : un modal avertit et renvoie vers la configuration des clés API quand on ouvre l’Assistant, la Migration, le Creator ou l’auto-remplissage de contexte sans aucun fournisseur IA configuré',
+    ],
+  },
+  {
+    version: '0.37.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Pièces jointes images et PDF analysées visuellement (vision) sur Claude, OpenAI et Gemini — l’IA lit désormais le texte, la mise en page, les tableaux et les schémas, idéal pour reconstruire un rapport QWeb à partir d’une maquette ou repartir d’un écran modélisé par le client',
       'Nouveaux formats pris en charge : classeurs Excel (.xlsx/.xls) convertis en tableaux Markdown, et davantage de formats texte (YAML, HTML, SQL, .po/.pot de traduction, INI, TOML…)',

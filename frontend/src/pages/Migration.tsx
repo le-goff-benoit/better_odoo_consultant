@@ -4,6 +4,7 @@ import { ArrowRightLeft, ArrowUp, Check, CheckCheck, Code, Copy, FileText, Image
 import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
+import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
@@ -1395,8 +1396,15 @@ export default function Migration() {
     ? (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL_EN : SUGGESTIONS_MIGRATION_TECHNICAL_EN)
     : (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL)
 
+  const { configured: aiConfigured, loading: aiProvLoading } = useAiProvidersConfigured()
+  const [aiGuardDismissed, setAiGuardDismissed] = useState(false)
+
   return (
     <div className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`}>
+      <AiProviderRequiredModal
+        open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
+        onClose={() => setAiGuardDismissed(true)}
+      />
       <PageHeader title={c.title} description={c.description} />
 
       <SelectionAskMore

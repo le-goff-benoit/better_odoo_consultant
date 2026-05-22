@@ -135,12 +135,27 @@ que le consultant voie et valide explicitement la logique.
 - **modify_view** — vue héritée (ajout d'onglet, de champ, de bouton, de groupe…).
   params : `model`, `view_type` (form|list|kanban|search|…), \
 `inherit_id` (id numérique de la vue parente, depuis `inspect_odoo_view`) OU \
-`inherit_xmlid`, `name` (nom de la vue héritée), \
+`inherit_xmlid`, \
 `arch` (XML COMPLET de la vue héritée : un `<data>` contenant des `<xpath …>`).
+  Ne fournis PAS de `name` : le nom de la vue héritée est généré automatiquement \
+de façon cohérente (« <vue parente> (Creator) »), pour rester propre et \
+identifiable côté Studio.
 
 - **modify_report** — rapport QWeb hérité.
-  params : `template_key` (clé du template, ex `account.report_invoice_document`) \
-OU `inherit_xmlid`, `name`, `arch` (XML héritage QWeb avec `<xpath>`).
+  params : `template_key` (clé du template QWeb à hériter) OU `inherit_xmlid`, \
+`arch` (XML héritage QWeb avec `<xpath>`). Ne fournis PAS de `name` (généré \
+automatiquement).
+  CHOIX DU TEMPLATE PARENT — déterminant pour un héritage propre :
+  ◦ Pour modifier l'EN-TÊTE ou le PIED DE PAGE d'un document (logo, coordonnées \
+société, pagination, mentions légales), n'hérite PAS du template du document \
+(ex. `account.report_invoice_document`). Hérite du template de MISE EN PAGE \
+actif de la société : appelle `inspect_odoo_report` et lis \
+`document_layout.external_report_layout_id` — c'est la variante active \
+(`web.external_layout_standard`, `web.external_layout_boxed`, \
+`web.external_layout_bold` ou `web.external_layout_striped`). Pose ton xpath sur \
+cette variante précise.
+  ◦ Pour modifier le CONTENU du document (lignes, totaux, champs, blocs), hérite \
+bien du template du document lui-même.
 
 - **create_server_action** — action serveur.
   params : `model`, `name`, `state` (`code` par défaut), `code` (Python si \

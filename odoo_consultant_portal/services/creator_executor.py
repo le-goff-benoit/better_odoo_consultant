@@ -16,6 +16,7 @@ target instance is never left in a half-applied state.
 """
 
 import asyncio
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
@@ -57,6 +58,19 @@ HANDLERS = {
 
 class OperationError(Exception):
     """A changeset operation could not be applied (bad params or Odoo refusal)."""
+
+
+def _inherited_view_name(parent_name: str | None, fallback: str) -> str:
+    """Build a clean, consistent name for a Creator-made inherited view.
+
+    Mirrors how Odoo Studio keeps its customizations identifiable: the name
+    reads ``<parent view> (Creator)`` so the inherited view is obvious in the
+    Studio / Technical view list. Any existing ``(Creator)`` / ``(Studio)``
+    suffix is stripped first so names never stack on repeated inheritance.
+    """
+    base = (parent_name or "").strip() or (fallback or "").strip()
+    base = re.sub(r"\s*\((?:Creator|Studio)\)\s*$", "", base).strip()
+    return f"{base} (Creator)" if base else "Personnalisation (Creator)"
 
 
 async def _run(fn):
@@ -344,11 +358,13 @@ class _Executor:
                 "expressions natives.")
         inherit_id = await self._resolve_parent_view(p, model, view_type)
         parent_rows = await _run(lambda: self.odoo.search_read(
-            "ir.ui.view", [["id", "=", inherit_id]], ["arch_db"], limit=1))
-        if parent_rows and parent_rows[0].get("arch_db"):
-            _validate_xpath_targets(parent_rows[0]["arch_db"], arch)
+            "ir.ui.view", [["id", "=", inherit_id]], ["arch_db", "name"], limit=1))
+        parent = parent_rows[0] if parent_rows else {}
+        if parent.get("arch_db"):
+            _validate_xpath_targets(parent["arch_db"], arch)
+        view_name = _inherited_view_name(parent.get("name"), f"{model} {view_type}")
         values = {
-            "name": p.get("name") or f"{model} {view_type} — Creator",
+            "name": view_name,
             "model": model,
             "type": view_type,
             "inherit_id": inherit_id,
@@ -359,17 +375,17 @@ class _Executor:
         view_id = await self._create(
             "ir.ui.view", values, f"Vue héritée {model} ({view_type})")
         return {"view_id": view_id, "model": model, "view_type": view_type,
-                "inherit_id": inherit_id,
+                "inherit_id": inherit_id, "view_name": view_name,
                 "plan": f"Vue {view_type} héritée du modèle {model} "
-                        f"(vue parente #{inherit_id})."}
+                        f"« {view_name} » (vue parente #{inherit_id})."}
 
     async def op_modify_report(self, p: dict) -> dict:
         arch = _req(p, "arch")
         _validate_xml(arch)
+        key = p.get("template_key") or p.get("report_name")
         if p.get("inherit_xmlid"):
             inherit_id = await self.resolve_xmlid(p["inherit_xmlid"], "ir.ui.view")
         else:
-            key = p.get("template_key") or p.get("report_name")
             if not key:
                 raise OperationError(
                     "Rapport : 'inherit_xmlid' ou 'template_key' requis.")
@@ -379,8 +395,13 @@ class _Executor:
             if not rows:
                 raise OperationError(f"Template QWeb introuvable : '{key}'")
             inherit_id = rows[0]["id"]
+        parent_rows = await _run(lambda: self.odoo.search_read(
+            "ir.ui.view", [["id", "=", inherit_id]], ["name"], limit=1))
+        parent_name = parent_rows[0].get("name") if parent_rows else None
+        view_name = _inherited_view_name(
+            parent_name, f"Rapport {key or p.get('inherit_xmlid') or ''}")
         values = {
-            "name": p.get("name") or f"Rapport — Creator",
+            "name": view_name,
             "type": "qweb",
             "inherit_id": inherit_id,
             "mode": "extension",
@@ -388,8 +409,9 @@ class _Executor:
             "arch": arch,
         }
         view_id = await self._create("ir.ui.view", values, "Rapport QWeb hérité")
-        return {"view_id": view_id, "inherit_id": inherit_id,
-                "plan": f"Vue QWeb héritée (template parent #{inherit_id})."}
+        return {"view_id": view_id, "inherit_id": inherit_id, "view_name": view_name,
+                "plan": f"Vue QWeb héritée « {view_name} » "
+                        f"(template parent #{inherit_id})."}
 
     async def op_create_server_action(self, p: dict) -> dict:
         model = _req(p, "model")

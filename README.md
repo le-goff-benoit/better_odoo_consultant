@@ -96,6 +96,11 @@ Elle détaille comment le portail combine :
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
 
+La version 0.38 **fiabilise le Creator et l'entrée en mode IA** :
+- **Creator — vues héritées propres** : les vues héritées créées par le Creator sont nommées automatiquement et de façon cohérente (« <vue parente> (Creator) »), identifiables côté Studio, sans suffixes qui s'empilent ;
+- **Creator — héritage en-tête/pied de page** : pour modifier l'en-tête ou le pied d'un document, l'IA est guidée vers le bon template de mise en page (`web.external_layout_*`) plutôt que le template du document ;
+- **garde « fournisseur IA requis »** : un modal avertit l'utilisateur et le renvoie vers la configuration des clés API lorsqu'il ouvre l'Assistant, la Migration, le Creator ou l'auto-remplissage de contexte sans aucun fournisseur IA configuré.
+
 La version 0.37 **enrichit les pièces jointes et le clonage de dépôt** :
 - **analyse visuelle des images et PDF** (vision) sur Claude, OpenAI et Gemini — l'IA lit le texte, la mise en page, les tableaux, les captures d'écran et les schémas ; idéal pour reconstruire un rapport QWeb à partir d'une maquette PDF ou repartir d'un écran déjà modélisé par le client ;
 - **classeurs Excel** (`.xlsx`, `.xls`) convertis en tableaux Markdown exploitables par l'IA ;

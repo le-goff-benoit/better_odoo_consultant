@@ -6,6 +6,7 @@ import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserP
 import { t } from '../theme'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
 import PageHeader from '../components/PageHeader'
+import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
@@ -887,8 +888,15 @@ export default function Assistant() {
     setModelId(p.models.find(m => m.recommended)?.id ?? p.models[0].id)
   }
 
+  const { configured: aiConfigured, loading: aiProvLoading } = useAiProvidersConfigured()
+  const [aiGuardDismissed, setAiGuardDismissed] = useState(false)
+
   return (
     <div className={`assistant-shell${isScrolled ? ' is-scrolled' : ''}`}>
+      <AiProviderRequiredModal
+        open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
+        onClose={() => setAiGuardDismissed(true)}
+      />
 
       <PageHeader
         title={c.title}

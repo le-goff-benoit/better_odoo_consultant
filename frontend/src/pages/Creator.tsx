@@ -13,6 +13,7 @@ import { useUiLanguage } from '../i18n'
 import { PROVIDERS } from '../constants/providers'
 import { makeChallenge } from '../constants/creatorWords'
 import PageHeader from '../components/PageHeader'
+import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
 import { Button, Card, Field, Badge, Modal, EmptyState } from '../components/ui'
 import ToolCallGroup, { type ToolEvent } from '../components/ToolCallGroup'
 import Markdown from '../components/Markdown'
@@ -264,6 +265,8 @@ export default function Creator() {
   const [request, setRequest] = useState('')
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
   const [draggingFiles, setDraggingFiles] = useState(false)
+  const { configured: aiConfigured, loading: aiProvLoading } = useAiProvidersConfigured()
+  const [aiGuardDismissed, setAiGuardDismissed] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [instructions, setInstructions] = useState<string[]>([])
@@ -810,6 +813,10 @@ export default function Creator() {
 
   return (
     <div className="creator-shell">
+      <AiProviderRequiredModal
+        open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
+        onClose={() => setAiGuardDismissed(true)}
+      />
       <PageHeader title={c.title} description={c.description} />
 
       <div className="creator-content-row">

@@ -3,7 +3,25 @@
 from odoo_consultant_portal.services.creator_service import (
     parse_analysis, build_analysis_message,
 )
-from odoo_consultant_portal.services.creator_executor import apply_changeset
+from odoo_consultant_portal.services.creator_executor import (
+    apply_changeset, _inherited_view_name,
+)
+
+
+# ── Inherited-view naming ────────────────────────────────────────
+
+def test_inherited_view_name_uses_parent():
+    assert _inherited_view_name("sale.order.form", "x") == "sale.order.form (Creator)"
+
+
+def test_inherited_view_name_does_not_stack_suffixes():
+    assert _inherited_view_name("Devis (Creator)", "x") == "Devis (Creator)"
+    assert _inherited_view_name("Facture (Studio)", "x") == "Facture (Creator)"
+
+
+def test_inherited_view_name_falls_back_when_parent_unknown():
+    assert _inherited_view_name(None, "sale.order form") == "sale.order form (Creator)"
+    assert _inherited_view_name("", "") == "Personnalisation (Creator)"
 
 
 # ── Changeset parsing ────────────────────────────────────────────
