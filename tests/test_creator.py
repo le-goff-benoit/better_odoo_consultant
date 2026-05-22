@@ -1,13 +1,16 @@
 """Tests for the Creator tool: changeset parsing, executor, dry-run."""
 
+import xml.etree.ElementTree as ET
+
+import httpx
+
 from odoo_consultant_portal.services.creator_service import (
     parse_analysis, build_analysis_message,
 )
-import xml.etree.ElementTree as ET
-
 from odoo_consultant_portal.services.creator_executor import (
     apply_changeset, _inherited_view_name, _normalize_inherit_arch,
 )
+from odoo_consultant_portal.services.preview_service import _http_error_detail
 
 
 # ── Inheritance arch normalization ───────────────────────────────
@@ -33,6 +36,22 @@ def test_normalize_keeps_bare_data_body():
     root = ET.fromstring(_normalize_inherit_arch(arch))
     assert root.tag == "data"
     assert root.find("xpath") is not None
+
+
+def test_report_preview_http_error_detail_keeps_odoo_message():
+    resp = httpx.Response(
+        500,
+        request=httpx.Request("GET", "https://example.test/report/pdf/x/1"),
+        headers={"content-type": "text/html; charset=utf-8"},
+        text="<html><body><h1>Internal Server Error</h1>"
+             "<pre>QWebException: Error while render the template</pre></body></html>",
+    )
+
+    detail = _http_error_detail(resp)
+
+    assert "HTTP 500" in detail
+    assert "QWebException" in detail
+    assert "<pre>" not in detail
 
 
 # ── Inherited-view naming ────────────────────────────────────────

@@ -25,7 +25,7 @@ from ...services.odoo_client import OdooClient
 from ...services.profile_manager import get_active_env_from_json, get_active_api_key
 from ...services.ai_service import stream_chat
 from ...services.context_service import load_context_for_prompt
-from ...services.localization_service import build_localization_context
+from ...services.localization_service import active_company_from_cache, build_localization_context
 from ...services.technical_complexity_service import (
     build_technical_complexity_context, parse_technical_complexity,
 )
@@ -168,12 +168,14 @@ def _company_name(profile: Profile, company_id: Optional[int]) -> Optional[str]:
 
 
 def _build_context_md(profile: Profile, version, user_prompt, company_id):
+    active_company = active_company_from_cache(profile.company_ids, company_id)
     localization_md = build_localization_context(
         profile.company_ids, company_id, version, user_prompt, "developer")
     complexity_md = build_technical_complexity_context(profile.technical_complexity)
     return load_context_for_prompt(
         version, user_prompt=user_prompt, perspective="developer", locale="fr",
         creation=True,
+        country_code=active_company.get("country_code") if active_company else None,
         priority_blocks=[b for b in (localization_md, complexity_md) if b])
 
 

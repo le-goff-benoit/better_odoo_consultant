@@ -25,7 +25,9 @@ operation is reported ``valid=False`` with the reason.
 
 import asyncio
 import base64
+import html
 import logging
+import re
 from typing import Optional
 
 import httpx
@@ -36,11 +38,28 @@ from .view_service import _assembled_view
 log = logging.getLogger(__name__)
 
 PREVIEWABLE_OPS = {"modify_view", "modify_report"}
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
 
 
 async def _run(fn):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, fn)
+
+
+def _http_error_detail(resp: httpx.Response, max_chars: int = 1200) -> str:
+    """Return a compact, readable detail from an Odoo HTTP error page."""
+    text = resp.text or ""
+    content_type = (resp.headers.get("content-type") or "").lower()
+    if "html" in content_type:
+        text = _TAG_RE.sub(" ", text)
+    text = html.unescape(text)
+    text = _WS_RE.sub(" ", text).strip()
+    if not text:
+        text = resp.reason_phrase
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "..."
+    return f"HTTP {resp.status_code} {resp.reason_phrase}: {text}"
 
 
 async def preview_operation(odoo, operations: list[dict], index: int,
@@ -152,7 +171,8 @@ async def _odoo_web_session(odoo) -> httpx.AsyncClient:
 async def _render_report_pdf(client: httpx.AsyncClient, report_name: str,
                              record_id: int) -> bytes:
     resp = await client.get(f"/report/pdf/{report_name}/{record_id}")
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        raise RuntimeError(_http_error_detail(resp))
     ctype = (resp.headers.get("content-type") or "").lower()
     if "pdf" not in ctype:
         raise RuntimeError(

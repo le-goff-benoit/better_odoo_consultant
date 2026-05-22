@@ -1008,6 +1008,35 @@ textarea:focus-visible {
   gap: 5px;
 }
 
+.conversation-localization-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: stretch;
+  width: 100%;
+  min-height: 38px;
+  border: var(--neo-border-w) solid var(--l10n-accent);
+  background: var(--l10n-bg);
+}
+
+.conversation-localization-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--l10n-accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.conversation-localization-card strong {
+  min-width: 0;
+  padding: 8px 9px;
+  color: var(--l10n-fg);
+  overflow-wrap: anywhere;
+}
+
 .conversation-profile-card {
   display: flex;
   flex-direction: column;
@@ -2338,6 +2367,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 6px 12px;
   flex-shrink: 0;
 }
@@ -2409,6 +2439,48 @@ textarea:focus-visible {
 
 .assistant-version-trigger:hover {
   filter: brightness(.94);
+}
+
+.assistant-localization-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border: var(--neo-border-w) solid var(--l10n-accent);
+  border-radius: 0;
+  background: var(--l10n-bg);
+  color: var(--l10n-fg);
+  cursor: pointer;
+  transition: filter .15s, border-color .15s;
+  white-space: nowrap;
+}
+
+.assistant-localization-trigger:hover {
+  filter: brightness(.94);
+}
+
+.assistant-localization-trigger.is-selected {
+  border-color: var(--l10n-accent);
+}
+
+.assistant-localization-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 1px solid var(--l10n-accent);
+  background: var(--l10n-accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .assistant-version-badge {

@@ -42,6 +42,18 @@ function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string 
   )
 }
 
+const L10N_COUNTRY_TONES: Record<string, { color: string; bg: string; border: string }> = {
+  CH: { color: '#ff3341', bg: 'rgba(255,51,65,.10)', border: 'rgba(255,51,65,.28)' },
+  FR: { color: '#114ee8', bg: 'rgba(17,78,232,.10)', border: 'rgba(17,78,232,.28)' },
+  BE: { color: '#8a5500', bg: 'rgba(255,215,53,.20)', border: 'rgba(138,85,0,.25)' },
+  LU: { color: '#0f6282', bg: 'rgba(72,231,255,.16)', border: 'rgba(15,98,130,.26)' },
+}
+
+function moduleCountry(moduleName?: string) {
+  const match = /^l10n_([a-z]{2})(?:_|$)/.exec(moduleName || '')
+  return match ? match[1].toUpperCase() : null
+}
+
 interface EnvEntry {
   id: string
   name: string
@@ -87,6 +99,87 @@ interface CompanyOption {
 
 function companyLocalizationLabel(company: CompanyOption) {
   return [company.country_code, company.currency].filter(Boolean).join(' · ')
+}
+
+function LocalizationBadges({ companies, max = 5 }: { companies: CompanyOption[]; max?: number }) {
+  const byCountry = new Map<string, {
+    code: string
+    name?: string
+    currencies: Set<string>
+    charts: Set<string>
+    companies: Set<string>
+    installed: Set<string>
+    available: Set<string>
+  }>()
+
+  for (const company of companies) {
+    const installed = company.installed_l10n_modules || []
+    const available = company.available_l10n_modules || []
+    const inferredCodes = [
+      ...installed.map(moduleCountry),
+      ...available.map(m => moduleCountry(m.name)),
+    ].filter(Boolean) as string[]
+    const code = (company.country_code || inferredCodes[0] || '').toUpperCase()
+    if (!code) continue
+    const entry = byCountry.get(code) ?? {
+      code,
+      name: company.country_name,
+      currencies: new Set<string>(),
+      charts: new Set<string>(),
+      companies: new Set<string>(),
+      installed: new Set<string>(),
+      available: new Set<string>(),
+    }
+    if (company.country_name && !entry.name) entry.name = company.country_name
+    if (company.currency) entry.currencies.add(company.currency)
+    if (company.chart_template) entry.charts.add(company.chart_template)
+    if (company.name) entry.companies.add(company.name)
+    installed.forEach(name => entry.installed.add(name))
+    available.forEach(module => module.name && entry.available.add(module.name))
+    byCountry.set(code, entry)
+  }
+
+  const items = Array.from(byCountry.values()).sort((a, b) => a.code.localeCompare(b.code))
+  if (items.length === 0) return null
+  const shown = items.slice(0, max)
+  const rest = items.length - max
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8, marginBottom: 4 }}>
+      {shown.map(item => {
+        const tone = L10N_COUNTRY_TONES[item.code] ?? { color: t.textSub, bg: t.bgMuted, border: t.border }
+        const modules = [...item.installed]
+        const titleParts = [
+          item.name ? `${item.name} (${item.code})` : item.code,
+          item.companies.size ? `Sociétés : ${[...item.companies].join(', ')}` : '',
+          item.currencies.size ? `Devise : ${[...item.currencies].join(', ')}` : '',
+          item.charts.size ? `Plan comptable : ${[...item.charts].join(', ')}` : '',
+          item.installed.size ? `Modules installés : ${[...item.installed].join(', ')}` : '',
+          item.available.size ? `Modules sources : ${[...item.available].join(', ')}` : '',
+        ].filter(Boolean)
+        return (
+          <span key={item.code} title={titleParts.join('\n')} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '3px 8px', borderRadius: 4,
+            background: tone.bg, border: `1px solid ${tone.border}`,
+            fontSize: 11, fontWeight: 700, color: tone.color,
+          }}>
+            <span style={{ fontSize: 13, lineHeight: 1 }}>{countryFlag(item.code) || '▣'}</span>
+            <span>{item.code}</span>
+            {modules[0] && <span style={{ opacity: .82, fontWeight: 600 }}>{modules[0]}</span>}
+            {modules.length > 1 && <span style={{ opacity: .72 }}>+{modules.length - 1}</span>}
+          </span>
+        )
+      })}
+      {rest > 0 && (
+        <span style={{
+          padding: '3px 8px', borderRadius: 4,
+          background: t.bgMuted, border: `1px solid ${t.border}`,
+          fontSize: 11, color: t.muted,
+        }}>+{rest}</span>
+      )}
+    </div>
+  )
 }
 
 function technicalComplexityLabel(raw?: string) {
@@ -144,6 +237,7 @@ const profilesCopy = {
     activeCompany: 'Société active',
     environments: 'Environnements',
     applications: 'Applications',
+    fiscalLocalizations: 'Localisations fiscales',
     linksActions: 'Liens & actions',
     quickActions: 'Actions rapides',
     maintenance: 'Maintenance',
@@ -194,6 +288,7 @@ const profilesCopy = {
     activeCompany: 'Active company',
     environments: 'Environments',
     applications: 'Applications',
+    fiscalLocalizations: 'Fiscal localizations',
     linksActions: 'Links & actions',
     quickActions: 'Quick actions',
     maintenance: 'Maintenance',
@@ -862,6 +957,13 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
     return envWithRepo?.github_repo ? `https://github.com/${envWithRepo.github_repo}` : null
   })()
   const companies: CompanyOption[] = (() => { try { return JSON.parse(profile.company_ids ?? '[]') } catch { return [] } })()
+  const localizedCompanies = companies.filter(company =>
+    company.country_code
+    || company.currency
+    || company.chart_template
+    || (company.installed_l10n_modules || []).length > 0
+    || (company.available_l10n_modules || []).length > 0
+  )
   const accessInfo: AccessInfo | null = (() => { try { return profile.user_access_info ? JSON.parse(profile.user_access_info) : null } catch { return null } })()
   const complexityLabel = technicalComplexityLabel(profile.technical_complexity)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -1133,6 +1235,13 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
           <div className="project-section">
             <div className="project-section-title">{c.applications}</div>
             <AppBadges apps={apps} max={6} />
+          </div>
+        )}
+
+        {localizedCompanies.length > 0 && (
+          <div className="project-section">
+            <div className="project-section-title">{c.fiscalLocalizations}</div>
+            <LocalizationBadges companies={localizedCompanies} max={6} />
           </div>
         )}
 

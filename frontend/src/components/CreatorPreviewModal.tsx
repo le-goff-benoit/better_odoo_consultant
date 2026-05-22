@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import {
   X, Loader2, CheckCircle2, AlertTriangle, FileText, PanelsTopLeft,
@@ -27,7 +27,9 @@ export interface PreviewResult {
 // Fixed Odoo-like palette — the wireframe represents an Odoo screen, so it
 // keeps its own light theme regardless of the app's light/dark mode.
 const ODOO = {
-  page: '#ebebeb',
+  page: '#f3f4f6',
+  chrome: '#f8f8f8',
+  control: '#ffffff',
   sheet: '#ffffff',
   text: '#37323e',
   muted: '#7c7d8a',
@@ -84,6 +86,18 @@ function isStaticInvisible(el: Element): boolean {
 
 interface Added { fields: Set<string>; pages: Set<string> }
 const NO_ADD: Added = { fields: new Set(), pages: new Set() }
+
+function pageLabel(page: Element, index: number): string {
+  return page.getAttribute('string') || page.getAttribute('name') || `Onglet ${index + 1}`
+}
+
+function containsAddedField(el: Element, added: Added): boolean {
+  if (!added.fields.size) return false
+  return Array.from(el.querySelectorAll('field')).some(f => {
+    const name = f.getAttribute('name')
+    return !!name && added.fields.has(name)
+  })
+}
 
 // ── wireframe pieces ─────────────────────────────────────────────
 
@@ -206,11 +220,12 @@ function FieldRow({ el, added }: { el: Element; added: Added }) {
   // `invisible` present but not a static "1"/"True" → conditionally shown.
   const conditional = el.hasAttribute('invisible') && !isStaticInvisible(el)
   return (
-    <div style={{
+    <div data-preview-added={isNew ? 'true' : undefined} style={{
       display: 'grid', gridTemplateColumns: 'minmax(64px, 36%) 1fr', gap: 10,
       alignItems: kind === 'text' || kind === 'image' ? 'flex-start' : 'center',
-      padding: isNew ? '3px 5px' : '1.5px 0', borderRadius: 4,
+      padding: isNew ? '6px 7px' : '3px 0', borderRadius: 4,
       outline: isNew ? `2px solid ${ODOO.added}` : 'none',
+      outlineOffset: isNew ? 1 : 0,
       background: isNew ? ODOO.addedBg : 'transparent',
       opacity: conditional && !isNew ? 0.5 : 1,
     }}>
@@ -250,7 +265,7 @@ function GroupColumn({ el, added }: { el: Element; added: Added }) {
         .forEach((f, j) => rows.push(<FieldRow key={`${i}-${j}`} el={f} added={added} />))
     }
   })
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>{rows}</div>
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{rows}</div>
 }
 
 /** A <group>: nested groups become side-by-side columns; bare fields stack. */
@@ -259,12 +274,12 @@ function GroupNode({ el, added }: { el: Element; added: Added }) {
   const childGroups = Array.from(el.children)
     .filter(c => c.tagName.toLowerCase() === 'group' && !isStaticInvisible(c))
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {title && <SectionTitle>{title}</SectionTitle>}
       {childGroups.length > 0 ? (
-        <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 30, flexWrap: 'wrap' }}>
           {childGroups.map((g, i) => (
-            <div key={i} style={{ flex: '1 1 230px', minWidth: 190 }}>
+            <div key={i} style={{ flex: '1 1 260px', minWidth: 210 }}>
               <GroupColumn el={g} added={added} />
             </div>
           ))}
@@ -299,9 +314,9 @@ function StatusBar({ el }: { el: Element }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: 10, flexWrap: 'wrap', maxWidth: 760, margin: '0 auto',
+      gap: 10, flexWrap: 'wrap',
       background: ODOO.sheet, border: `1px solid ${ODOO.border}`,
-      borderRadius: 3, padding: '5px 8px',
+      borderRadius: 0, padding: '8px 10px',
     }}>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
         {buttons.slice(0, 9).map((b, i) => <HeaderButton key={i} el={b} />)}
@@ -345,31 +360,41 @@ function Notebook({ el, added }: { el: Element; added: Added }) {
   const pages = Array.from(el.children)
     .filter(c => c.tagName.toLowerCase() === 'page' && !isStaticInvisible(c))
   const [active, setActive] = useState(0)
+  const preferred = pages.findIndex((p, i) => added.pages.has(pageLabel(p, i)) || containsAddedField(p, added))
+  useEffect(() => {
+    if (preferred >= 0) setActive(preferred)
+  }, [preferred])
   if (!pages.length) return null
   const page = pages[Math.min(active, pages.length - 1)]
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', borderBottom: `1px solid ${ODOO.border}` }}>
+    <div data-preview-added={preferred >= 0 ? 'true' : undefined}>
+      <div style={{
+        display: 'flex', gap: 0, flexWrap: 'wrap',
+        borderBottom: `1px solid ${ODOO.border}`, marginTop: 4,
+      }}>
         {pages.map((p, i) => {
-          const label = p.getAttribute('string') || p.getAttribute('name') || `Onglet ${i + 1}`
+          const label = pageLabel(p, i)
           const isNew = added.pages.has(label)
+          const hasAdded = containsAddedField(p, added)
           return (
             <button
               key={i} type="button" onClick={() => setActive(i)}
               style={{
-                fontSize: 10.5, fontWeight: 700, padding: '5px 11px', cursor: 'pointer',
-                border: 'none', background: 'transparent',
-                borderBottom: i === active ? `2px solid ${ODOO.primary}` : '2px solid transparent',
+                fontSize: 11, fontWeight: 600, padding: '8px 12px', cursor: 'pointer',
+                border: `1px solid ${i === active ? ODOO.border : 'transparent'}`,
+                borderBottom: i === active ? `1px solid ${ODOO.sheet}` : `1px solid ${ODOO.border}`,
+                background: i === active ? ODOO.sheet : '#f6f6f7',
+                marginBottom: -1,
                 color: i === active ? ODOO.text : ODOO.muted,
                 display: 'inline-flex', gap: 5, alignItems: 'center',
               }}
             >
-              {label}{isNew && <NewBadge />}
+              {label}{(isNew || hasAdded) && <NewBadge />}
             </button>
           )
         })}
       </div>
-      <div style={{ paddingTop: 12 }}>{renderSheetChildren(page, added)}</div>
+      <div style={{ padding: '16px 0 4px' }}>{renderSheetChildren(page, added)}</div>
     </div>
   )
 }
@@ -423,9 +448,9 @@ function renderSheetChildren(el: Element, added: Added): ReactNode {
         run.length === 1
           ? <GroupNode key={k++} el={run[0]} added={added} />
           : (
-            <div key={k++} style={{ display: 'flex', gap: 26, flexWrap: 'wrap' }}>
+            <div key={k++} style={{ display: 'flex', gap: 30, flexWrap: 'wrap' }}>
               {run.map((g, j) => (
-                <div key={j} style={{ flex: '1 1 220px', minWidth: 180 }}>
+                <div key={j} style={{ flex: '1 1 260px', minWidth: 210 }}>
                   <GroupNode el={g} added={added} />
                 </div>
               ))}
@@ -449,7 +474,7 @@ function renderSheetChildren(el: Element, added: Added): ReactNode {
     }
     i++
   }
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>{out}</div>
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>{out}</div>
 }
 
 function FormView({ root, added }: { root: Element; added: Added }) {
@@ -457,12 +482,12 @@ function FormView({ root, added }: { root: Element; added: Added }) {
   const header = children.find(c => c.tagName.toLowerCase() === 'header')
   const sheet = children.find(c => c.tagName.toLowerCase() === 'sheet')
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {header && <StatusBar el={header} />}
       <div style={{
-        background: ODOO.sheet, border: `1px solid ${ODOO.border}`, borderRadius: 3,
-        boxShadow: '0 1px 5px rgba(0,0,0,.12)', padding: '18px 22px',
-        maxWidth: 760, width: '100%', margin: '0 auto',
+        background: ODOO.sheet, border: `1px solid ${ODOO.border}`, borderRadius: 0,
+        boxShadow: '0 1px 4px rgba(0,0,0,.10)', padding: '24px 28px 30px',
+        maxWidth: 980, width: '100%', margin: '0 auto',
       }}>
         {renderSheetChildren(sheet || root, added)}
       </div>
@@ -517,38 +542,92 @@ function ListView({ root, added }: { root: Element; added: Added }) {
 
 function ViewWireframe({ arch, added }: { arch: string; added: Added }) {
   const root = useMemo(() => parseArch(arch), [arch])
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!added.fields.size && !added.pages.size) return
+    const target = ref.current?.querySelector('[data-preview-added="true"]')
+    if (!target) return
+    window.setTimeout(() => target.scrollIntoView({ block: 'center', inline: 'nearest' }), 60)
+  }, [arch, added])
   if (!arch) return <Hint>Vue indisponible.</Hint>
   if (!root) return <Hint>Architecture de vue illisible.</Hint>
   const tag = root.tagName.toLowerCase()
   return (
-    <div style={{
-      background: ODOO.page, borderRadius: 6, padding: 14, color: ODOO.text,
+    <div ref={ref} style={{
+      background: ODOO.page, borderRadius: 0, color: ODOO.text,
       fontFamily: 'system-ui, sans-serif',
     }}>
-      {tag === 'form' ? (
-        <FormView root={root} added={added} />
-      ) : tag === 'tree' || tag === 'list' ? (
-        <ListView root={root} added={added} />
-      ) : (
-        <div>
-          <div style={{ fontSize: 11, color: ODOO.muted, marginBottom: 8 }}>
-            Aperçu schématique limité pour une vue « {tag} » — champs présents :
+      <OdooChrome viewType={tag}>
+        {tag === 'form' ? (
+          <FormView root={root} added={added} />
+        ) : tag === 'tree' || tag === 'list' ? (
+          <ListView root={root} added={added} />
+        ) : (
+          <div style={{ padding: 14 }}>
+            <div style={{ fontSize: 11, color: ODOO.muted, marginBottom: 8 }}>
+              Aperçu schématique limité pour une vue « {tag} » — champs présents :
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {Array.from(root.querySelectorAll('field')).map((f, i) => {
+                const name = f.getAttribute('name') || ''
+                const isNew = added.fields.has(name)
+                return (
+                  <span key={i} style={{
+                    fontSize: 10, padding: '3px 7px', borderRadius: 3,
+                    border: `1px solid ${isNew ? ODOO.added : ODOO.border}`,
+                    background: isNew ? ODOO.addedBg : ODOO.sheet,
+                  }}>{name}</span>
+                )
+              })}
+            </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {Array.from(root.querySelectorAll('field')).map((f, i) => {
-              const name = f.getAttribute('name') || ''
-              const isNew = added.fields.has(name)
-              return (
-                <span key={i} style={{
-                  fontSize: 10, padding: '3px 7px', borderRadius: 3,
-                  border: `1px solid ${isNew ? ODOO.added : ODOO.border}`,
-                  background: isNew ? ODOO.addedBg : ODOO.sheet,
-                }}>{name}</span>
-              )
-            })}
+        )}
+      </OdooChrome>
+    </div>
+  )
+}
+
+function OdooChrome({ viewType, children }: { viewType: string; children: ReactNode }) {
+  const title = viewType === 'form' ? 'Formulaire' : viewType === 'list' || viewType === 'tree' ? 'Liste' : humanize(viewType)
+  return (
+    <div style={{ minWidth: 420, background: ODOO.page }}>
+      <div style={{
+        height: 31, display: 'flex', alignItems: 'center', gap: 14,
+        padding: '0 12px', background: ODOO.primary, color: '#fff',
+        fontSize: 12, fontWeight: 600,
+      }}>
+        <span>Odoo</span>
+        <span style={{ opacity: .72, fontWeight: 500 }}>Ventes</span>
+        <span style={{ marginLeft: 'auto', opacity: .75 }}>Utilisateur</span>
+      </div>
+      <div style={{
+        background: ODOO.control, borderBottom: `1px solid ${ODOO.border}`,
+        padding: '10px 14px 11px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" style={{
+            border: `1px solid ${ODOO.primary}`, background: ODOO.primary,
+            color: '#fff', borderRadius: 3, padding: '4px 10px',
+            fontSize: 11, fontWeight: 700,
+          }}>Nouveau</button>
+          <button type="button" style={{
+            border: `1px solid ${ODOO.inputBorder}`, background: '#fff',
+            color: ODOO.text, borderRadius: 3, padding: '4px 10px',
+            fontSize: 11, fontWeight: 600,
+          }}>Action</button>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 10, color: ODOO.muted }}>Ventes / Aperçu Creator</div>
+            <div style={{ fontSize: 15, color: ODOO.text, fontWeight: 650 }}>{title}</div>
           </div>
+          <div style={{
+            width: 150, height: 24, border: `1px solid ${ODOO.inputBorder}`,
+            background: '#fff', borderRadius: 3,
+          }} />
         </div>
-      )}
+      </div>
+      <div style={{ padding: 14 }}>
+        {children}
+      </div>
     </div>
   )
 }
