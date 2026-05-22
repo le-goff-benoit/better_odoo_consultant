@@ -25,8 +25,11 @@ operation is reported ``valid=False`` with the reason.
 
 import asyncio
 import base64
+import html
 import logging
-from typing import Optional
+import re
+import xml.etree.ElementTree as ET
+from typing import Any, Optional
 
 import httpx
 
@@ -36,11 +39,196 @@ from .view_service import _assembled_view
 log = logging.getLogger(__name__)
 
 PREVIEWABLE_OPS = {"modify_view", "modify_report"}
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+_SAMPLE_FIELD_LIMIT = 80
+_SAMPLE_X2MANY_ROWS = 5
+_SAMPLE_X2MANY_COLUMNS = 12
 
 
 async def _run(fn):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, fn)
+
+
+def _http_error_detail(resp: httpx.Response, max_chars: int = 1200) -> str:
+    """Return a compact, readable detail from an Odoo HTTP error page."""
+    text = resp.text or ""
+    content_type = (resp.headers.get("content-type") or "").lower()
+    if "html" in content_type:
+        text = _TAG_RE.sub(" ", text)
+    text = html.unescape(text)
+    text = _WS_RE.sub(" ", text).strip()
+    if not text:
+        text = resp.reason_phrase
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "..."
+    return f"HTTP {resp.status_code} {resp.reason_phrase}: {text}"
+
+
+def _field_names_from_arch(*arches: str) -> list[str]:
+    """Extract unique field names from one or more XML view architectures."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for arch in arches:
+        if not arch:
+            continue
+        try:
+            root = ET.fromstring(arch)
+        except ET.ParseError:
+            continue
+        for field in root.iter("field"):
+            name = field.attrib.get("name")
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+    return names
+
+
+def _x2many_columns_from_arch(*arches: str) -> dict[str, list[str]]:
+    """Return embedded list/form columns declared below relational fields."""
+    columns: dict[str, list[str]] = {}
+    for arch in arches:
+        if not arch:
+            continue
+        try:
+            root = ET.fromstring(arch)
+        except ET.ParseError:
+            continue
+        for field in root.iter("field"):
+            name = field.attrib.get("name")
+            if not name:
+                continue
+            child_names: list[str] = []
+            seen: set[str] = set()
+            for container in field:
+                if container.tag not in {"tree", "list", "form"}:
+                    continue
+                for child in container.iter("field"):
+                    child_name = child.attrib.get("name")
+                    if child_name and child_name not in seen:
+                        seen.add(child_name)
+                        child_names.append(child_name)
+            if child_names:
+                columns[name] = child_names[:_SAMPLE_X2MANY_COLUMNS]
+    return columns
+
+
+def _sample_value(value: Any) -> Any:
+    """Keep preview sample values compact and JSON-friendly."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (list, tuple)):
+        out = [_sample_value(v) for v in value[:8]]
+        return out
+    if isinstance(value, dict):
+        return {str(k): _sample_value(v) for k, v in list(value.items())[:8]}
+    return str(value)
+
+
+async def _sample_record_for_view(odoo, model: str, arches: list[str]) -> dict:
+    """Read a recent record and field metadata for a view preview.
+
+    The preview remains read-only: it uses the active Odoo environment and
+    company context, but only calls fields_get/search_read.
+    """
+    try:
+        fields_meta = await _run(lambda: odoo.fields_get(
+            model, ["string", "type", "selection", "relation"]))
+    except Exception as exc:  # noqa: BLE001 - sample data is best-effort
+        log.info("Aperçu vue — fields_get impossible pour %s : %s", model, exc)
+        return {}
+
+    arch_fields = [
+        name for name in _field_names_from_arch(*arches)
+        if name in fields_meta and not str(name).startswith("__")
+    ]
+    # Avoid pulling huge binary/html values into the modal. The layout still
+    # gets their type from fields_meta, but their sample value stays empty.
+    readable_fields = [
+        name for name in arch_fields
+        if (fields_meta.get(name) or {}).get("type") not in {"binary", "html"}
+    ][: _SAMPLE_FIELD_LIMIT]
+    read_fields = list(dict.fromkeys(["display_name", *readable_fields]))
+
+    rows = []
+    try:
+        rows = await _run(lambda: odoo.search_read(
+            model, [], read_fields, limit=1, order="write_date desc, id desc"))
+    except Exception as exc:  # noqa: BLE001
+        log.info("Aperçu vue — record sample impossible pour %s : %s", model, exc)
+        try:
+            rows = await _run(lambda: odoo.search_read(
+                model, [], ["display_name"], limit=1, order="id desc"))
+        except Exception:
+            rows = []
+
+    row = rows[0] if rows else {}
+    sample_values = {
+        field: _sample_value(row.get(field))
+        for field in readable_fields
+        if field in row
+    }
+    embedded_columns = _x2many_columns_from_arch(*arches)
+    for field, columns in embedded_columns.items():
+        meta = fields_meta.get(field) or {}
+        if meta.get("type") not in {"one2many", "many2many"}:
+            continue
+        relation = meta.get("relation")
+        ids = row.get(field) if isinstance(row.get(field), list) else []
+        if not relation or not ids:
+            sample_values[field] = {"ids": _sample_value(ids), "count": len(ids), "records": []}
+            continue
+        try:
+            related_meta = await _run(lambda relation=relation: odoo.fields_get(
+                relation, ["string", "type", "selection", "relation"]))
+        except Exception as exc:  # noqa: BLE001
+            log.info("Aperçu vue — fields_get relation impossible pour %s : %s", relation, exc)
+            related_meta = {}
+        related_fields = [
+            col for col in columns
+            if col in related_meta and related_meta[col].get("type") not in {"binary", "html"}
+        ][: _SAMPLE_X2MANY_COLUMNS]
+        read_related = list(dict.fromkeys(["display_name", *related_fields]))
+        try:
+            related_rows = await _run(lambda relation=relation, ids=ids[:_SAMPLE_X2MANY_ROWS]: odoo.search_read(
+                relation, [["id", "in", ids]], read_related,
+                limit=_SAMPLE_X2MANY_ROWS, order="id asc"))
+        except Exception as exc:  # noqa: BLE001
+            log.info("Aperçu vue — lignes liées impossibles pour %s.%s : %s", model, field, exc)
+            related_rows = []
+        sample_values[field] = {
+            "ids": _sample_value(ids),
+            "count": len(ids),
+            "records": [_sample_value(r) for r in related_rows],
+            "field_info": {
+                name: {
+                    "string": meta.get("string") or name,
+                    "type": meta.get("type"),
+                    "selection": meta.get("selection") or [],
+                    "relation": meta.get("relation"),
+                }
+                for name, meta in related_meta.items()
+                if name in columns
+            },
+        }
+    sample_id = row.get("id")
+    sample_name = row.get("display_name") or (f"#{sample_id}" if sample_id else None)
+    field_info = {
+        name: {
+            "string": meta.get("string") or name,
+            "type": meta.get("type"),
+            "selection": meta.get("selection") or [],
+            "relation": meta.get("relation"),
+        }
+        for name, meta in fields_meta.items()
+        if name in arch_fields
+    }
+    return {
+        "record": {"id": sample_id, "name": sample_name} if sample_id else None,
+        "field_info": field_info,
+        "sample_values": sample_values,
+    }
 
 
 async def preview_operation(odoo, operations: list[dict], index: int,
@@ -93,6 +281,7 @@ async def preview_view_operation(odoo, operations: list[dict], index: int,
 
     executor = _Executor(odoo, dry=False, version=version, tag=False)
     after_arch = ""
+    sample_context: dict = {}
     valid = True
     error: Optional[str] = None
     try:
@@ -104,6 +293,9 @@ async def preview_view_operation(odoo, operations: list[dict], index: int,
             valid = False
             error = ("La vue modifiée n'a pas pu être réassemblée par Odoo — "
                      "l'héritage est probablement invalide.")
+        else:
+            sample_context = await _sample_record_for_view(
+                odoo, model, [before_arch, after_arch])
     except OperationError as exc:
         valid = False
         error = str(exc)
@@ -120,6 +312,7 @@ async def preview_view_operation(odoo, operations: list[dict], index: int,
         "model": model, "view_type": view_type,
         "before_arch": before_arch, "after_arch": after_arch,
         "rollback_warnings": rb_errors,
+        **sample_context,
     }
 
 
@@ -152,7 +345,8 @@ async def _odoo_web_session(odoo) -> httpx.AsyncClient:
 async def _render_report_pdf(client: httpx.AsyncClient, report_name: str,
                              record_id: int) -> bytes:
     resp = await client.get(f"/report/pdf/{report_name}/{record_id}")
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        raise RuntimeError(_http_error_detail(resp))
     ctype = (resp.headers.get("content-type") or "").lower()
     if "pdf" not in ctype:
         raise RuntimeError(

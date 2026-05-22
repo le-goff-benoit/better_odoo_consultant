@@ -1,12 +1,19 @@
 """Tests for the Creator tool: changeset parsing, executor, dry-run."""
 
+import xml.etree.ElementTree as ET
+
+import httpx
+
 from odoo_consultant_portal.services.creator_service import (
     parse_analysis, build_analysis_message,
 )
-import xml.etree.ElementTree as ET
-
 from odoo_consultant_portal.services.creator_executor import (
     apply_changeset, _inherited_view_name, _normalize_inherit_arch,
+)
+from odoo_consultant_portal.services.preview_service import (
+    _field_names_from_arch,
+    _http_error_detail,
+    _sample_record_for_view,
 )
 
 
@@ -33,6 +40,32 @@ def test_normalize_keeps_bare_data_body():
     root = ET.fromstring(_normalize_inherit_arch(arch))
     assert root.tag == "data"
     assert root.find("xpath") is not None
+
+
+def test_report_preview_http_error_detail_keeps_odoo_message():
+    resp = httpx.Response(
+        500,
+        request=httpx.Request("GET", "https://example.test/report/pdf/x/1"),
+        headers={"content-type": "text/html; charset=utf-8"},
+        text="<html><body><h1>Internal Server Error</h1>"
+             "<pre>QWebException: Error while render the template</pre></body></html>",
+    )
+
+    detail = _http_error_detail(resp)
+
+    assert "HTTP 500" in detail
+    assert "QWebException" in detail
+    assert "<pre>" not in detail
+
+
+def test_view_preview_extracts_unique_field_names_from_arches():
+    names = _field_names_from_arch(
+        '<form><field name="name"/><field name="partner_id"/></form>',
+        '<form><field name="partner_id"/><field name="amount_total"/></form>',
+        '<form><field></field></form>',
+    )
+
+    assert names == ["name", "partner_id", "amount_total"]
 
 
 # ── Inherited-view naming ────────────────────────────────────────
@@ -149,8 +182,20 @@ class FakeOdoo:
 
     def fields_get(self, model, attributes=None):
         if model in self._field_types:
-            return {f: {"type": t, "string": f, "store": True, "readonly": False}
-                    for f, t in self._field_types[model].items()}
+            return {
+                f: ({
+                    "string": f,
+                    "store": True,
+                    "readonly": False,
+                    **t,
+                } if isinstance(t, dict) else {
+                    "type": t,
+                    "string": f,
+                    "store": True,
+                    "readonly": False,
+                })
+                for f, t in self._field_types[model].items()
+            }
         return self._automation_fields
 
 
@@ -175,6 +220,78 @@ async def test_apply_unknown_operation_type_fails():
     result = await apply_changeset(fake, [{"type": "nuke", "params": {}}])
     assert not result["ok"]
     assert result["operations"][0]["status"] == "failed"
+
+
+async def test_view_preview_sample_record_uses_customer_data():
+    fake = FakeOdoo(
+        records={
+            "sale.order": [{
+                "id": 42,
+                "display_name": "S/2026/0044",
+                "partner_id": [7, "Deco Addict"],
+                "amount_total": 1240.5,
+                "image_128": "base64",
+            }],
+        },
+        field_types={
+            "sale.order": {
+                "name": "char",
+                "partner_id": "many2one",
+                "amount_total": "monetary",
+                "image_128": "binary",
+            },
+        },
+    )
+    arch = (
+        '<form><sheet><field name="name"/><field name="partner_id"/>'
+        '<field name="amount_total"/><field name="image_128"/></sheet></form>'
+    )
+
+    result = await _sample_record_for_view(fake, "sale.order", [arch])
+
+    assert result["record"] == {"id": 42, "name": "S/2026/0044"}
+    assert result["sample_values"]["partner_id"] == [7, "Deco Addict"]
+    assert result["sample_values"]["amount_total"] == 1240.5
+    assert "image_128" not in result["sample_values"]
+    assert result["field_info"]["partner_id"]["type"] == "many2one"
+
+
+async def test_view_preview_samples_embedded_x2many_lines():
+    fake = FakeOdoo(
+        records={
+            "sale.order": [{
+                "id": 42,
+                "display_name": "S/2026/0044",
+                "order_line": [338, 339, 340],
+            }],
+            "sale.order.line": [
+                {"id": 338, "display_name": "Line 1", "product_id": [10, "Service"], "product_uom_qty": 2.0, "price_subtotal": 300.0},
+                {"id": 339, "display_name": "Line 2", "product_id": [11, "Support"], "product_uom_qty": 1.0, "price_subtotal": 120.0},
+            ],
+        },
+        field_types={
+            "sale.order": {
+                "order_line": {"type": "one2many", "relation": "sale.order.line"},
+            },
+            "sale.order.line": {
+                "product_id": {"type": "many2one", "relation": "product.product"},
+                "product_uom_qty": "float",
+                "price_subtotal": "monetary",
+            },
+        },
+    )
+    arch = (
+        '<form><sheet><field name="order_line"><tree>'
+        '<field name="product_id"/><field name="product_uom_qty"/>'
+        '<field name="price_subtotal"/></tree></field></sheet></form>'
+    )
+
+    result = await _sample_record_for_view(fake, "sale.order", [arch])
+    lines = result["sample_values"]["order_line"]
+
+    assert lines["count"] == 3
+    assert lines["records"][0]["product_id"] == [10, "Service"]
+    assert lines["field_info"]["product_uom_qty"]["type"] == "float"
 
 
 async def test_apply_rolls_back_on_partial_failure():

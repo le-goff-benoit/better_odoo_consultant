@@ -162,6 +162,30 @@ def test_context_router_includes_version_notes_for_version_sensitive_prompts():
     assert "Notes de version Odoo 18.0" in context
 
 
+def test_context_router_includes_selected_fiscal_localization():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Comment gérer la TVA et les factures clients ?",
+        country_code="CH",
+    )
+
+    assert "Localisation fiscale CH" in context
+    assert "Localisation fiscale Suisse" in context
+    assert "l10n_ch_reports" in context
+
+
+def test_context_router_can_force_general_mode_localization():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Comment fonctionne le workflow des ventes ?",
+        country_code="FR",
+        force_localization=True,
+    )
+
+    assert "Localisation fiscale FR" in context
+    assert "Localisation fiscale France" in context
+
+
 def test_context_router_supports_english_context_defaults():
     context = load_context_for_prompt(
         "18.0",

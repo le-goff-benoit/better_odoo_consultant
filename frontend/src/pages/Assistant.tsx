@@ -320,6 +320,35 @@ const assistantCopy = {
 const ODOO_VERSIONS_BASE = ['19.0', '18.0', '17.0', '16.0', '15.0']
 
 const GENERAL_KEY = 'general'
+const LS_GENERAL_COUNTRY = 'odoo-general-fiscal-country'
+const FISCAL_COUNTRIES = [
+  { code: '', labelFr: 'Aucune localisation', labelEn: 'No localization', short: '—' },
+  { code: 'CH', labelFr: 'Suisse', labelEn: 'Switzerland', short: 'CH' },
+  { code: 'FR', labelFr: 'France', labelEn: 'France', short: 'FR' },
+  { code: 'BE', labelFr: 'Belgique', labelEn: 'Belgium', short: 'BE' },
+  { code: 'LU', labelFr: 'Luxembourg', labelEn: 'Luxembourg', short: 'LU' },
+]
+
+function fiscalCountryLabel(code: string | null | undefined, lang: 'fr' | 'en') {
+  const country = FISCAL_COUNTRIES.find(c => c.code === (code || '').toUpperCase())
+  if (!country || !country.code) return undefined
+  return `${lang === 'en' ? country.labelEn : country.labelFr} (${country.code})`
+}
+
+function countryToneStyle(code: string | null | undefined): React.CSSProperties {
+  const tones: Record<string, { accent: string; bg: string; fg: string }> = {
+    CH: { accent: '#ff3341', bg: 'color-mix(in srgb, #ff3341 15%, var(--th-bg-card))', fg: '#ff3341' },
+    FR: { accent: '#114ee8', bg: 'color-mix(in srgb, #114ee8 13%, var(--th-bg-card))', fg: '#114ee8' },
+    BE: { accent: '#ffd735', bg: 'color-mix(in srgb, #ffd735 18%, var(--th-bg-card))', fg: '#8a5500' },
+    LU: { accent: '#48e7ff', bg: 'color-mix(in srgb, #48e7ff 16%, var(--th-bg-card))', fg: '#0f6282' },
+  }
+  const tone = tones[(code || '').toUpperCase()] ?? { accent: 'var(--th-border)', bg: 'var(--th-bg-card)', fg: 'var(--th-text-sub)' }
+  return {
+    '--l10n-accent': tone.accent,
+    '--l10n-bg': tone.bg,
+    '--l10n-fg': tone.fg,
+  } as React.CSSProperties
+}
 // ── Main page ─────────────────────────────────────────────────
 
 export default function Assistant() {
@@ -356,6 +385,9 @@ export default function Assistant() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
   const [activeEnvId, setActiveEnvId] = useState<string | null>(null)   // null = use profile default
   const [generalVersion, setGeneralVersion] = useState('19.0')
+  const [generalCountryCode, setGeneralCountryCode] = useState<string>(() => {
+    try { return localStorage.getItem(LS_GENERAL_COUNTRY) ?? '' } catch { return '' }
+  })
 
   // Conversations keyed by string (profile id as string, or 'general')
   // Initialized from localStorage so they survive page refresh
@@ -381,6 +413,9 @@ export default function Assistant() {
 
   // Auto-persist active conversations to localStorage
   useEffect(() => { persistActiveConvs(conversations) }, [conversations])
+  useEffect(() => {
+    try { localStorage.setItem(LS_GENERAL_COUNTRY, generalCountryCode) } catch { /* quota */ }
+  }, [generalCountryCode])
 
   // Subscribe to streaming signals so tab dots re-render when streams complete
   const [, _rerenderSig] = useState(0)
@@ -541,6 +576,9 @@ export default function Assistant() {
   })()
   const activeCompanyName = activeCompany?.name
   const activeCompanyLocalization = companyLocalizationLabel(activeCompany)
+  const generalLocalization = fiscalCountryLabel(generalCountryCode, lang)
+  const effectiveCountryCode = isGeneralMode ? generalCountryCode : activeCompany?.country_code
+  const effectiveLocalization = isGeneralMode ? generalLocalization : activeCompanyLocalization
   const activeComplexity = technicalComplexityLabel(selectedProfile?.technical_complexity)
   const complexityParsed = (() => { try { return JSON.parse(selectedProfile?.technical_complexity ?? '{}') } catch { return {} } })()
   const repoIsCloned = ((complexityParsed?.dev?.repositories ?? []) as Array<{ cloned: boolean }>).some(r => r.cloned)
@@ -549,6 +587,8 @@ export default function Assistant() {
     perspective,
     version: activeVersion,
     migration: false,
+    countryCode: effectiveCountryCode,
+    forceLocalization: isGeneralMode && !!generalCountryCode,
   })
   const conversationSources = [
     activeVersion && sourcesInstalled ? `Sources Odoo ${activeVersion}${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' Community' : ' Enterprise'}` : null,
@@ -675,7 +715,7 @@ export default function Assistant() {
     abortRef.current = ctrl
     try {
       const body = isGeneralMode
-        ? { provider, profile_id: null, version: generalVersion, messages: history, model: modelId, perspective }
+        ? { provider, profile_id: null, version: generalVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective }
         : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective }
       const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal })
       const reader = res.body!.getReader()
@@ -749,7 +789,7 @@ export default function Assistant() {
     try {
       const cleanAttachments = attached.map(attachmentPayload)
       const body = useGeneral
-        ? { provider, profile_id: null, version: useVersion, messages: history, model: modelId, perspective }
+        ? { provider, profile_id: null, version: useVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective }
         : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective }
       if (cleanAttachments.length > 0) {
         Object.assign(body, { attachments: cleanAttachments })
@@ -973,6 +1013,13 @@ export default function Assistant() {
                 )}
               </span>
             ) : null}
+            {isGeneralMode && (
+              <CountryDropdown
+                value={generalCountryCode}
+                onChange={setGeneralCountryCode}
+                lang={lang}
+              />
+            )}
           </div>{/* end version dropdown container */}
         </div>{/* end row 1 outer wrapper */}
 
@@ -1224,8 +1271,8 @@ export default function Assistant() {
           project={isGeneralMode ? undefined : selectedProfile?.name}
           environment={activeEnvObj?.name}
           company={activeCompanyName}
-          countryCode={activeCompany?.country_code}
-          localization={activeCompanyLocalization}
+          countryCode={effectiveCountryCode}
+          localization={effectiveLocalization}
           complexity={activeComplexity}
           version={activeVersion}
           repo={activeEnvRepo}
@@ -1602,6 +1649,66 @@ function VersionDropdown({ value, onChange, versions, sourcesStatus = {} }: {
   )
 }
 
+function CountryDropdown({ value, onChange, lang }: {
+  value: string
+  onChange: (v: string) => void
+  lang: 'fr' | 'en'
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selected = FISCAL_COUNTRIES.find(c => c.code === value) ?? FISCAL_COUNTRIES[0]
+  const selectedLabel = selected.code
+    ? `${countryFlag(selected.code)} ${selected.short}`
+    : (lang === 'en' ? 'L10N none' : 'L10N aucune')
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`assistant-localization-trigger${value ? ' is-selected' : ''}`}
+        style={countryToneStyle(value)}
+        title={lang === 'en' ? 'Fiscal localization context' : 'Contexte de localisation fiscale'}
+      >
+        <Globe2 size={12} />
+        <span>{selectedLabel}</span>
+        <ChevronDown size={11} style={{ opacity: .65 }} />
+      </button>
+      {open && (
+        <div className="assistant-dropdown-panel align-right" style={{ minWidth: 210 }}>
+          <div className="assistant-dropdown-header">
+            {lang === 'en' ? 'Fiscal localization' : 'Localisation fiscale'}
+          </div>
+          {FISCAL_COUNTRIES.map(country => {
+            const isActive = country.code === value
+            const label = lang === 'en' ? country.labelEn : country.labelFr
+            return (
+              <button
+                key={country.code || 'none'}
+                onClick={() => { onChange(country.code); setOpen(false) }}
+                className={`assistant-dropdown-item${isActive ? ' is-active' : ''}`}
+              >
+                <span className="assistant-localization-swatch" style={countryToneStyle(country.code)}>
+                  {country.code ? country.short : '—'}
+                </span>
+                <span style={{ flex: 1 }}>{country.code ? `${countryFlag(country.code)} ${label}` : label}</span>
+                {isActive && <Check size={13} />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Bubbles ──────────────────────────────────────────────────
 
 function fmtTime(ts?: number) {
@@ -1875,4 +1982,3 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
     </div>
   )
 }
-

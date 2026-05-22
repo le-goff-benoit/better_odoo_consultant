@@ -17,7 +17,7 @@ from ...services.ai_service import (
     GITHUB_MODELS_BASE_URL, COPILOT_BASE_URL, COPILOT_HEADERS,
 )
 from ...services.context_service import load_context_for_prompt
-from ...services.localization_service import build_localization_context
+from ...services.localization_service import active_company_from_cache, build_localization_context
 from ...services.technical_complexity_service import build_technical_complexity_context
 from ...services.attachment_service import ChatAttachment, inject_attachments
 
@@ -246,6 +246,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     attachments: list[ChatAttachment] = Field(default_factory=list)
     model: Optional[str] = None
+    country_code: Optional[str] = None  # general mode fiscal localization selector
     # Migration mode
     migration_mode: bool = False
     target_version: Optional[str] = None      # standalone target version
@@ -310,6 +311,8 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             user_prompt=user_prompt,
             perspective=req.perspective or "developer",
             locale=_context_locale,
+            country_code=req.country_code,
+            force_localization=bool(req.country_code),
         )
 
         # Migration target resolution
@@ -349,18 +352,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         raise HTTPException(400, "Clé API Odoo introuvable pour ce projet")
 
     active_company_id = req.company_id or profile.selected_company_id or None
+    _active_company = active_company_from_cache(profile.company_ids, active_company_id)
 
     # Resolve company name for the system prompt
     _active_company_name: Optional[str] = None
-    if active_company_id and profile.company_ids:
-        import json as _json2
-        try:
-            for c in _json2.loads(profile.company_ids):
-                if c.get("id") == active_company_id:
-                    _active_company_name = c.get("name")
-                    break
-        except Exception:
-            pass
+    if _active_company:
+        _active_company_name = _active_company.get("name")
 
     odoo = OdooClient(
         _active_env.get("db_url") or profile.db_url,
@@ -460,6 +457,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         user_prompt=user_prompt,
         perspective=req.perspective or "developer",
         locale=_context_locale,
+        country_code=_active_company.get("country_code") if _active_company else None,
         priority_blocks=[b for b in (_source_warning, localization_md, complexity_md) if b],
     )
 

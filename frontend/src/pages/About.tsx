@@ -7,10 +7,41 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.40.0',
+    version: '0.40.3',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Wireframe d’aperçu : champs typés — many2one et sélection avec menu déroulant, date, zone de texte, étiquettes, image, booléen, numérique — pour reconnaître la structure d’un coup d’œil',
+      'Les champs en affichage conditionnel sont grisés et marqués ◇ ; les champs en invisible statique restent masqués',
+      'Séparateurs rendus (titre de section ou filet)',
+    ],
+  },
+  {
+    version: '0.40.2',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Erreurs xpath actionnables : un xpath sans cible liste désormais les ancres RÉELLES de la vue parente (onglets et champs existants) — fini de deviner « other_info » au lieu de « other_information »',
+      'Aperçu : bouton « Corriger automatiquement cette erreur » qui relance l’IA avec l’erreur exacte ; les demandes de modification incluent le détail de l’erreur',
+      'Wireframe : groupes affichés en colonnes côte à côte (comme Odoo) et bloc titre du formulaire (oe_title)',
+    ],
+  },
+  {
+    version: '0.40.1',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'inspect_odoo_report renvoie désormais l’arch XML réelle des templates QWeb (rapport, document, mise en page) : l’IA cible des xpath valides au lieu de deviner des classes inexistantes (cause des erreurs « l’élément <xpath …> ne peut être localisé »)',
+    ],
+  },
+  {
+    version: '0.40.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Aperçu Creator : rendu des vues redessiné façon Odoo (feuille blanche, colonnes, statusbar, button box, palette aubergine)',
       'Aperçu calculé en contexte du changeset : les champs créés par les opérations précédentes sont appliqués d’abord — fin des faux négatifs « le champ x_… n’existe pas »',

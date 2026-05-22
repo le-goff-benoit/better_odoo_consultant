@@ -141,7 +141,9 @@ _TOOL_INSPECT_REPORT = {
     "description": (
         "Inspecter les rapports PDF / QWeb de l'instance Odoo connectée. Retourne : "
         "l'action de rapport (ir.actions.report), le template QWeb et son arbre "
-        "d'héritage, le format papier (paperformat) et la mise en page document de la "
+        "d'héritage, l'ARCH XML RÉELLE des templates (champ `qweb_archs` : rapport + "
+        "template document + mise en page — indispensable pour écrire des xpath "
+        "valides), le format papier (paperformat) et la mise en page document de la "
         "société (layout, police, couleurs).\n"
         "Utilise cet outil quand l'utilisateur demande comment un rapport PDF est "
         "construit, pourquoi il a une certaine apparence, quel template ou layout est "

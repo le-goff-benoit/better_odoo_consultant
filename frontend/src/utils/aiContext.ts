@@ -169,6 +169,7 @@ const DEV_STRONG = [
 const MEETING_TERMS = ['compte-rendu', 'compte rendu', 'meeting minute', 'réunion', 'reunion', 'pv de réunion', 'pv de reunion']
 const STUDIO_TERMS = ['studio', 'x_studio', 'personnalisation', 'customisation', 'champ custom', 'modèle custom', 'modele custom', 'inspect_studio']
 const VERSION_TERMS = ['version', 'migration', 'upgrade', 'nouveauté', 'nouveaute', 'changement', 'différence', 'difference', 'breaking', 'deprecated', 'dépréci', 'depreci', 'renommé', 'renomme', 'compatib', 'odoo 15', 'odoo 16', 'odoo 17', 'odoo 18', 'odoo 19']
+const FISCAL_TERMS = ['compta', 'comptabil', 'account', 'accounting', 'fiscal', 'tax', 'taxe', 'tva', 'vat', 'factur', 'invoice', 'journal', 'plan comptable', 'chart of accounts', 'fec', 'intrastat', 'qr-bill', 'qr bill', 'pos cert', 'paie', 'payroll']
 
 // Weighted scoring: each "weak" term match = 1 point, each "strong" term = 3.
 // A perspective wins only if its score is ≥ MIN_SCORE AND strictly above the
@@ -314,6 +315,8 @@ export function routedContextFiles(params: {
   version?: string | null
   targetVersion?: string | null
   migration?: boolean
+  countryCode?: string | null
+  forceLocalization?: boolean
 }) {
   const text = params.prompt.toLocaleLowerCase()
   const files = new Set<string>(['skills.md', `profile-${params.perspective === 'business_analyst' ? 'business-analyst' : params.perspective}.md`])
@@ -322,6 +325,10 @@ export function routedContextFiles(params: {
   if (hasAny(text, STUDIO_TERMS)) files.add('studio.md')
   if (params.version) files.add(`odoo-${params.version}.md`)
   if (params.targetVersion && params.targetVersion !== params.version) files.add(`odoo-${params.targetVersion}.md`)
+  const countryCode = (params.countryCode ?? '').trim().toLocaleLowerCase()
+  if (/^[a-z]{2}$/.test(countryCode) && (params.forceLocalization || hasAny(text, FISCAL_TERMS))) {
+    files.add(`l10n_${countryCode}.md`)
+  }
   return Array.from(files)
 }
 

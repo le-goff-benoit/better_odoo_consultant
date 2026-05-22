@@ -69,6 +69,7 @@ _SECTION_TITLES = {
         "migration": "Méthodologie de migration",
         "creation": "Méthodologie de création Studio",
         "profile": "Profil de réponse",
+        "localization": "Localisation fiscale {country}",
     },
     "en": {
         "skills": "Consultant skills",
@@ -78,8 +79,22 @@ _SECTION_TITLES = {
         "migration": "Migration methodology",
         "creation": "Studio creation methodology",
         "profile": "Response profile",
+        "localization": "Fiscal localization {country}",
     },
 }
+
+# Curated fiscal-localization knowledge files are routed in when the active /
+# selected country is known and the prompt is fiscally relevant.
+_L10N_FILE_RE = re.compile(r"^l10n_([a-z]{2})\.md$")
+_FISCAL_TERMS = (
+    "compta", "comptabil", "account", "accounting", "fiscal", "fisc",
+    "tva", "vat", "taxe", "tax", "impôt", "impot", "facture", "factur",
+    "invoice", "avoir", "refund", "plan comptable", "chart of accounts",
+    "écriture", "ecriture", "journal", "localisation", "localization", "l10n",
+    "devise", "currency", "reporting légal", "legal report", "fec", "intrastat",
+    "qr-bill", "qr bill", "qr-facture", "bvr", "iso 20022", "paie", "payroll",
+    "salaire", "déclaration", "declaration", "swissdec", "factur-x", "chorus",
+)
 
 # Map of perspective → markdown filename. Legacy aliases are mapped to their
 # closest new role so older clients (or stored prompts) still pick up a profile.
@@ -317,6 +332,8 @@ def load_context_for_prompt(
     target_version: Optional[str] = None,
     priority_blocks: Optional[list[str]] = None,
     creation: bool = False,
+    country_code: Optional[str] = None,
+    force_localization: bool = False,
 ) -> str:
     """Return routed markdown context to inject into the AI system prompt.
 
@@ -373,6 +390,18 @@ def load_context_for_prompt(
             sections.append((titles["version"].format(version=target_version), read_file(f"odoo-{target_version}.md", lang)))
         except FileNotFoundError:
             pass
+    # Curated fiscal-localization knowledge (l10n_<cc>.md) for the active /
+    # selected country — gated on a fiscally relevant prompt so it only spends
+    # budget when the country actually matters.
+    _localization_title = None
+    cc = (country_code or "").strip().lower()
+    if len(cc) == 2 and cc.isalpha() and (force_localization or _has_any(prompt, _FISCAL_TERMS)):
+        try:
+            _loc_content = read_file(f"l10n_{cc}.md", lang)
+            _localization_title = titles["localization"].format(country=cc.upper())
+            sections.append((_localization_title, _loc_content))
+        except FileNotFoundError:
+            pass
     _migration_title = None
     if migration:
         try:
@@ -405,6 +434,8 @@ def load_context_for_prompt(
         core.add(_migration_title)
     if _creation_title:
         core.add(_creation_title)
+    if _localization_title:
+        core.add(_localization_title)
     # Priority blocks consume the budget first; the routed sections fit in what
     # remains, so the assembled context never overflows MAX_CONTEXT_CHARS.
     separator = "\n\n---\n\n"
@@ -435,6 +466,9 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
         m_en = re.match(r'^odoo-([\d\.]+)\.md$', name)
         if m_en:
             return _VERSION_NOTES_EN.get(m_en.group(1))
+        m_l10n_en = _L10N_FILE_RE.match(name)
+        if m_l10n_en:
+            return _L10N_NOTES_EN.get(m_l10n_en.group(1))
     if name == "skills.md":
         return _SKILLS_MD
     if name == "meeting-minute.md":
@@ -450,6 +484,9 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
     if m:
         return _VERSION_NOTES.get(m.group(1))
+    m_l10n = _L10N_FILE_RE.match(name)
+    if m_l10n:
+        return _L10N_NOTES.get(m_l10n.group(1))
     return None
 
 
@@ -1902,6 +1939,81 @@ _VERSION_NOTES: dict = {
 """,
 }
 
+_L10N_NOTES: dict = {
+    "ch": """\
+# Localisation fiscale Suisse (l10n_ch)
+
+## Portée
+- Pays fiscal : Suisse (CH), devise habituelle CHF.
+- Base Community attendue : `l10n_ch`.
+- Compléments fréquents selon version / édition : `l10n_ch_reports`, `l10n_ch_pos`, modules paie `l10n_ch_hr_payroll*`.
+
+## Points de vigilance fonctionnels
+- Facturation : TVA suisse, positions fiscales, arrondis de devise, QR-facture / QR-bill et références de paiement.
+- Banque : paiements et relevés à vérifier selon les formats disponibles dans la version (`ISO 20022`, import/export bancaire, QR-IBAN).
+- Reporting : les rapports légaux avancés peuvent dépendre d'Enterprise (`l10n_ch_reports`) et changent selon version.
+- Paie : ne pas extrapoler depuis la comptabilité ; les modules Swiss payroll sont séparés et souvent Enterprise.
+
+## Discipline de réponse
+- Toujours vérifier dans les sources de la version active les modules `l10n_ch*` Community et Enterprise avant d'affirmer qu'une fonctionnalité existe.
+- Si la question dépend d'un rapport légal, d'un export bancaire ou de la paie, citer le module Odoo concerné et demander confirmation de l'édition installée si elle n'est pas connue.
+- En migration, comparer les manifests et modèles des modules `l10n_ch*` source et cible : les écarts de reporting légal sont souvent versionnés.
+""",
+    "fr": """\
+# Localisation fiscale France (l10n_fr)
+
+## Portée
+- Pays fiscal : France (FR), devise habituelle EUR.
+- Base Community attendue : `l10n_fr`.
+- Compléments fréquents selon version / édition : `l10n_fr_account`, `l10n_fr_fec`, `l10n_fr_reports`, `l10n_fr_facturx_chorus_pro`, `l10n_fr_pos_cert`, `l10n_fr_fec_import`, modules paie `l10n_fr_hr_payroll*`.
+
+## Points de vigilance fonctionnels
+- Comptabilité : plan comptable, TVA, journaux, lettrage, FEC et rapports légaux doivent être vérifiés sur la version active.
+- Facturation électronique : distinguer Factur-X / Chorus Pro / Peppol selon version, module installé et édition.
+- POS : certification et contraintes caisse via `l10n_fr_pos_cert` ; ne pas répondre depuis le POS générique seulement.
+- Paie : les règles sociales relèvent de modules dédiés, souvent Enterprise ; ne pas mélanger avec `l10n_fr`.
+
+## Discipline de réponse
+- Toujours vérifier dans les sources de la version active les modules `l10n_fr*` Community et Enterprise avant d'affirmer qu'une fonctionnalité existe.
+- Si la demande parle TVA, FEC, facture électronique, POS certifié ou paie, intégrer explicitement l'impact de la localisation française.
+- En migration, inspecter les manifests et modèles des modules `l10n_fr*` des deux versions, car les obligations et exports peuvent changer hors du coeur comptable.
+""",
+    "be": """\
+# Localisation fiscale Belgique (l10n_be)
+
+## Portée
+- Pays fiscal : Belgique (BE), devise habituelle EUR.
+- Base Community attendue : `l10n_be`.
+- Compléments fréquents selon version / édition : `l10n_be_reports`, `l10n_be_coda`, `l10n_be_codabox`, `l10n_be_intrastat*`, modules paie `l10n_be_hr_payroll*`, POS Blackbox selon version.
+
+## Points de vigilance fonctionnels
+- Comptabilité : TVA belge, rapports périodiques, CODA/Codabox, dépenses non admises et Intrastat dépendent fortement des modules installés.
+- POS / restauration : vérifier les modules belges spécifiques avant de conclure sur conformité caisse.
+- Paie : sujet séparé, généralement Enterprise et très modulaire.
+
+## Discipline de réponse
+- Toujours vérifier les modules `l10n_be*` disponibles dans les sources Community et Enterprise de la version active.
+- Mentionner explicitement quand une réponse dépend d'Enterprise ou d'un connecteur bancaire / social non confirmé.
+""",
+    "lu": """\
+# Localisation fiscale Luxembourg (l10n_lu)
+
+## Portée
+- Pays fiscal : Luxembourg (LU), devise habituelle EUR.
+- Base Community attendue : `l10n_lu`.
+- Compléments fréquents selon version / édition : `l10n_lu_reports`, modules paie `l10n_lu_hr_payroll*`.
+
+## Points de vigilance fonctionnels
+- Comptabilité : plan comptable, TVA et rapports légaux doivent être vérifiés dans les sources de la version active.
+- Reporting : les rapports avancés peuvent dépendre d'Enterprise.
+- Paie : traiter séparément de la localisation comptable.
+
+## Discipline de réponse
+- Toujours vérifier les modules `l10n_lu*` Community et Enterprise avant de conclure.
+- Si la demande dépend d'un dépôt légal, d'un export ou de la paie, demander confirmation des modules installés.
+""",
+}
+
 
 # ── English default context ───────────────────────────────────────
 
@@ -2370,6 +2482,81 @@ _VERSION_NOTES_EN = {
 ## Migration watchpoints
 - Review removed/deprecated ORM fields and search argument naming.
 - Validate custom web assets and reporting.
+""",
+}
+
+_L10N_NOTES_EN = {
+    "ch": """\
+# Swiss fiscal localization (l10n_ch)
+
+## Scope
+- Fiscal country: Switzerland (CH), usual currency CHF.
+- Expected Community base: `l10n_ch`.
+- Common add-ons depending on version / edition: `l10n_ch_reports`, `l10n_ch_pos`, payroll modules `l10n_ch_hr_payroll*`.
+
+## Functional watchpoints
+- Invoicing: Swiss VAT, fiscal positions, currency rounding, QR-bill and payment references.
+- Banking: verify payment and statement formats in the selected version (`ISO 20022`, bank import/export, QR-IBAN).
+- Reporting: advanced legal reports may depend on Enterprise (`l10n_ch_reports`) and vary by version.
+- Payroll: treat separately from accounting; Swiss payroll modules are distinct and often Enterprise.
+
+## Response discipline
+- Always inspect the active-version sources for Community and Enterprise `l10n_ch*` modules before asserting that a feature exists.
+- For legal reports, bank exports or payroll, name the relevant Odoo module and ask for edition confirmation when unknown.
+- During migrations, compare manifests and models for `l10n_ch*` modules across source and target versions.
+""",
+    "fr": """\
+# French fiscal localization (l10n_fr)
+
+## Scope
+- Fiscal country: France (FR), usual currency EUR.
+- Expected Community base: `l10n_fr`.
+- Common add-ons depending on version / edition: `l10n_fr_account`, `l10n_fr_fec`, `l10n_fr_reports`, `l10n_fr_facturx_chorus_pro`, `l10n_fr_pos_cert`, `l10n_fr_fec_import`, payroll modules `l10n_fr_hr_payroll*`.
+
+## Functional watchpoints
+- Accounting: chart of accounts, VAT, journals, reconciliation, FEC and legal reports must be verified on the active version.
+- E-invoicing: distinguish Factur-X / Chorus Pro / Peppol by version, installed module and edition.
+- POS: certified cash-register constraints go through `l10n_fr_pos_cert`; do not answer from generic POS behavior only.
+- Payroll: French payroll rules live in dedicated modules, often Enterprise.
+
+## Response discipline
+- Always inspect the active-version sources for Community and Enterprise `l10n_fr*` modules before asserting that a feature exists.
+- If the request mentions VAT, FEC, e-invoicing, certified POS or payroll, explicitly include the French localization impact.
+- During migrations, inspect manifests and models for `l10n_fr*` modules in both versions.
+""",
+    "be": """\
+# Belgian fiscal localization (l10n_be)
+
+## Scope
+- Fiscal country: Belgium (BE), usual currency EUR.
+- Expected Community base: `l10n_be`.
+- Common add-ons depending on version / edition: `l10n_be_reports`, `l10n_be_coda`, `l10n_be_codabox`, `l10n_be_intrastat*`, payroll modules `l10n_be_hr_payroll*`, POS Blackbox modules depending on version.
+
+## Functional watchpoints
+- Accounting: Belgian VAT, periodic reports, CODA/Codabox, disallowed expenses and Intrastat depend heavily on installed modules.
+- POS / restaurant: verify Belgian-specific modules before making compliance claims.
+- Payroll: separate topic, generally Enterprise and very modular.
+
+## Response discipline
+- Always inspect available `l10n_be*` modules in Community and Enterprise sources for the active version.
+- Explicitly flag when an answer depends on Enterprise or an unconfirmed banking / social connector.
+""",
+    "lu": """\
+# Luxembourg fiscal localization (l10n_lu)
+
+## Scope
+- Fiscal country: Luxembourg (LU), usual currency EUR.
+- Expected Community base: `l10n_lu`.
+- Common add-ons depending on version / edition: `l10n_lu_reports`, payroll modules `l10n_lu_hr_payroll*`.
+
+## Functional watchpoints
+- Accounting: chart of accounts, VAT and legal reports must be checked in the active-version sources.
+- Reporting: advanced reports may depend on Enterprise.
+- Payroll: treat separately from accounting localization.
+
+## Response discipline
+- Always verify Community and Enterprise `l10n_lu*` modules before concluding.
+- If the request depends on legal filing, export or payroll, ask which modules are installed.
 """,
 }
 
