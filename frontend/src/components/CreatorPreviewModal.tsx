@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import {
   X, Loader2, CheckCircle2, AlertTriangle, FileText, PanelsTopLeft,
@@ -105,37 +105,127 @@ function SectionTitle({ children }: { children: ReactNode }) {
   )
 }
 
+/** <separator>: a titled section header, or a plain horizontal rule. */
+function Separator({ el }: { el: Element }) {
+  const s = el.getAttribute('string')
+  if (s) return <SectionTitle>{s}</SectionTitle>
+  return <div style={{ borderTop: `1px solid ${ODOO.border}`, margin: '3px 0' }} />
+}
+
+type FieldKind =
+  | 'boolean' | 'many2one' | 'tags' | 'selection'
+  | 'text' | 'date' | 'numeric' | 'image' | 'char'
+
+/** Best-effort field type from the arch — the widget attribute first, then
+ *  name heuristics (the arch carries no ttype). Drives the input shape so the
+ *  consultant recognizes a many2one / date / text area at a glance. */
+function fieldKind(el: Element): FieldKind {
+  const w = (el.getAttribute('widget') || '').toLowerCase()
+  const name = (el.getAttribute('name') || '').toLowerCase()
+  if (w) {
+    if (w.includes('boolean') || w === 'checkbox' || w === 'toggle') return 'boolean'
+    if (w.includes('tags')) return 'tags'
+    if (w.includes('many2one')) return 'many2one'
+    if (w === 'selection' || w === 'radio' || w.includes('selection') || w === 'priority') return 'selection'
+    if (w === 'text' || w === 'html') return 'text'
+    if (w.includes('image') || w === 'binary') return 'image'
+    if (w === 'date' || w === 'datetime' || w === 'daterange') return 'date'
+    if (w === 'monetary' || w === 'float' || w === 'integer'
+        || w === 'percentage' || w === 'float_time') return 'numeric'
+    return 'char'
+  }
+  if (name.endsWith('_ids')) return 'tags'
+  if (name.endsWith('_id')) return 'many2one'
+  if (name === 'state' || name.endsWith('stage_id')) return 'selection'
+  if (name.startsWith('is_') || name.startsWith('has_')) return 'boolean'
+  if (name.includes('date')) return 'date'
+  if (/^(amount|price|qty|quantity)/.test(name)
+      || /(_total|_amount|_qty|_price|_count|_tax)$/.test(name)) return 'numeric'
+  if (name.includes('note') || name.includes('description') || name.includes('comment')) return 'text'
+  return 'char'
+}
+
+/** The schematic input control for a field, shaped by its kind. */
+function FieldValue({ kind }: { kind: FieldKind }) {
+  const box: CSSProperties = {
+    border: `1px solid ${ODOO.inputBorder}`, background: ODOO.inputBg,
+    borderRadius: 3, height: 20,
+  }
+  if (kind === 'boolean') {
+    return <span style={{ ...box, width: 13, height: 13, borderRadius: 2,
+      borderWidth: 1.5, display: 'inline-block' }} />
+  }
+  if (kind === 'text') return <span style={{ ...box, height: 42, display: 'block' }} />
+  if (kind === 'image') {
+    return <span style={{ ...box, width: 50, height: 50, display: 'inline-block' }} />
+  }
+  if (kind === 'numeric') return <span style={{ ...box, width: 104, display: 'inline-block' }} />
+  if (kind === 'date') {
+    return (
+      <span style={{ ...box, width: 132, display: 'inline-flex',
+        alignItems: 'center', justifyContent: 'flex-end' }}>
+        <span style={{
+          width: 19, height: '100%', borderLeft: `1px solid ${ODOO.inputBorder}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 9, color: ODOO.muted,
+        }}>▦</span>
+      </span>
+    )
+  }
+  if (kind === 'tags') {
+    return (
+      <span style={{ display: 'inline-flex', gap: 4 }}>
+        {[58, 42].map((w, i) => (
+          <span key={i} style={{
+            width: w, height: 15, borderRadius: 8,
+            background: '#ece7ea', border: `1px solid ${ODOO.border}`,
+          }} />
+        ))}
+      </span>
+    )
+  }
+  if (kind === 'many2one' || kind === 'selection') {
+    return (
+      <span style={{
+        ...box, width: kind === 'selection' ? 168 : '100%',
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+      }}>
+        <span style={{ fontSize: 8, color: ODOO.muted, paddingRight: 6 }}>▼</span>
+      </span>
+    )
+  }
+  return <span style={{ ...box, display: 'block' }} />
+}
+
 function FieldRow({ el, added }: { el: Element; added: Added }) {
   const name = el.getAttribute('name') || ''
-  const widget = (el.getAttribute('widget') || '').toLowerCase()
-  if (widget === 'statusbar') return null  // rendered in the header
+  if ((el.getAttribute('widget') || '').toLowerCase() === 'statusbar') return null
   const label = el.getAttribute('string') || humanize(name)
   const isNew = !!name && added.fields.has(name)
-  const boolean = widget.includes('boolean') || widget === 'checkbox'
+  const kind = fieldKind(el)
+  // `invisible` present but not a static "1"/"True" → conditionally shown.
+  const conditional = el.hasAttribute('invisible') && !isStaticInvisible(el)
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: 'minmax(64px, 38%) 1fr', gap: 10,
-      alignItems: 'center', padding: isNew ? '3px 5px' : '1px 0',
-      borderRadius: 4, outline: isNew ? `2px solid ${ODOO.added}` : 'none',
+      display: 'grid', gridTemplateColumns: 'minmax(64px, 36%) 1fr', gap: 10,
+      alignItems: kind === 'text' || kind === 'image' ? 'flex-start' : 'center',
+      padding: isNew ? '3px 5px' : '1.5px 0', borderRadius: 4,
+      outline: isNew ? `2px solid ${ODOO.added}` : 'none',
       background: isNew ? ODOO.addedBg : 'transparent',
+      opacity: conditional && !isNew ? 0.5 : 1,
     }}>
       <span style={{
         fontSize: 10.5, color: ODOO.muted, textAlign: 'right',
         display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center',
+        paddingTop: kind === 'text' || kind === 'image' ? 3 : 0,
       }}>
-        {label}{isNew && <NewBadge />}
+        {label}
+        {conditional && !isNew && (
+          <span title="Affichage conditionnel" style={{ fontSize: 9 }}>◇</span>
+        )}
+        {isNew && <NewBadge />}
       </span>
-      {boolean ? (
-        <span style={{
-          width: 13, height: 13, borderRadius: 2,
-          border: `1.5px solid ${ODOO.inputBorder}`, background: ODOO.inputBg,
-        }} />
-      ) : (
-        <span style={{
-          height: 20, borderRadius: 3,
-          border: `1px solid ${ODOO.inputBorder}`, background: ODOO.inputBg,
-        }} />
-      )}
+      <FieldValue kind={kind} />
     </div>
   )
 }
@@ -151,8 +241,7 @@ function GroupColumn({ el, added }: { el: Element; added: Added }) {
     } else if (tag === 'group') {
       rows.push(<GroupNode key={i} el={child} added={added} />)
     } else if (tag === 'separator') {
-      const s = child.getAttribute('string')
-      if (s) rows.push(<SectionTitle key={i}>{s}</SectionTitle>)
+      rows.push(<Separator key={i} el={child} />)
     } else if (tag === 'label') {
       // Odoo label/field manual pairs — the field carries its own label.
     } else if (child.querySelector?.('field')) {
@@ -354,8 +443,7 @@ function renderSheetChildren(el: Element, added: Added): ReactNode {
     } else if (tag === 'field') {
       out.push(<FieldRow key={k++} el={child} added={added} />)
     } else if (tag === 'separator') {
-      const s = child.getAttribute('string')
-      if (s) out.push(<SectionTitle key={k++}>{s}</SectionTitle>)
+      out.push(<Separator key={k++} el={child} />)
     } else if (child.children.length) {
       out.push(<div key={k++}>{renderSheetChildren(child, added)}</div>)
     }

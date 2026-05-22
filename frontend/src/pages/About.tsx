@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.40.2',
+    version: '0.40.3',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Wireframe d’aperçu : champs typés — many2one et sélection avec menu déroulant, date, zone de texte, étiquettes, image, booléen, numérique — pour reconnaître la structure d’un coup d’œil',
+      'Les champs en affichage conditionnel sont grisés et marqués ◇ ; les champs en invisible statique restent masqués',
+      'Séparateurs rendus (titre de section ou filet)',
+    ],
+  },
+  {
+    version: '0.40.2',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Erreurs xpath actionnables : un xpath sans cible liste désormais les ancres RÉELLES de la vue parente (onglets et champs existants) — fini de deviner « other_info » au lieu de « other_information »',
       'Aperçu : bouton « Corriger automatiquement cette erreur » qui relance l’IA avec l’erreur exacte ; les demandes de modification incluent le détail de l’erreur',
