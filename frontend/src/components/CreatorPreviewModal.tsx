@@ -285,28 +285,82 @@ function Notebook({ el, added }: { el: Element; added: Added }) {
   )
 }
 
-/** Render the children of a <sheet> (or a notebook page). */
+/** The <div class="oe_title"> block — the prominent record title (e.g. the
+ *  order reference), rendered larger than ordinary fields. */
+function TitleBlock({ el, added }: { el: Element; added: Added }) {
+  const fields = Array.from(el.querySelectorAll('field')).filter(f => !isStaticInvisible(f))
+  if (!fields.length) return null
+  return (
+    <div style={{ borderBottom: `1px solid ${ODOO.border}`, paddingBottom: 8 }}>
+      {fields.map((f, i) => {
+        const name = f.getAttribute('name') || ''
+        const isNew = added.fields.has(name)
+        return (
+          <div key={i} style={{ marginBottom: 5 }}>
+            <span style={{
+              fontSize: 8.5, color: ODOO.muted, textTransform: 'uppercase', letterSpacing: 0.4,
+            }}>
+              {f.getAttribute('string') || humanize(name)}
+            </span>
+            <div style={{
+              height: i === 0 ? 24 : 18, width: i === 0 ? '60%' : '42%', marginTop: 2,
+              background: ODOO.field, border: `1px solid ${ODOO.inputBorder}`, borderRadius: 3,
+              outline: isNew ? `2px solid ${ODOO.added}` : 'none',
+            }} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Render the children of a <sheet> (or a notebook page). Consecutive sibling
+ *  <group> elements are laid out side by side as columns, the way Odoo does. */
 function renderSheetChildren(el: Element, added: Added): ReactNode {
   const out: ReactNode[] = []
-  Array.from(el.children).forEach((child, i) => {
-    if (isStaticInvisible(child)) return
+  const children = Array.from(el.children).filter(c => !isStaticInvisible(c))
+  let i = 0
+  let k = 0
+  while (i < children.length) {
+    const child = children[i]
     const tag = child.tagName.toLowerCase()
     const cls = child.getAttribute('class') || ''
+    if (tag === 'group') {
+      const run: Element[] = []
+      while (i < children.length && children[i].tagName.toLowerCase() === 'group') {
+        run.push(children[i]); i++
+      }
+      out.push(
+        run.length === 1
+          ? <GroupNode key={k++} el={run[0]} added={added} />
+          : (
+            <div key={k++} style={{ display: 'flex', gap: 26, flexWrap: 'wrap' }}>
+              {run.map((g, j) => (
+                <div key={j} style={{ flex: '1 1 220px', minWidth: 180 }}>
+                  <GroupNode el={g} added={added} />
+                </div>
+              ))}
+            </div>
+          ),
+      )
+      continue
+    }
     if (tag === 'div' && cls.includes('oe_button_box')) {
-      out.push(<ButtonBox key={i} el={child} />)
-    } else if (tag === 'group') {
-      out.push(<GroupNode key={i} el={child} added={added} />)
+      out.push(<ButtonBox key={k++} el={child} />)
+    } else if (tag === 'div' && cls.includes('oe_title')) {
+      out.push(<TitleBlock key={k++} el={child} added={added} />)
     } else if (tag === 'notebook') {
-      out.push(<Notebook key={i} el={child} added={added} />)
+      out.push(<Notebook key={k++} el={child} added={added} />)
     } else if (tag === 'field') {
-      out.push(<FieldRow key={i} el={child} added={added} />)
+      out.push(<FieldRow key={k++} el={child} added={added} />)
     } else if (tag === 'separator') {
       const s = child.getAttribute('string')
-      if (s) out.push(<SectionTitle key={i}>{s}</SectionTitle>)
+      if (s) out.push(<SectionTitle key={k++}>{s}</SectionTitle>)
     } else if (child.children.length) {
-      out.push(<div key={i}>{renderSheetChildren(child, added)}</div>)
+      out.push(<div key={k++}>{renderSheetChildren(child, added)}</div>)
     }
-  })
+    i++
+  }
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>{out}</div>
 }
 
@@ -482,9 +536,21 @@ export default function CreatorPreviewModal({
 
   if (!open) return null
 
+  const previewError = error || (result?.valid === false ? (result.error || null) : null)
+
   const submitChange = () => {
     const text = changeText.trim()
-    if (text) onRequestChange(text)
+    if (!text) return
+    onRequestChange(
+      previewError ? `${text}\n\n(Pour rappel, l'aperçu a signalé : ${previewError})` : text,
+    )
+  }
+
+  const autoFix = () => {
+    if (!previewError) return
+    onRequestChange(
+      `Corrige cette opération : l'aperçu a échoué. Erreur signalée par Odoo : ${previewError}`,
+    )
   }
 
   return createPortal(
@@ -559,6 +625,19 @@ export default function CreatorPreviewModal({
                 <Banner tone="ok">
                   L'opération s'assemble correctement — voici le rendu avant / après.
                 </Banner>
+              )}
+
+              {result.valid === false && (
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="ui-button ui-button-primary"
+                    onClick={autoFix}
+                  >
+                    <Wand2 size={14} />
+                    Corriger automatiquement cette erreur
+                  </button>
+                </div>
               )}
 
               <ChangeSummary opSummary={opSummary} result={result} added={added} />

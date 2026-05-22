@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.40.1',
+    version: '0.40.2',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Erreurs xpath actionnables : un xpath sans cible liste désormais les ancres RÉELLES de la vue parente (onglets et champs existants) — fini de deviner « other_info » au lieu de « other_information »',
+      'Aperçu : bouton « Corriger automatiquement cette erreur » qui relance l’IA avec l’erreur exacte ; les demandes de modification incluent le détail de l’erreur',
+      'Wireframe : groupes affichés en colonnes côte à côte (comme Odoo) et bloc titre du formulaire (oe_title)',
+    ],
+  },
+  {
+    version: '0.40.1',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'inspect_odoo_report renvoie désormais l’arch XML réelle des templates QWeb (rapport, document, mise en page) : l’IA cible des xpath valides au lieu de deviner des classes inexistantes (cause des erreurs « l’élément <xpath …> ne peut être localisé »)',
     ],

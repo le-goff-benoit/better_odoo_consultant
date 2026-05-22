@@ -171,7 +171,28 @@ def _validate_xpath_targets(parent_arch: str, inherited_arch: str) -> None:
         except (SyntaxError, KeyError):
             continue
         if not matches:
-            raise OperationError(f"XPath sans cible dans la vue parente : {expr}")
+            raise OperationError(
+                f"XPath sans cible dans la vue parente : {expr}. "
+                f"{_available_anchors(parent_root)}")
+
+
+def _available_anchors(parent_root: ET.Element) -> str:
+    """List the real anchors of the parent arch — so a failed xpath message
+    tells the AI / consultant exactly what *does* exist to target."""
+    pages = sorted({
+        p.get("name") or p.get("string")
+        for p in parent_root.iter("page")
+        if p.get("name") or p.get("string")
+    })
+    fields = sorted({f.get("name") for f in parent_root.iter("field") if f.get("name")})
+    parts = []
+    if pages:
+        parts.append("onglets disponibles : " + ", ".join(pages))
+    if fields:
+        shown = fields[:35]
+        suffix = " …" if len(fields) > 35 else ""
+        parts.append("champs disponibles : " + ", ".join(shown) + suffix)
+    return ("Ancres réelles — " + " ; ".join(parts)) if parts else ""
 
 
 def _clean(values: dict) -> dict:
