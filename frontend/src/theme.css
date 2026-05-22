@@ -1008,35 +1008,6 @@ textarea:focus-visible {
   gap: 5px;
 }
 
-.conversation-localization-card {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  align-items: stretch;
-  width: 100%;
-  min-height: 38px;
-  border: var(--neo-border-w) solid var(--l10n-accent);
-  background: var(--l10n-bg);
-}
-
-.conversation-localization-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--l10n-accent);
-  color: #fff;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.conversation-localization-card strong {
-  min-width: 0;
-  padding: 8px 9px;
-  color: var(--l10n-fg);
-  overflow-wrap: anywhere;
-}
-
 .conversation-profile-card {
   display: flex;
   flex-direction: column;

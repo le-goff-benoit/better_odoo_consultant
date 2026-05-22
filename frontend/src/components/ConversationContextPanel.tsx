@@ -96,7 +96,7 @@ export default function ConversationContextPanel({
     }
 
   const flag = countryFlag(countryCode)
-  const localizationTone = countryTone(countryCode)
+  const localizationFile = localizationContextFile(countryCode)
   const selectionRows = [
     { label: c.project, value: project || c.general },
     { label: c.environment, value: environment },
@@ -153,9 +153,14 @@ export default function ConversationContextPanel({
 
       {localization && (
         <ContextBlock icon={<Globe2 size={15} />} label={c.localization}>
-          <div className="conversation-localization-card" style={localizationTone}>
-            <span className="conversation-localization-mark">{(countryCode || '').toUpperCase() || 'L10N'}</span>
-            <strong>{flag ? `${flag} ${localization}` : localization}</strong>
+          <div className="context-pill-row">
+            {localizationFile && (
+              <span className="ui-badge ui-badge-brand">
+                {flag && <span>{flag}</span>}
+                {localizationFile}
+              </span>
+            )}
+            <span className="ui-badge ui-badge-neutral">{localization}</span>
           </div>
         </ContextBlock>
       )}
@@ -177,19 +182,9 @@ export default function ConversationContextPanel({
   )
 }
 
-function countryTone(countryCode?: string | null): React.CSSProperties {
-  const tones: Record<string, { accent: string; bg: string; fg: string }> = {
-    CH: { accent: '#ff3341', bg: 'color-mix(in srgb, #ff3341 15%, var(--th-bg-card))', fg: '#ff3341' },
-    FR: { accent: '#114ee8', bg: 'color-mix(in srgb, #114ee8 13%, var(--th-bg-card))', fg: '#114ee8' },
-    BE: { accent: '#ffd735', bg: 'color-mix(in srgb, #ffd735 18%, var(--th-bg-card))', fg: '#8a5500' },
-    LU: { accent: '#48e7ff', bg: 'color-mix(in srgb, #48e7ff 16%, var(--th-bg-card))', fg: '#0f6282' },
-  }
-  const tone = tones[(countryCode || '').toUpperCase()] ?? { accent: 'var(--brand)', bg: 'var(--brand-10)', fg: 'var(--brand-muted-text)' }
-  return {
-    '--l10n-accent': tone.accent,
-    '--l10n-bg': tone.bg,
-    '--l10n-fg': tone.fg,
-  } as React.CSSProperties
+function localizationContextFile(countryCode?: string | null) {
+  const code = (countryCode || '').trim().toLowerCase()
+  return /^[a-z]{2}$/.test(code) ? `l10n_${code}.md` : null
 }
 
 function ContextBlock({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
