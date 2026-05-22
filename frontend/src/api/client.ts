@@ -5,6 +5,10 @@ export const api = axios.create({ baseURL: '/api' })
 // Health
 export const health = () => api.get('/health')
 
+// App updates
+export const getUpdateStatus = () => api.get('/update/status')
+export const applyUpdate = () => api.post('/update/apply')
+
 // Sources
 export const listVersions = () => api.get('/sources/versions')
 export const listSshKeys = () => api.get('/sources/ssh-keys')

@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.40.3',
+    version: '0.41.0',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bandeau global de mise à jour : l’application détecte un nouveau commit disponible sur la branche main et affiche un appel à l’action sur toutes les routes',
+      'Bouton « Mettre à jour » : récupération de origin/main, réinstallation via install.sh, fermeture du processus courant puis redémarrage automatique avec start.sh',
+      'Journal de mise à jour écrit dans ~/.odoo-portal/portal-update.log pour diagnostiquer un éventuel échec côté poste utilisateur',
+    ],
+  },
+  {
+    version: '0.40.3',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Wireframe d’aperçu : champs typés — many2one et sélection avec menu déroulant, date, zone de texte, étiquettes, image, booléen, numérique — pour reconnaître la structure d’un coup d’œil',
       'Les champs en affichage conditionnel sont grisés et marqués ◇ ; les champs en invisible statique restent masqués',

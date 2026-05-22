@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react'
 import Sidebar from './Sidebar'
+import UpdateBanner from './UpdateBanner'
 
 export const WIDTH_OPTIONS = [
   { id: 'narrow',  label: 'Étroit', labelEn: 'Narrow', px: 800  },
@@ -56,6 +57,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
+      <UpdateBanner />
       <Sidebar contextOpen={contextOpen} onToggleContext={toggleContext} />
       <WorkspaceContextState.Provider value={{ contextOpen }}>
         <div className="app-workspace">
