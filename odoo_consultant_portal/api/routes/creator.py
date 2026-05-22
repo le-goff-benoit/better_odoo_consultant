@@ -395,25 +395,30 @@ class PreviewBody(BaseModel):
     profile_id: int
     env_id: Optional[str] = None
     company_id: Optional[int] = None
-    operation: Operation
+    operations: list[Operation]
+    index: int
 
 
 @router.post("/preview")
 async def preview(body: PreviewBody, session: AsyncSession = Depends(get_session)):
-    """Compute a before/after preview of a single modify_view / modify_report
-    operation. The inherited view is created transiently and rolled back —
-    nothing is persisted. Also acts as a validation gate (valid / error)."""
-    operation = body.operation.model_dump()
-    if operation.get("type") not in PREVIEWABLE_OPS:
+    """Compute a before/after preview of the modify_view / modify_report
+    operation at ``index``, in the context of the whole changeset (preceding
+    create_field operations are applied first). Everything is created
+    transiently and rolled back — nothing is persisted. Also acts as a
+    validation gate (valid / error)."""
+    if not body.operations or body.index < 0 or body.index >= len(body.operations):
+        raise HTTPException(400, "Opération à prévisualiser introuvable.")
+    operations = [op.model_dump() for op in body.operations]
+    if operations[body.index].get("type") not in PREVIEWABLE_OPS:
         raise HTTPException(400, "Aperçu disponible uniquement pour les vues et les rapports.")
     profile = await session.get(Profile, body.profile_id)
     if not profile:
         raise HTTPException(404, "Projet introuvable.")
-    _check_operations_allowed(profile, [operation])
+    _check_operations_allowed(profile, operations)
     odoo, _src, _repo, version, _env, _cid = _build_runtime(
         profile, body.env_id, body.company_id)
     try:
-        return await preview_operation(odoo, operation, version)
+        return await preview_operation(odoo, operations, body.index, version)
     except HTTPException:
         raise
     except Exception as exc:

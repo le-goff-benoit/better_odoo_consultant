@@ -7,10 +7,24 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.39.0',
+    version: '0.40.0',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Aperçu Creator : rendu des vues redessiné façon Odoo (feuille blanche, colonnes, statusbar, button box, palette aubergine)',
+      'Aperçu calculé en contexte du changeset : les champs créés par les opérations précédentes sont appliqués d’abord — fin des faux négatifs « le champ x_… n’existe pas »',
+      'Aperçu : mode plein écran, encadré récapitulant la modification, et possibilité de demander une révision directement depuis l’aperçu',
+      'Executor tolérant : un arch d’héritage enveloppé par erreur dans <template>/<odoo> est automatiquement déballé',
+      'Faisabilité Odoo Studio renforcée : l’IA n’invente plus de classes CSS (faux positifs sans effet), privilégie les styles en ligne / classes existantes, et émet un verdict de faisabilité explicite',
+      'Bouton « Aperçu » mis en évidence dans la couleur de surbrillance',
+    ],
+  },
+  {
+    version: '0.39.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Creator : nouveau bouton « Aperçu » sur les opérations de modification de vue et de rapport',
       'Aperçu des vues : rendu wireframe avant/après de la vue assemblée par Odoo, avec les champs et onglets ajoutés surlignés en vert',

@@ -2,21 +2,25 @@
 
 A ``modify_view`` / ``modify_report`` operation is hard to judge from raw XML.
 This service computes what the change actually produces — **without persisting
-anything**: it creates the inherited view transiently via the executor
-(``tag=False`` so no traceability record is left), captures the result, then
-rolls it back.
+anything**: it applies the operation (and the ``create_field`` operations that
+precede it in the same changeset) transiently via the executor (``tag=False``
+so no traceability record is left), captures the result, then rolls everything
+back.
+
+Previewing the operation *in changeset context* matters: a ``modify_view`` that
+adds ``x_project_type`` to a form is only valid once the ``create_field`` that
+creates ``x_project_type`` has run — so the preview applies those prerequisites
+first.
 
 The same computation doubles as a validation gate: if the inherited view does
-not assemble (bad xpath) or the report does not render, the operation is
-reported ``valid=False`` with the reason, before the consultant ever sees a
-green light.
+not assemble (bad xpath, missing field) or the report does not render, the
+operation is reported ``valid=False`` with the reason.
 
-- Views   → returns the assembled arch before and after (the frontend draws a
-            schematic wireframe and highlights what changed).
-- Reports → returns the real PDF before and after. Odoo blocks ``_render_qweb_pdf``
-            over XML-RPC (underscore-prefixed methods are refused), so the PDF
-            is fetched through the ``/report/pdf`` web controller using a
-            short-lived cookie session (the API key authenticates the session).
+- Views   → assembled arch before and after (the frontend draws a schematic
+            Odoo-style wireframe and highlights what changed).
+- Reports → the real PDF before and after. Odoo blocks ``_render_qweb_pdf``
+            over XML-RPC, so the PDF is fetched through the ``/report/pdf`` web
+            controller using a short-lived cookie session.
 """
 
 import asyncio
@@ -39,27 +43,45 @@ async def _run(fn):
     return await loop.run_in_executor(None, fn)
 
 
-async def preview_operation(odoo, operation: dict, version: Optional[str]) -> dict:
-    """Dispatch a single operation to the matching preview builder."""
-    op_type = (operation or {}).get("type")
+async def preview_operation(odoo, operations: list[dict], index: int,
+                            version: Optional[str]) -> dict:
+    """Preview ``operations[index]`` in the context of the whole changeset."""
+    if index < 0 or index >= len(operations):
+        return {"ok": False, "error": "Index d'opération invalide."}
+    op_type = (operations[index] or {}).get("type")
     if op_type == "modify_view":
-        return await preview_view_operation(odoo, operation, version)
+        return await preview_view_operation(odoo, operations, index, version)
     if op_type == "modify_report":
-        return await preview_report_operation(odoo, operation, version)
+        return await preview_report_operation(odoo, operations, index, version)
     return {"ok": False,
             "error": f"Aperçu non disponible pour l'opération « {op_type} »."}
+
+
+async def _apply_prerequisites(executor: _Executor, operations: list[dict],
+                               index: int) -> None:
+    """Apply transiently the ``create_field`` operations preceding the target.
+
+    A modify_view / modify_report frequently references a field created earlier
+    in the same changeset; that field must exist for Odoo to validate the view.
+    """
+    for op in operations[:index]:
+        if (op or {}).get("type") == "create_field":
+            await executor.op_create_field(op.get("params") or {})
 
 
 # ── Views ────────────────────────────────────────────────────────
 
 
-async def preview_view_operation(odoo, operation: dict, version: Optional[str]) -> dict:
+async def preview_view_operation(odoo, operations: list[dict], index: int,
+                                 version: Optional[str]) -> dict:
     """Assemble the target view before and after the inherited view is applied.
 
-    The inherited view is created transiently then rolled back, so Odoo itself
-    performs the xpath inheritance — the assembled arch is authoritative.
+    The inherited view (and any prerequisite custom fields) are created
+    transiently then rolled back, so Odoo itself performs the xpath inheritance
+    — the assembled arch is authoritative.
     """
-    params = operation.get("params") or {}
+    target = operations[index]
+    params = target.get("params") or {}
     model = params.get("model")
     view_type = params.get("view_type") or "form"
     if not model:
@@ -74,6 +96,7 @@ async def preview_view_operation(odoo, operation: dict, version: Optional[str]) 
     valid = True
     error: Optional[str] = None
     try:
+        await _apply_prerequisites(executor, operations, index)
         await executor.op_modify_view(params)
         after = await _assembled_view(odoo, model, view_type, None)
         after_arch = (after or {}).get("arch") or ""
@@ -150,9 +173,11 @@ async def _resolve_report(odoo, params: dict) -> Optional[dict]:
     return None
 
 
-async def preview_report_operation(odoo, operation: dict, version: Optional[str]) -> dict:
+async def preview_report_operation(odoo, operations: list[dict], index: int,
+                                   version: Optional[str]) -> dict:
     """Render the report as a PDF before and after the inherited QWeb view."""
-    params = operation.get("params") or {}
+    target = operations[index]
+    params = target.get("params") or {}
 
     report = await _resolve_report(odoo, params)
     if not report:
@@ -182,6 +207,7 @@ async def preview_report_operation(odoo, operation: dict, version: Optional[str]
         client = await _odoo_web_session(odoo)
         before_pdf = await _render_report_pdf(client, rname, record_id)
         try:
+            await _apply_prerequisites(executor, operations, index)
             await executor.op_modify_report(params)
             after_pdf = await _render_report_pdf(client, rname, record_id)
         except OperationError as exc:

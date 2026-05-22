@@ -96,6 +96,13 @@ Elle détaille comment le portail combine :
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
 
+La version 0.40 **affine l'aperçu du Creator et la faisabilité Studio** :
+- **rendu des vues redessiné façon Odoo** : feuille blanche, colonnes, statusbar, button box, palette aubergine ;
+- **aperçu en contexte du changeset** : les champs créés par les opérations précédentes sont appliqués avant l'aperçu — plus de faux négatif « le champ x_… n'existe pas » ;
+- **aperçu en plein écran**, encadré récapitulant la modification, et **demande de révision** directement depuis l'aperçu ;
+- **executor tolérant** : un arch d'héritage enveloppé à tort dans `<template>` / `<odoo>` est automatiquement déballé ;
+- **faisabilité Odoo Studio renforcée** : l'IA n'invente plus de classes CSS (faux positifs sans effet visuel), privilégie les styles en ligne et les classes existantes, et émet un verdict de faisabilité explicite.
+
 La version 0.39 **ajoute l'aperçu avant/après au Creator** :
 - **bouton « Aperçu »** sur chaque opération de modification de vue ou de rapport ;
 - **aperçu des vues** : rendu schématique (wireframe) de la vue assemblée par Odoo, avant et après l'héritage, avec les champs et onglets ajoutés surlignés ;

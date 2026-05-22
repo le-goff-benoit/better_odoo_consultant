@@ -106,6 +106,40 @@ def _validate_xml(arch: str) -> None:
         raise OperationError(f"Arch XML invalide : {exc}")
 
 
+def _normalize_inherit_arch(arch: str) -> str:
+    """Unwrap a module-style wrapper the AI may have put around the arch.
+
+    The executor creates the ``ir.ui.view`` record itself and sets
+    ``inherit_id`` — so the arch must be the *bare* inheritance body (a
+    ``<data>`` of ``<xpath>`` specs). Models often wrap it as a file-style
+    ``<odoo><template id=… inherit_id=…>…</template></odoo>`` or just
+    ``<template …>…</template>``; Odoo then refuses the view because a
+    ``<template>`` element is not a valid inheritance directive. This unwraps
+    those layers down to a ``<data>`` body.
+    """
+    try:
+        root = ET.fromstring(arch)
+    except ET.ParseError:
+        return arch  # let _validate_xml surface a clear error
+    # Descend through file-level wrappers (<odoo>, <openerp>).
+    for _ in range(3):
+        if root.tag in ("odoo", "openerp"):
+            inner = next((c for c in root
+                          if c.tag in ("template", "data", "xpath", "field", "record")), None)
+            if inner is None:
+                break
+            root = inner
+        else:
+            break
+    # A <template> wrapper: its children are the inheritance specs.
+    if root.tag == "template":
+        data = ET.Element("data")
+        for child in list(root):
+            data.append(child)
+        root = data
+    return ET.tostring(root, encoding="unicode")
+
+
 def _normalize_xpath(expr: str) -> str:
     expr = (expr or "").strip()
     if expr.startswith("//"):
@@ -350,7 +384,7 @@ class _Executor:
     async def op_modify_view(self, p: dict) -> dict:
         model = _req(p, "model")
         view_type = p.get("view_type") or "form"
-        arch = _req(p, "arch")
+        arch = _normalize_inherit_arch(_req(p, "arch"))
         _validate_xml(arch)
         try:
             major = int(str(self.version or "").split(".", 1)[0])
@@ -385,7 +419,7 @@ class _Executor:
                         f"« {view_name} » (vue parente #{inherit_id})."}
 
     async def op_modify_report(self, p: dict) -> dict:
-        arch = _req(p, "arch")
+        arch = _normalize_inherit_arch(_req(p, "arch"))
         _validate_xml(arch)
         key = p.get("template_key") or p.get("report_name")
         if p.get("inherit_xmlid"):

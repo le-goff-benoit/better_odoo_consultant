@@ -453,15 +453,18 @@ export default function Creator() {
 
   // ── preview ─────────────────────────────────────────────────────
 
-  const runPreview = async (op: Operation) => {
-    if (projectId === '') return
+  const runPreview = async (index: number) => {
+    if (projectId === '' || !analysis) return
+    const op = analysis[index]
+    if (!op) return
     setPreview({ open: true, loading: true, result: null, error: null, summary: op.summary || '' })
     try {
       const res = await previewCreatorOperation({
         profile_id: projectId,
         env_id: envId ?? undefined,
         company_id: companyId ?? undefined,
-        operation: op,
+        operations: analysis,
+        index,
       })
       setPreview(p => ({ ...p, loading: false, result: res.data as PreviewResult }))
     } catch (e: unknown) {
@@ -471,6 +474,15 @@ export default function Creator() {
         error: detail ?? (e instanceof Error ? e.message : 'Aperçu impossible'),
       }))
     }
+  }
+
+  const requestChangeFromPreview = (instruction: string) => {
+    if (projectId === '') return
+    const ctx = preview.summary ? `Concernant « ${preview.summary} » : ` : ''
+    const next = [...instructions, ctx + instruction]
+    setInstructions(next)
+    setPreview(p => ({ ...p, open: false }))
+    runAnalysis(next)
   }
 
   // ── analysis ────────────────────────────────────────────────────
@@ -850,6 +862,7 @@ export default function Creator() {
         result={preview.result}
         error={preview.error}
         opSummary={preview.summary}
+        onRequestChange={requestChangeFromPreview}
         onClose={() => setPreview(p => ({ ...p, open: false }))}
       />
       <PageHeader title={c.title} description={c.description} />
@@ -1545,7 +1558,7 @@ function CreatorHistoryPanel({ rows, empty, title, close, labels, resume, onResu
 // ── Operation row (proposal) ──────────────────────────────────────
 
 function OperationRow({ op, index, en, onPreview }: {
-  op: Operation; index: number; en: boolean; onPreview: (op: Operation) => void
+  op: Operation; index: number; en: boolean; onPreview: (index: number) => void
 }) {
   const meta = OP_META[op.type]
   const previewable = op.type === 'modify_view' || op.type === 'modify_report'
@@ -1577,9 +1590,9 @@ function OperationRow({ op, index, en, onPreview }: {
         {previewable && (
           <button
             type="button"
-            className="assistant-soft-action"
+            className="ui-button ui-button-primary ui-button-xs"
             style={{ marginLeft: 'auto' }}
-            onClick={() => onPreview(op)}
+            onClick={() => onPreview(index)}
             title={en ? 'Preview this change' : 'Aperçu de cette modification'}
           >
             <Eye size={13} />
