@@ -44,12 +44,14 @@ class OdooClient:
         model: str,
         domain: list = None,
         fields: list[str] = None,
-        limit: int = 80,
+        limit: Optional[int] = 80,
         offset: int = 0,
         order: str = "",
     ) -> list[dict]:
         domain = domain or []
-        kwargs: dict[str, Any] = {"limit": limit, "offset": offset, "context": self._ctx()}
+        kwargs: dict[str, Any] = {"offset": offset, "context": self._ctx()}
+        if limit and limit > 0:
+            kwargs["limit"] = limit
         if fields:
             kwargs["fields"] = fields
         if order:

@@ -10,15 +10,14 @@ interface Profile { id: number; name: string }
 export default function Query() {
   const lang = useUiLanguage()
   const c = lang === 'en'
-    ? { title: 'Query', description: 'Read live Odoo records from a configured project and export a small dataset.', profile: 'Profile', select: 'Select a project', model: 'Model', modelHint: 'Example: res.partner, sale.order, account.move', limit: 'Limit', exportAs: 'Export as', none: 'None', loadFields: 'Load fields', loading: 'Loading…', search: 'Search', fields: 'Fields', more: 'more', records: 'records', result: 'Result preview', noResult: 'Run a search to preview records or an export.' }
-    : { title: 'Requêtes', description: 'Lisez des enregistrements Odoo en direct depuis un projet configuré et exportez un jeu de données ciblé.', profile: 'Profil', select: 'Sélectionner un projet', model: 'Modèle', modelHint: 'Exemple : res.partner, sale.order, account.move', limit: 'Limite', exportAs: 'Exporter en', none: 'Aucun', loadFields: 'Charger les champs', loading: 'Chargement…', search: 'Rechercher', fields: 'Champs', more: 'en plus', records: 'enregistrements', result: 'Aperçu du résultat', noResult: 'Lancez une recherche pour prévisualiser les enregistrements ou un export.' }
+    ? { title: 'Query', description: 'Read live Odoo records from a configured project; large results are fetched safely with pagination.', profile: 'Profile', select: 'Select a project', model: 'Model', modelHint: 'Example: res.partner, sale.order, account.move', exportAs: 'Export as', none: 'None', loadFields: 'Load fields', loading: 'Loading…', search: 'Search', fields: 'Fields', more: 'more', records: 'records', result: 'Result preview', noResult: 'Run a search to preview records or an export.', shownOf: 'shown of' }
+    : { title: 'Requêtes', description: 'Lisez des enregistrements Odoo en direct ; les gros volumes sont récupérés proprement par pagination.', profile: 'Profil', select: 'Sélectionner un projet', model: 'Modèle', modelHint: 'Exemple : res.partner, sale.order, account.move', exportAs: 'Exporter en', none: 'Aucun', loadFields: 'Charger les champs', loading: 'Chargement…', search: 'Rechercher', fields: 'Champs', more: 'en plus', records: 'enregistrements', result: 'Aperçu du résultat', noResult: 'Lancez une recherche pour prévisualiser les enregistrements ou un export.', shownOf: 'affichés sur' }
   const { data: profilesData } = useQuery({ queryKey: ['profiles'], queryFn: listProfiles })
   const profiles: Profile[] = profilesData?.data ?? []
   const [profileId, setProfileId] = useState<number | ''>('')
   const [model, setModel] = useState('res.partner')
-  const [limit, setLimit] = useState(20)
   const [exportFormat, setExportFormat] = useState('')
-  const [result, setResult] = useState<{ records?: object[]; export?: string; count?: number } | null>(null)
+  const [result, setResult] = useState<{ records?: object[]; export?: string; count?: number; total_count?: number; warning?: string; note?: string } | null>(null)
   const [fields, setFields] = useState<Record<string, { string: string; type: string }>>({})
 
   const fetchFields = useMutation({
@@ -27,7 +26,7 @@ export default function Query() {
   })
 
   const search = useMutation({
-    mutationFn: () => searchRecords({ profile_id: profileId, model, domain: [], limit, export_format: exportFormat || null }),
+    mutationFn: () => searchRecords({ profile_id: profileId, model, domain: [], export_format: exportFormat || null }),
     onSuccess: (res) => setResult(res.data),
     onError: (e: { message: string }) => setResult({ export: `Error: ${e.message}` }),
   })
@@ -47,9 +46,6 @@ export default function Query() {
             </Field>
             <Field label={c.model} hint={c.modelHint}>
               <input value={model} onChange={e => setModel(e.target.value)} className="ui-input" />
-            </Field>
-            <Field label={c.limit}>
-              <input type="number" min={1} max={500} value={limit} onChange={e => setLimit(Number(e.target.value))} className="ui-input" />
             </Field>
             <Field label={c.exportAs}>
               <select value={exportFormat} onChange={e => setExportFormat(e.target.value)} className="ui-input">
@@ -91,7 +87,13 @@ export default function Query() {
           {!result && <div className="ui-empty-description">{c.noResult}</div>}
           {result && (
             <>
-              <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--th-muted)' }}>{result.count ?? 0} {c.records}</p>
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--th-muted)' }}>
+                {result.total_count && result.total_count !== result.count
+                  ? `${result.count ?? 0} ${c.shownOf} ${result.total_count} ${c.records}`
+                  : `${result.count ?? 0} ${c.records}`}
+              </p>
+              {result.note && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--th-muted)' }}>{result.note}</p>}
+              {result.warning && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--th-warning-fg)' }}>{result.warning}</p>}
               {result.export && <pre className="ui-code-block">{result.export}</pre>}
               {result.records && !result.export && (
                 <pre className="ui-code-block">{JSON.stringify(result.records.slice(0, 5), null, 2)}</pre>

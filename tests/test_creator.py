@@ -341,6 +341,93 @@ async def test_apply_modify_view_rejects_invalid_xml():
     assert "XML" in (result["operations"][0].get("error") or "")
 
 
+class FakeReportOdoo(FakeOdoo):
+    def search_read(self, model, domain=None, fields=None, limit=80,
+                    offset=0, order=""):
+        if model == "ir.ui.view":
+            crit = {d[0]: d[2] for d in (domain or [])}
+            if crit.get("key") == "account.report_invoice":
+                return [{"id": 500, "name": "Invoice report"}]
+            if crit.get("id") == 500:
+                return [{
+                    "id": 500,
+                    "name": "Invoice report",
+                    "arch_db": "<template><div class='page'><p name='anchor'>Total</p></div></template>",
+                }]
+        return super().search_read(model, domain, fields, limit, offset, order)
+
+
+async def test_apply_modify_report_rejects_field_tag():
+    fake = FakeReportOdoo()
+    ops = [{
+        "type": "modify_report",
+        "summary": "ajoute un champ au PDF",
+        "params": {
+            "template_key": "account.report_invoice",
+            "arch": '<data><xpath expr="//p[@name=\'anchor\']" '
+                    'position="after"><field name="x_foo"/></xpath></data>',
+        },
+    }]
+
+    result = await apply_changeset(fake, ops)
+
+    assert not result["ok"]
+    assert "t-field" in (result["operations"][0].get("error") or "")
+    assert fake.created == []
+
+
+async def test_apply_modify_report_rejects_missing_xpath_target():
+    fake = FakeReportOdoo()
+    ops = [{
+        "type": "modify_report",
+        "summary": "ajoute un champ au PDF",
+        "params": {
+            "template_key": "account.report_invoice",
+            "arch": '<data><xpath expr="//span[@name=\'missing\']" '
+                    'position="after"><span t-field="o.x_foo"/></xpath></data>',
+        },
+    }]
+
+    result = await apply_changeset(fake, ops)
+
+    assert not result["ok"]
+    assert "XPath sans cible" in (result["operations"][0].get("error") or "")
+    assert fake.created == []
+
+
+async def test_apply_create_field_then_show_it_in_report():
+    fake = FakeReportOdoo()
+    ops = [
+        {
+            "type": "create_field",
+            "summary": "crée le champ note PDF",
+            "params": {
+                "model": "sale.order",
+                "name": "x_pdf_note",
+                "ttype": "char",
+                "field_description": "Note PDF",
+            },
+        },
+        {
+            "type": "modify_report",
+            "summary": "affiche la note dans le PDF",
+            "params": {
+                "template_key": "account.report_invoice",
+                "arch": '<data><xpath expr="//p[@name=\'anchor\']" '
+                        'position="after"><span t-field="o.x_pdf_note"/></xpath></data>',
+            },
+        },
+    ]
+
+    result = await apply_changeset(fake, ops)
+
+    assert result["ok"]
+    field_creates = [c for c in fake.created if c[0] == "ir.model.fields"]
+    report_creates = [c for c in fake.created if c[0] == "ir.ui.view"]
+    assert field_creates[0][1]["name"] == "x_pdf_note"
+    assert 't-field="o.x_pdf_note"' in report_creates[0][1]["arch"]
+
+
 # ── Dry-run / preflight ──────────────────────────────────────────
 
 async def test_dry_run_validates_without_writing():

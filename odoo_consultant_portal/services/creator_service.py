@@ -193,6 +193,15 @@ xpath doit cibler un élément, une classe ou un attribut qui EXISTE réellement
 dans cette arch. N'invente JAMAIS un nom de classe (ex. `o_line_table`) ni une \
 balise : si l'ancre voulue n'y figure pas, choisis-en une voisine réellement \
 présente.
+  RENDU DES CHAMPS — dans un rapport PDF QWeb, n'utilise JAMAIS `<field \
+name="x_champ"/>` : cette syntaxe est celle des vues formulaire/liste et peut \
+être acceptée sans rien afficher. Utilise `<span t-field="o.x_champ"/>` ou \
+`<span t-out="o.x_champ"/>` selon le contexte (`o`, `doc`, `line`, etc.).
+  Si la demande consiste à créer un NOUVEAU champ puis à l'afficher dans le PDF, \
+produis obligatoirement deux opérations dans cet ordre : `create_field` d'abord, \
+puis `modify_report` avec un `t-field`/`t-out` qui référence ce champ nouvellement \
+créé (ex. `<span t-field="o.x_champ"/>`). Ne bloque pas sous prétexte que le champ \
+n'existe pas encore avant application : il existera grâce à l'opération précédente.
   CHOIX DU TEMPLATE PARENT — déterminant pour un héritage propre :
   ◦ Pour modifier l'EN-TÊTE ou le PIED DE PAGE d'un document (logo, coordonnées \
 société, pagination, mentions légales), n'hérite PAS du template du document \

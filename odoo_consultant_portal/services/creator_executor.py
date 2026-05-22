@@ -176,6 +176,23 @@ def _validate_xpath_targets(parent_arch: str, inherited_arch: str) -> None:
                 f"{_available_anchors(parent_root)}")
 
 
+def _validate_qweb_report_arch(arch: str) -> None:
+    try:
+        root = ET.fromstring(arch)
+    except ET.ParseError:
+        return
+    field_tags = [node.get("name") for node in root.iter("field") if node.get("name")]
+    if field_tags:
+        field_list = ", ".join(field_tags[:5])
+        suffix = " …" if len(field_tags) > 5 else ""
+        raise OperationError(
+            "Rapport QWeb : balise <field> détectée "
+            f"({field_list}{suffix}). Dans un PDF QWeb, un champ doit être "
+            "rendu avec une expression comme <span t-field=\"o.x_champ\"/> "
+            "ou <span t-out=\"o.x_champ\"/> ; sinon la modification peut être "
+            "créée sans afficher la valeur dans le PDF.")
+
+
 def _available_anchors(parent_root: ET.Element) -> str:
     """List the real anchors of the parent arch — so a failed xpath message
     tells the AI / consultant exactly what *does* exist to target."""
@@ -442,6 +459,7 @@ class _Executor:
     async def op_modify_report(self, p: dict) -> dict:
         arch = _normalize_inherit_arch(_req(p, "arch"))
         _validate_xml(arch)
+        _validate_qweb_report_arch(arch)
         key = p.get("template_key") or p.get("report_name")
         if p.get("inherit_xmlid"):
             inherit_id = await self.resolve_xmlid(p["inherit_xmlid"], "ir.ui.view")
@@ -456,8 +474,11 @@ class _Executor:
                 raise OperationError(f"Template QWeb introuvable : '{key}'")
             inherit_id = rows[0]["id"]
         parent_rows = await _run(lambda: self.odoo.search_read(
-            "ir.ui.view", [["id", "=", inherit_id]], ["name"], limit=1))
+            "ir.ui.view", [["id", "=", inherit_id]], ["arch_db", "name"], limit=1))
         parent_name = parent_rows[0].get("name") if parent_rows else None
+        parent_arch = parent_rows[0].get("arch_db") if parent_rows else None
+        if parent_arch:
+            _validate_xpath_targets(parent_arch, arch)
         view_name = _inherited_view_name(
             parent_name, f"Rapport {key or p.get('inherit_xmlid') or ''}")
         values = {

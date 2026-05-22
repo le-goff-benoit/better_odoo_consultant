@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from odoo_consultant_portal.services.odoo_client import OdooClient
 
 
@@ -35,3 +35,23 @@ def test_export_csv():
     csv_text = client.export_csv(records)
     assert "Alice" in csv_text
     assert "id" in csv_text
+
+
+def test_search_read_accepts_high_limit():
+    client = make_client()
+    client._uid = 1
+    with patch.object(client._models, "execute_kw", return_value=[]) as execute_kw:
+        client.search_read("res.partner", limit=5000)
+
+    kwargs = execute_kw.call_args.args[-1]
+    assert kwargs["limit"] == 5000
+
+
+def test_search_read_omits_limit_for_unlimited_requests():
+    client = make_client()
+    client._uid = 1
+    with patch.object(client._models, "execute_kw", return_value=[]) as execute_kw:
+        client.search_read("res.partner", limit=0)
+
+    kwargs = execute_kw.call_args.args[-1]
+    assert "limit" not in kwargs
