@@ -186,6 +186,13 @@ avant/après du rapport). Ne fournis PAS de `name` (généré automatiquement).
   Le `arch` ne doit JAMAIS être enveloppé dans `<template id=… inherit_id=…>`, \
 `<odoo>` ni `<openerp>` : le Creator crée lui-même l'`ir.ui.view` QWeb et fixe \
 `inherit_id`. Donne directement `<data><xpath …>…</xpath></data>`.
+  CIBLAGE XPATH — OBLIGATOIRE : avant d'écrire un xpath de rapport, appelle \
+`inspect_odoo_report` et lis le champ `qweb_archs` — l'arch XML RÉELLE du \
+template du rapport, du template document et de la mise en page. Chaque `expr` \
+xpath doit cibler un élément, une classe ou un attribut qui EXISTE réellement \
+dans cette arch. N'invente JAMAIS un nom de classe (ex. `o_line_table`) ni une \
+balise : si l'ancre voulue n'y figure pas, choisis-en une voisine réellement \
+présente.
   CHOIX DU TEMPLATE PARENT — déterminant pour un héritage propre :
   ◦ Pour modifier l'EN-TÊTE ou le PIED DE PAGE d'un document (logo, coordonnées \
 société, pagination, mentions légales), n'hérite PAS du template du document \

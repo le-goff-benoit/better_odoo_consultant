@@ -7,10 +7,19 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.40.0',
+    version: '0.40.1',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'inspect_odoo_report renvoie désormais l’arch XML réelle des templates QWeb (rapport, document, mise en page) : l’IA cible des xpath valides au lieu de deviner des classes inexistantes (cause des erreurs « l’élément <xpath …> ne peut être localisé »)',
+    ],
+  },
+  {
+    version: '0.40.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Aperçu Creator : rendu des vues redessiné façon Odoo (feuille blanche, colonnes, statusbar, button box, palette aubergine)',
       'Aperçu calculé en contexte du changeset : les champs créés par les opérations précédentes sont appliqués d’abord — fin des faux négatifs « le champ x_… n’existe pas »',

@@ -7,8 +7,15 @@ source code cannot give.
 """
 
 import asyncio
+import re
 import xml.etree.ElementTree as ET
 from typing import Any, Optional
+
+# QWeb report templates reference each other through t-call; the AI must see
+# the real arch (classes, t-fields, table structure) to write valid xpath.
+_TCALL_RE = re.compile(r't-call="([\w.]+)"')
+_QWEB_ARCH_CAP = 8000
+_QWEB_MAX_TEMPLATES = 5
 
 
 # Field attributes that matter when explaining "how is this field configured
@@ -250,6 +257,38 @@ async def inspect_odoo_view(
     }
 
 
+async def _collect_qweb_archs(odoo, seed_keys: list[str]) -> dict[str, str]:
+    """Breadth-first walk over t-call references starting from *seed_keys*.
+
+    Returns ``{template_key: arch}`` (each capped) so the AI can target xpath
+    against the real report structure — the document template and the layout
+    are reached through the report template's t-call chain.
+    """
+    archs: dict[str, str] = {}
+    seen: set[str] = set()
+    queue = [k for k in seed_keys if k]
+    while queue and len(archs) < _QWEB_MAX_TEMPLATES:
+        key = queue.pop(0)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        try:
+            rows = await _run(lambda key=key: odoo.search_read(
+                "ir.ui.view", [["key", "=", key], ["type", "=", "qweb"]],
+                ["arch"], limit=1))
+        except Exception:
+            continue
+        if not rows:
+            continue
+        arch = rows[0].get("arch") or ""
+        archs[key] = (arch[:_QWEB_ARCH_CAP] + "\n…[arch tronquée]"
+                      if len(arch) > _QWEB_ARCH_CAP else arch)
+        for ref in _TCALL_RE.findall(arch):
+            if ref not in seen and ref not in queue:
+                queue.append(ref)
+    return archs
+
+
 async def inspect_odoo_report(
     odoo,
     model: Optional[str] = None,
@@ -297,6 +336,10 @@ async def inspect_odoo_report(
                     ["name", "key"], limit=40))
                 tpl["inherited_by"] = [c.get("name") for c in children if c.get("name")]
             detail["qweb_templates"] = templates
+            # Real arch of the report + the templates it t-calls (document,
+            # layout) — so the AI writes xpath against confirmed elements.
+            seeds = [t["key"] for t in templates if t.get("key")] or [rname]
+            detail["qweb_archs"] = await _collect_qweb_archs(odoo, seeds)
         except Exception:
             pass
 
