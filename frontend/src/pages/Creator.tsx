@@ -161,11 +161,11 @@ export default function Creator() {
     steps: en ? ['Request', 'Analysis', 'Validation', 'Result'] : ['Demande', 'Analyse', 'Validation', 'Résultat'],
     gateTitle: en ? 'Sensitive tool' : 'Outil sensible',
     gateHint: en
-      ? 'The Creator writes directly to production or test databases. Type the confirmation code below to enter.'
-      : 'Le Creator écrit directement sur des bases de production ou de test. Tapez le code de confirmation ci-dessous pour entrer.',
-    gateChallenge: en ? 'Type this code to continue:' : 'Tapez ce code pour continuer :',
+      ? 'The Creator writes directly to production or test databases. Type the Odoo/mountain passphrase below to enter.'
+      : 'Le Creator écrit directement sur des bases de production ou de test. Tapez le mot repère Odoo/montagne ci-dessous pour entrer.',
+    gateChallenge: en ? 'Type this Odoo/mountain passphrase to continue:' : 'Tapez ce mot repère Odoo/montagne pour continuer :',
     enter: en ? 'Enter the tool' : 'Accéder à l\'outil',
-    challengePlaceholder: en ? 'Type the code…' : 'Tapez le code…',
+    challengePlaceholder: en ? 'Type the passphrase…' : 'Tapez le mot repère…',
     project: en ? 'Project' : 'Projet',
     selectProject: en ? 'Select a project' : 'Sélectionner un projet',
     environment: en ? 'Environment' : 'Environnement',
@@ -225,8 +225,8 @@ export default function Creator() {
       : 'Le dry-run a détecté des problèmes — rien ne sera écrit. Modifiez la demande et réessayez.',
     onInstance: en ? 'Target instance' : 'Instance cible',
     confirmChallenge: en
-      ? 'To write these changes to the instance, type the confirmation code:'
-      : 'Pour écrire ces modifications sur l\'instance, tapez le code de confirmation :',
+      ? 'To write these changes to the instance, type the Odoo/mountain passphrase:'
+      : 'Pour écrire ces modifications sur l\'instance, tapez le mot repère Odoo/montagne :',
     confirmApply: en ? 'Apply now' : 'Appliquer maintenant',
     applying: en ? 'Applying…' : 'Application en cours…',
     appliedOk: en ? 'Modification applied' : 'Modification appliquée',

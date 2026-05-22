@@ -3,23 +3,20 @@
 // consultant retypes to confirm a sensitive action — same idea as GitHub's
 // "type the repository name to confirm" prompt.
 //
-// All lowercase, accent-free and easy to type, so confirmation never fails on
-// a keyboard-layout detail.
+// Vocabulary is intentionally Odoo / mountain oriented, while staying
+// lowercase, accent-free and easy to type so confirmation never fails on a
+// keyboard-layout detail.
 export const CREATOR_WORDS: string[] = [
-  'arbre', 'maison', 'route', 'livre', 'pomme', 'chaise', 'table', 'porte',
-  'jardin', 'soleil', 'lune', 'etoile', 'riviere', 'montagne', 'foret', 'plage',
-  'ocean', 'nuage', 'pluie', 'vent', 'neige', 'glace', 'terre', 'pierre',
-  'sable', 'herbe', 'fleur', 'racine', 'branche', 'feuille', 'fruit', 'graine',
-  'metal', 'verre', 'papier', 'tissu', 'corde', 'brique', 'pont', 'tour',
-  'place', 'chemin', 'sentier', 'gare', 'port', 'phare', 'moulin', 'ferme',
-  'grange', 'cave', 'grenier', 'cuisine', 'salon', 'bureau', 'atelier',
-  'marche', 'boutique', 'musee', 'theatre', 'ecole', 'banque', 'usine',
-  'champ', 'vigne', 'verger', 'prairie', 'etang', 'source', 'vague', 'marais',
-  'colline', 'vallee', 'plaine', 'desert', 'falaise', 'grotte', 'canyon',
-  'glacier', 'volcan', 'comete', 'planete', 'galaxie', 'horizon', 'aurore',
-  'brume', 'orage', 'eclair', 'tonnerre', 'prisme', 'cristal', 'diamant',
-  'saphir', 'ambre', 'cuivre', 'bronze', 'argent', 'platine', 'corail',
-  'perle', 'ancre',
+  'odoo', 'studio', 'module', 'modele', 'champ', 'vue', 'rapport', 'qweb',
+  'menu', 'action', 'record', 'domaine', 'xmlid', 'societe', 'facture',
+  'commande', 'devis', 'client', 'produit', 'stock', 'crm', 'vente', 'achat',
+  'compta', 'kanban', 'liste', 'formulaire', 'serveur', 'cron', 'automatisation',
+  'migration', 'source', 'branche', 'commit', 'depot', 'instance', 'base',
+  'sommet', 'alpage', 'aiguille', 'arete', 'creste', 'col', 'refuge', 'sentier',
+  'piolet', 'cordee', 'moraine', 'glacier', 'neve', 'serac', 'vallon', 'torrent',
+  'cascade', 'rocher', 'falaise', 'panorama', 'altitude', 'bivouac', 'piolet',
+  'crampon', 'edelweiss', 'chamois', 'bouquetin', 'sapin', 'meleze', 'ubac',
+  'adret', 'combe', 'plateau', 'cairn', 'balise', 'trace', 'pente', 'neige',
 ]
 
 /** Build a confirmation phrase: `count` distinct random words joined by '-'. */
