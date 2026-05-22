@@ -143,8 +143,10 @@ identifiable côté Studio.
 
 - **modify_report** — rapport QWeb hérité.
   params : `template_key` (clé du template QWeb à hériter) OU `inherit_xmlid`, \
-`arch` (XML héritage QWeb avec `<xpath>`). Ne fournis PAS de `name` (généré \
-automatiquement).
+`arch` (XML héritage QWeb avec `<xpath>`), `report_name` (le `report_name` de \
+l'`ir.actions.report` concerné, ex. `account.report_invoice` — recommandé : il \
+permet de générer un aperçu PDF avant/après du rapport). Ne fournis PAS de \
+`name` (généré automatiquement).
   CHOIX DU TEMPLATE PARENT — déterminant pour un héritage propre :
   ◦ Pour modifier l'EN-TÊTE ou le PIED DE PAGE d'un document (logo, coordonnées \
 société, pagination, mentions légales), n'hérite PAS du template du document \

@@ -200,10 +200,12 @@ def _target_ids(params: dict, op_name: str) -> list[int]:
 
 
 class _Executor:
-    def __init__(self, odoo, dry: bool = False, version: str | None = None):
+    def __init__(self, odoo, dry: bool = False, version: str | None = None,
+                 tag: bool = True):
         self.odoo = odoo
         self.dry = dry                         # preflight: validate, never write
         self.version = version
+        self.tag = tag                         # register created records under x_creator
         self.created: list[dict] = []          # {model, res_id, label} — newest last
         self.modified: list[dict] = []         # {model, res_id, before} — for rollback
         self.deleted: list[dict] = []          # {model, snapshot, label} — for rollback
@@ -243,7 +245,10 @@ class _Executor:
             return self._dry_counter
         res_id = await _run(lambda: self.odoo.create(model, _clean(values)))
         self.created.append({"model": model, "res_id": res_id, "label": label})
-        await self._register_xmlid(model, res_id)
+        # A transient preview run (tag=False) skips the x_creator traceability
+        # tag — the record is rolled back immediately, it must leave no trace.
+        if self.tag:
+            await self._register_xmlid(model, res_id)
         return res_id
 
     async def _register_xmlid(self, model: str, res_id: int) -> None:

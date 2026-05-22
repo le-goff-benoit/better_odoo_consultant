@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.38.0',
+    version: '0.39.0',
     date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Creator : nouveau bouton « Aperçu » sur les opérations de modification de vue et de rapport',
+      'Aperçu des vues : rendu wireframe avant/après de la vue assemblée par Odoo, avec les champs et onglets ajoutés surlignés en vert',
+      'Aperçu des rapports : rendu PDF réel avant/après, généré par Odoo sur un enregistrement témoin (en-tête, pied de page et mise en page inclus)',
+      'L’aperçu sert aussi de garde-fou : une vue qui ne s’assemble pas ou un rapport qui ne se rend pas est signalé explicitement, avant le feu vert du consultant',
+    ],
+  },
+  {
+    version: '0.38.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Creator : les vues héritées sont nommées automatiquement et de façon cohérente (« <vue parente> (Creator) ») — propres et identifiables côté Studio, sans suffixes empilés',
       'Creator : pour modifier l’en-tête ou le pied de page d’un document, l’IA est guidée vers le bon template de mise en page (web.external_layout_*) au lieu du template du document',

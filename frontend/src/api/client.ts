@@ -81,6 +81,7 @@ export const deleteContextFile = (name: string, locale = 'fr') => api.delete(`/c
 // Creator
 export const getCreatorProjects = () => api.get('/creator/projects')
 export const dryRunCreatorChangeset = (data: object) => api.post('/creator/dry-run', data)
+export const previewCreatorOperation = (data: object) => api.post('/creator/preview', data)
 export const applyCreatorChangeset = (data: object) => api.post('/creator/apply', data)
 export const rejectCreatorRequest = (data: object) => api.post('/creator/reject', data)
 export const documentCreatorChange = (data: object) => api.post('/creator/document', data)

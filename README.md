@@ -96,6 +96,12 @@ Elle détaille comment le portail combine :
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
 
+La version 0.39 **ajoute l'aperçu avant/après au Creator** :
+- **bouton « Aperçu »** sur chaque opération de modification de vue ou de rapport ;
+- **aperçu des vues** : rendu schématique (wireframe) de la vue assemblée par Odoo, avant et après l'héritage, avec les champs et onglets ajoutés surlignés ;
+- **aperçu des rapports** : rendu **PDF réel** avant/après, généré par Odoo sur un enregistrement témoin — en-tête, pied de page et mise en page société inclus ;
+- l'aperçu est **transitoire** (la vue héritée est créée puis annulée, rien n'est persisté) et sert de **garde-fou** : une vue qui ne s'assemble pas ou un rapport qui ne se rend pas est signalé avant l'application.
+
 La version 0.38 **fiabilise le Creator et l'entrée en mode IA** :
 - **Creator — vues héritées propres** : les vues héritées créées par le Creator sont nommées automatiquement et de façon cohérente (« <vue parente> (Creator) »), identifiables côté Studio, sans suffixes qui s'empilent ;
 - **Creator — héritage en-tête/pied de page** : pour modifier l'en-tête ou le pied d'un document, l'IA est guidée vers le bon template de mise en page (`web.external_layout_*`) plutôt que le template du document ;
