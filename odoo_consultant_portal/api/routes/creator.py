@@ -33,6 +33,7 @@ from ...services.creator_service import (
     build_analysis_message, parse_analysis, build_documentation_message,
 )
 from ...services.creator_executor import apply_changeset
+from ...services.preview_service import preview_operation, PREVIEWABLE_OPS
 from ...services.attachment_service import ChatAttachment, inject_attachments
 from .ai import _ai_key, _sse, _exchange_copilot_token, _PROVIDERS
 
@@ -386,6 +387,42 @@ async def dry_run(body: DryRunBody, session: AsyncSession = Depends(get_session)
                                      version=version)
     except Exception as exc:
         raise HTTPException(500, f"Échec du contrôle préalable : {exc}")
+
+
+# ── Preview ──────────────────────────────────────────────────────
+
+class PreviewBody(BaseModel):
+    profile_id: int
+    env_id: Optional[str] = None
+    company_id: Optional[int] = None
+    operations: list[Operation]
+    index: int
+
+
+@router.post("/preview")
+async def preview(body: PreviewBody, session: AsyncSession = Depends(get_session)):
+    """Compute a before/after preview of the modify_view / modify_report
+    operation at ``index``, in the context of the whole changeset (preceding
+    create_field operations are applied first). Everything is created
+    transiently and rolled back — nothing is persisted. Also acts as a
+    validation gate (valid / error)."""
+    if not body.operations or body.index < 0 or body.index >= len(body.operations):
+        raise HTTPException(400, "Opération à prévisualiser introuvable.")
+    operations = [op.model_dump() for op in body.operations]
+    if operations[body.index].get("type") not in PREVIEWABLE_OPS:
+        raise HTTPException(400, "Aperçu disponible uniquement pour les vues et les rapports.")
+    profile = await session.get(Profile, body.profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable.")
+    _check_operations_allowed(profile, operations)
+    odoo, _src, _repo, version, _env, _cid = _build_runtime(
+        profile, body.env_id, body.company_id)
+    try:
+        return await preview_operation(odoo, operations, body.index, version)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"Échec de l'aperçu : {exc}")
 
 
 # ── Reject ───────────────────────────────────────────────────────

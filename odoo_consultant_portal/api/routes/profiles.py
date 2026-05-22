@@ -1123,30 +1123,47 @@ async def sync_env_repo(profile_id: int, env_id: str, body: RepoSyncRequest = Re
     is_clone = not (repo_path / ".git").exists()
 
     async def generate():
+        # A client repo frequently vendors its addons (OCA modules, shared
+        # libraries) as Git submodules. Clone recursively, and after a pull
+        # re-sync the submodules so they track the new superproject commit.
         if is_clone:
             repo_path.mkdir(parents=True, exist_ok=True)
-            cmd = ["git", "clone", "--progress", "--depth=1", "--branch", repo_branch, repo_url, str(repo_path)]
-            label = f"Clonage de {github_repo} (branche {repo_branch})"
+            steps = [(
+                f"Clonage de {github_repo} (branche {repo_branch})",
+                ["git", "clone", "--progress", "--depth=1", "--branch", repo_branch,
+                 "--recurse-submodules", "--shallow-submodules", repo_url, str(repo_path)],
+            )]
         else:
-            cmd = ["git", "-C", str(repo_path), "pull", "--progress"]
-            label = f"Mise à jour de {github_repo}"
+            steps = [
+                (f"Mise à jour de {github_repo}",
+                 ["git", "-C", str(repo_path), "pull", "--progress"]),
+                ("Synchronisation des submodules Git",
+                 ["git", "-C", str(repo_path), "submodule", "update",
+                  "--init", "--recursive", "--depth", "1", "--progress"]),
+            ]
 
-        yield f"data: {json.dumps({'type': 'start', 'msg': f'⟳ {label}'}, ensure_ascii=False)}\n\n"
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env={**_os.environ, "GIT_TERMINAL_PROMPT": "0"},
-        )
-        async for raw in proc.stdout:
-            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
-            if line:
-                yield f"data: {json.dumps({'type': 'log', 'msg': line}, ensure_ascii=False)}\n\n"
-        await proc.wait()
-        if proc.returncode == 0:
+        returncode = 0
+        for label, cmd in steps:
+            yield f"data: {json.dumps({'type': 'start', 'msg': f'⟳ {label}'}, ensure_ascii=False)}\n\n"
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                env={**_os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+            async for raw in proc.stdout:
+                line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                if line:
+                    yield f"data: {json.dumps({'type': 'log', 'msg': line}, ensure_ascii=False)}\n\n"
+            await proc.wait()
+            returncode = proc.returncode or 0
+            if returncode != 0:
+                break
+
+        if returncode == 0:
             yield f"data: {json.dumps({'type': 'done', 'msg': '✓ Terminé'}, ensure_ascii=False)}\n\n"
         else:
-            yield f"data: {json.dumps({'type': 'error', 'msg': f'Erreur git (code {proc.returncode})'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'msg': f'Erreur git (code {returncode})'}, ensure_ascii=False)}\n\n"
         yield f"data: {json.dumps({'type': 'end'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(

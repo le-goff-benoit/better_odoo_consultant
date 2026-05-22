@@ -7,10 +7,59 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.35.7',
-    date: '2026-05-16',
+    version: '0.40.0',
+    date: '2026-05-22',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Aperçu Creator : rendu des vues redessiné façon Odoo (feuille blanche, colonnes, statusbar, button box, palette aubergine)',
+      'Aperçu calculé en contexte du changeset : les champs créés par les opérations précédentes sont appliqués d’abord — fin des faux négatifs « le champ x_… n’existe pas »',
+      'Aperçu : mode plein écran, encadré récapitulant la modification, et possibilité de demander une révision directement depuis l’aperçu',
+      'Executor tolérant : un arch d’héritage enveloppé par erreur dans <template>/<odoo> est automatiquement déballé',
+      'Faisabilité Odoo Studio renforcée : l’IA n’invente plus de classes CSS (faux positifs sans effet), privilégie les styles en ligne / classes existantes, et émet un verdict de faisabilité explicite',
+      'Bouton « Aperçu » mis en évidence dans la couleur de surbrillance',
+    ],
+  },
+  {
+    version: '0.39.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Creator : nouveau bouton « Aperçu » sur les opérations de modification de vue et de rapport',
+      'Aperçu des vues : rendu wireframe avant/après de la vue assemblée par Odoo, avec les champs et onglets ajoutés surlignés en vert',
+      'Aperçu des rapports : rendu PDF réel avant/après, généré par Odoo sur un enregistrement témoin (en-tête, pied de page et mise en page inclus)',
+      'L’aperçu sert aussi de garde-fou : une vue qui ne s’assemble pas ou un rapport qui ne se rend pas est signalé explicitement, avant le feu vert du consultant',
+    ],
+  },
+  {
+    version: '0.38.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Creator : les vues héritées sont nommées automatiquement et de façon cohérente (« <vue parente> (Creator) ») — propres et identifiables côté Studio, sans suffixes empilés',
+      'Creator : pour modifier l’en-tête ou le pied de page d’un document, l’IA est guidée vers le bon template de mise en page (web.external_layout_*) au lieu du template du document',
+      'Garde « fournisseur IA requis » : un modal avertit et renvoie vers la configuration des clés API quand on ouvre l’Assistant, la Migration, le Creator ou l’auto-remplissage de contexte sans aucun fournisseur IA configuré',
+    ],
+  },
+  {
+    version: '0.37.0',
+    date: '2026-05-22',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Pièces jointes images et PDF analysées visuellement (vision) sur Claude, OpenAI et Gemini — l’IA lit désormais le texte, la mise en page, les tableaux et les schémas, idéal pour reconstruire un rapport QWeb à partir d’une maquette ou repartir d’un écran modélisé par le client',
+      'Nouveaux formats pris en charge : classeurs Excel (.xlsx/.xls) convertis en tableaux Markdown, et davantage de formats texte (YAML, HTML, SQL, .po/.pot de traduction, INI, TOML…)',
+      'Assistant, Migration et Creator : glisser-déposer des pièces jointes, limite de taille portée à 10 MB par fichier',
+      'Dépôt client : les submodules Git sont désormais récupérés au clonage et resynchronisés à chaque mise à jour',
+    ],
+  },
+  {
+    version: '0.35.7',
+    date: '2026-05-16',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Topbar : indicateur visuel de synchronisation des sources quand un téléchargement ou une mise à jour est en cours',
       'La synchronisation des sources est maintenant suivie dans un store global frontend : on peut quitter la page Sources et y revenir sans perdre l’état courant',

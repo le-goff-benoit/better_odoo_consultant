@@ -3,7 +3,52 @@
 from odoo_consultant_portal.services.creator_service import (
     parse_analysis, build_analysis_message,
 )
-from odoo_consultant_portal.services.creator_executor import apply_changeset
+import xml.etree.ElementTree as ET
+
+from odoo_consultant_portal.services.creator_executor import (
+    apply_changeset, _inherited_view_name, _normalize_inherit_arch,
+)
+
+
+# ── Inheritance arch normalization ───────────────────────────────
+
+def test_normalize_unwraps_template_wrapper():
+    arch = ('<template id="x" inherit_id="sale.report_saleorder_document">'
+            '<xpath expr="//div" position="after"><field name="x_t"/></xpath>'
+            '</template>')
+    root = ET.fromstring(_normalize_inherit_arch(arch))
+    assert root.tag == "data"
+    assert root.find("xpath") is not None
+
+
+def test_normalize_unwraps_odoo_file_wrapper():
+    arch = ('<odoo><template inherit_id="y">'
+            '<xpath expr="//a" position="inside"/></template></odoo>')
+    root = ET.fromstring(_normalize_inherit_arch(arch))
+    assert root.tag == "data"
+
+
+def test_normalize_keeps_bare_data_body():
+    arch = '<data><xpath expr="//a" position="after"/></data>'
+    root = ET.fromstring(_normalize_inherit_arch(arch))
+    assert root.tag == "data"
+    assert root.find("xpath") is not None
+
+
+# ── Inherited-view naming ────────────────────────────────────────
+
+def test_inherited_view_name_uses_parent():
+    assert _inherited_view_name("sale.order.form", "x") == "sale.order.form (Creator)"
+
+
+def test_inherited_view_name_does_not_stack_suffixes():
+    assert _inherited_view_name("Devis (Creator)", "x") == "Devis (Creator)"
+    assert _inherited_view_name("Facture (Studio)", "x") == "Facture (Creator)"
+
+
+def test_inherited_view_name_falls_back_when_parent_unknown():
+    assert _inherited_view_name(None, "sale.order form") == "sale.order form (Creator)"
+    assert _inherited_view_name("", "") == "Personnalisation (Creator)"
 
 
 # ── Changeset parsing ────────────────────────────────────────────

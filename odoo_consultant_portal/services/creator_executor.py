@@ -16,6 +16,7 @@ target instance is never left in a half-applied state.
 """
 
 import asyncio
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
@@ -59,6 +60,19 @@ class OperationError(Exception):
     """A changeset operation could not be applied (bad params or Odoo refusal)."""
 
 
+def _inherited_view_name(parent_name: str | None, fallback: str) -> str:
+    """Build a clean, consistent name for a Creator-made inherited view.
+
+    Mirrors how Odoo Studio keeps its customizations identifiable: the name
+    reads ``<parent view> (Creator)`` so the inherited view is obvious in the
+    Studio / Technical view list. Any existing ``(Creator)`` / ``(Studio)``
+    suffix is stripped first so names never stack on repeated inheritance.
+    """
+    base = (parent_name or "").strip() or (fallback or "").strip()
+    base = re.sub(r"\s*\((?:Creator|Studio)\)\s*$", "", base).strip()
+    return f"{base} (Creator)" if base else "Personnalisation (Creator)"
+
+
 async def _run(fn):
     """Run a blocking XML-RPC call off the event loop."""
     loop = asyncio.get_event_loop()
@@ -90,6 +104,40 @@ def _validate_xml(arch: str) -> None:
         ET.fromstring(arch)
     except ET.ParseError as exc:
         raise OperationError(f"Arch XML invalide : {exc}")
+
+
+def _normalize_inherit_arch(arch: str) -> str:
+    """Unwrap a module-style wrapper the AI may have put around the arch.
+
+    The executor creates the ``ir.ui.view`` record itself and sets
+    ``inherit_id`` — so the arch must be the *bare* inheritance body (a
+    ``<data>`` of ``<xpath>`` specs). Models often wrap it as a file-style
+    ``<odoo><template id=… inherit_id=…>…</template></odoo>`` or just
+    ``<template …>…</template>``; Odoo then refuses the view because a
+    ``<template>`` element is not a valid inheritance directive. This unwraps
+    those layers down to a ``<data>`` body.
+    """
+    try:
+        root = ET.fromstring(arch)
+    except ET.ParseError:
+        return arch  # let _validate_xml surface a clear error
+    # Descend through file-level wrappers (<odoo>, <openerp>).
+    for _ in range(3):
+        if root.tag in ("odoo", "openerp"):
+            inner = next((c for c in root
+                          if c.tag in ("template", "data", "xpath", "field", "record")), None)
+            if inner is None:
+                break
+            root = inner
+        else:
+            break
+    # A <template> wrapper: its children are the inheritance specs.
+    if root.tag == "template":
+        data = ET.Element("data")
+        for child in list(root):
+            data.append(child)
+        root = data
+    return ET.tostring(root, encoding="unicode")
 
 
 def _normalize_xpath(expr: str) -> str:
@@ -186,10 +234,12 @@ def _target_ids(params: dict, op_name: str) -> list[int]:
 
 
 class _Executor:
-    def __init__(self, odoo, dry: bool = False, version: str | None = None):
+    def __init__(self, odoo, dry: bool = False, version: str | None = None,
+                 tag: bool = True):
         self.odoo = odoo
         self.dry = dry                         # preflight: validate, never write
         self.version = version
+        self.tag = tag                         # register created records under x_creator
         self.created: list[dict] = []          # {model, res_id, label} — newest last
         self.modified: list[dict] = []         # {model, res_id, before} — for rollback
         self.deleted: list[dict] = []          # {model, snapshot, label} — for rollback
@@ -229,7 +279,10 @@ class _Executor:
             return self._dry_counter
         res_id = await _run(lambda: self.odoo.create(model, _clean(values)))
         self.created.append({"model": model, "res_id": res_id, "label": label})
-        await self._register_xmlid(model, res_id)
+        # A transient preview run (tag=False) skips the x_creator traceability
+        # tag — the record is rolled back immediately, it must leave no trace.
+        if self.tag:
+            await self._register_xmlid(model, res_id)
         return res_id
 
     async def _register_xmlid(self, model: str, res_id: int) -> None:
@@ -331,7 +384,7 @@ class _Executor:
     async def op_modify_view(self, p: dict) -> dict:
         model = _req(p, "model")
         view_type = p.get("view_type") or "form"
-        arch = _req(p, "arch")
+        arch = _normalize_inherit_arch(_req(p, "arch"))
         _validate_xml(arch)
         try:
             major = int(str(self.version or "").split(".", 1)[0])
@@ -344,11 +397,13 @@ class _Executor:
                 "expressions natives.")
         inherit_id = await self._resolve_parent_view(p, model, view_type)
         parent_rows = await _run(lambda: self.odoo.search_read(
-            "ir.ui.view", [["id", "=", inherit_id]], ["arch_db"], limit=1))
-        if parent_rows and parent_rows[0].get("arch_db"):
-            _validate_xpath_targets(parent_rows[0]["arch_db"], arch)
+            "ir.ui.view", [["id", "=", inherit_id]], ["arch_db", "name"], limit=1))
+        parent = parent_rows[0] if parent_rows else {}
+        if parent.get("arch_db"):
+            _validate_xpath_targets(parent["arch_db"], arch)
+        view_name = _inherited_view_name(parent.get("name"), f"{model} {view_type}")
         values = {
-            "name": p.get("name") or f"{model} {view_type} — Creator",
+            "name": view_name,
             "model": model,
             "type": view_type,
             "inherit_id": inherit_id,
@@ -359,17 +414,17 @@ class _Executor:
         view_id = await self._create(
             "ir.ui.view", values, f"Vue héritée {model} ({view_type})")
         return {"view_id": view_id, "model": model, "view_type": view_type,
-                "inherit_id": inherit_id,
+                "inherit_id": inherit_id, "view_name": view_name,
                 "plan": f"Vue {view_type} héritée du modèle {model} "
-                        f"(vue parente #{inherit_id})."}
+                        f"« {view_name} » (vue parente #{inherit_id})."}
 
     async def op_modify_report(self, p: dict) -> dict:
-        arch = _req(p, "arch")
+        arch = _normalize_inherit_arch(_req(p, "arch"))
         _validate_xml(arch)
+        key = p.get("template_key") or p.get("report_name")
         if p.get("inherit_xmlid"):
             inherit_id = await self.resolve_xmlid(p["inherit_xmlid"], "ir.ui.view")
         else:
-            key = p.get("template_key") or p.get("report_name")
             if not key:
                 raise OperationError(
                     "Rapport : 'inherit_xmlid' ou 'template_key' requis.")
@@ -379,8 +434,13 @@ class _Executor:
             if not rows:
                 raise OperationError(f"Template QWeb introuvable : '{key}'")
             inherit_id = rows[0]["id"]
+        parent_rows = await _run(lambda: self.odoo.search_read(
+            "ir.ui.view", [["id", "=", inherit_id]], ["name"], limit=1))
+        parent_name = parent_rows[0].get("name") if parent_rows else None
+        view_name = _inherited_view_name(
+            parent_name, f"Rapport {key or p.get('inherit_xmlid') or ''}")
         values = {
-            "name": p.get("name") or f"Rapport — Creator",
+            "name": view_name,
             "type": "qweb",
             "inherit_id": inherit_id,
             "mode": "extension",
@@ -388,8 +448,9 @@ class _Executor:
             "arch": arch,
         }
         view_id = await self._create("ir.ui.view", values, "Rapport QWeb hérité")
-        return {"view_id": view_id, "inherit_id": inherit_id,
-                "plan": f"Vue QWeb héritée (template parent #{inherit_id})."}
+        return {"view_id": view_id, "inherit_id": inherit_id, "view_name": view_name,
+                "plan": f"Vue QWeb héritée « {view_name} » "
+                        f"(template parent #{inherit_id})."}
 
     async def op_create_server_action(self, p: dict) -> dict:
         model = _req(p, "model")

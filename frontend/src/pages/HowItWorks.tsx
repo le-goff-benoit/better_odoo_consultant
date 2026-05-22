@@ -166,7 +166,7 @@ const steps: DiagramStep[] = [
     badges: ['Prompt', 'Markdown'],
     details: [
       "La demande utilisateur détermine le mode (général, projet ou migration) et déclenche la détection automatique de perspective si le mode Auto est actif.",
-      "Les pièces jointes (texte, Markdown, JSON, XML, Python, logs, PDF textuels) sont ajoutées au dernier message. Elles peuvent contenir des traces d'erreur, des configs ou des extraits de code à analyser.",
+      "Les pièces jointes (texte, code, configs, .po, classeurs Excel, PDF et images) sont ajoutées au dernier message. Images et PDF sont analysés visuellement (vision) ; les classeurs Excel sont convertis en tableaux Markdown.",
       "L'historique de la conversation peut être sauvegardé et relancé depuis l'historique, ou converti en compte-rendu de réunion.",
     ],
     technicalRefs: ['ChatRequest.messages', 'ChatRequest.attachments', '_inject_attachments()', 'perspectivePrompt', 'Historique conversation'],
@@ -369,7 +369,7 @@ const stepsEn: DiagramStep[] = [
     badges: ['Prompt', 'Markdown'],
     details: [
       'The user request determines mode (general, project or migration) and triggers automatic perspective detection when Auto mode is active.',
-      'Attachments (text, Markdown, JSON, XML, Python, logs, textual PDFs) are appended to the latest user message and can contain error traces, configs or code snippets.',
+      'Attachments (text, code, configs, .po files, Excel workbooks, PDFs and images) are appended to the latest user message. Images and PDFs are analysed visually (vision); Excel workbooks are converted to Markdown tables.',
       'Conversations can be saved in history and reused, or converted into a formatted Markdown meeting-minute report.',
     ],
     technicalRefs: ['ChatRequest.messages', 'ChatRequest.attachments', '_inject_attachments()', 'perspectivePrompt', 'Conversation history'],

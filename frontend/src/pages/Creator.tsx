@@ -3,16 +3,19 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Wand2, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Loader2,
   FileText, Download, RotateCcw, Pencil, Play, Hammer, Database,
-  ScanSearch, KeyRound, History, X, Paperclip, ArrowRight,
+  ScanSearch, KeyRound, History, X, Paperclip, ArrowRight, Image as ImageIcon, Eye,
 } from 'lucide-react'
 import {
   getCreatorProjects, getAiProviders, getModelConfig, checkAllSources, getCreatorHistory,
   getCreatorHistoryEntry, dryRunCreatorChangeset, applyCreatorChangeset, rejectCreatorRequest, documentCreatorChange,
+  previewCreatorOperation,
 } from '../api/client'
 import { useUiLanguage } from '../i18n'
 import { PROVIDERS } from '../constants/providers'
 import { makeChallenge } from '../constants/creatorWords'
 import PageHeader from '../components/PageHeader'
+import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
+import CreatorPreviewModal, { type PreviewResult } from '../components/CreatorPreviewModal'
 import { Button, Card, Field, Badge, Modal, EmptyState } from '../components/ui'
 import ToolCallGroup, { type ToolEvent } from '../components/ToolCallGroup'
 import Markdown from '../components/Markdown'
@@ -22,8 +25,9 @@ import { useWorkspaceContext } from '../components/Layout'
 import { routedContextFiles } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
 import {
-  ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_ACCEPT, ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_MB,
   fileKind, fileToBase64, formatFileSize, attachmentPayload,
+  attachmentNeedsBase64, defaultMimeType,
   type AttachmentDraft,
 } from '../utils/attachments'
 
@@ -262,6 +266,12 @@ export default function Creator() {
   const [companyId, setCompanyId] = useState<number | null>(null)
   const [request, setRequest] = useState('')
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
+  const [draggingFiles, setDraggingFiles] = useState(false)
+  const { configured: aiConfigured, loading: aiProvLoading } = useAiProvidersConfigured()
+  const [aiGuardDismissed, setAiGuardDismissed] = useState(false)
+  const [preview, setPreview] = useState<{
+    open: boolean; loading: boolean; result: PreviewResult | null; error: string | null; summary: string
+  }>({ open: false, loading: false, result: null, error: null, summary: '' })
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [instructions, setInstructions] = useState<string[]>([])
@@ -421,17 +431,17 @@ export default function Creator() {
     for (const file of files.slice(0, slots)) {
       const kind = fileKind(file)
       if (!kind) { addAttachmentError(file, en ? 'Unsupported format' : 'Format non supporté'); continue }
-      if (file.size > ATTACHMENT_MAX_BYTES) { addAttachmentError(file, en ? 'File over 5 MB' : 'Fichier supérieur à 5 MB'); continue }
+      if (file.size > ATTACHMENT_MAX_BYTES) { addAttachmentError(file, en ? `File over ${ATTACHMENT_MAX_MB} MB` : `Fichier supérieur à ${ATTACHMENT_MAX_MB} MB`); continue }
       try {
         const base = {
           id: `${Date.now()}-${file.name}-${Math.random().toString(16).slice(2)}`,
           name: file.name,
-          mime_type: file.type || (kind === 'pdf' ? 'application/pdf' : 'text/plain'),
+          mime_type: defaultMimeType(file, kind),
           size: file.size,
           kind,
           status: 'ready' as const,
         }
-        const draft: AttachmentDraft = kind === 'pdf'
+        const draft: AttachmentDraft = attachmentNeedsBase64(kind)
           ? { ...base, content_base64: await fileToBase64(file) }
           : { ...base, text: await file.text() }
         setAttachments(prev => [...prev.filter(a => a.status === 'ready'), draft].slice(0, ATTACHMENT_MAX_FILES))
@@ -439,6 +449,40 @@ export default function Creator() {
         addAttachmentError(file, err instanceof Error ? err.message : (en ? 'Cannot read file' : 'Lecture impossible'))
       }
     }
+  }
+
+  // ── preview ─────────────────────────────────────────────────────
+
+  const runPreview = async (index: number) => {
+    if (projectId === '' || !analysis) return
+    const op = analysis[index]
+    if (!op) return
+    setPreview({ open: true, loading: true, result: null, error: null, summary: op.summary || '' })
+    try {
+      const res = await previewCreatorOperation({
+        profile_id: projectId,
+        env_id: envId ?? undefined,
+        company_id: companyId ?? undefined,
+        operations: analysis,
+        index,
+      })
+      setPreview(p => ({ ...p, loading: false, result: res.data as PreviewResult }))
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setPreview(p => ({
+        ...p, loading: false,
+        error: detail ?? (e instanceof Error ? e.message : 'Aperçu impossible'),
+      }))
+    }
+  }
+
+  const requestChangeFromPreview = (instruction: string) => {
+    if (projectId === '') return
+    const ctx = preview.summary ? `Concernant « ${preview.summary} » : ` : ''
+    const next = [...instructions, ctx + instruction]
+    setInstructions(next)
+    setPreview(p => ({ ...p, open: false }))
+    runAnalysis(next)
   }
 
   // ── analysis ────────────────────────────────────────────────────
@@ -808,6 +852,19 @@ export default function Creator() {
 
   return (
     <div className="creator-shell">
+      <AiProviderRequiredModal
+        open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
+        onClose={() => setAiGuardDismissed(true)}
+      />
+      <CreatorPreviewModal
+        open={preview.open}
+        loading={preview.loading}
+        result={preview.result}
+        error={preview.error}
+        opSummary={preview.summary}
+        onRequestChange={requestChangeFromPreview}
+        onClose={() => setPreview(p => ({ ...p, open: false }))}
+      />
       <PageHeader title={c.title} description={c.description} />
 
       <div className="creator-content-row">
@@ -916,9 +973,18 @@ export default function Creator() {
           )}
 
           <div
-            style={{ marginTop: 16 }}
-            onDragOver={e => { if (phase === 'setup') e.preventDefault() }}
+            style={{
+              marginTop: 16,
+              borderRadius: 10,
+              outline: draggingFiles ? '2px dashed var(--brand)' : '2px dashed transparent',
+              outlineOffset: 6,
+              transition: 'outline-color .12s',
+            }}
+            onDragEnter={e => { if (phase === 'setup') { e.preventDefault(); setDraggingFiles(true) } }}
+            onDragOver={e => { if (phase === 'setup') { e.preventDefault(); setDraggingFiles(true) } }}
+            onDragLeave={e => { if (e.currentTarget === e.target) setDraggingFiles(false) }}
             onDrop={e => {
+              setDraggingFiles(false)
               if (phase !== 'setup') return
               e.preventDefault()
               if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
@@ -942,7 +1008,7 @@ export default function Creator() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".txt,.md,.csv,.json,.xml,.py,.log,.pdf"
+                  accept={ATTACHMENT_ACCEPT}
                   style={{ display: 'none' }}
                   onChange={e => { if (e.target.files) addFiles(e.target.files); e.currentTarget.value = '' }}
                 />
@@ -967,7 +1033,7 @@ export default function Creator() {
                     className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`}
                     title={att.error ?? att.name}
                   >
-                    {att.kind === 'pdf' ? <FileText size={13} /> : <Paperclip size={13} />}
+                    {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={13} /> : att.kind === 'image' ? <ImageIcon size={13} /> : <Paperclip size={13} />}
                     <span className="assistant-attachment-name">{att.name}</span>
                     <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
                     {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
@@ -1082,7 +1148,9 @@ export default function Creator() {
               </div>
               {opCount === 0 && <p className="ui-empty-description">{c.noOps}</p>}
               {analysis && analysis.length > 0 && <ChangesetSummary ops={analysis} en={en} />}
-              {analysis?.map((op, i) => <OperationRow key={i} op={op} index={i} en={en} />)}
+              {analysis?.map((op, i) => (
+                <OperationRow key={i} op={op} index={i} en={en} onPreview={runPreview} />
+              ))}
 
               {applyErr && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, color: 'var(--th-danger, #c0392b)', fontSize: 13 }}>
@@ -1489,8 +1557,11 @@ function CreatorHistoryPanel({ rows, empty, title, close, labels, resume, onResu
 
 // ── Operation row (proposal) ──────────────────────────────────────
 
-function OperationRow({ op, index, en }: { op: Operation; index: number; en: boolean }) {
+function OperationRow({ op, index, en, onPreview }: {
+  op: Operation; index: number; en: boolean; onPreview: (index: number) => void
+}) {
   const meta = OP_META[op.type]
+  const previewable = op.type === 'modify_view' || op.type === 'modify_report'
   const label = meta ? (en ? meta.en : meta.fr) : op.type
   const params = op.params ?? {}
   const arch = typeof params.arch === 'string' ? params.arch : null
@@ -1516,6 +1587,18 @@ function OperationRow({ op, index, en }: { op: Operation; index: number; en: boo
         </span>
         <Badge tone="info">{label}</Badge>
         <span style={{ fontSize: 13, fontWeight: 600 }}>{op.summary}</span>
+        {previewable && (
+          <button
+            type="button"
+            className="ui-button ui-button-primary ui-button-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => onPreview(index)}
+            title={en ? 'Preview this change' : 'Aperçu de cette modification'}
+          >
+            <Eye size={13} />
+            <span>{en ? 'Preview' : 'Aperçu'}</span>
+          </button>
+        )}
       </div>
       {scalarParams.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, marginLeft: 30 }}>
