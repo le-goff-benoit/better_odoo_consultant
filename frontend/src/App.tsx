@@ -8,6 +8,7 @@ const Sources   = lazy(() => import('./pages/Sources'))
 const Profiles  = lazy(() => import('./pages/Profiles'))
 const Assistant = lazy(() => import('./pages/Assistant'))
 const Migration = lazy(() => import('./pages/Migration'))
+const Creator   = lazy(() => import('./pages/Creator'))
 const Query     = lazy(() => import('./pages/Query'))
 const History   = lazy(() => import('./pages/History'))
 const Settings  = lazy(() => import('./pages/Settings'))
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/profiles" element={<Profiles />} />
         <Route path="/assistant" element={<Assistant />} />
         <Route path="/migration" element={<Migration />} />
+        <Route path="/creator" element={<Creator />} />
         <Route path="/query" element={<Query />} />
         <Route path="/history" element={<History />} />
         <Route path="/settings" element={<Settings />} />

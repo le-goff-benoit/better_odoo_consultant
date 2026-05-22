@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Copy, FileText, Globe2, History, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Code, Copy, FileText, Globe2, History, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
 import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
 import { t } from '../theme'
+import { copyRichText, copyMarkdown } from '../utils/clipboard'
 import PageHeader from '../components/PageHeader'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
@@ -30,6 +31,7 @@ import { streamingSignals } from '../utils/streamingSignals'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
+import Markdown from '../components/Markdown'
 
 // Module-level buffer: message arrays survive component unmount so streams
 // that finish after navigation are captured and shown on remount.
@@ -242,12 +244,14 @@ const assistantCopy = {
     activeEnv: 'Environnement actif',
     default: 'défaut',
     recommended: 'Recommandé',
-    copyTitle: 'Copier la réponse',
+    copyTitle: 'Copier la réponse mise en forme (collage avec styles)',
     thinking: 'Réflexion en cours…',
     analyzing: 'Analyse des résultats et rédaction de la réponse…',
     tokens: 'Tokens utilisés (entrée ↑ + sortie ↓)',
     copied: 'Copié !',
     copy: 'Copier',
+    copyMd: 'Copier MD',
+    copyMdTitle: 'Copier le texte Markdown brut',
     expand: 'Agrandir',
     expandTitle: 'Agrandir la réponse en plein écran',
     askMore: 'Plus de détail',
@@ -294,12 +298,14 @@ const assistantCopy = {
     activeEnv: 'Active environment',
     default: 'default',
     recommended: 'Recommended',
-    copyTitle: 'Copy answer',
+    copyTitle: 'Copy the formatted answer (paste keeps styling)',
     thinking: 'Thinking…',
     analyzing: 'Analyzing results and drafting the answer…',
     tokens: 'Tokens used (input ↑ + output ↓)',
     copied: 'Copied!',
     copy: 'Copy',
+    copyMd: 'Copy MD',
+    copyMdTitle: 'Copy the raw Markdown text',
     expand: 'Expand',
     expandTitle: 'Expand the answer to fullscreen',
     askMore: 'More detail',
@@ -1660,14 +1666,23 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
   const elapsed = (timestamp && startTime && timestamp > startTime)
     ? (() => { const s = (timestamp - startTime) / 1000; return s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` })()
     : null
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'' | 'rich' | 'md'>('')
   const [expanded, setExpanded] = useState(false)
+  const markdownRef = useRef<HTMLDivElement>(null)
 
-  function copyText() {
+  function copyStyled() {
     if (!textEvt?.content) return
-    navigator.clipboard.writeText(textEvt.content).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+    copyRichText(markdownRef.current, textEvt.content).then(() => {
+      setCopied('rich')
+      setTimeout(() => setCopied(''), 2000)
+    })
+  }
+
+  function copyMd() {
+    if (!textEvt?.content) return
+    copyMarkdown(textEvt.content).then(() => {
+      setCopied('md')
+      setTimeout(() => setCopied(''), 2000)
     })
   }
 
@@ -1709,20 +1724,34 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               </button>
               <button
                 type="button"
-                onClick={copyText}
+                onClick={copyStyled}
                 title={c.copyTitle}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   width: 26, height: 26, border: `1px solid ${t.border}`,
                   borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                  color: copied ? t.success : t.muted, opacity: 0.8,
+                  color: copied === 'rich' ? t.success : t.muted, opacity: 0.8,
                   transition: 'opacity .15s, color .15s',
                 }}
               >
-                {copied ? <CheckCheck size={13} /> : <Copy size={13} />}
+                {copied === 'rich' ? <CheckCheck size={13} /> : <Copy size={13} />}
+              </button>
+              <button
+                type="button"
+                onClick={copyMd}
+                title={c.copyMdTitle}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, border: `1px solid ${t.border}`,
+                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
+                  color: copied === 'md' ? t.success : t.muted, opacity: 0.8,
+                  transition: 'opacity .15s, color .15s',
+                }}
+              >
+                {copied === 'md' ? <CheckCheck size={13} /> : <Code size={13} />}
               </button>
             </div>
-            <Markdown text={textEvt.content} />
+            <div ref={markdownRef}><Markdown text={textEvt.content} /></div>
           </div>
         )}
 
@@ -1798,18 +1827,33 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
                 </button>
                 <button
                   type="button"
-                  onClick={copyText}
+                  onClick={copyStyled}
                   title={c.copyTitle}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 4,
                     border: `1px solid ${t.border}`, borderRadius: t.radius,
                     background: 'transparent', cursor: 'pointer', padding: '2px 7px',
-                    color: copied ? t.success : t.muted, fontSize: 10, fontWeight: 600,
+                    color: copied === 'rich' ? t.success : t.muted, fontSize: 10, fontWeight: 600,
                     transition: 'color .15s',
                   }}
                 >
-                  {copied ? <CheckCheck size={11} /> : <Copy size={11} />}
-                  {copied ? c.copied : c.copy}
+                  {copied === 'rich' ? <CheckCheck size={11} /> : <Copy size={11} />}
+                  {copied === 'rich' ? c.copied : c.copy}
+                </button>
+                <button
+                  type="button"
+                  onClick={copyMd}
+                  title={c.copyMdTitle}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    border: `1px solid ${t.border}`, borderRadius: t.radius,
+                    background: 'transparent', cursor: 'pointer', padding: '2px 7px',
+                    color: copied === 'md' ? t.success : t.muted, fontSize: 10, fontWeight: 600,
+                    transition: 'color .15s',
+                  }}
+                >
+                  {copied === 'md' ? <CheckCheck size={11} /> : <Code size={11} />}
+                  {copied === 'md' ? c.copied : c.copyMd}
                 </button>
               </div>
             )}
@@ -1820,155 +1864,3 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
   )
 }
 
-// ── Markdown table with CSV export ────────────────────────────
-
-function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: string[][] }) {
-  const [hovered, setHovered] = useState(false)
-
-  const downloadCsv = () => {
-    const escape = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-    const lines = [
-      headers.map(escape).join(','),
-      ...dataRows.map(row => row.map(escape).join(',')),
-    ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'export.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  return (
-    <div
-      style={{ overflowX: 'auto', margin: '8px 0', position: 'relative' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {hovered && (
-        <button
-          onClick={downloadCsv}
-          title="Exporter en CSV"
-          style={{
-            position: 'absolute', top: 4, right: 4, zIndex: 10,
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '3px 9px', fontSize: 11, fontWeight: 600,
-            background: t.bgCard, color: t.action,
-            border: `1px solid ${t.brand40}`, borderRadius: t.radius,
-            cursor: 'pointer', boxShadow: t.shadow,
-            transition: 'opacity .15s',
-          }}
-        >
-          ↓ CSV
-        </button>
-      )}
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-        <thead>
-          <tr>
-            {headers.map((h, j) => (
-              <th key={j} style={{ padding: '6px 12px', textAlign: 'left', background: t.bgMuted, borderBottom: `2px solid ${t.border}`, fontWeight: 600, color: t.textSub }}>
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {dataRows.map((row, ri) => (
-            <tr key={ri} style={{ background: ri % 2 === 0 ? t.bgCard : t.bgMuted }}>
-              {row.map((cell, ci) => (
-                <td key={ci} style={{ padding: '5px 12px', borderBottom: `1px solid ${t.border}`, fontSize: 13 }}>
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ── Markdown renderer ─────────────────────────────────────────
-
-function Markdown({ text }: { text: string }) {
-  const lines = text.split('\n')
-  const result: React.ReactNode[] = []
-  let i = 0
-
-  while (i < lines.length) {
-    const line = lines[i]
-
-    if (line.startsWith('```')) {
-      const codeLines: string[] = []
-      i++
-      while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++ }
-      result.push(
-        <pre key={i} style={{ background: 'var(--code-bg)', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
-          <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{codeLines.join('\n')}</code>
-        </pre>
-      )
-      i++; continue
-    }
-
-    if (line.startsWith('|')) {
-      const tableLines: string[] = []
-      while (i < lines.length && lines[i].startsWith('|')) { tableLines.push(lines[i]); i++ }
-      const rows = tableLines.filter(l => !l.match(/^\|[-| :]+\|$/))
-      if (rows.length) {
-        const headers = rows[0].split('|').filter(Boolean).map(s => s.trim())
-        const dataRows = rows.slice(1).map(row => row.split('|').filter(Boolean).map(c => c.trim()))
-        const tableKey = i
-        result.push(
-          <MarkdownTable key={tableKey} headers={headers} dataRows={dataRows} />
-        )
-      }
-      continue
-    }
-
-    const hMatch = line.match(/^(#{1,3})\s+(.+)/)
-    if (hMatch) {
-      const sizes = [18, 16, 14]
-      result.push(<div key={i} style={{ fontSize: sizes[hMatch[1].length - 1], fontWeight: 700, color: t.text, margin: '12px 0 4px' }}>{hMatch[2]}</div>)
-      i++; continue
-    }
-
-    const listMatch = line.match(/^[-*]\s+(.+)/)
-    if (listMatch) {
-      result.push(
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brand, flexShrink: 0 }}>•</span>
-          <span>{inlineMarkdown(listMatch[1])}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    const olMatch = line.match(/^(\d+)\.\s+(.+)/)
-    if (olMatch) {
-      result.push(
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brand, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
-          <span>{inlineMarkdown(olMatch[2])}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    if (!line.trim()) { result.push(<div key={i} style={{ height: 8 }} />); i++; continue }
-
-    result.push(<p key={i} style={{ margin: '0 0 4px' }}>{inlineMarkdown(line)}</p>)
-    i++
-  }
-
-  return <>{result}</>
-}
-
-function inlineMarkdown(text: string): React.ReactNode {
-  return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} style={{ color: 'color-mix(in srgb, var(--brand) 40%, var(--th-text))' }}>{part.slice(2, -2)}</strong>
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) return <em key={i}>{part.slice(1, -1)}</em>
-    if (part.startsWith('`') && part.endsWith('`')) return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
-    return part
-  })
-}

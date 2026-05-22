@@ -59,3 +59,30 @@ class PromptHistory(SQLModel, table=True):
     exported_file_path: Optional[str] = None
     status: str = "pending"
     duration_ms: Optional[int] = None
+
+
+class CreatorRequest(SQLModel, table=True):
+    """One Studio-style modification request handled by the Creator tool.
+
+    A row is persisted once a request reaches a terminal state — applied,
+    failed or rejected — so the Creator never lets the user chain unvalidated
+    modifications and keeps an audit trail of every live write.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    profile_id: Optional[int] = Field(default=None, foreign_key="profile.id")
+    profile_name: Optional[str] = None
+    env_id: Optional[str] = None
+    env_label: Optional[str] = None
+    company_id: Optional[int] = None
+    request_text: str
+    instructions: Optional[str] = None        # JSON array of follow-up instructions
+    functional_analysis: Optional[str] = None
+    technical_analysis: Optional[str] = None
+    changeset: Optional[str] = None           # JSON array of operations
+    apply_result: Optional[str] = None        # JSON: per-operation execution result
+    documentation: Optional[str] = None       # Markdown recap written by the AI
+    status: str = "analyzed"                  # analyzed | applied | failed | rejected
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

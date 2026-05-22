@@ -67,6 +67,7 @@ _SECTION_TITLES = {
         "studio": "Inspection Studio",
         "version": "Notes de version Odoo {version}",
         "migration": "Méthodologie de migration",
+        "creation": "Méthodologie de création Studio",
         "profile": "Profil de réponse",
     },
     "en": {
@@ -75,6 +76,7 @@ _SECTION_TITLES = {
         "studio": "Studio inspection",
         "version": "Odoo {version} release notes",
         "migration": "Migration methodology",
+        "creation": "Studio creation methodology",
         "profile": "Response profile",
     },
 }
@@ -314,6 +316,7 @@ def load_context_for_prompt(
     locale: Optional[str] = None,
     target_version: Optional[str] = None,
     priority_blocks: Optional[list[str]] = None,
+    creation: bool = False,
 ) -> str:
     """Return routed markdown context to inject into the AI system prompt.
 
@@ -378,6 +381,16 @@ def load_context_for_prompt(
             sections.append((_migration_title, _migration_content))
         except FileNotFoundError:
             pass
+    # Creation methodology — core section for the Creator tool, always injected
+    # so the Studio-creation conventions are never crowded out of the budget.
+    _creation_title = None
+    if creation:
+        try:
+            _creation_content = read_file("creation.md", lang)
+            _creation_title = titles["creation"]
+            sections.append((_creation_title, _creation_content))
+        except FileNotFoundError:
+            pass
     if not sections and not blocks:
         return ""
     # Skills, role profile and (in migration mode) the migration methodology are
@@ -390,6 +403,8 @@ def load_context_for_prompt(
         core.add(_profile_title)
     if _migration_title:
         core.add(_migration_title)
+    if _creation_title:
+        core.add(_creation_title)
     # Priority blocks consume the budget first; the routed sections fit in what
     # remains, so the assembled context never overflows MAX_CONTEXT_CHARS.
     separator = "\n\n---\n\n"
@@ -413,6 +428,8 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
             return _MIGRATION_MD_EN
         if name == "studio.md":
             return _STUDIO_MD_EN
+        if name == "creation.md":
+            return _CREATION_MD_EN
         if name in _PROFILE_DEFAULTS_EN:
             return _PROFILE_DEFAULTS_EN[name]
         m_en = re.match(r'^odoo-([\d\.]+)\.md$', name)
@@ -426,6 +443,8 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
         return _MIGRATION_MD
     if name == "studio.md":
         return _STUDIO_MD
+    if name == "creation.md":
+        return _CREATION_MD
     if name in _PROFILE_DEFAULTS:
         return _PROFILE_DEFAULTS[name]
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
@@ -901,6 +920,12 @@ champs: employee_id, number_of_days, date_from, date_to
 hr.payslip | [["state","in",["draft","verify"]], ["date_from",">=","<début_mois>"]]
 champs: employee_id, date_from, date_to, struct_id
 ```
+
+### Réflexe Studio / Studio + Dev
+- Si la base utilise Studio ou Studio + Dev et qu'une anomalie apparaît lors d'une création, confirmation, annulation, duplication, archivage ou remise en brouillon, vérifier systématiquement les automatisations avant de conclure à un bug standard.
+- Contrôler en priorité `ir.actions.server`, `ir.cron`, `base.automation` et, si le symptôme dépend de l'utilisateur ou de la société active, `ir.rule`.
+- Rechercher les automatisations qui ciblent le modèle principal **et** les modèles liés au flux métier (ex. `sale.order`, `project.project`, `documents.document`, `stock.picking`).
+- Vérifier aussi les enregistrements archivés / en corbeille sur les objets liés quand une automatisation duplique, archive, restaure ou déplace des documents.
 
 ---
 
@@ -2022,6 +2047,12 @@ hr.attendance | [["check_out","=",false]]
 stock.picking | [["state","in",["confirmed","assigned"]],["scheduled_date","<","<date_7d>"]]
 ```
 
+### Studio / Studio + Dev reflex
+- If the database uses Studio or Studio + Dev and an issue appears during create, confirm, cancel, duplicate, archive, or reset-to-draft flows, inspect automations before blaming standard Odoo.
+- Check `ir.actions.server`, `ir.cron`, `base.automation`, and `ir.rule` first when the symptom depends on the user or active company.
+- Look for automations targeting both the main model and related models in the flow (for example `sale.order`, `project.project`, `documents.document`, `stock.picking`).
+- Also inspect archived / trashed linked records when an automation duplicates, archives, restores, or moves documents.
+
 ## Security & Access Rights
 Important groups: `base.group_user`, `base.group_portal`, `account.group_account_user`,
 `account.group_account_manager`, `sale.group_sale_manager`, `stock.group_stock_manager`,
@@ -2341,3 +2372,118 @@ _VERSION_NOTES_EN = {
 - Validate custom web assets and reporting.
 """,
 }
+
+
+# ── Creation methodology (Creator tool) ───────────────────────────
+
+_CREATION_MD = """\
+# Méthodologie de création Studio
+
+Ce guide cadre l'outil **Création** : préparer une modification de type Odoo
+Studio qui sera ensuite **écrite en direct** sur l'instance connectée
+(production ou test). C'est une opération sensible — rigueur maximale.
+
+## Rôle de l'IA
+Tu produis un *changeset* structuré : la liste exacte et ordonnée des
+opérations qui seront exécutées. Cette liste EST le contrat — rien d'autre ne
+sera appliqué. Sois exhaustif et précis.
+
+## Investigation obligatoire avant toute proposition
+1. `inspect_studio` — personnalisations existantes (ne jamais écraser ni
+   dupliquer un champ/une vue déjà créé).
+2. `inspect_odoo_view` — arch assemblée de la vue cible ; récupère le
+   `view_db_id` du parent à hériter.
+3. `get_odoo_fields` / `query_odoo` — modèles et champs réellement présents.
+4. `search_odoo_source` / `read_odoo_file` — code source Odoo de la version de
+   l'instance : nom exact des modèles, vues, méthodes.
+5. `search_project_source` / `read_project_file` — dépôt du client, si
+   disponible : un modèle ou un champ peut venir d'un module custom.
+N'invente jamais un nom. Vérifie-le contre l'instance ou le code source.
+
+## Conventions Studio à respecter
+- Tout nouveau champ : préfixe `x_`, créé en `state='manual'`.
+- Toute modification de vue ou de rapport : **vue héritée** (xpath), jamais
+  d'édition en place de la vue standard.
+- Réutilise les modèles et champs standard quand ils existent ; ne crée du
+  custom que si c'est nécessaire.
+- Le résultat doit être globalement identique à ce que produirait Odoo Studio.
+
+## Sensibilité à la version Odoo
+La syntaxe des vues change entre versions majeures — adapte l'`arch` à la
+version réelle de l'instance :
+- **Odoo 17+** : `attrs` et `states` supprimés → expressions directes
+  (`invisible="..."`, `readonly="..."`, `required="..."`).
+- **Odoo 17+** : `<tree>` devient `<list>`.
+- **≤ 16** : `attrs="{'invisible': [...]}"` reste la forme attendue.
+Vérifie la version via le contexte du projet ou le code source avant d'écrire
+un `arch`.
+
+## Discipline dry-run
+Un *dry-run* (contrôle à blanc, sans écriture) est exécuté avant toute création.
+Pour qu'il passe, chaque opération doit se résoudre proprement :
+- le modèle ciblé existe ;
+- la vue parente à hériter existe ;
+- le champ à créer n'existe pas déjà sur le modèle ;
+- l'`arch` XML est bien formé.
+Conçois le changeset pour qu'il passe le dry-run du premier coup.
+
+## Qualité de l'analyse
+- Analyse fonctionnelle : besoin, comportement attendu, impacts, limites.
+- Analyse technique : modèles/vues/champs concernés, héritages, risques.
+- Si la demande est hors périmètre Studio, impossible ou trop ambiguë,
+  ne propose aucune opération et explique pourquoi.
+"""
+
+_CREATION_MD_EN = """\
+# Studio creation methodology
+
+This guide frames the **Creator** tool: preparing an Odoo Studio-style change
+that will then be **written live** to the connected instance (production or
+test). It is a sensitive operation — maximum rigour.
+
+## Role of the AI
+You produce a structured *changeset*: the exact, ordered list of operations
+that will be executed. That list IS the contract — nothing else is applied.
+Be exhaustive and precise.
+
+## Mandatory investigation before proposing anything
+1. `inspect_studio` — existing customizations (never overwrite or duplicate an
+   already-created field/view).
+2. `inspect_odoo_view` — assembled arch of the target view; get the parent
+   `view_db_id` to inherit from.
+3. `get_odoo_fields` / `query_odoo` — models and fields actually present.
+4. `search_odoo_source` / `read_odoo_file` — Odoo source for the instance
+   version: exact model, view and method names.
+5. `search_project_source` / `read_project_file` — the client repo, when
+   available: a model or field may come from a custom module.
+Never invent a name. Verify it against the instance or the source code.
+
+## Studio conventions to follow
+- Every new field: `x_` prefix, created with `state='manual'`.
+- Every view or report change: an **inherited view** (xpath), never an in-place
+  edit of the standard view.
+- Reuse standard models and fields when they exist; only create custom when
+  necessary.
+- The result must be effectively identical to what Odoo Studio would produce.
+
+## Odoo version sensitivity
+View syntax changes between major versions — adapt the `arch` to the instance's
+real version:
+- **Odoo 17+**: `attrs` and `states` removed → direct expressions
+  (`invisible="..."`, `readonly="..."`, `required="..."`).
+- **Odoo 17+**: `<tree>` becomes `<list>`.
+- **≤ 16**: `attrs="{'invisible': [...]}"` is still expected.
+Check the version before writing an `arch`.
+
+## Dry-run discipline
+A dry-run (preflight, no write) runs before any creation. To pass it, every
+operation must resolve cleanly: the target model exists, the parent view to
+inherit exists, the field to create does not already exist, and the XML `arch`
+is well-formed. Design the changeset to pass the dry-run on the first try.
+
+## Analysis quality
+- Functional analysis: need, expected behaviour, impacts, limits.
+- Technical analysis: models/views/fields involved, inheritance, risks.
+- If the request is outside the Studio scope, impossible or too ambiguous,
+  propose no operation and explain why.
+"""

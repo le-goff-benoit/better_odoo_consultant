@@ -12,6 +12,7 @@ from ..core.context_constants import (
     MAX_PROJECT_CONTEXT_CHARS as _MAX_PROJECT_CONTEXT_CHARS,
     MAX_HISTORY_TURNS as _MAX_HISTORY_TURNS,
     MAX_TOOL_RESULT_HISTORY_CHARS as _MAX_TOOL_RESULT_HISTORY_CHARS,
+    MAX_DATA_TOOL_RESULT_HISTORY_CHARS as _MAX_DATA_TOOL_RESULT_HISTORY_CHARS,
     CLAUDE_MAX_OUTPUT_TOKENS as _CLAUDE_MAX_OUTPUT_TOKENS,
     GEMINI_MAX_OUTPUT_TOKENS as _GEMINI_MAX_OUTPUT_TOKENS,
 )
@@ -157,7 +158,8 @@ TOOLS_CLAUDE = [
         "model":  {"type": "string", "description": "Modèle Odoo (ex: account.move, sale.order, res.partner)"},
         "domain": {"type": "array",  "description": "Domaine Odoo, ex: [[\"state\",\"=\",\"posted\"]]", "default": []},
         "fields": {"type": "array",  "items": {"type": "string"}, "description": "Champs à récupérer"},
-        "limit":  {"type": "integer", "description": "Nombre max de résultats (défaut 20)", "default": 20},
+        "limit":  {"type": "integer", "description": "Nombre max de résultats (défaut 20, max 500)", "default": 20},
+        "offset": {"type": "integer", "description": "Décalage pour paginer un grand ensemble (défaut 0)", "default": 0},
         "order":  {"type": "string",  "description": "Tri, ex: 'date desc'", "default": ""},
     }}},
     {**_TOOL_COUNT, "input_schema": {"type": "object", "required": ["model"], "properties": {
@@ -188,6 +190,7 @@ TOOLS_OPENAI = [
         "domain": {"type": "array",   "items": {}, "default": []},
         "fields": {"type": "array",   "items": {"type": "string"}},
         "limit":  {"type": "integer", "default": 20},
+        "offset": {"type": "integer", "default": 0},
         "order":  {"type": "string",  "default": ""},
     }}}},
     {"type": "function", "function": {**_TOOL_COUNT, "parameters": {"type": "object", "required": ["model"], "properties": {
@@ -219,7 +222,7 @@ TOOLS_GEMINI = [
              "parameters": {"type": "object", "required": ["model", "fields"], "properties": {
                  "model":  {"type": "string"},  "domain": {"type": "array"},
                  "fields": {"type": "array"},   "limit":  {"type": "integer"},
-                 "order":  {"type": "string"},
+                 "offset": {"type": "integer"}, "order":  {"type": "string"},
              }}},
             {"name": "count_odoo",   "description": _TOOL_COUNT["description"],
              "parameters": {"type": "object", "required": ["model"], "properties": {
@@ -764,16 +767,21 @@ def _trim_history(messages: list) -> list:
 def _compress_tool_result(result: dict) -> str:
     """Serialize a tool result for storage in the messages array.
 
-    The returned string is capped at _MAX_TOOL_RESULT_HISTORY_CHARS so that
-    large tool outputs (Studio audit, source searches) don’t bloat the context
-    window across many turns. The full result is still streamed to the frontend
-    via the SSE 'tool_result' event before this compressed copy is stored.
+    The returned string is capped so large tool outputs (Studio audit, source
+    searches) don’t bloat the context window across many turns. Record-bearing
+    results (query_odoo) get a larger budget — the model must keep the data it
+    queried to reason precisely, e.g. when building a changeset record by
+    record. The full result is still streamed to the frontend via the SSE
+    'tool_result' event before this compressed copy is stored.
     """
     raw = json.dumps(result, ensure_ascii=False, default=str)
-    if len(raw) <= _MAX_TOOL_RESULT_HISTORY_CHARS:
+    cap = (_MAX_DATA_TOOL_RESULT_HISTORY_CHARS
+           if isinstance(result, dict) and isinstance(result.get("records"), list)
+           else _MAX_TOOL_RESULT_HISTORY_CHARS)
+    if len(raw) <= cap:
         return raw
     suffix = "...[résultat tronqué dans l'historique — complet dans le panneau contextuel]"
-    return raw[: _MAX_TOOL_RESULT_HISTORY_CHARS - len(suffix)] + suffix
+    return raw[: cap - len(suffix)] + suffix
 
 
 def _language_block(response_language: Optional[str]) -> str:
@@ -1609,15 +1617,17 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
     loop = asyncio.get_event_loop()
     try:
         if name == "query_odoo":
+            offset = max(int(args.get("offset", 0)), 0)
             records = await loop.run_in_executor(None, lambda: odoo.search_read(
                 args["model"],
                 args.get("domain", []),
                 args.get("fields", []),
-                min(int(args.get("limit", 20)), 100),
-                0,
+                min(int(args.get("limit", 20)), 500),
+                offset,
                 args.get("order", ""),
             ))
-            return {"ok": True, "count": len(records), "records": records}
+            return {"ok": True, "count": len(records), "offset": offset,
+                    "records": records}
 
         elif name == "count_odoo":
             count = await loop.run_in_executor(None, lambda: odoo.search_count(

@@ -78,6 +78,15 @@ export const getContextFile = (name: string, locale = 'fr') => api.get(`/context
 export const saveContextFile = (name: string, content: string, locale = 'fr') => api.put(`/context/file/${name}?locale=${encodeURIComponent(locale)}`, { content })
 export const deleteContextFile = (name: string, locale = 'fr') => api.delete(`/context/file/${name}?locale=${encodeURIComponent(locale)}`)
 
+// Creator
+export const getCreatorProjects = () => api.get('/creator/projects')
+export const dryRunCreatorChangeset = (data: object) => api.post('/creator/dry-run', data)
+export const applyCreatorChangeset = (data: object) => api.post('/creator/apply', data)
+export const rejectCreatorRequest = (data: object) => api.post('/creator/reject', data)
+export const documentCreatorChange = (data: object) => api.post('/creator/document', data)
+export const getCreatorHistory = (limit = 50) => api.get(`/creator/history?limit=${limit}`)
+export const getCreatorHistoryEntry = (id: number) => api.get(`/creator/history/${id}`)
+
 // User profile / settings
 export const getUserProfile = () => api.get('/settings/user-profile')
 export const saveUserProfile = (data: object) => api.post('/settings/user-profile', data)

@@ -112,6 +112,8 @@ def test_context_router_selects_business_domain_sections():
     assert "Comptabilité & Finance" in context
     assert "Patterns de diagnostic avancés" in context
     assert "# Factures impayées depuis > 90 jours" in context
+    assert "Réflexe Studio / Studio + Dev" in context
+    assert "`ir.actions.server`, `ir.cron`, `base.automation`" in context
     assert "Notes de version Odoo 18.0" not in context
     assert "Fabrication (MRP)" not in context
     assert "Point de Vente (POS)" not in context
@@ -318,6 +320,7 @@ def test_technical_complexity_context_guides_response_strategy():
     assert "Complexité technique du projet" in context
     assert "Studio + Dev" in context
     assert "standard, de Studio ou du code custom" in context
+    assert "actions serveur, actions planifiées, automatisations et record rules" in context
 
 
 @pytest.mark.asyncio
