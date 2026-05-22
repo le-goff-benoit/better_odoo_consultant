@@ -16,6 +16,8 @@ export interface PreviewResult {
   view_type?: string
   before_arch?: string
   after_arch?: string
+  field_info?: FieldInfoMap
+  sample_values?: SampleValues
   // report
   report_name?: string
   report_label?: string
@@ -130,12 +132,210 @@ type FieldKind =
   | 'boolean' | 'many2one' | 'tags' | 'selection'
   | 'text' | 'date' | 'numeric' | 'image' | 'char'
 
-/** Best-effort field type from the arch — the widget attribute first, then
- *  name heuristics (the arch carries no ttype). Drives the input shape so the
- *  consultant recognizes a many2one / date / text area at a glance. */
-function fieldKind(el: Element): FieldKind {
+type FieldInfo = {
+  string?: string
+  type?: string
+  selection?: Array<[unknown, string] | unknown[]>
+  relation?: string
+}
+type FieldInfoMap = Record<string, FieldInfo>
+type SampleValues = Record<string, unknown>
+
+type ViewSampleProps = {
+  fieldInfo?: FieldInfoMap
+  sampleValues?: SampleValues
+}
+
+type VisibilityState = 'visible' | 'hidden' | 'conditional'
+
+function fieldLabel(el: Element, fieldInfo?: FieldInfoMap): string {
+  const name = el.getAttribute('name') || ''
+  return el.getAttribute('string') || fieldInfo?.[name]?.string || humanize(name)
+}
+
+function parseMaybeObject(raw: string | null): unknown {
+  if (!raw) return null
+  const normalized = raw
+    .replace(/\(/g, '[')
+    .replace(/\)/g, ']')
+    .replace(/\bTrue\b/g, 'true')
+    .replace(/\bFalse\b/g, 'false')
+    .replace(/\bNone\b/g, 'null')
+    .replace(/'/g, '"')
+  try {
+    return JSON.parse(normalized)
+  } catch {
+    return null
+  }
+}
+
+function comparableValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return false
+    if (value.length >= 2 && (typeof value[0] === 'number' || typeof value[0] === 'string')) {
+      return value[0]
+    }
+    return value.map(comparableValue)
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    return obj.id ?? obj.value ?? obj.name ?? value
+  }
+  return value
+}
+
+function isEmptyOdooValue(value: unknown): boolean {
+  return value === false || value === null || value === undefined || value === ''
+    || (Array.isArray(value) && value.length === 0)
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  if (isEmptyOdooValue(left) && isEmptyOdooValue(right)) return true
+  return String(comparableValue(left)) === String(comparableValue(right))
+}
+
+function evalCondition(term: unknown, sampleValues?: SampleValues): boolean | null {
+  if (!Array.isArray(term) || term.length < 3) return null
+  const [field, op, expected] = term
+  if (typeof field !== 'string' || typeof op !== 'string') return null
+  const actual = sampleValues?.[field]
+  const left = comparableValue(actual)
+  const right = comparableValue(expected)
+  switch (op) {
+    case '=':
+    case '==':
+      return valuesEqual(actual, expected)
+    case '!=':
+    case '<>':
+      return !valuesEqual(actual, expected)
+    case 'in':
+      return Array.isArray(expected)
+        ? expected.some(v => valuesEqual(actual, v))
+        : String(expected).includes(String(left ?? ''))
+    case 'not in':
+      return Array.isArray(expected)
+        ? !expected.some(v => valuesEqual(actual, v))
+        : !String(expected).includes(String(left ?? ''))
+    case '>':
+      return Number(left) > Number(right)
+    case '>=':
+      return Number(left) >= Number(right)
+    case '<':
+      return Number(left) < Number(right)
+    case '<=':
+      return Number(left) <= Number(right)
+    case 'ilike':
+    case 'like':
+      return String(left ?? '').toLowerCase().includes(String(right ?? '').toLowerCase())
+    case 'not ilike':
+    case 'not like':
+      return !String(left ?? '').toLowerCase().includes(String(right ?? '').toLowerCase())
+    default:
+      return null
+  }
+}
+
+function evalDomainNode(node: unknown, sampleValues?: SampleValues): boolean | null {
+  if (!Array.isArray(node)) return null
+  if (node.length >= 3 && typeof node[0] === 'string' && typeof node[1] === 'string') {
+    return evalCondition(node, sampleValues)
+  }
+  if (node[0] === '|') {
+    const left = evalDomainNode(node[1], sampleValues)
+    const right = evalDomainNode(node[2], sampleValues)
+    return left === null || right === null ? null : left || right
+  }
+  if (node[0] === '&') {
+    const left = evalDomainNode(node[1], sampleValues)
+    const right = evalDomainNode(node[2], sampleValues)
+    return left === null || right === null ? null : left && right
+  }
+  if (node[0] === '!') {
+    const value = evalDomainNode(node[1], sampleValues)
+    return value === null ? null : !value
+  }
+  const values = node.map(part => evalDomainNode(part, sampleValues))
+  if (values.some(v => v === null)) return null
+  return values.every(Boolean)
+}
+
+function evalInlineExpression(expr: string | null, sampleValues?: SampleValues): boolean | null {
+  const raw = (expr || '').trim()
+  if (!raw || raw === '0' || raw.toLowerCase() === 'false') return false
+  if (raw === '1' || raw.toLowerCase() === 'true') return true
+  const match = raw.match(/^([A-Za-z_][\w.]*)\s*(==|=|!=|<>|not in|in|>=|<=|>|<)\s*(.+)$/)
+  if (!match) {
+    if (/^[A-Za-z_]\w*$/.test(raw)) return !isEmptyOdooValue(sampleValues?.[raw])
+    return null
+  }
+  const [, field, op, rhs] = match
+  const parsed = parseMaybeObject(rhs)
+  const expected = parsed !== null
+    ? parsed
+    : rhs.replace(/^["']|["']$/g, '')
+  return evalCondition([field, op, expected], sampleValues)
+}
+
+function invisibleCondition(el: Element): unknown {
+  const modifiers = parseMaybeObject(el.getAttribute('modifiers'))
+  if (modifiers && typeof modifiers === 'object' && !Array.isArray(modifiers)) {
+    const value = (modifiers as Record<string, unknown>).invisible
+    if (value !== undefined) return value
+  }
+  const attrs = parseMaybeObject(el.getAttribute('attrs'))
+  if (attrs && typeof attrs === 'object' && !Array.isArray(attrs)) {
+    const value = (attrs as Record<string, unknown>).invisible
+    if (value !== undefined) return value
+  }
+  return el.getAttribute('invisible') || el.getAttribute('column_invisible')
+}
+
+function visibilityState(el: Element, sampleValues?: SampleValues): VisibilityState {
+  if (isStaticInvisible(el)) return 'hidden'
+  const condition = invisibleCondition(el)
+  if (condition === null || condition === undefined || condition === '') return 'visible'
+  if (typeof condition === 'boolean') return condition ? 'hidden' : 'visible'
+  if (Array.isArray(condition)) {
+    const value = evalDomainNode(condition, sampleValues)
+    return value === null ? 'conditional' : value ? 'hidden' : 'visible'
+  }
+  if (typeof condition === 'string') {
+    const value = evalInlineExpression(condition, sampleValues)
+    return value === null ? 'conditional' : value ? 'hidden' : 'visible'
+  }
+  return 'conditional'
+}
+
+function isHiddenForSample(el: Element, sampleValues?: SampleValues): boolean {
+  return visibilityState(el, sampleValues) === 'hidden'
+}
+
+function kindFromOdooType(ttype?: string): FieldKind | null {
+  switch ((ttype || '').toLowerCase()) {
+    case 'boolean': return 'boolean'
+    case 'many2one': return 'many2one'
+    case 'many2many':
+    case 'one2many': return 'tags'
+    case 'selection': return 'selection'
+    case 'text':
+    case 'html': return 'text'
+    case 'date':
+    case 'datetime': return 'date'
+    case 'float':
+    case 'integer':
+    case 'monetary': return 'numeric'
+    case 'binary': return 'image'
+    case 'char': return 'char'
+    default: return null
+  }
+}
+
+/** Best-effort field type from the arch and Odoo metadata. The widget wins,
+ * then fields_get metadata, then name heuristics as fallback. */
+function fieldKind(el: Element, fieldInfo?: FieldInfoMap): FieldKind {
   const w = (el.getAttribute('widget') || '').toLowerCase()
-  const name = (el.getAttribute('name') || '').toLowerCase()
+  const rawName = el.getAttribute('name') || ''
+  const name = rawName.toLowerCase()
   if (w) {
     if (w.includes('boolean') || w === 'checkbox' || w === 'toggle') return 'boolean'
     if (w.includes('tags')) return 'tags'
@@ -148,6 +348,8 @@ function fieldKind(el: Element): FieldKind {
         || w === 'percentage' || w === 'float_time') return 'numeric'
     return 'char'
   }
+  const metaKind = kindFromOdooType((fieldInfo?.[rawName] || fieldInfo?.[name])?.type)
+  if (metaKind) return metaKind
   if (name.endsWith('_ids')) return 'tags'
   if (name.endsWith('_id')) return 'many2one'
   if (name === 'state' || name.endsWith('stage_id')) return 'selection'
@@ -159,25 +361,79 @@ function fieldKind(el: Element): FieldKind {
   return 'char'
 }
 
+function selectionLabel(value: unknown, info?: FieldInfo): string | null {
+  const selection = info?.selection || []
+  for (const item of selection) {
+    if (!Array.isArray(item) || item.length < 2) continue
+    if (String(item[0]) === String(value)) return String(item[1])
+  }
+  return null
+}
+
+function valueText(value: unknown, kind: FieldKind, info?: FieldInfo): string {
+  if (value === null || value === undefined || value === false || value === '') return ''
+  if (kind === 'selection') {
+    const label = selectionLabel(value, info)
+    if (label) return label
+  }
+  if (Array.isArray(value)) {
+    if (kind === 'many2one' && value.length >= 2) return String(value[1] || '')
+    const labels = value.map(item => {
+      if (Array.isArray(item) && item.length >= 2) return String(item[1] || item[0])
+      if (item && typeof item === 'object') {
+        const obj = item as Record<string, unknown>
+        return String(obj.display_name || obj.name || obj.id || '')
+      }
+      return String(item)
+    }).filter(Boolean)
+    return labels.slice(0, 3).join(', ')
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    return String(obj.display_name || obj.name || obj.id || '')
+  }
+  const text = String(value)
+  return text.length > 72 ? `${text.slice(0, 69)}...` : text
+}
+
 /** The schematic input control for a field, shaped by its kind. */
-function FieldValue({ kind }: { kind: FieldKind }) {
+function FieldValue({ kind, value, info }: { kind: FieldKind; value?: unknown; info?: FieldInfo }) {
+  const text = valueText(value, kind, info)
   const box: CSSProperties = {
     border: `1px solid ${ODOO.inputBorder}`, background: ODOO.inputBg,
     borderRadius: 3, height: 20,
   }
   if (kind === 'boolean') {
     return <span style={{ ...box, width: 13, height: 13, borderRadius: 2,
-      borderWidth: 1.5, display: 'inline-block' }} />
+      borderWidth: 1.5, display: 'inline-flex', alignItems: 'center',
+      justifyContent: 'center', fontSize: 10, color: ODOO.primary,
+      fontWeight: 800 }}>{value === true ? '✓' : ''}</span>
   }
-  if (kind === 'text') return <span style={{ ...box, height: 42, display: 'block' }} />
+  if (kind === 'text') {
+    return <span style={{
+      ...box, minHeight: 42, height: 'auto', display: 'block',
+      padding: text ? '5px 7px' : 0, color: ODOO.text, fontSize: 10.5,
+      lineHeight: 1.35, overflow: 'hidden',
+    }}>{text}</span>
+  }
   if (kind === 'image') {
     return <span style={{ ...box, width: 50, height: 50, display: 'inline-block' }} />
   }
-  if (kind === 'numeric') return <span style={{ ...box, width: 104, display: 'inline-block' }} />
+  if (kind === 'numeric') {
+    return <span style={{
+      ...box, width: 118, display: 'inline-flex', alignItems: 'center',
+      justifyContent: 'flex-end', padding: '0 6px', color: ODOO.text,
+      fontSize: 10.5,
+    }}>{text}</span>
+  }
   if (kind === 'date') {
     return (
       <span style={{ ...box, width: 132, display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'flex-end' }}>
+        alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{
+          minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap', paddingLeft: 6, fontSize: 10.5, color: ODOO.text,
+        }}>{text}</span>
         <span style={{
           width: 19, height: '100%', borderLeft: `1px solid ${ODOO.inputBorder}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -187,13 +443,17 @@ function FieldValue({ kind }: { kind: FieldKind }) {
     )
   }
   if (kind === 'tags') {
+    const tags = text ? text.split(',').map(t => t.trim()).filter(Boolean).slice(0, 3) : []
     return (
-      <span style={{ display: 'inline-flex', gap: 4 }}>
-        {[58, 42].map((w, i) => (
+      <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+        {(tags.length ? tags : ['', '']).map((tag, i) => (
           <span key={i} style={{
-            width: w, height: 15, borderRadius: 8,
+            minWidth: tag ? 0 : (i === 0 ? 58 : 42), height: 16, borderRadius: 8,
             background: '#ece7ea', border: `1px solid ${ODOO.border}`,
-          }} />
+            padding: tag ? '1px 6px' : 0, fontSize: 9.5, color: ODOO.text,
+            maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>{tag}</span>
         ))}
       </span>
     )
@@ -202,23 +462,36 @@ function FieldValue({ kind }: { kind: FieldKind }) {
     return (
       <span style={{
         ...box, width: kind === 'selection' ? 168 : '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
+        <span style={{
+          minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap', paddingLeft: 6, color: ODOO.text, fontSize: 10.5,
+        }}>{text}</span>
         <span style={{ fontSize: 8, color: ODOO.muted, paddingRight: 6 }}>▼</span>
       </span>
     )
   }
-  return <span style={{ ...box, display: 'block' }} />
+  return <span style={{
+    ...box, display: 'block', padding: text ? '3px 6px' : 0,
+    color: ODOO.text, fontSize: 10.5, overflow: 'hidden',
+    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  }}>{text}</span>
 }
 
-function FieldRow({ el, added }: { el: Element; added: Added }) {
+function FieldRow({ el, added, fieldInfo, sampleValues }: {
+  el: Element; added: Added
+} & ViewSampleProps) {
   const name = el.getAttribute('name') || ''
+  const visibility = visibilityState(el, sampleValues)
+  if (visibility === 'hidden') return null
   if ((el.getAttribute('widget') || '').toLowerCase() === 'statusbar') return null
-  const label = el.getAttribute('string') || humanize(name)
+  const label = fieldLabel(el, fieldInfo)
   const isNew = !!name && added.fields.has(name)
-  const kind = fieldKind(el)
-  // `invisible` present but not a static "1"/"True" → conditionally shown.
-  const conditional = el.hasAttribute('invisible') && !isStaticInvisible(el)
+  const kind = fieldKind(el, fieldInfo)
+  const info = fieldInfo?.[name]
+  const value = sampleValues?.[name]
+  const conditional = visibility === 'conditional'
   return (
     <div data-preview-added={isNew ? 'true' : undefined} style={{
       display: 'grid', gridTemplateColumns: 'minmax(64px, 36%) 1fr', gap: 10,
@@ -240,39 +513,46 @@ function FieldRow({ el, added }: { el: Element; added: Added }) {
         )}
         {isNew && <NewBadge />}
       </span>
-      <FieldValue kind={kind} />
+      <FieldValue kind={kind} value={value} info={info} />
     </div>
   )
 }
 
 /** A single column of a group: stacked label|value field rows. */
-function GroupColumn({ el, added }: { el: Element; added: Added }) {
+function GroupColumn({ el, added, fieldInfo, sampleValues }: {
+  el: Element; added: Added
+} & ViewSampleProps) {
   const rows: ReactNode[] = []
   Array.from(el.children).forEach((child, i) => {
-    if (isStaticInvisible(child)) return
+    if (isHiddenForSample(child, sampleValues)) return
     const tag = child.tagName.toLowerCase()
     if (tag === 'field') {
-      rows.push(<FieldRow key={i} el={child} added={added} />)
+      rows.push(<FieldRow key={i} el={child} added={added}
+        fieldInfo={fieldInfo} sampleValues={sampleValues} />)
     } else if (tag === 'group') {
-      rows.push(<GroupNode key={i} el={child} added={added} />)
+      rows.push(<GroupNode key={i} el={child} added={added}
+        fieldInfo={fieldInfo} sampleValues={sampleValues} />)
     } else if (tag === 'separator') {
       rows.push(<Separator key={i} el={child} />)
     } else if (tag === 'label') {
       // Odoo label/field manual pairs — the field carries its own label.
     } else if (child.querySelector?.('field')) {
       Array.from(child.querySelectorAll(':scope field'))
-        .filter(f => !isStaticInvisible(f))
-        .forEach((f, j) => rows.push(<FieldRow key={`${i}-${j}`} el={f} added={added} />))
+        .filter(f => !isHiddenForSample(f, sampleValues))
+        .forEach((f, j) => rows.push(<FieldRow key={`${i}-${j}`} el={f} added={added}
+          fieldInfo={fieldInfo} sampleValues={sampleValues} />))
     }
   })
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{rows}</div>
 }
 
 /** A <group>: nested groups become side-by-side columns; bare fields stack. */
-function GroupNode({ el, added }: { el: Element; added: Added }) {
+function GroupNode({ el, added, fieldInfo, sampleValues }: {
+  el: Element; added: Added
+} & ViewSampleProps) {
   const title = el.getAttribute('string')
   const childGroups = Array.from(el.children)
-    .filter(c => c.tagName.toLowerCase() === 'group' && !isStaticInvisible(c))
+    .filter(c => c.tagName.toLowerCase() === 'group' && !isHiddenForSample(c, sampleValues))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {title && <SectionTitle>{title}</SectionTitle>}
@@ -280,21 +560,26 @@ function GroupNode({ el, added }: { el: Element; added: Added }) {
         <div style={{ display: 'flex', gap: 30, flexWrap: 'wrap' }}>
           {childGroups.map((g, i) => (
             <div key={i} style={{ flex: '1 1 260px', minWidth: 210 }}>
-              <GroupColumn el={g} added={added} />
+              <GroupColumn el={g} added={added}
+                fieldInfo={fieldInfo} sampleValues={sampleValues} />
             </div>
           ))}
         </div>
       ) : (
-        <GroupColumn el={el} added={added} />
+        <GroupColumn el={el} added={added}
+          fieldInfo={fieldInfo} sampleValues={sampleValues} />
       )}
     </div>
   )
 }
 
-function HeaderButton({ el }: { el: Element }) {
+function HeaderButton({ el, sampleValues }: { el: Element; sampleValues?: SampleValues }) {
   const label = el.getAttribute('string') || humanize(el.getAttribute('name') || 'Action')
   const cls = el.getAttribute('class') || ''
   const primary = cls.includes('oe_highlight') || cls.includes('btn-primary')
+  const visibility = visibilityState(el, sampleValues)
+  if (visibility === 'hidden') return null
+  const conditional = visibility === 'conditional'
   return (
     <span style={{
       fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 3,
@@ -302,15 +587,46 @@ function HeaderButton({ el }: { el: Element }) {
       border: `1px solid ${primary ? ODOO.primary : ODOO.inputBorder}`,
       background: primary ? ODOO.primary : ODOO.sheet,
       color: primary ? ODOO.primaryText : ODOO.text,
-    }}>{label}</span>
+      opacity: conditional ? 0.38 : 1,
+    }} title={conditional ? 'Bouton affiché conditionnellement dans Odoo' : undefined}>{label}</span>
   )
 }
 
-function StatusBar({ el }: { el: Element }) {
+type StatusStep = { value: string; label: string }
+
+function statusbarSteps(field?: Element, fieldInfo?: FieldInfoMap): StatusStep[] {
+  const name = field?.getAttribute('name') || ''
+  const visible = field?.getAttribute('statusbar_visible')
+  const values = visible
+    ? visible.split(',').map(v => v.trim()).filter(Boolean)
+    : []
+  const selection = fieldInfo?.[name]?.selection || []
+  if (selection.length) {
+    const allSteps = selection
+      .filter(item => Array.isArray(item) && item.length >= 2)
+      .map(item => ({ value: String(item[0]), label: String(item[1]) }))
+    const filtered = values.length
+      ? allSteps.filter(step => values.includes(step.value))
+      : allSteps
+    if (filtered.length) return filtered.slice(0, 5)
+  }
+  const fallback = ['draft', 'sent', 'sale']
+  return (values.length ? values : fallback)
+    .slice(0, 5)
+    .map(value => ({ value, label: humanize(value) }))
+}
+
+function StatusBar({ el, fieldInfo, sampleValues }: {
+  el: Element
+} & ViewSampleProps) {
   const buttons = Array.from(el.querySelectorAll(':scope > button'))
-    .filter(b => !isStaticInvisible(b))
-  const hasStatus = Array.from(el.querySelectorAll(':scope > field'))
-    .some(f => (f.getAttribute('widget') || '') === 'statusbar')
+    .filter(b => !isHiddenForSample(b, sampleValues))
+  const statusField = Array.from(el.querySelectorAll(':scope > field'))
+    .find(f => (f.getAttribute('widget') || '') === 'statusbar')
+  const steps = statusbarSteps(statusField, fieldInfo)
+  const statusName = statusField?.getAttribute('name') || ''
+  const statusValue = sampleValues?.[statusName]
+  const activeIndex = steps.findIndex(step => String(step.value) === String(statusValue))
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -319,46 +635,84 @@ function StatusBar({ el }: { el: Element }) {
       borderRadius: 0, padding: '8px 10px',
     }}>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-        {buttons.slice(0, 9).map((b, i) => <HeaderButton key={i} el={b} />)}
+        {buttons.slice(0, 9).map((b, i) => (
+          <HeaderButton key={i} el={b} sampleValues={sampleValues} />
+        ))}
       </div>
-      {hasStatus && (
-        <div style={{ display: 'flex' }}>
-          {[0, 1, 2].map(i => (
-            <span key={i} style={{
-              height: 16, width: 34, marginLeft: i ? -7 : 0,
-              background: i === 2 ? ODOO.primary : '#e6e6ea',
-              clipPath: 'polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 0 100%, 7px 50%)',
-            }} />
-          ))}
+      {statusField && (
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+          {steps.map((step, i) => {
+            const active = activeIndex >= 0 ? i === activeIndex : i === Math.min(steps.length - 1, 1)
+            return (
+              <span key={`${step.value}-${i}`} style={{
+                minWidth: 58, maxWidth: 118, height: 22, marginLeft: i ? -8 : 0,
+                padding: '0 15px 0 12px',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: active ? ODOO.primary : '#e6e6ea',
+                color: active ? '#fff' : ODOO.muted,
+                fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap',
+                overflow: 'hidden', textOverflow: 'ellipsis',
+                clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%, 8px 50%)',
+              }} title={step.label}>
+                {step.label}
+              </span>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-function ButtonBox({ el }: { el: Element }) {
+function smartButtonIcon(el: Element) {
+  const raw = `${el.getAttribute('name') || ''} ${el.getAttribute('string') || ''}`.toLowerCase()
+  if (raw.includes('invoice') || raw.includes('facture')) return '▤'
+  if (raw.includes('delivery') || raw.includes('picking') || raw.includes('dropship')) return '▦'
+  if (raw.includes('project')) return '▥'
+  if (raw.includes('timesheet')) return '◷'
+  if (raw.includes('purchase')) return '◇'
+  if (raw.includes('spreadsheet')) return '▧'
+  if (raw.includes('sale')) return '◫'
+  return '□'
+}
+
+function ButtonBox({ el, sampleValues }: { el: Element; sampleValues?: SampleValues }) {
   const buttons = Array.from(el.querySelectorAll(':scope > button'))
-    .filter(b => !isStaticInvisible(b))
+    .filter(b => !isHiddenForSample(b, sampleValues))
   if (!buttons.length) return null
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-      {buttons.slice(0, 8).map((b, i) => (
-        <span key={i} style={{
-          display: 'inline-flex', flexDirection: 'column', minWidth: 58,
-          border: `1px solid ${ODOO.border}`, borderRadius: 3, padding: '4px 9px',
-          background: ODOO.sheet, fontSize: 9.5, fontWeight: 600, color: ODOO.stat,
-        }}>
-          <span style={{ fontSize: 12, fontWeight: 800 }}>—</span>
-          {b.getAttribute('string') || humanize(b.getAttribute('name') || '')}
-        </span>
-      ))}
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      {buttons.slice(0, 8).map((b, i) => {
+        const conditional = visibilityState(b, sampleValues) === 'conditional'
+        return (
+          <span key={i} style={{
+            display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr)', alignItems: 'center',
+            minWidth: 120, maxWidth: 180, minHeight: 42,
+            border: `1px solid ${ODOO.border}`, borderRadius: 3, padding: '5px 8px',
+            background: conditional ? '#fafafa' : ODOO.sheet,
+            fontSize: 9.5, fontWeight: 600, color: ODOO.stat,
+            opacity: conditional ? 0.42 : 1,
+          }}>
+            <span style={{
+              width: 18, height: 18, borderRadius: 3,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              background: '#f1edf1', color: ODOO.primary, fontSize: 12, fontWeight: 800,
+            }}>{smartButtonIcon(b)}</span>
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {b.getAttribute('string') || humanize(b.getAttribute('name') || '')}
+            </span>
+          </span>
+        )
+      })}
     </div>
   )
 }
 
-function Notebook({ el, added }: { el: Element; added: Added }) {
+function Notebook({ el, added, fieldInfo, sampleValues }: {
+  el: Element; added: Added
+} & ViewSampleProps) {
   const pages = Array.from(el.children)
-    .filter(c => c.tagName.toLowerCase() === 'page' && !isStaticInvisible(c))
+    .filter(c => c.tagName.toLowerCase() === 'page' && !isHiddenForSample(c, sampleValues))
   const [active, setActive] = useState(0)
   const preferred = pages.findIndex((p, i) => added.pages.has(pageLabel(p, i)) || containsAddedField(p, added))
   useEffect(() => {
@@ -394,33 +748,43 @@ function Notebook({ el, added }: { el: Element; added: Added }) {
           )
         })}
       </div>
-      <div style={{ padding: '16px 0 4px' }}>{renderSheetChildren(page, added)}</div>
+      <div style={{ padding: '16px 0 4px' }}>
+        {renderSheetChildren(page, added, fieldInfo, sampleValues)}
+      </div>
     </div>
   )
 }
 
 /** The <div class="oe_title"> block — the prominent record title (e.g. the
  *  order reference), rendered larger than ordinary fields. */
-function TitleBlock({ el, added }: { el: Element; added: Added }) {
-  const fields = Array.from(el.querySelectorAll('field')).filter(f => !isStaticInvisible(f))
+function TitleBlock({ el, added, fieldInfo, sampleValues }: {
+  el: Element; added: Added
+} & ViewSampleProps) {
+  const fields = Array.from(el.querySelectorAll('field'))
+    .filter(f => !isHiddenForSample(f, sampleValues))
   if (!fields.length) return null
   return (
     <div style={{ borderBottom: `1px solid ${ODOO.border}`, paddingBottom: 8 }}>
       {fields.map((f, i) => {
         const name = f.getAttribute('name') || ''
         const isNew = added.fields.has(name)
+        const kind = fieldKind(f, fieldInfo)
+        const text = valueText(sampleValues?.[name], kind, fieldInfo?.[name])
         return (
           <div key={i} style={{ marginBottom: 5 }}>
             <span style={{
               fontSize: 8.5, color: ODOO.muted, textTransform: 'uppercase', letterSpacing: 0.4,
             }}>
-              {f.getAttribute('string') || humanize(name)}
+              {fieldLabel(f, fieldInfo)}
             </span>
             <div style={{
-              height: i === 0 ? 24 : 18, width: i === 0 ? '60%' : '42%', marginTop: 2,
+              minHeight: i === 0 ? 24 : 18, width: i === 0 ? '60%' : '42%', marginTop: 2,
               background: ODOO.field, border: `1px solid ${ODOO.inputBorder}`, borderRadius: 3,
               outline: isNew ? `2px solid ${ODOO.added}` : 'none',
-            }} />
+              padding: text ? (i === 0 ? '2px 8px' : '1px 7px') : 0,
+              color: ODOO.text, fontSize: i === 0 ? 16 : 12, fontWeight: i === 0 ? 650 : 500,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{text}</div>
           </div>
         )
       })}
@@ -430,9 +794,14 @@ function TitleBlock({ el, added }: { el: Element; added: Added }) {
 
 /** Render the children of a <sheet> (or a notebook page). Consecutive sibling
  *  <group> elements are laid out side by side as columns, the way Odoo does. */
-function renderSheetChildren(el: Element, added: Added): ReactNode {
+function renderSheetChildren(
+  el: Element,
+  added: Added,
+  fieldInfo?: FieldInfoMap,
+  sampleValues?: SampleValues,
+): ReactNode {
   const out: ReactNode[] = []
-  const children = Array.from(el.children).filter(c => !isStaticInvisible(c))
+  const children = Array.from(el.children).filter(c => !isHiddenForSample(c, sampleValues))
   let i = 0
   let k = 0
   while (i < children.length) {
@@ -446,12 +815,14 @@ function renderSheetChildren(el: Element, added: Added): ReactNode {
       }
       out.push(
         run.length === 1
-          ? <GroupNode key={k++} el={run[0]} added={added} />
+          ? <GroupNode key={k++} el={run[0]} added={added}
+            fieldInfo={fieldInfo} sampleValues={sampleValues} />
           : (
             <div key={k++} style={{ display: 'flex', gap: 30, flexWrap: 'wrap' }}>
               {run.map((g, j) => (
                 <div key={j} style={{ flex: '1 1 260px', minWidth: 210 }}>
-                  <GroupNode el={g} added={added} />
+                  <GroupNode el={g} added={added}
+                    fieldInfo={fieldInfo} sampleValues={sampleValues} />
                 </div>
               ))}
             </div>
@@ -460,44 +831,55 @@ function renderSheetChildren(el: Element, added: Added): ReactNode {
       continue
     }
     if (tag === 'div' && cls.includes('oe_button_box')) {
-      out.push(<ButtonBox key={k++} el={child} />)
+      out.push(<ButtonBox key={k++} el={child} sampleValues={sampleValues} />)
     } else if (tag === 'div' && cls.includes('oe_title')) {
-      out.push(<TitleBlock key={k++} el={child} added={added} />)
+      out.push(<TitleBlock key={k++} el={child} added={added}
+        fieldInfo={fieldInfo} sampleValues={sampleValues} />)
     } else if (tag === 'notebook') {
-      out.push(<Notebook key={k++} el={child} added={added} />)
+      out.push(<Notebook key={k++} el={child} added={added}
+        fieldInfo={fieldInfo} sampleValues={sampleValues} />)
     } else if (tag === 'field') {
-      out.push(<FieldRow key={k++} el={child} added={added} />)
+      out.push(<FieldRow key={k++} el={child} added={added}
+        fieldInfo={fieldInfo} sampleValues={sampleValues} />)
     } else if (tag === 'separator') {
       out.push(<Separator key={k++} el={child} />)
     } else if (child.children.length) {
-      out.push(<div key={k++}>{renderSheetChildren(child, added)}</div>)
+      out.push(<div key={k++}>
+        {renderSheetChildren(child, added, fieldInfo, sampleValues)}
+      </div>)
     }
     i++
   }
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>{out}</div>
 }
 
-function FormView({ root, added }: { root: Element; added: Added }) {
+function FormView({ root, added, fieldInfo, sampleValues }: {
+  root: Element; added: Added
+} & ViewSampleProps) {
   const children = Array.from(root.children)
   const header = children.find(c => c.tagName.toLowerCase() === 'header')
   const sheet = children.find(c => c.tagName.toLowerCase() === 'sheet')
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {header && <StatusBar el={header} />}
+      {header && <StatusBar el={header}
+        fieldInfo={fieldInfo} sampleValues={sampleValues} />}
       <div style={{
         background: ODOO.sheet, border: `1px solid ${ODOO.border}`, borderRadius: 0,
         boxShadow: '0 1px 4px rgba(0,0,0,.10)', padding: '24px 28px 30px',
         maxWidth: 980, width: '100%', margin: '0 auto',
       }}>
-        {renderSheetChildren(sheet || root, added)}
+        {renderSheetChildren(sheet || root, added, fieldInfo, sampleValues)}
       </div>
     </div>
   )
 }
 
-function ListView({ root, added }: { root: Element; added: Added }) {
+function ListView({ root, added, fieldInfo, sampleValues }: {
+  root: Element; added: Added
+} & ViewSampleProps) {
   const cols = Array.from(root.querySelectorAll(':scope > field'))
-    .filter(f => !isStaticInvisible(f))
+    .filter(f => !isHiddenForSample(f, sampleValues))
+  const hasSample = cols.some(f => sampleValues?.[f.getAttribute('name') || ''] !== undefined)
   return (
     <div style={{
       background: ODOO.sheet, border: `1px solid ${ODOO.border}`,
@@ -515,13 +897,33 @@ function ListView({ root, added }: { root: Element; added: Added }) {
                   borderBottom: `1px solid ${ODOO.border}`, background: '#f6f6f8',
                   whiteSpace: 'nowrap', outline: isNew ? `2px solid ${ODOO.added}` : 'none',
                 }}>
-                  {f.getAttribute('string') || humanize(name)}
+                  {fieldLabel(f, fieldInfo)}
                 </th>
               )
             })}
           </tr>
         </thead>
         <tbody>
+          {hasSample && (
+            <tr>
+              {cols.map((f, i) => {
+                const name = f.getAttribute('name') || ''
+                const kind = fieldKind(f, fieldInfo)
+                const text = valueText(sampleValues?.[name], kind, fieldInfo?.[name])
+                return (
+                  <td key={i} style={{
+                    padding: '7px 9px', borderBottom: `1px solid ${ODOO.border}`,
+                    color: ODOO.text, maxWidth: 210,
+                  }}>
+                    <span style={{
+                      display: 'block', minHeight: 12, overflow: 'hidden',
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{text}</span>
+                  </td>
+                )
+              })}
+            </tr>
+          )}
           {[0, 1, 2, 3].map(r => (
             <tr key={r}>
               {cols.map((_, i) => (
@@ -540,7 +942,12 @@ function ListView({ root, added }: { root: Element; added: Added }) {
   )
 }
 
-function ViewWireframe({ arch, added }: { arch: string; added: Added }) {
+function ViewWireframe({ arch, added, fieldInfo, sampleValues, record, model }: {
+  arch: string
+  added: Added
+  record?: { id: number; name: string }
+  model?: string
+} & ViewSampleProps) {
   const root = useMemo(() => parseArch(arch), [arch])
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -557,11 +964,13 @@ function ViewWireframe({ arch, added }: { arch: string; added: Added }) {
       background: ODOO.page, borderRadius: 0, color: ODOO.text,
       fontFamily: 'system-ui, sans-serif',
     }}>
-      <OdooChrome viewType={tag}>
+      <OdooChrome viewType={tag} record={record} model={model}>
         {tag === 'form' ? (
-          <FormView root={root} added={added} />
+          <FormView root={root} added={added}
+            fieldInfo={fieldInfo} sampleValues={sampleValues} />
         ) : tag === 'tree' || tag === 'list' ? (
-          <ListView root={root} added={added} />
+          <ListView root={root} added={added}
+            fieldInfo={fieldInfo} sampleValues={sampleValues} />
         ) : (
           <div style={{ padding: 14 }}>
             <div style={{ fontSize: 11, color: ODOO.muted, marginBottom: 8 }}>
@@ -587,8 +996,16 @@ function ViewWireframe({ arch, added }: { arch: string; added: Added }) {
   )
 }
 
-function OdooChrome({ viewType, children }: { viewType: string; children: ReactNode }) {
+function OdooChrome({
+  viewType, children, record, model,
+}: {
+  viewType: string
+  children: ReactNode
+  record?: { id: number; name: string }
+  model?: string
+}) {
   const title = viewType === 'form' ? 'Formulaire' : viewType === 'list' || viewType === 'tree' ? 'Liste' : humanize(viewType)
+  const breadcrumb = model ? humanize(model) : 'Ventes'
   return (
     <div style={{ minWidth: 420, background: ODOO.page }}>
       <div style={{
@@ -616,8 +1033,12 @@ function OdooChrome({ viewType, children }: { viewType: string; children: ReactN
             fontSize: 11, fontWeight: 600,
           }}>Action</button>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 10, color: ODOO.muted }}>Ventes / Aperçu Creator</div>
-            <div style={{ fontSize: 15, color: ODOO.text, fontWeight: 650 }}>{title}</div>
+            <div style={{ fontSize: 10, color: ODOO.muted }}>
+              {breadcrumb} / Aperçu Creator{record?.name ? ` / ${record.name}` : ''}
+            </div>
+            <div style={{ fontSize: 15, color: ODOO.text, fontWeight: 650 }}>
+              {record?.name || title}
+            </div>
           </div>
           <div style={{
             width: 150, height: 24, border: `1px solid ${ODOO.inputBorder}`,
@@ -679,7 +1100,7 @@ export default function CreatorPreviewModal({
   opSummary?: string
   onRequestChange: (instruction: string) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const [changeText, setChangeText] = useState('')
 
   useEffect(() => {
@@ -689,7 +1110,13 @@ export default function CreatorPreviewModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  useEffect(() => { if (!open) { setChangeText(''); setExpanded(false) } }, [open])
+  useEffect(() => {
+    if (open) {
+      setExpanded(true)
+      return
+    }
+    setChangeText('')
+  }, [open])
 
   const added = useMemo<Added>(() => {
     if (result?.kind !== 'view') return NO_ADD
@@ -816,6 +1243,12 @@ export default function CreatorPreviewModal({
                 </Hint>
               )}
 
+              {result.kind === 'view' && result.record && (
+                <Hint>
+                  Valeurs témoin chargées depuis Odoo : {result.record.name}
+                </Hint>
+              )}
+
               <div style={{ display: 'flex', gap: 14, marginTop: 12, alignItems: 'stretch' }}>
                 {result.kind === 'report' ? (
                   <>
@@ -830,10 +1263,14 @@ export default function CreatorPreviewModal({
                 ) : (
                   <>
                     <Pane title="Avant">
-                      <ViewWireframe arch={result.before_arch || ''} added={NO_ADD} />
+                      <ViewWireframe arch={result.before_arch || ''} added={NO_ADD}
+                        fieldInfo={result.field_info} sampleValues={result.sample_values}
+                        record={result.record} model={result.model} />
                     </Pane>
                     <Pane title="Après (proposé)">
-                      <ViewWireframe arch={result.after_arch || ''} added={added} />
+                      <ViewWireframe arch={result.after_arch || ''} added={added}
+                        fieldInfo={result.field_info} sampleValues={result.sample_values}
+                        record={result.record} model={result.model} />
                     </Pane>
                   </>
                 )}

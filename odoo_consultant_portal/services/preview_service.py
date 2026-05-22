@@ -28,7 +28,8 @@ import base64
 import html
 import logging
 import re
-from typing import Optional
+import xml.etree.ElementTree as ET
+from typing import Any, Optional
 
 import httpx
 
@@ -40,6 +41,7 @@ log = logging.getLogger(__name__)
 PREVIEWABLE_OPS = {"modify_view", "modify_report"}
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
+_SAMPLE_FIELD_LIMIT = 80
 
 
 async def _run(fn):
@@ -60,6 +62,99 @@ def _http_error_detail(resp: httpx.Response, max_chars: int = 1200) -> str:
     if len(text) > max_chars:
         text = text[:max_chars].rstrip() + "..."
     return f"HTTP {resp.status_code} {resp.reason_phrase}: {text}"
+
+
+def _field_names_from_arch(*arches: str) -> list[str]:
+    """Extract unique field names from one or more XML view architectures."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for arch in arches:
+        if not arch:
+            continue
+        try:
+            root = ET.fromstring(arch)
+        except ET.ParseError:
+            continue
+        for field in root.iter("field"):
+            name = field.attrib.get("name")
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+    return names
+
+
+def _sample_value(value: Any) -> Any:
+    """Keep preview sample values compact and JSON-friendly."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (list, tuple)):
+        out = [_sample_value(v) for v in value[:8]]
+        return out
+    if isinstance(value, dict):
+        return {str(k): _sample_value(v) for k, v in list(value.items())[:8]}
+    return str(value)
+
+
+async def _sample_record_for_view(odoo, model: str, arches: list[str]) -> dict:
+    """Read a recent record and field metadata for a view preview.
+
+    The preview remains read-only: it uses the active Odoo environment and
+    company context, but only calls fields_get/search_read.
+    """
+    try:
+        fields_meta = await _run(lambda: odoo.fields_get(
+            model, ["string", "type", "selection", "relation"]))
+    except Exception as exc:  # noqa: BLE001 - sample data is best-effort
+        log.info("Aperçu vue — fields_get impossible pour %s : %s", model, exc)
+        return {}
+
+    arch_fields = [
+        name for name in _field_names_from_arch(*arches)
+        if name in fields_meta and not str(name).startswith("__")
+    ]
+    # Avoid pulling huge binary/html values into the modal. The layout still
+    # gets their type from fields_meta, but their sample value stays empty.
+    readable_fields = [
+        name for name in arch_fields
+        if (fields_meta.get(name) or {}).get("type") not in {"binary", "html"}
+    ][: _SAMPLE_FIELD_LIMIT]
+    read_fields = list(dict.fromkeys(["display_name", *readable_fields]))
+
+    rows = []
+    try:
+        rows = await _run(lambda: odoo.search_read(
+            model, [], read_fields, limit=1, order="write_date desc, id desc"))
+    except Exception as exc:  # noqa: BLE001
+        log.info("Aperçu vue — record sample impossible pour %s : %s", model, exc)
+        try:
+            rows = await _run(lambda: odoo.search_read(
+                model, [], ["display_name"], limit=1, order="id desc"))
+        except Exception:
+            rows = []
+
+    row = rows[0] if rows else {}
+    sample_values = {
+        field: _sample_value(row.get(field))
+        for field in readable_fields
+        if field in row
+    }
+    sample_id = row.get("id")
+    sample_name = row.get("display_name") or (f"#{sample_id}" if sample_id else None)
+    field_info = {
+        name: {
+            "string": meta.get("string") or name,
+            "type": meta.get("type"),
+            "selection": meta.get("selection") or [],
+            "relation": meta.get("relation"),
+        }
+        for name, meta in fields_meta.items()
+        if name in arch_fields
+    }
+    return {
+        "record": {"id": sample_id, "name": sample_name} if sample_id else None,
+        "field_info": field_info,
+        "sample_values": sample_values,
+    }
 
 
 async def preview_operation(odoo, operations: list[dict], index: int,
@@ -112,6 +207,7 @@ async def preview_view_operation(odoo, operations: list[dict], index: int,
 
     executor = _Executor(odoo, dry=False, version=version, tag=False)
     after_arch = ""
+    sample_context: dict = {}
     valid = True
     error: Optional[str] = None
     try:
@@ -123,6 +219,9 @@ async def preview_view_operation(odoo, operations: list[dict], index: int,
             valid = False
             error = ("La vue modifiée n'a pas pu être réassemblée par Odoo — "
                      "l'héritage est probablement invalide.")
+        else:
+            sample_context = await _sample_record_for_view(
+                odoo, model, [before_arch, after_arch])
     except OperationError as exc:
         valid = False
         error = str(exc)
@@ -139,6 +238,7 @@ async def preview_view_operation(odoo, operations: list[dict], index: int,
         "model": model, "view_type": view_type,
         "before_arch": before_arch, "after_arch": after_arch,
         "rollback_warnings": rb_errors,
+        **sample_context,
     }
 
 

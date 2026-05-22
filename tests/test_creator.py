@@ -10,7 +10,11 @@ from odoo_consultant_portal.services.creator_service import (
 from odoo_consultant_portal.services.creator_executor import (
     apply_changeset, _inherited_view_name, _normalize_inherit_arch,
 )
-from odoo_consultant_portal.services.preview_service import _http_error_detail
+from odoo_consultant_portal.services.preview_service import (
+    _field_names_from_arch,
+    _http_error_detail,
+    _sample_record_for_view,
+)
 
 
 # ── Inheritance arch normalization ───────────────────────────────
@@ -52,6 +56,16 @@ def test_report_preview_http_error_detail_keeps_odoo_message():
     assert "HTTP 500" in detail
     assert "QWebException" in detail
     assert "<pre>" not in detail
+
+
+def test_view_preview_extracts_unique_field_names_from_arches():
+    names = _field_names_from_arch(
+        '<form><field name="name"/><field name="partner_id"/></form>',
+        '<form><field name="partner_id"/><field name="amount_total"/></form>',
+        '<form><field></field></form>',
+    )
+
+    assert names == ["name", "partner_id", "amount_total"]
 
 
 # ── Inherited-view naming ────────────────────────────────────────
@@ -194,6 +208,40 @@ async def test_apply_unknown_operation_type_fails():
     result = await apply_changeset(fake, [{"type": "nuke", "params": {}}])
     assert not result["ok"]
     assert result["operations"][0]["status"] == "failed"
+
+
+async def test_view_preview_sample_record_uses_customer_data():
+    fake = FakeOdoo(
+        records={
+            "sale.order": [{
+                "id": 42,
+                "display_name": "S/2026/0044",
+                "partner_id": [7, "Deco Addict"],
+                "amount_total": 1240.5,
+                "image_128": "base64",
+            }],
+        },
+        field_types={
+            "sale.order": {
+                "name": "char",
+                "partner_id": "many2one",
+                "amount_total": "monetary",
+                "image_128": "binary",
+            },
+        },
+    )
+    arch = (
+        '<form><sheet><field name="name"/><field name="partner_id"/>'
+        '<field name="amount_total"/><field name="image_128"/></sheet></form>'
+    )
+
+    result = await _sample_record_for_view(fake, "sale.order", [arch])
+
+    assert result["record"] == {"id": 42, "name": "S/2026/0044"}
+    assert result["sample_values"]["partner_id"] == [7, "Deco Addict"]
+    assert result["sample_values"]["amount_total"] == 1240.5
+    assert "image_128" not in result["sample_values"]
+    assert result["field_info"]["partner_id"]["type"] == "many2one"
 
 
 async def test_apply_rolls_back_on_partial_failure():
