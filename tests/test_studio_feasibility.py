@@ -91,3 +91,75 @@ def test_changeset_verdict_is_feasible_when_all_ops_are():
 
 def test_empty_changeset_is_feasible():
     assert evaluate_changeset([])["verdict"] == "feasible"
+
+
+# ── Regression: xpath INSIDE arch (the real Creator payload shape) ───
+
+
+def test_extract_xpath_specs_from_arch():
+    """The xpath spec is inside <arch>, not in a flat op.xpath field."""
+    from odoo_consultant_portal.services.studio_feasibility_service import extract_xpath_specs
+    arch = (
+        '<data><xpath expr="//page[@name=\'other_information\']" position="inside">'
+        '<field name="x_anniversaire"/></xpath></data>'
+    )
+    assert extract_xpath_specs(arch) == [("//page[@name='other_information']", "inside")]
+
+
+def test_extract_xpath_specs_empty_on_bad_xml():
+    from odoo_consultant_portal.services.studio_feasibility_service import extract_xpath_specs
+    assert extract_xpath_specs("<broken") == []
+    assert extract_xpath_specs("") == []
+
+
+def test_modify_view_deep_xpath_in_arch_is_flagged_with_caveats():
+    """Regression for the screenshot bug: a deep xpath inside <arch> was
+    silently treated as feasible because the evaluator only looked at
+    op['xpath']. It must now reach with_caveats with a precise reason."""
+    arch = (
+        '<data><xpath expr="//form/sheet/notebook/page[@name=\'other_information\']/group" '
+        'position="inside"><field name="x_anniversaire"/></xpath></data>'
+    )
+    op = {"type": "modify_view", "params": {
+        "model": "sale.order", "arch": arch, "inherit_id": 42,
+    }}
+    result = evaluate_operation(op)
+    assert result["verdict"] == "with_caveats"
+    assert any("XPath complexe" in r for r in result["reasons"])
+    assert any("/form/sheet/notebook" in r for r in result["reasons"])
+
+
+def test_modify_view_simple_xpath_in_arch_stays_feasible():
+    arch = (
+        '<data><xpath expr="//page[@name=\'other_information\']" position="inside">'
+        '<field name="x_anniversaire"/></xpath></data>'
+    )
+    op = {"type": "modify_view", "params": {
+        "model": "sale.order", "arch": arch, "inherit_id": 42,
+    }}
+    assert evaluate_operation(op)["verdict"] == "feasible"
+
+
+def test_modify_view_replace_in_arch_is_with_caveats():
+    arch = (
+        '<data><xpath expr="//field[@name=\'partner_id\']" position="replace">'
+        '<field name="x_partner"/></xpath></data>'
+    )
+    op = {"type": "modify_view", "params": {
+        "model": "sale.order", "arch": arch, "inherit_id": 42,
+    }}
+    result = evaluate_operation(op)
+    assert result["verdict"] == "with_caveats"
+    assert any("replace" in r.lower() for r in result["reasons"])
+
+
+def test_modify_report_deep_xpath_in_arch_flagged():
+    arch = (
+        '<data><xpath expr="//t[@t-call=\'web.address_layout\']/div/div[2]" position="inside">'
+        '<span t-field="o.x_y"/></xpath></data>'
+    )
+    op = {"type": "modify_report", "params": {
+        "inherit_xmlid": "account.report_invoice_document", "arch": arch,
+    }}
+    result = evaluate_operation(op)
+    assert result["verdict"] == "with_caveats"

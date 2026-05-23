@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.45.0',
+    version: '0.46.0',
     date: '2026-05-23',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Fix faisabilité Studio sur modify_view / modify_report : le verdict mentait — il regardait `op.xpath` (jamais rempli) au lieu de parser les `<xpath expr="...">` dans le `arch`. Un xpath profond `//form/sheet/notebook/page[…]/group` était classé « Studio » alors qu\'il déclenche systématiquement « XPath sans cible » au dry-run',
+      'Validateur préflight enrichi : un xpath non Studio (chemin absolu, axes, prédicat) lève désormais un warning précis avec l\'expression fautive — visible AVANT de cliquer Aperçu',
+      'Nouveau snippet creator intent « modify_view » : quand l\'utilisateur demande « ajoute le champ X dans l\'onglet Y », l\'IA reçoit explicitement la règle Studio (xpath simple sur un seul ancrage nommé, exemple concret, positions autorisées) — réduit la fréquence du bug à la source',
+      '8 nouveaux tests (extract_xpath_specs + verdicts modify_view/report avec arch profond / simple / replace, validateur xpath complexity, intent modify_view)',
+    ],
+  },
+  {
+    version: '0.45.0',
+    date: '2026-05-23',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Performance contexte — cache mémoire (LRU 64) sur load_context_for_prompt : un tour de chat ne re-fait plus 4-8 lectures de fichiers + parsing à chaque turn',
       'Plafond par bloc prioritaire (4000 chars) : un bloc qui déraperait (complexité technique, localisation, intent) ne peut plus affamer les sections routées — log d\'alerte si dépassé',

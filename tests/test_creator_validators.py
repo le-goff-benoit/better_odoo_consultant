@@ -297,3 +297,27 @@ def test_changeset_ok_with_only_warnings():
     ])
     assert aggregate["ok"] is True
     assert _warnings(aggregate["operations"][0]["issues"])
+
+
+def test_modify_view_deep_xpath_warning():
+    """Validator counterpart of the studio_feasibility fix."""
+    arch = (
+        '<data><xpath expr="//form/sheet/notebook/page[@name=\'other_information\']/group" '
+        'position="inside"><field name="x_y"/></xpath></data>'
+    )
+    op = {"type": "modify_view", "params": {
+        "model": "sale.order", "inherit_id": 42, "arch": arch,
+    }}
+    warnings = _warnings(validate_operation(op))
+    assert any("XPath" in w["message"] and "Studio" in w["message"] for w in warnings)
+
+
+def test_modify_view_simple_xpath_no_warning():
+    arch = (
+        '<data><xpath expr="//page[@name=\'other_information\']" position="inside">'
+        '<field name="x_y"/></xpath></data>'
+    )
+    op = {"type": "modify_view", "params": {
+        "model": "sale.order", "inherit_id": 42, "arch": arch,
+    }}
+    assert _warnings(validate_operation(op)) == []

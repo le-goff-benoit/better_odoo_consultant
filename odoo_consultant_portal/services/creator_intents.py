@@ -210,6 +210,49 @@ _INTENTS: tuple[tuple[str, tuple[str, ...], tuple[str, ...], str, str], ...] = (
         "field: create / update / delete records on the CHILD model directly.",
     ),
     (
+        "modify_view",
+        # FR triggers — vocabulary the consultant uses to ask for a view
+        # tweak (adding a field, hiding one, moving to a tab, etc.).
+        ("ajoute le champ", "ajouter le champ", "afficher le champ",
+         "place le champ", "deplace le champ", "deplacer le champ",
+         "dans l'onglet", "dans la page", "dans le notebook",
+         "masque le champ", "cache le champ", "rendre invisible",
+         "bouton dans la vue", "menu action", "modifie la vue", "modifier la vue"),
+        # EN
+        ("add the field", "show the field", "hide the field",
+         "move the field", "in the tab", "in the notebook page",
+         "make invisible", "button in the view", "action menu",
+         "edit the view", "modify the view"),
+        # FR
+        "Modification de vue (`modify_view`) — règles xpath OBLIGATOIRES :\n"
+        "- Studio produit TOUJOURS des xpath simples sur un seul ancrage nommé : "
+        "`//page[@name='other_information']`, `//field[@name='partner_id']`, "
+        "`//group[@name='sales_info']`. JAMAIS de chemin absolu avec "
+        "/form/sheet/notebook/... — l'executor rejette avec « XPath sans cible » ;\n"
+        "- avant d'écrire un xpath, appelle `inspect_odoo_view` et utilise les "
+        "noms exacts (attribut `name` ou `string`) trouvés dans le squelette ;\n"
+        "- positions autorisées : `inside` (ajouter à l'intérieur), `after`, "
+        "`before`, `attributes` (modifier un attribut). Éviter `replace` sauf "
+        "demande explicite de remplacement d'un nœud entier ;\n"
+        "- pour ajouter un champ dans un onglet : "
+        "`<xpath expr=\"//page[@name='other_information']\" position=\"inside\">"
+        "<field name=\"x_anniversaire\"/></xpath>` — UNE seule expression simple, "
+        "pas de chemin profond.",
+        # EN
+        "View modification (`modify_view`) — MANDATORY xpath rules:\n"
+        "- Studio ALWAYS produces simple xpaths on a single named anchor: "
+        "`//page[@name='other_information']`, `//field[@name='partner_id']`. "
+        "NEVER an absolute path with /form/sheet/notebook/... — the executor "
+        "rejects with « XPath without target »;\n"
+        "- before writing an xpath, call `inspect_odoo_view` and use the exact "
+        "names (attribute `name` or `string`) found in the skeleton;\n"
+        "- allowed positions: `inside`, `after`, `before`, `attributes`. Avoid "
+        "`replace` unless explicitly required;\n"
+        "- to add a field in a tab: `<xpath expr=\"//page[@name='other_information']\" "
+        "position=\"inside\"><field name=\"x_birthday\"/></xpath>` — ONE simple "
+        "expression, no deep path.",
+    ),
+    (
         "records_bulk",
         ("mettre a jour les fiches", "mettre a jour les produits", "import csv",
          "rapprocher", "mise en coherence", "synchroniser les fiches", "deduplication",

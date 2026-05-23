@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Literal
+from xml.etree import ElementTree as ET
 
 Verdict = Literal["feasible", "with_caveats", "not_feasible"]
 
@@ -42,23 +43,73 @@ def _basic_xpath(expr: str) -> bool:
     return bool(simple)
 
 
+def extract_xpath_specs(arch: str) -> list[tuple[str, str]]:
+    """Return ``[(expr, position), …]`` for every ``<xpath>`` node in *arch*.
+
+    The Creator emits an inheritance arch like
+    ``<data><xpath expr="…" position="…">…</xpath></data>`` — the actual
+    xpath spec lives INSIDE the XML, never as a standalone ``op["xpath"]``
+    field. Feasibility / validator rules must parse it to do any meaningful
+    check. Best-effort: malformed XML returns an empty list (other rules
+    flag the parse error separately)."""
+    if not arch:
+        return []
+    try:
+        root = ET.fromstring(arch)
+    except ET.ParseError:
+        return []
+    specs: list[tuple[str, str]] = []
+    # The root itself may be the <xpath> element.
+    candidates = [root] + list(root.iter("xpath"))
+    seen: set[int] = set()
+    for node in candidates:
+        if node.tag != "xpath" or id(node) in seen:
+            continue
+        seen.add(id(node))
+        expr = (node.get("expr") or "").strip()
+        position = (node.get("position") or "").strip().lower()
+        if expr:
+            specs.append((expr, position))
+    return specs
+
+
 def _evaluate_modify_view(op: dict) -> tuple[Verdict, list[str]]:
     """Studio's view editor handles drag-drop changes (add/move/hide field,
     add page, attribute tweak). It cannot match arbitrary XPath, and it does
     not let the user write inheritance with conditional position blocks."""
     reasons: list[str] = []
-    xpath = (op.get("xpath") or "").strip()
-    operation_kind = (op.get("operation") or "").strip().lower()
+    # The xpath spec lives in op.params["arch"] (the inheritance XML), with
+    # `op["xpath"]` and `op["operation"]` as legacy fallbacks. Parse the arch
+    # first — that's where the LLM actually writes the spec today.
+    params = op.get("params") if isinstance(op.get("params"), dict) else {}
+    arch = params.get("arch") or op.get("arch") or ""
+    specs = extract_xpath_specs(arch)
+    # Legacy: a flat op.xpath / op.operation pair (older Creator schema).
+    legacy_xpath = (op.get("xpath") or "").strip()
+    legacy_op = (op.get("operation") or "").strip().lower()
+    if legacy_xpath:
+        specs.append((legacy_xpath, legacy_op))
 
-    if xpath and not _basic_xpath(xpath):
+    complex_exprs: list[str] = []
+    has_replace = False
+    for expr, position in specs:
+        if not _basic_xpath(expr):
+            complex_exprs.append(expr)
+        if position == "replace":
+            has_replace = True
+
+    if complex_exprs:
+        first = complex_exprs[0]
+        suffix = f" (+{len(complex_exprs) - 1} autre(s))" if len(complex_exprs) > 1 else ""
         reasons.append(
-            "XPath complexe (axes, position, prédicats) — Studio génère uniquement "
-            "des cibles simples comme //field[@name='x']."
+            f"XPath complexe : `{first}`{suffix} — Studio génère uniquement des cibles "
+            "simples comme `//page[@name='x']` ou `//field[@name='x']` (sans chemin "
+            "absolu /form/sheet/notebook/…). L'executor risque de rejeter la cible."
         )
 
     # Studio writes inside/after/before/attributes; it does not produce
     # `replace` on whole elements.
-    if operation_kind == "replace":
+    if has_replace:
         reasons.append(
             "Position 'replace' d'un nœud entier — Studio ne propose que ajouter, "
             "déplacer, masquer ou modifier un attribut."
@@ -112,8 +163,16 @@ def _evaluate_create_cron(_op: dict) -> tuple[Verdict, list[str]]:
 
 
 def _evaluate_modify_report(op: dict) -> tuple[Verdict, list[str]]:
-    xpath = (op.get("xpath") or "").strip()
-    if xpath and not _basic_xpath(xpath):
+    # Same as modify_view: the xpath lives inside the arch XML, not in a flat
+    # op.xpath field. Parse the arch and check every <xpath> spec.
+    params = op.get("params") if isinstance(op.get("params"), dict) else {}
+    arch = params.get("arch") or op.get("arch") or ""
+    specs = extract_xpath_specs(arch)
+    legacy_xpath = (op.get("xpath") or "").strip()
+    if legacy_xpath:
+        specs.append((legacy_xpath, ""))
+    complex_in_report = any(not _basic_xpath(expr) for expr, _pos in specs)
+    if complex_in_report:
         return (
             "with_caveats",
             ["Studio dispose d'un éditeur de rapport limité — un XPath complexe "

@@ -223,6 +223,27 @@ def _check_arch_xml(arch: Optional[str], field: str = "arch") -> list[Issue]:
                      message=f"XML invalide : {exc}")]
 
 
+# Same simple-Studio-xpath shape as in studio_feasibility_service — kept in
+# sync via the shared `extract_xpath_specs` helper imported there. Anything
+# else is likely to fail at executor dry-run time (XPath without target).
+def _check_xpath_complexity(arch: Optional[str]) -> list[Issue]:
+    if not arch:
+        return []
+    # Local import to avoid a circular dependency at module load.
+    from .studio_feasibility_service import extract_xpath_specs, _basic_xpath
+    issues: list[Issue] = []
+    for expr, _position in extract_xpath_specs(arch):
+        if not _basic_xpath(expr):
+            issues.append(Issue(
+                field="arch", severity="warning",
+                message=f"XPath `{expr}` n'est pas du shape Studio "
+                        "`//page[@name='x']` / `//field[@name='x']` — l'executor "
+                        "risque de rejeter la cible (« XPath sans cible »). "
+                        "Préférer un xpath simple sur un seul ancrage nommé.",
+            ))
+    return issues
+
+
 def _rules_create_field(p: dict) -> list[Issue]:
     issues: list[Issue] = []
     name = (p.get("name") or "").strip()
@@ -287,6 +308,7 @@ def _rules_modify_view(p: dict) -> list[Issue]:
             message="`inherit_id` ou `inherit_xmlid` requis — une modify_view doit "
                     "hériter d'une vue parente."
         ))
+    issues.extend(_check_xpath_complexity(p.get("arch")))
     return issues
 
 
@@ -307,6 +329,9 @@ def _rules_modify_report(p: dict) -> list[Issue]:
                     "`<span t-field=\"o.x_y\"/>` ou `<span t-out=\"o.x_y\"/>` pour "
                     "que la valeur s'affiche dans le PDF."
         ))
+    # QWeb reports legitimately target by class / t-call rather than
+    # `[@name='x']`, so the Studio-style xpath check belongs to modify_view
+    # only — running it on reports would flood the punch list with noise.
     return issues
 
 
