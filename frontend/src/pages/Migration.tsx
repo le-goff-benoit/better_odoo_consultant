@@ -8,6 +8,8 @@ import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
+import ConversationHistoryPanel from '../components/ConversationHistoryPanel'
+import WorkspaceShell from '../components/WorkspaceShell'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
@@ -33,6 +35,7 @@ import {
 } from '../utils/attachments'
 import { routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
+import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
 import { History } from 'lucide-react'
 
@@ -1115,6 +1118,7 @@ export default function Migration() {
   const sourceRepoName = resolveRepoName(source, profiles)
   const sourceProfile = source.mode === 'environment' ? profiles.find(p => p.id === source.profileId) : undefined
   const sourceEnv = sourceProfile ? profileEnvs(sourceProfile).find(e => e.id === source.envId) : undefined
+  const handleRefreshContext = useRefreshProjectContext(sourceProfile?.id ?? null, sourceEnv?.id ?? null)
   const sourceCompany = activeCompany(sourceProfile)
   const sourceLocalization = companyLocalizationLabel(sourceCompany)
   const sourceComplexity = technicalComplexityLabel(sourceProfile?.technical_complexity)
@@ -1403,23 +1407,172 @@ export default function Migration() {
   const { configured: aiConfigured, loading: aiProvLoading } = useAiProvidersConfigured()
   const [aiGuardDismissed, setAiGuardDismissed] = useState(false)
 
+  // Slots passed to WorkspaceShell. Defining them here keeps the return JSX
+  // readable and the locals close to the state/handlers they capture.
+  const migrationComposer = (
+    <div className="assistant-composer">
+      <div
+        className={`assistant-composer-inner${draggingFiles ? ' is-dragging' : ''}`}
+        onDragOver={e => {
+          e.preventDefault()
+          if (!streaming) setDraggingFiles(true)
+        }}
+        onDragLeave={e => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDraggingFiles(false)
+        }}
+        onDrop={e => {
+          e.preventDefault()
+          setDraggingFiles(false)
+          addFiles(e.dataTransfer.files)
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ATTACHMENT_ACCEPT}
+          style={{ display: 'none' }}
+          onChange={e => {
+            if (e.target.files) addFiles(e.target.files)
+            e.currentTarget.value = ''
+          }}
+        />
+        {showSuggestions && (
+          <div className="assistant-composer-suggestions">
+            {suggestionList.map(s => (
+              <button key={s} type="button" onClick={() => setInput(s)} className="assistant-composer-suggestion">
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {attachments.length > 0 && (
+          <div className="assistant-attachments">
+            {attachments.map(att => (
+              <div key={att.id} className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`} title={att.error ?? att.name}>
+                {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={13} /> : att.kind === 'image' ? <ImageIcon size={13} /> : <Paperclip size={13} />}
+                <span className="assistant-attachment-name">{att.name}</span>
+                <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
+                {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
+                <button type="button" onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))} aria-label={c.removeAttachment(att.name)}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder={
+            configuredProviders.length === 0
+              ? c.configureProvider
+              : !sourceVersion && !targetVersion
+              ? c.selectVersions
+              : c.placeholder(sourceVersion, targetVersion)
+          }
+          disabled={!ready || streaming}
+          rows={3}
+          className="assistant-textarea"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={streaming || readyAttachments.length >= ATTACHMENT_MAX_FILES}
+          title={c.attach}
+          className="assistant-attach-button"
+        >
+          <Paperclip size={16} />
+        </button>
+        <button
+          onClick={streaming ? () => abortRef.current?.abort() : send}
+          disabled={!streaming && ((!input.trim() && readyAttachments.length === 0) || !ready)}
+          title={streaming ? c.stop : c.send}
+          className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
+        >
+          {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
+        </button>
+      </div>
+      <div className="assistant-composer-meta">
+        <span>
+          {c.meta}
+          {readyAttachments.length > 0 && ` · ${readyAttachments.length}/${ATTACHMENT_MAX_FILES} ${c.files}`}
+          {attachmentChars > ATTACHMENT_MAX_TOTAL_CHARS && ` · ${c.truncated}`}
+        </span>
+        {(sourceVersion || targetVersion) && (
+          <span>{sourceLabel} → {targetLabel}</span>
+        )}
+      </div>
+    </div>
+  )
+
+  const migrationContextPanel = contextOpen ? (
+    <ConversationContextPanel
+      mode={perspectiveMode}
+      effectivePerspective={perspective}
+      onModeChange={setPerspective}
+      disabled={streaming}
+      provider={activeProvDef?.label}
+      model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
+      project={sourceProfile?.name}
+      environment={sourceEnv?.name}
+      company={sourceCompany?.name}
+      countryCode={sourceCompany?.country_code}
+      localization={sourceLocalization}
+      complexity={sourceComplexity}
+      version={sourceVersion}
+      targetVersion={targetVersion}
+      repo={sourceRepoName}
+      contextFiles={contextFiles}
+      contextFileSources={contextFileSources}
+      sources={conversationSources}
+      attachments={readyAttachments.map(a => a.name)}
+      onRefresh={handleRefreshContext}
+    />
+  ) : null
+
+  const migrationHistoryPanel = showHistory ? (
+    <ConversationHistoryPanel
+      rows={migHistory.map(conv => ({
+        id: conv.id,
+        title: conv.title,
+        updatedAt: conv.updatedAt,
+        messageCount: conv.messages.filter(m => m.role === 'user').length,
+        badge: (conv.srcVersion || conv.tgtVersion)
+          ? `${conv.srcVersion ?? '?'} → ${conv.tgtVersion ?? '?'}`
+          : null,
+        _raw: conv,
+      }))}
+      onClose={() => setShowHistory(false)}
+      onResume={(item) => resumeConv((item as unknown as { _raw: MigSavedConv })._raw)}
+      onDelete={(item) => deleteConv(String(item.id))}
+      formatDate={(v) => fmtDate(Number(v))}
+    />
+  ) : null
+
   return (
-    <div className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`}>
-      <AiProviderRequiredModal
-        open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
-        onClose={() => setAiGuardDismissed(true)}
-      />
-      <PageHeader title={c.title} description={c.description} />
-
-      <SelectionAskMore
-        containerRef={messageListRef}
-        onAsk={askMoreOnSelection}
-        label={lang === 'fr' ? 'Plus de détail' : 'More detail'}
-        disabled={streaming}
-      />
-
-      <div className="migration-content-row">
-        <div className="migration-main-column">
+    <WorkspaceShell
+      className={`migration-shell${isScrolled ? ' is-scrolled' : ''}`}
+      mainClassName="migration-content-row"
+      chatClassName="migration-main-column"
+      header={<>
+        <AiProviderRequiredModal
+          open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
+          onClose={() => setAiGuardDismissed(true)}
+        />
+        <PageHeader title={c.title} description={c.description} />
+        <SelectionAskMore
+          containerRef={messageListRef}
+          onAsk={askMoreOnSelection}
+          label={lang === 'fr' ? 'Plus de détail' : 'More detail'}
+          disabled={streaming}
+        />
+      </>}
+      composer={migrationComposer}
+      contextPanel={migrationContextPanel}
+      historyPanel={migrationHistoryPanel}
+    >
       {/* Control bar — framed in the same context card as the Assistant page */}
       <div className="assistant-context">
       <div className="assistant-control-row">
@@ -1561,170 +1714,6 @@ export default function Migration() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="assistant-composer">
-        <div
-          className={`assistant-composer-inner${draggingFiles ? ' is-dragging' : ''}`}
-          onDragOver={e => {
-            e.preventDefault()
-            if (!streaming) setDraggingFiles(true)
-          }}
-          onDragLeave={e => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDraggingFiles(false)
-          }}
-          onDrop={e => {
-            e.preventDefault()
-            setDraggingFiles(false)
-            addFiles(e.dataTransfer.files)
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={ATTACHMENT_ACCEPT}
-            style={{ display: 'none' }}
-            onChange={e => {
-              if (e.target.files) addFiles(e.target.files)
-              e.currentTarget.value = ''
-            }}
-          />
-          {showSuggestions && (
-            <div className="assistant-composer-suggestions">
-              {suggestionList.map(s => (
-                <button key={s} type="button" onClick={() => setInput(s)} className="assistant-composer-suggestion">
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-          {attachments.length > 0 && (
-            <div className="assistant-attachments">
-              {attachments.map(att => (
-                <div key={att.id} className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`} title={att.error ?? att.name}>
-                  {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={13} /> : att.kind === 'image' ? <ImageIcon size={13} /> : <Paperclip size={13} />}
-                  <span className="assistant-attachment-name">{att.name}</span>
-                  <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
-                  {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
-                  <button type="button" onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))} aria-label={c.removeAttachment(att.name)}>
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-            placeholder={
-              configuredProviders.length === 0
-                ? c.configureProvider
-                : !sourceVersion && !targetVersion
-                ? c.selectVersions
-                : c.placeholder(sourceVersion, targetVersion)
-            }
-            disabled={!ready || streaming}
-            rows={3}
-            className="assistant-textarea"
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={streaming || readyAttachments.length >= ATTACHMENT_MAX_FILES}
-            title={c.attach}
-            className="assistant-attach-button"
-          >
-            <Paperclip size={16} />
-          </button>
-          <button
-            onClick={streaming ? () => abortRef.current?.abort() : send}
-            disabled={!streaming && ((!input.trim() && readyAttachments.length === 0) || !ready)}
-            title={streaming ? c.stop : c.send}
-            className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
-          >
-            {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
-          </button>
-        </div>
-        <div className="assistant-composer-meta">
-          <span>
-            {c.meta}
-            {readyAttachments.length > 0 && ` · ${readyAttachments.length}/${ATTACHMENT_MAX_FILES} ${c.files}`}
-            {attachmentChars > ATTACHMENT_MAX_TOTAL_CHARS && ` · ${c.truncated}`}
-          </span>
-          {(sourceVersion || targetVersion) && (
-            <span>{sourceLabel} → {targetLabel}</span>
-          )}
-        </div>
-      </div>
-        </div>
-        {contextOpen && (
-          <ConversationContextPanel
-            mode={perspectiveMode}
-            effectivePerspective={perspective}
-            onModeChange={setPerspective}
-            disabled={streaming}
-            provider={activeProvDef?.label}
-            model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
-            project={sourceProfile?.name}
-            environment={sourceEnv?.name}
-            company={sourceCompany?.name}
-            countryCode={sourceCompany?.country_code}
-            localization={sourceLocalization}
-            complexity={sourceComplexity}
-            version={sourceVersion}
-            targetVersion={targetVersion}
-            repo={sourceRepoName}
-            contextFiles={contextFiles}
-            contextFileSources={contextFileSources}
-            sources={conversationSources}
-            attachments={readyAttachments.map(a => a.name)}
-          />
-        )}
-
-      {/* History side panel */}
-      {showHistory && (
-        <div className="assistant-history-panel">
-          <div style={{ padding: '12px 14px 10px', borderBottom: `var(--neo-border-w) solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: t.text, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-              <History size={14} /> {lang === 'fr' ? 'Historique' : 'History'}
-            </span>
-            <button onClick={() => setShowHistory(false)} className="ui-icon-button" aria-label={lang === 'fr' ? 'Fermer' : 'Close'} title={lang === 'fr' ? 'Fermer' : 'Close'}><X size={15} /></button>
-          </div>
-          {migHistory.length === 0
-            ? <div style={{ padding: '20px 14px', fontSize: 12, color: t.muted, textAlign: 'center' }}>{lang === 'fr' ? 'Aucune conversation sauvegardée' : 'No saved conversations'}</div>
-            : migHistory.map(conv => (
-              <div key={conv.id} style={{
-                padding: '11px 14px', borderBottom: `1px solid ${t.borderLight}`,
-                display: 'flex', flexDirection: 'column', gap: 5,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-                  <span style={{ fontSize: 12, fontWeight: 650, color: t.text, lineHeight: 1.4, flex: 1 }}
-                    title={conv.title}>{conv.title}</span>
-                  <button onClick={() => deleteConv(conv.id)}
-                    className="ui-icon-button" aria-label={lang === 'fr' ? 'Supprimer' : 'Delete'} title={lang === 'fr' ? 'Supprimer' : 'Delete'}><X size={14} /></button>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 10, color: t.muted }}>{fmtDate(conv.updatedAt)}</span>
-                  {(conv.srcVersion || conv.tgtVersion) && (
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.brand20, color: t.brand }}>
-                      {conv.srcVersion ?? '?'} → {conv.tgtVersion ?? '?'}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto' }}>
-                    {conv.messages.filter(m => m.role === 'user').length} msg
-                  </span>
-                </div>
-                <button className="btn btn-primary" onClick={() => resumeConv(conv)}
-                  style={{ marginTop: 3, fontSize: 11, padding: '5px 10px' }}>
-                  <History size={12} /> {lang === 'fr' ? 'Reprendre' : 'Resume'}
-                </button>
-              </div>
-            ))
-          }
-        </div>
-      )}
-      </div>
-    </div>
+    </WorkspaceShell>
   )
 }

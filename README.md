@@ -5,7 +5,12 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.47.0** — wireframe Creator affiné (conditionnels masqués au lieu de grisés quand sample dispo, évaluation domaine étendue `not`/`and`/`or`/`len()`, toggle « Tout afficher », +12 colonnes X2Many) · pré-vol Creator avec fond coloré selon le statut
+> Version actuelle : **0.50.0** — refonte UX :
+> - **Bouton Rafraîchir unifié** sur la carte projet : un seul clic enchaîne vérification d'accès + pull du dépôt custom + localisation fiscale + complexité technique + auto-fill du contexte IA.
+> - **Carte projet simplifiée** (Modifier · Rafraîchir · Maintenance), modal Maintenance pour les actions rares (VS Code, liens externes, contexte markdown, suppression).
+> - **Wizard 2 étapes** pour ajouter un environnement (connexion testée avant la config dépôt).
+> - **Panneau de contexte** condensé : chips colorés (drapeau pays, badge version `v18 → v17`, complexité, dépôt) + bouton refresh intégré + sélecteur de profil compact (`PerspectiveSelect`).
+> - **`WorkspaceShell` partagé** entre Creator / Assistant / Migration — squelette JSX unifié, classes CSS `workspace-*` côte à côte avec les classes existantes.
 
 ---
 

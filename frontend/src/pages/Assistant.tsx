@@ -10,6 +10,8 @@ import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
 import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
+import ConversationHistoryPanel from '../components/ConversationHistoryPanel'
+import WorkspaceShell from '../components/WorkspaceShell'
 import { useWorkspaceContext } from '../components/Layout'
 
 import { PROVIDERS } from '../constants/providers'
@@ -33,6 +35,7 @@ import {
 import { routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
 import { countryFlag } from '../utils/countryFlag'
 import { streamingSignals } from '../utils/streamingSignals'
+import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
@@ -567,6 +570,10 @@ export default function Assistant() {
     return envs.find(e => e.id === effectiveId) ?? envs[0] ?? null
   })()
   const activeEnvRepo = activeEnvObj?.github_repo ?? null
+  const handleRefreshContext = useRefreshProjectContext(
+    isGeneralMode ? null : (selectedProfile?.id ?? null),
+    activeEnvObj?.id ?? null,
+  )
   const activeCompany = (() => {
     if (!selectedProfile) return null
     const companies = parseCompanies(selectedProfile.company_ids)
@@ -935,25 +942,22 @@ export default function Assistant() {
   const { configured: aiConfigured, loading: aiProvLoading } = useAiProvidersConfigured()
   const [aiGuardDismissed, setAiGuardDismissed] = useState(false)
 
-  return (
-    <div className={`assistant-shell${isScrolled ? ' is-scrolled' : ''}`}>
-      <AiProviderRequiredModal
-        open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
-        onClose={() => setAiGuardDismissed(true)}
-      />
-
-      <PageHeader
-        title={c.title}
-        description={c.description}
-        action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}><Settings size={15} /> {c.settings}</Link>}
-      />
-
-      <SelectionAskMore
-        containerRef={messageListRef}
-        onAsk={askMoreOnSelection}
-        label={c.askMore}
-        disabled={streaming}
-      />
+  const assistantHeader = (<>
+    <AiProviderRequiredModal
+      open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
+      onClose={() => setAiGuardDismissed(true)}
+    />
+    <PageHeader
+      title={c.title}
+      description={c.description}
+      action={<Link to="/settings" className="btn btn-secondary" style={{ textDecoration: 'none' }}><Settings size={15} /> {c.settings}</Link>}
+    />
+    <SelectionAskMore
+      containerRef={messageListRef}
+      onAsk={askMoreOnSelection}
+      label={c.askMore}
+      disabled={streaming}
+    />
 
       {/* ── Context bar ── */}
       <div className="assistant-context">
@@ -1089,21 +1093,163 @@ export default function Assistant() {
         </div>
       </div>
 
-      {/* Sources warning banner */}
-      {activeVersion && !sourcesInstalled && (
-        <div className="assistant-source-warning">
-          <TriangleAlert size={17} />
-          <div style={{ fontSize: 12, flex: 1 }}>
-            <strong>{c.sourceWarningStrong(activeVersion)}</strong> — {c.sourceWarning}{' '}
-            <Link to="/sources" style={{ color: t.warning, fontWeight: 600 }}>{c.installSources}</Link>
-          </div>
+    {/* Sources warning banner */}
+    {activeVersion && !sourcesInstalled && (
+      <div className="assistant-source-warning">
+        <TriangleAlert size={17} />
+        <div style={{ fontSize: 12, flex: 1 }}>
+          <strong>{c.sourceWarningStrong(activeVersion)}</strong> — {c.sourceWarning}{' '}
+          <Link to="/sources" style={{ color: t.warning, fontWeight: 600 }}>{c.installSources}</Link>
         </div>
-      )}
+      </div>
+    )}
+  </>)
 
-      {/* Main content row: chat + optional history panel */}
-      <div className="assistant-main">
-      <div className="assistant-chat-panel">
+  const assistantComposer = (
+    <div className="assistant-composer">
+      <div
+        className={`assistant-composer-inner${draggingFiles ? ' is-dragging' : ''}`}
+        onDragEnter={e => { e.preventDefault(); setDraggingFiles(true) }}
+        onDragOver={e => { e.preventDefault(); setDraggingFiles(true) }}
+        onDragLeave={e => { if (e.currentTarget === e.target) setDraggingFiles(false) }}
+        onDrop={e => {
+          e.preventDefault()
+          setDraggingFiles(false)
+          addFiles(e.dataTransfer.files)
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ATTACHMENT_ACCEPT}
+          style={{ display: 'none' }}
+          onChange={e => {
+            if (e.target.files) addFiles(e.target.files)
+            e.currentTarget.value = ''
+          }}
+        />
+        {promptSuggestions.length > 0 && (
+          <div className="assistant-composer-suggestions">
+            {promptSuggestions.map(s => (
+              <button key={s} type="button" onClick={() => setInput(s)} className="assistant-composer-suggestion">
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {attachments.length > 0 && (
+          <div className="assistant-attachments">
+            {attachments.map(att => (
+              <div key={att.id} className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`} title={att.error ?? att.name}>
+                {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={13} /> : att.kind === 'image' ? <ImageIcon size={13} /> : <Paperclip size={13} />}
+                <span className="assistant-attachment-name">{att.name}</span>
+                <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
+                {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
+                <button type="button" onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))} aria-label={c.removeAttachment(att.name)}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder={
+            configuredProviders.length === 0
+              ? c.configureProvider
+              : profileId === null
+              ? c.selectTab
+              : isGeneralMode
+              ? c.generalPlaceholder(generalVersion)
+              : c.ask
+          }
+          disabled={configuredProviders.length === 0 || profileId === null}
+          rows={3}
+          className="assistant-textarea"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={streaming || readyAttachments.length >= ATTACHMENT_MAX_FILES}
+          title={c.attach}
+          className="assistant-attach-button"
+        >
+          <Paperclip size={16} />
+        </button>
+        <button
+          onClick={streaming ? () => abortRef.current?.abort() : send}
+          disabled={configuredProviders.length === 0 || profileId === null || (!streaming && ((!input.trim() && readyAttachments.length === 0) || companyAccessBlocked))}
+          title={streaming ? c.stop : companyAccessBlocked ? c.companyBlocked : c.send}
+          className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
+        >
+          {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
+        </button>
+      </div>
+      <div className="assistant-composer-meta">
+        <span>
+          {c.meta}
+          {readyAttachments.length > 0 && ` · ${readyAttachments.length}/${ATTACHMENT_MAX_FILES} ${c.files}`}
+          {attachmentChars > ATTACHMENT_MAX_TOTAL_CHARS && ` · ${c.truncated}`}
+        </span>
+        {currentProv && <span>{currentProv.label} · {currentProv.models.find(m => m.id === modelId)?.label}</span>}
+      </div>
+    </div>
+  )
 
+  const assistantContextPanel = contextOpen ? (
+    <ConversationContextPanel
+      mode={perspectiveMode}
+      effectivePerspective={perspective}
+      onModeChange={setPerspective}
+      disabled={streaming}
+      provider={currentProv?.label}
+      model={currentProv?.models.find(m => m.id === modelId)?.label}
+      project={isGeneralMode ? undefined : selectedProfile?.name}
+      environment={activeEnvObj?.name}
+      company={activeCompanyName}
+      countryCode={effectiveCountryCode}
+      localization={effectiveLocalization}
+      complexity={activeComplexity}
+      version={activeVersion}
+      repo={activeEnvRepo}
+      contextFiles={contextFiles}
+      contextFileSources={contextFileSources}
+      sources={conversationSources}
+      attachments={readyAttachments.map(a => a.name)}
+      onRefresh={handleRefreshContext}
+    />
+  ) : null
+
+  const assistantHistoryPanel = (showHistory && convKey) ? (
+    <ConversationHistoryPanel
+      rows={(savedConvs[convKey] ?? []).map(conv => ({
+        id: conv.id,
+        title: conv.title,
+        updatedAt: conv.updatedAt,
+        messageCount: conv.messages.filter(m => m.role === 'user').length,
+        badge: conv.version ? `v${conv.version}` : null,
+        _raw: conv,
+      }))}
+      onClose={() => setShowHistory(false)}
+      onResume={(item) => resumeConv((item as unknown as { _raw: SavedConv })._raw)}
+      onDelete={(item) => deleteConv(convKey, String(item.id))}
+      formatDate={(v) => fmtDate(Number(v))}
+    />
+  ) : null
+
+  return (
+    <WorkspaceShell
+      className={`assistant-shell${isScrolled ? ' is-scrolled' : ''}`}
+      mainClassName="assistant-main"
+      chatClassName="assistant-chat-panel"
+      header={assistantHeader}
+      composer={assistantComposer}
+      contextPanel={assistantContextPanel}
+      historyPanel={assistantHistoryPanel}
+    >
       {/* Chat history */}
       <div className="assistant-message-list" ref={messageListRef}>
 
@@ -1170,166 +1316,7 @@ export default function Assistant() {
         )
       })()}
 
-      {/* Input area */}
-      <div className="assistant-composer">
-        <div
-          className={`assistant-composer-inner${draggingFiles ? ' is-dragging' : ''}`}
-          onDragEnter={e => { e.preventDefault(); setDraggingFiles(true) }}
-          onDragOver={e => { e.preventDefault(); setDraggingFiles(true) }}
-          onDragLeave={e => { if (e.currentTarget === e.target) setDraggingFiles(false) }}
-          onDrop={e => {
-            e.preventDefault()
-            setDraggingFiles(false)
-            addFiles(e.dataTransfer.files)
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={ATTACHMENT_ACCEPT}
-            style={{ display: 'none' }}
-            onChange={e => {
-              if (e.target.files) addFiles(e.target.files)
-              e.currentTarget.value = ''
-            }}
-          />
-          {promptSuggestions.length > 0 && (
-            <div className="assistant-composer-suggestions">
-              {promptSuggestions.map(s => (
-                <button key={s} type="button" onClick={() => setInput(s)} className="assistant-composer-suggestion">
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-          {attachments.length > 0 && (
-            <div className="assistant-attachments">
-              {attachments.map(att => (
-                <div key={att.id} className={`assistant-attachment-chip${att.status === 'error' ? ' is-error' : ''}`} title={att.error ?? att.name}>
-                  {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={13} /> : att.kind === 'image' ? <ImageIcon size={13} /> : <Paperclip size={13} />}
-                  <span className="assistant-attachment-name">{att.name}</span>
-                  <span className="assistant-attachment-size">{formatFileSize(att.size)}</span>
-                  {att.status === 'error' && <span className="assistant-attachment-error">{att.error}</span>}
-                  <button type="button" onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))} aria-label={c.removeAttachment(att.name)}>
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-            placeholder={
-              configuredProviders.length === 0
-                ? c.configureProvider
-                : profileId === null
-                ? c.selectTab
-                : isGeneralMode
-                ? c.generalPlaceholder(generalVersion)
-                : c.ask
-            }
-            disabled={configuredProviders.length === 0 || profileId === null}
-            rows={3}
-            className="assistant-textarea"
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={streaming || readyAttachments.length >= ATTACHMENT_MAX_FILES}
-            title={c.attach}
-            className="assistant-attach-button"
-          >
-            <Paperclip size={16} />
-          </button>
-          <button
-            onClick={streaming ? () => abortRef.current?.abort() : send}
-            disabled={configuredProviders.length === 0 || profileId === null || (!streaming && ((!input.trim() && readyAttachments.length === 0) || companyAccessBlocked))}
-            title={streaming ? c.stop : companyAccessBlocked ? c.companyBlocked : c.send}
-            className={`assistant-send-button${streaming ? ' is-streaming' : ''}`}
-          >
-            {streaming ? <Square size={15} /> : <ArrowUp size={18} />}
-          </button>
-        </div>
-        <div className="assistant-composer-meta">
-          <span>
-            {c.meta}
-            {readyAttachments.length > 0 && ` · ${readyAttachments.length}/${ATTACHMENT_MAX_FILES} ${c.files}`}
-            {attachmentChars > ATTACHMENT_MAX_TOTAL_CHARS && ` · ${c.truncated}`}
-          </span>
-          {currentProv && <span>{currentProv.label} · {currentProv.models.find(m => m.id === modelId)?.label}</span>}
-        </div>
-      </div>
-      </div>
-
-      {contextOpen && (
-        <ConversationContextPanel
-          mode={perspectiveMode}
-          effectivePerspective={perspective}
-          onModeChange={setPerspective}
-          disabled={streaming}
-          provider={currentProv?.label}
-          model={currentProv?.models.find(m => m.id === modelId)?.label}
-          project={isGeneralMode ? undefined : selectedProfile?.name}
-          environment={activeEnvObj?.name}
-          company={activeCompanyName}
-          countryCode={effectiveCountryCode}
-          localization={effectiveLocalization}
-          complexity={activeComplexity}
-          version={activeVersion}
-          repo={activeEnvRepo}
-          contextFiles={contextFiles}
-          contextFileSources={contextFileSources}
-          sources={conversationSources}
-          attachments={readyAttachments.map(a => a.name)}
-        />
-      )}
-      {/* History panel */}
-      {showHistory && convKey && (
-        <div className="assistant-history-panel">
-          <div style={{ padding: '12px 14px 10px', borderBottom: `var(--neo-border-w) solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: t.text, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-              <History size={14} /> {c.history}
-            </span>
-            <button onClick={() => setShowHistory(false)} className="ui-icon-button" aria-label={c.close} title={c.close}><X size={15} /></button>
-          </div>
-          {(savedConvs[convKey] ?? []).length === 0
-            ? <div style={{ padding: '20px 14px', fontSize: 12, color: t.muted, textAlign: 'center' }}>{c.emptyHistory}</div>
-            : (savedConvs[convKey] ?? []).map(conv => (
-              <div key={conv.id} style={{
-                padding: '11px 14px', borderBottom: `1px solid ${t.borderLight}`,
-                display: 'flex', flexDirection: 'column', gap: 5,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-                  <span style={{ fontSize: 12, fontWeight: 650, color: t.text, lineHeight: 1.4, flex: 1 }}
-                    title={conv.title}>{conv.title}</span>
-                  <button onClick={() => deleteConv(convKey, conv.id)}
-                    className="ui-icon-button" aria-label={c.deleteConversation} title={c.deleteConversation}><X size={14} /></button>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 10, color: t.muted }}>{fmtDate(conv.updatedAt)}</span>
-                  {conv.version && (
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.brand20, color: t.brand }}>
-                      v{conv.version}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto' }}>
-                    {conv.messages.filter(m => m.role === 'user').length} msg
-                  </span>
-                </div>
-                <button className="btn btn-primary" onClick={() => resumeConv(conv)}
-                  style={{ marginTop: 3, fontSize: 11, padding: '5px 10px' }}>
-                  <History size={12} /> {c.resume}
-                </button>
-              </div>
-            ))
-          }
-        </div>
-      )}
-      </div>
-    </div>
+    </WorkspaceShell>
   )
 }
 

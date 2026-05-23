@@ -587,6 +587,113 @@ async def refresh_technical_complexity(profile_id: int, session: AsyncSession = 
     return analysis
 
 
+@router.post("/{profile_id}/refresh-context")
+async def refresh_context(
+    profile_id: int,
+    env_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_session),
+):
+    """One-shot refresh of everything that feeds the conversation context panel:
+    pulls the custom repo for the active env (if cloned), refreshes fiscal
+    localization, and recomputes technical-complexity signals. Each step is
+    isolated — a failure in one does not block the others. Returns a per-step
+    summary so the UI can display what actually changed."""
+    profile = await session.get(Profile, profile_id)
+    if not profile:
+        raise HTTPException(404, "Projet introuvable")
+
+    target_env_id = env_id or profile.active_env_id
+    try:
+        envs: list[dict] = json.loads(profile.environments or "[]")
+    except Exception:
+        envs = []
+    env = next((e for e in envs if e.get("id") == target_env_id), None)
+
+    result: dict = {"access": None, "repo": None, "localization": None, "complexity": None, "context": None}
+
+    # ── 0. Check access (best-effort) — confirms credentials still work
+    try:
+        client = _get_client_from_profile(profile)
+        loop = asyncio.get_event_loop()
+        info = await _check_user_access(client, loop)
+        profile.user_access_info = json.dumps(info)
+        result["access"] = {"status": "ok", "uid": info.get("uid") if isinstance(info, dict) else None}
+    except Exception as exc:
+        result["access"] = {"status": "error", "error": str(exc)}
+
+    # ── 1. Pull custom repo (only if already cloned for this env)
+    github_repo = (env or {}).get("github_repo")
+    if github_repo and target_env_id:
+        repo_path = _repo_local_path(profile.name, target_env_id)
+        if (repo_path / ".git").exists():
+            try:
+                from ...services import project_manager
+                loop = asyncio.get_event_loop()
+                pull_result = await loop.run_in_executor(
+                    None, project_manager.pull_project, str(repo_path), None,
+                )
+                result["repo"] = {"status": "ok", "github_repo": github_repo, **pull_result}
+            except Exception as exc:
+                result["repo"] = {"status": "error", "github_repo": github_repo, "error": str(exc)}
+        else:
+            result["repo"] = {"status": "skipped", "github_repo": github_repo, "reason": "not cloned"}
+
+    # ── 2. Refresh fiscal localization (best-effort)
+    try:
+        client = _get_client_from_profile(profile)
+        version = (env or {}).get("odoo_version") or profile.odoo_version
+        companies = await detect_company_localizations(client, version)
+        if companies:
+            profile.company_ids = dump_company_cache(
+                merge_company_localizations(profile.company_ids, companies)
+            )
+            result["localization"] = {"status": "ok", "companies": len(companies)}
+        else:
+            result["localization"] = {"status": "empty"}
+    except Exception as exc:
+        result["localization"] = {"status": "error", "error": str(exc)}
+
+    # ── 3. Recompute technical complexity (best-effort)
+    try:
+        try:
+            client = _get_client_from_profile(profile)
+        except Exception:
+            client = None
+        analysis = await analyze_technical_complexity(
+            profile.name, profile.environments, client, profile.github_repo,
+        )
+        profile.technical_complexity = dump_technical_complexity(analysis)
+        result["complexity"] = {"status": "ok", "level": analysis.get("level") if isinstance(analysis, dict) else None}
+    except Exception as exc:
+        result["complexity"] = {"status": "error", "error": str(exc)}
+
+    # ── 4. Regenerate AI project context (best-effort, optional) — uses any
+    # configured AI provider key. Skipped silently when no key is available so
+    # the rest of the refresh isn't penalised for a missing dependency.
+    try:
+        ctx_resp = await auto_fill_context(profile_id, session)
+        content = ctx_resp.get("content") if isinstance(ctx_resp, dict) else None
+        if content:
+            profile.project_context = content
+            result["context"] = {"status": "ok", "chars": len(content)}
+        else:
+            result["context"] = {"status": "empty"}
+    except HTTPException as exc:
+        # 503 = no AI provider key configured. Treat as skip, not failure.
+        if exc.status_code == 503:
+            result["context"] = {"status": "skipped", "reason": "no AI provider configured"}
+        else:
+            result["context"] = {"status": "error", "error": exc.detail}
+    except Exception as exc:
+        result["context"] = {"status": "error", "error": str(exc)}
+
+    profile.updated_at = datetime.utcnow()
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+    return result
+
+
 @router.post("/check-access-raw")
 async def check_access_raw(body: AccessCheckRequest):
     """Check access using raw credentials (used from wizard before profile is saved)."""

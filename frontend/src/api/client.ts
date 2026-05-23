@@ -35,6 +35,8 @@ export const checkAccessRaw = (data: object) => api.post('/profiles/check-access
 export const checkAccessProfile = (id: number) => api.post(`/profiles/${id}/check-access`)
 export const refreshProfileLocalization = (id: number) => api.post(`/profiles/${id}/localization/refresh`)
 export const refreshProfileComplexity = (id: number) => api.post(`/profiles/${id}/technical-complexity/refresh`)
+export const refreshProjectContext = (id: number, envId?: string | null) =>
+  api.post(`/profiles/${id}/refresh-context${envId ? `?env_id=${encodeURIComponent(envId)}` : ''}`)
 export const getProfileContext = (id: number) => api.get(`/profiles/${id}/context`)
 export const saveProfileContext = (id: number, content: string) => api.put(`/profiles/${id}/context`, { content })
 export const autoFillContext = (id: number) => api.post(`/profiles/${id}/context/auto-fill`)

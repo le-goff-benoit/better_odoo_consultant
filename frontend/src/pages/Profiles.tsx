@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, Building2, Check, ChevronDown, ChevronUp, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Layers3, Loader2, MoreHorizontal, Pencil, Play, Plus, RefreshCw, Search, Trash2, TriangleAlert, UserRound, X } from 'lucide-react'
-import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, checkAccessProfile, refreshProfileLocalization, refreshProfileComplexity, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
+import { Bot, Building2, Check, ChevronRight, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Layers3, Loader2, MoreHorizontal, Pencil, Play, Plus, RefreshCw, Trash2, TriangleAlert, UserRound, Wrench, X } from 'lucide-react'
+import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, refreshProjectContext, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
@@ -435,9 +435,46 @@ export default function Profiles() {
     onError:   (e: ApiErr) => notify(e.response?.data?.detail ?? e.message, false),
   })
 
-  const [checkingAccessId, setCheckingAccessId] = useState<number | null>(null)
-  const [refreshingLocalizationId, setRefreshingLocalizationId] = useState<number | null>(null)
-  const [refreshingComplexityId, setRefreshingComplexityId] = useState<number | null>(null)
+  const [refreshingAllId, setRefreshingAllId] = useState<number | null>(null)
+
+  /** Single "refresh everything" button: pulls custom repo + access + localization
+   * + technical-complexity + AI auto-fill of project context. Each step is
+   * isolated server-side, partial failures still report success on others. */
+  const refreshAll = async (profileId: number) => {
+    setRefreshingAllId(profileId)
+    try {
+      const res = await refreshProjectContext(profileId, null)
+      qc.invalidateQueries({ queryKey: ['profiles'] })
+      qc.invalidateQueries({ queryKey: ['context-files-meta'] })
+      const data = res.data as Record<string, { status?: string; error?: string; companies?: number; level?: string; head?: string }> | undefined
+      // Build a compact "what changed" line for the toast
+      const okSteps: string[] = []
+      const errSteps: string[] = []
+      const labels = lang === 'en'
+        ? { access: 'access', repo: 'repo', localization: 'localization', complexity: 'complexity', context: 'context' }
+        : { access: 'accès', repo: 'dépôt', localization: 'localisation', complexity: 'complexité', context: 'contexte' }
+      for (const k of ['access', 'repo', 'localization', 'complexity', 'context'] as const) {
+        const step = data?.[k]
+        if (!step) continue
+        if (step.status === 'ok') okSteps.push(labels[k])
+        else if (step.status === 'error') errSteps.push(labels[k])
+      }
+      if (errSteps.length === 0 && okSteps.length > 0) {
+        notify((lang === 'en' ? '✓ Refreshed: ' : '✓ Rafraîchi : ') + okSteps.join(', '))
+      } else if (errSteps.length > 0) {
+        notify((lang === 'en'
+          ? `Partial refresh — failed: ${errSteps.join(', ')}`
+          : `Rafraîchissement partiel — échecs : ${errSteps.join(', ')}`), false)
+      } else {
+        notify(lang === 'en' ? 'Nothing to refresh' : 'Rien à rafraîchir')
+      }
+    } catch (e) {
+      const err = e as ApiErr
+      notify(err.response?.data?.detail ?? err.message ?? 'Refresh failed', false)
+    } finally {
+      setRefreshingAllId(null)
+    }
+  }
 
   // ── Context modal ──────────────────────────────────────────────
   const [contextProfileId, setContextProfileId] = useState<number | null>(null)
@@ -484,52 +521,6 @@ export default function Profiles() {
       notify(c.contextGenerateError, false)
     } finally {
       setContextAutoFilling(false)
-    }
-  }
-
-  const checkAccess = async (profileId: number) => {
-    setCheckingAccessId(profileId)
-    try {
-      const res = await checkAccessProfile(profileId)
-      const info: AccessInfo = res.data
-      qc.invalidateQueries({ queryKey: ['profiles'] })
-      if (info.is_system) {
-        notify(`⚠ Utilisateur administrateur système détecté (${info.user_name}). Préférez un utilisateur dédié.`, false)
-      } else if (info.is_admin) {
-        notify(`⚠ Utilisateur avec droits d'administration (${info.user_name}). Pensez à limiter les droits.`, false)
-      } else {
-        notify(`Accès vérifié pour ${info.user_name} — ${info.accessible_company_ids.length} société(s) accessible(s) ✓`)
-      }
-    } catch {
-      notify(c.accessCheckError, false)
-    } finally {
-      setCheckingAccessId(null)
-    }
-  }
-
-  const refreshLocalization = async (profileId: number) => {
-    setRefreshingLocalizationId(profileId)
-    try {
-      await refreshProfileLocalization(profileId)
-      qc.invalidateQueries({ queryKey: ['profiles'] })
-      notify(c.localizationUpdated)
-    } catch {
-      notify(c.localizationError, false)
-    } finally {
-      setRefreshingLocalizationId(null)
-    }
-  }
-
-  const refreshComplexity = async (profileId: number) => {
-    setRefreshingComplexityId(profileId)
-    try {
-      await refreshProfileComplexity(profileId)
-      qc.invalidateQueries({ queryKey: ['profiles'] })
-      notify(c.complexityUpdated)
-    } catch {
-      notify(c.complexityError, false)
-    } finally {
-      setRefreshingComplexityId(null)
     }
   }
 
@@ -897,12 +888,8 @@ export default function Profiles() {
               onEdit={() => openEdit(p)}
               onSelectCompany={(companyId) => updateProfile(p.id, { selected_company_id: companyId })
                 .then(() => qc.invalidateQueries({ queryKey: ['profiles'] }))}
-              onCheckAccess={() => checkAccess(p.id)}
-              checkingAccess={checkingAccessId === p.id}
-              onRefreshLocalization={() => refreshLocalization(p.id)}
-              refreshingLocalization={refreshingLocalizationId === p.id}
-              onRefreshComplexity={() => refreshComplexity(p.id)}
-              refreshingComplexity={refreshingComplexityId === p.id}
+              onRefreshAll={() => refreshAll(p.id)}
+              refreshingAll={refreshingAllId === p.id}
               onContext={() => openContext(p.id)}
               onRefresh={() => qc.invalidateQueries({ queryKey: ['profiles'] })} />
           ))}
@@ -940,12 +927,10 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 type EnvModalState = { mode: 'add' } | { mode: 'edit'; env: EnvEntry }
 const EMPTY_ENV_FORM = { id: '', name: '', db_url: '', db_name: '', login: '', api_key: '', odoo_version: '', branch: '', github_repo: '', repo_branch: '' }
 
-function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onCheckAccess, checkingAccess, onRefreshLocalization, refreshingLocalization, onRefreshComplexity, refreshingComplexity, onContext, onRefresh }: {
+function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onRefreshAll, refreshingAll, onContext, onRefresh }: {
   profile: Profile; onTest: () => void; onDelete: () => void; onEdit: () => void
   onSelectCompany: (companyId: number) => void
-  onCheckAccess: () => void; checkingAccess: boolean
-  onRefreshLocalization: () => void; refreshingLocalization: boolean
-  onRefreshComplexity: () => void; refreshingComplexity: boolean
+  onRefreshAll: () => void; refreshingAll: boolean
   onContext: () => void; onRefresh: () => void
 }) {
   const lang = useUiLanguage()
@@ -969,6 +954,9 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [envModal, setEnvModal] = useState<EnvModalState | null>(null)
+  // 2-step wizard for "add" mode: 1 = connection (mandatory test), 2 = optional repo.
+  // Edit mode shows a single screen with all fields visible (already configured).
+  const [envStep, setEnvStep] = useState<1 | 2>(1)
   const [envForm, setEnvForm] = useState(EMPTY_ENV_FORM)
   const [envDiag, setEnvDiag] = useState<DiagResult | null>(null)
   const [envDiagPending, setEnvDiagPending] = useState(false)
@@ -994,11 +982,13 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
   const openAddEnv = () => {
     setEnvForm(EMPTY_ENV_FORM)
     setEnvDiag(null)
+    setEnvStep(1)
     setEnvModal({ mode: 'add' })
   }
   const openEditEnv = (env: EnvEntry) => {
     setEnvForm({ id: env.id, name: env.name, db_url: env.db_url, db_name: env.db_name, login: env.login, api_key: '', odoo_version: env.odoo_version ?? '', branch: env.branch ?? '', github_repo: env.github_repo ?? '', repo_branch: env.repo_branch ?? '' })
     setEnvDiag(null)
+    setEnvStep(1)
     setEnvModal({ mode: 'edit', env })
   }
 
@@ -1210,7 +1200,13 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
               <span title="Utilisateur avec droits d'administration" className="project-pill project-pill-warning"><TriangleAlert size={11} /> Admin</span>
             )}
             {complexityLabel && (
-              <span title={c.complexityTitle} className="project-pill project-pill-neutral"><Layers3 size={11} /> {complexityLabel}</span>
+              <span
+                title={lang === 'en'
+                  ? `Technical complexity (Studio + custom modules). Updated by the Refresh button.`
+                  : `Complexité technique (Studio + modules custom). Mise à jour via le bouton Rafraîchir.`}
+                className="project-pill project-pill-neutral">
+                <Layers3 size={11} /> {complexityLabel}
+              </span>
             )}
           </div>
         </div>
@@ -1304,54 +1300,98 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
         </div>
 
         {/* ── Footer ── */}
+        {/* ── Footer (3 actions only — refresh is the new primary affordance) ── */}
         <div className="project-card-footer">
-          <div className="project-footer-row">
-            <div className="project-section-title">{c.quickActions}</div>
-            {(profile.odoo_sh_url || ghUrl) && (
-              <div className="project-link-list project-link-list-compact">
-                {profile.odoo_sh_url && <QuickLink href={profile.odoo_sh_url} label="Dashboard" icon={<Cloud size={12} />} color={t.brand} />}
-                {ghUrl && <QuickLink href={ghUrl} label="GitHub" icon={<GitBranch size={12} />} color={t.textSub} />}
-              </div>
-            )}
-          </div>
-
           <div className="project-action-list project-action-list-primary">
-            <button className="btn btn-outline btn-sm" onClick={onEdit} title={c.edit}><Pencil size={13} /> {c.edit}</button>
-            <button className="btn btn-outline btn-sm" onClick={onTest} title={c.test}><Play size={13} /> {c.test}</button>
-            <button className="btn btn-outline btn-sm project-workspace-action" onClick={openWorkspace} disabled={workspaceOpening} title={c.vscodeTitle}>
-              {workspaceOpening ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Code2 size={13} />} {c.vscode}
+            <button className="btn btn-outline btn-sm" onClick={onEdit} title={c.edit}>
+              <Pencil size={13} /> {c.edit}
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={onRefreshAll} disabled={refreshingAll}
+              title={lang === 'en'
+                ? 'Refresh: access + repo pull + localization + complexity + AI context'
+                : 'Rafraîchir : accès + pull dépôt + localisation + complexité + contexte IA'}>
+              {refreshingAll
+                ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} />
+                : <RefreshCw size={13} />}
+              {' '}{lang === 'en' ? 'Refresh' : 'Rafraîchir'}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => setMaintenanceOpen(true)}
+              title={lang === 'en' ? 'Maintenance actions' : 'Actions de maintenance'}>
+              <Wrench size={13} /> {c.maintenance}
             </button>
           </div>
+        </div>
 
-          <div className="project-action-list project-action-list-secondary">
-            <div className={`project-maintenance-menu${maintenanceOpen ? ' is-open' : ''}`}>
-              <button className="btn btn-outline-muted btn-sm" onClick={() => setMaintenanceOpen(o => !o)}>
-                {maintenanceOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} {c.maintenance}
-              </button>
-              {maintenanceOpen && (
-                <div className="project-maintenance-actions">
-                  <button className="btn btn-outline-muted btn-sm" onClick={onCheckAccess} disabled={checkingAccess} title="Vérifier les droits d'accès">
-                    {checkingAccess ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Search size={13} />} {c.access}
-                  </button>
-                  <button className="btn btn-outline-muted btn-sm" onClick={onRefreshLocalization} disabled={refreshingLocalization} title={c.localizationTitle}>
-                    {refreshingLocalization ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <RefreshCw size={13} />} {c.localization}
-                  </button>
-                  <button className="btn btn-outline-muted btn-sm" onClick={onRefreshComplexity} disabled={refreshingComplexity} title={c.complexityTitle}>
-                    {refreshingComplexity ? <Loader2 size={13} style={{ animation: 'spin .9s linear infinite' }} /> : <Layers3 size={13} />} {c.complexity}
-                  </button>
-                  <button className="btn btn-outline-muted btn-sm" onClick={onContext} title="Fichier de contexte de ce projet">
-                    <ClipboardList size={13} /> {c.context}
-                    {profile.project_context && (
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.successSolid, display: 'inline-block', flexShrink: 0 }} />
-                    )}
+        {/* ── Maintenance modal (advanced / rare actions) ── */}
+        {maintenanceOpen && modalRoot && createPortal((
+          <div className="ui-modal-overlay" onClick={() => setMaintenanceOpen(false)}>
+            <div className="ui-modal project-maintenance-modal" role="dialog" aria-modal="true"
+              aria-labelledby="maintenance-modal-title"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 460 }}>
+              <div className="ui-modal-header">
+                <h2 id="maintenance-modal-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <Wrench size={16} /> {c.maintenance} — {profile.name}
+                </h2>
+                <button onClick={() => setMaintenanceOpen(false)} className="ui-icon-button"
+                  title={lang === 'en' ? 'Close' : 'Fermer'} aria-label={lang === 'en' ? 'Close' : 'Fermer'}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="ui-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <MaintenanceAction
+                  icon={<Code2 size={15} />}
+                  label={c.vscode}
+                  description={c.vscodeTitle}
+                  onClick={() => { setMaintenanceOpen(false); openWorkspace() }}
+                  loading={workspaceOpening}
+                />
+                <MaintenanceAction
+                  icon={<ClipboardList size={15} />}
+                  label={c.context}
+                  description={lang === 'en'
+                    ? 'View or edit the markdown context file used by the AI assistant.'
+                    : 'Voir ou éditer le fichier markdown de contexte utilisé par l\'assistant IA.'}
+                  onClick={() => { setMaintenanceOpen(false); onContext() }}
+                  dotColor={profile.project_context ? t.successSolid : undefined}
+                />
+                {(profile.odoo_sh_url || ghUrl) && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                      {lang === 'en' ? 'External links' : 'Liens externes'}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {profile.odoo_sh_url && (
+                        <a href={profile.odoo_sh_url} target="_blank" rel="noreferrer"
+                          className="btn btn-outline btn-sm" style={{ textDecoration: 'none' }}>
+                          <Cloud size={13} /> Odoo.sh Dashboard
+                        </a>
+                      )}
+                      {ghUrl && (
+                        <a href={ghUrl} target="_blank" rel="noreferrer"
+                          className="btn btn-outline btn-sm" style={{ textDecoration: 'none' }}>
+                          <GitBranch size={13} /> GitHub
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 14, marginTop: 4 }}>
+                  <button
+                    onClick={() => { setMaintenanceOpen(false); setConfirmDelete(true) }}
+                    className="btn btn-sm"
+                    style={{
+                      width: '100%', justifyContent: 'flex-start',
+                      background: 'transparent', color: t.danger, border: `1px solid ${t.danger}`,
+                    }}
+                    title={c.deleteTitle}>
+                    <Trash2 size={14} /> {lang === 'en' ? 'Delete project' : 'Supprimer le projet'}
                   </button>
                 </div>
-              )}
+              </div>
             </div>
-            <button onClick={() => setConfirmDelete(true)} title={c.deleteTitle}
-              className="project-delete-action"><Trash2 size={15} /></button>
           </div>
-        </div>
+        ), modalRoot)}
 
         {/* ── Env modal (add / edit) ── */}
         {envModal && modalRoot && createPortal((
@@ -1368,7 +1408,31 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                 </button>
               </div>
 
+              {/* Stepper (add mode only — edit shows everything in one screen) */}
+              {envModal.mode === 'add' && (
+                <div className="project-env-stepper" style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 20px', borderBottom: `1px solid ${t.border}`,
+                  fontSize: 12,
+                }}>
+                  <EnvStep n={1} label="Connexion Odoo" active={envStep === 1} done={envDiag?.uid != null}
+                    onClick={() => setEnvStep(1)} />
+                  <span style={{ flex: '0 0 24px', height: 1, background: t.border }} />
+                  <EnvStep n={2} label="Dépôt & options" active={envStep === 2}
+                    done={false}
+                    disabled={envDiag?.uid == null}
+                    onClick={() => { if (envDiag?.uid != null) setEnvStep(2) }} />
+                  <div style={{ flex: 1 }} />
+                  <span style={{ color: t.muted, fontSize: 11 }}>
+                    Étape {envStep} / 2
+                  </span>
+                </div>
+              )}
+
               <div className="ui-modal-body project-env-modal-body">
+                {/* ── STEP 1 fields (add+edit; in add wizard, only step 1 active) ── */}
+                {(envModal.mode === 'edit' || envStep === 1) && <>
+
                 {/* Nom + identifiant (add only) */}
                 {envModal.mode === 'add' && (
                   <div className="project-env-grid project-env-grid-asymmetric">
@@ -1447,6 +1511,10 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                   )}
                 </div>
 
+                </>}
+                {/* ── STEP 2 fields (add+edit; in add wizard, only step 2 active) ── */}
+                {(envModal.mode === 'edit' || envStep === 2) && <>
+
                 {/* Version + Branch */}
                 <div className="project-env-grid">
                   <div className="ui-field">
@@ -1514,12 +1582,18 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                     </div>
                   )}
                 </div>
+                </>}
               </div>
 
-              {/* Footer */}
+              {/* Footer (wizard-aware: in add mode, step 1 shows "Suivant", step 2 shows "Enregistrer") */}
               <div className="ui-modal-footer project-env-modal-footer">
                 <div className="project-env-modal-actions">
                   <button className="btn btn-secondary" onClick={() => setEnvModal(null)}>Annuler</button>
+                  {envModal.mode === 'add' && envStep === 2 && (
+                    <button className="btn btn-outline btn-sm" onClick={() => setEnvStep(1)}>
+                      ← Précédent
+                    </button>
+                  )}
                   {envModal.mode === 'edit' && envModal.env.id !== activeEnvId && (
                     <button className="btn btn-outline btn-sm" onClick={() => { activateEnv(envModal.env.id); setEnvModal(null) }}
                       style={{ color: t.action, borderColor: t.action }}>
@@ -1533,11 +1607,22 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
                     </button>
                   )}
                 </div>
-                <button className="btn btn-primary" onClick={saveEnvModal}
-                  disabled={envSaving || !envForm.name || !envForm.db_url || !envForm.db_name || !envForm.login || (envModal.mode === 'add' && !envForm.api_key)}>
-                  {envSaving ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Check size={14} />}
-                  {envSaving ? 'Enregistrement…' : 'Enregistrer'}
-                </button>
+                {envModal.mode === 'add' && envStep === 1 ? (
+                  <button className="btn btn-primary"
+                    onClick={() => setEnvStep(2)}
+                    disabled={envDiag?.uid == null}
+                    title={envDiag?.uid == null
+                      ? 'Lancez le test de connexion avant de passer à l\'étape suivante'
+                      : 'Continuer vers la configuration du dépôt'}>
+                    Suivant →
+                  </button>
+                ) : (
+                  <button className="btn btn-primary" onClick={saveEnvModal}
+                    disabled={envSaving || !envForm.name || !envForm.db_url || !envForm.db_name || !envForm.login || (envModal.mode === 'add' && !envForm.api_key)}>
+                    {envSaving ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : <Check size={14} />}
+                    {envSaving ? 'Enregistrement…' : 'Enregistrer'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1589,6 +1674,76 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onChe
 
       </div>
     </div>
+  )
+}
+
+function EnvStep({ n, label, active, done, disabled, onClick }: {
+  n: number; label: string; active: boolean; done?: boolean
+  disabled?: boolean; onClick?: () => void
+}) {
+  const color = active ? 'var(--brand)' : done ? 'var(--th-success, #16a34a)' : 'var(--th-muted)'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        background: 'transparent', border: 'none', padding: 0,
+        cursor: disabled ? 'not-allowed' : (onClick ? 'pointer' : 'default'),
+        opacity: disabled ? 0.55 : 1,
+      }}>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 22, height: 22, borderRadius: '50%',
+        background: active ? color : 'transparent',
+        color: active ? 'var(--brand-contrast, #fff)' : color,
+        border: `1.5px solid ${color}`,
+        fontSize: 11, fontWeight: 700,
+      }}>
+        {done && !active ? <Check size={12} /> : n}
+      </span>
+      <span style={{ fontWeight: active ? 600 : 500, color: active ? 'var(--th-text)' : 'var(--th-muted)' }}>
+        {label}
+      </span>
+    </button>
+  )
+}
+
+function MaintenanceAction({ icon, label, description, onClick, loading, dotColor }: {
+  icon: React.ReactNode; label: string; description: string
+  onClick: () => void; loading?: boolean; dotColor?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className="project-maintenance-action-row"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 12px',
+        width: '100%', textAlign: 'left',
+        border: '1px solid var(--th-border)', borderRadius: 'var(--neo-radius, 8px)',
+        background: 'transparent', cursor: loading ? 'wait' : 'pointer',
+        opacity: loading ? 0.6 : 1, transition: 'background .15s',
+      }}>
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 28, height: 28, flexShrink: 0,
+        background: 'color-mix(in srgb, var(--brand) 12%, transparent)',
+        borderRadius: 6, color: 'var(--brand)' }}>
+        {loading ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : icon}
+      </span>
+      <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13 }}>
+          {label}
+          {dotColor && <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor }} />}
+        </span>
+        <span style={{ fontSize: 11.5, color: 'var(--th-muted)', lineHeight: 1.4 }}>
+          {description}
+        </span>
+      </span>
+      <ChevronRight size={14} style={{ flexShrink: 0, opacity: 0.5, marginTop: 7 }} />
+    </button>
   )
 }
 

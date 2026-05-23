@@ -21,9 +21,11 @@ import ToolCallGroup, { type ToolEvent } from '../components/ToolCallGroup'
 import Markdown from '../components/Markdown'
 import AiSelector from '../components/AiSelector'
 import ConversationContextPanel from '../components/ConversationContextPanel'
+import WorkspaceShell from '../components/WorkspaceShell'
 import { useWorkspaceContext } from '../components/Layout'
 import { routedContextFiles, routedContextFilesWithSource, type ComplexityMode } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
+import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import {
   ATTACHMENT_ACCEPT, ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_MB,
   fileKind, fileToBase64, formatFileSize, attachmentPayload,
@@ -386,6 +388,7 @@ export default function Creator() {
   const activeVersion = activeEnv?.odoo_version ?? selectedProject?.odoo_version ?? null
   const activeCompany = companies.find(c => c.id === companyId) ?? companies[0] ?? null
   const activeEnvRepo = activeEnv?.github_repo ?? null
+  const handleRefreshContext = useRefreshProjectContext(selectedProject?.id ?? null, activeEnv?.id ?? null)
   const activeComplexity = technicalComplexityLabel(selectedProject?.technical_complexity)
   const activeCompanyLocalization = companyLocalizationLabel(activeCompany)
   const complexityParsed = parseJson<Record<string, unknown>>(selectedProject?.technical_complexity, {})
@@ -875,25 +878,77 @@ export default function Creator() {
   const currentStep: 1 | 2 | 3 | 4 =
     phase === 'setup' ? 1 : phase === 'analyzing' ? 2 : phase === 'done' ? 4 : 3
 
-  return (
-    <div className="creator-shell">
-      <AiProviderRequiredModal
-        open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
-        onClose={() => setAiGuardDismissed(true)}
-      />
-      <CreatorPreviewModal
-        open={preview.open}
-        loading={preview.loading}
-        result={preview.result}
-        error={preview.error}
-        opSummary={preview.summary}
-        onRequestChange={requestChangeFromPreview}
-        onClose={() => setPreview(p => ({ ...p, open: false }))}
-      />
-      <PageHeader title={c.title} description={c.description} />
+  const creatorHeader = (<>
+    <AiProviderRequiredModal
+      open={!aiProvLoading && !aiConfigured && !aiGuardDismissed}
+      onClose={() => setAiGuardDismissed(true)}
+    />
+    <CreatorPreviewModal
+      open={preview.open}
+      loading={preview.loading}
+      result={preview.result}
+      error={preview.error}
+      opSummary={preview.summary}
+      onRequestChange={requestChangeFromPreview}
+      onClose={() => setPreview(p => ({ ...p, open: false }))}
+    />
+    <PageHeader title={c.title} description={c.description} />
+  </>)
 
-      <div className="creator-content-row">
-        <div className="creator-main-column">
+  const creatorContextPanel = contextOpen ? (
+    <ConversationContextPanel
+      title={en ? 'Creator context' : 'Contexte Creator'}
+      mode="developer"
+      effectivePerspective="developer"
+      lockedProfileLabel={en ? 'Creator' : 'Créateur'}
+      lockedProfileHint={en
+        ? 'Locked — Studio production conventions enforced'
+        : 'Verrouillé — conventions Studio appliquées'}
+      provider={activeProvDef?.label}
+      model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
+      project={selectedProject?.name}
+      environment={activeEnv?.name}
+      company={activeCompany?.name}
+      countryCode={activeCompany?.country_code}
+      localization={activeCompanyLocalization}
+      complexity={activeComplexity}
+      version={activeVersion}
+      repo={activeEnvRepo}
+      contextFiles={contextFiles}
+      contextFileSources={contextFileSources}
+      sources={conversationSources}
+      attachments={[]}
+      onRefresh={handleRefreshContext}
+    />
+  ) : null
+
+  const creatorHistoryPanel = showHistory ? (
+    <CreatorHistoryPanel
+      rows={historyRows}
+      empty={c.emptyHistory}
+      title={c.history}
+      close={c.close}
+      labels={{
+        applied: c.statusApplied,
+        failed: c.statusFailed,
+        rejected: c.statusRejected,
+        analyzed: c.statusAnalyzed,
+      }}
+      resume={c.resume}
+      onResume={resumeHistoryEntry}
+      onClose={() => setShowHistory(false)}
+    />
+  ) : null
+
+  return (
+    <WorkspaceShell
+      className="creator-shell"
+      mainClassName="creator-content-row"
+      chatClassName="creator-main-column"
+      header={creatorHeader}
+      contextPanel={creatorContextPanel}
+      historyPanel={creatorHistoryPanel}
+    >
       <StepBar steps={c.steps} current={currentStep} />
 
       <div className="assistant-context">
@@ -1382,53 +1437,7 @@ export default function Creator() {
           )}
         </Modal>
       )}
-        </div>
-
-        {contextOpen && (
-          <ConversationContextPanel
-            title={en ? 'Creator context' : 'Contexte Creator'}
-            mode="developer"
-            effectivePerspective="developer"
-            lockedProfileLabel={en ? 'Creator' : 'Créateur'}
-            lockedProfileHint={en
-              ? 'Locked — Studio production conventions enforced'
-              : 'Verrouillé — conventions Studio appliquées'}
-            provider={activeProvDef?.label}
-            model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
-            project={selectedProject?.name}
-            environment={activeEnv?.name}
-            company={activeCompany?.name}
-            countryCode={activeCompany?.country_code}
-            localization={activeCompanyLocalization}
-            complexity={activeComplexity}
-            version={activeVersion}
-            repo={activeEnvRepo}
-            contextFiles={contextFiles}
-            contextFileSources={contextFileSources}
-            sources={conversationSources}
-            attachments={[]}
-          />
-        )}
-
-        {showHistory && (
-          <CreatorHistoryPanel
-            rows={historyRows}
-            empty={c.emptyHistory}
-            title={c.history}
-            close={c.close}
-            labels={{
-              applied: c.statusApplied,
-              failed: c.statusFailed,
-              rejected: c.statusRejected,
-              analyzed: c.statusAnalyzed,
-            }}
-            resume={c.resume}
-            onResume={resumeHistoryEntry}
-            onClose={() => setShowHistory(false)}
-          />
-        )}
-      </div>
-    </div>
+    </WorkspaceShell>
   )
 }
 

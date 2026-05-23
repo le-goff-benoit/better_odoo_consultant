@@ -1,9 +1,12 @@
 import type React from 'react'
-import { Bot, Database, FileText, FolderCode, Globe2, Lock, PanelRight, Sparkles, Workflow } from 'lucide-react'
+import { useState } from 'react'
+import { Bot, Database, FileText, FolderCode, GitBranch, Globe2, Layers3, Lock, PanelRight, RefreshCw, Sparkles, Workflow } from 'lucide-react'
+import { countryFlag } from '../utils/countryFlag'
 import { useQuery } from '@tanstack/react-query'
 import { useUiLanguage } from '../i18n'
 import type { Perspective, PerspectiveMode } from './PerspectiveToggle'
-import PerspectiveToggle, { PERSPECTIVE_COLORS } from './PerspectiveToggle'
+import { PERSPECTIVE_COLORS } from './PerspectiveToggle'
+import PerspectiveSelect from './PerspectiveSelect'
 import { perspectiveLabel } from '../utils/aiContext'
 import type { ContextFileSource } from '../utils/aiContext'
 import { listContextFiles } from '../api/client'
@@ -55,6 +58,11 @@ interface ConversationContextPanelProps {
   lockedProfileLabel?: string
   /** Helper text under the lock chip (e.g. why it's locked). */
   lockedProfileHint?: string
+  /** When provided, displays a refresh button in the panel header that runs
+   * a unified refresh of the project context (custom repo pull + fiscal
+   * localization + technical complexity). The promise should resolve with a
+   * short human-readable summary that the caller surfaces as a toast. */
+  onRefresh?: () => Promise<string | void>
 }
 
 export default function ConversationContextPanel({
@@ -80,8 +88,28 @@ export default function ConversationContextPanel({
   attachments,
   lockedProfileLabel,
   lockedProfileHint,
+  onRefresh,
 }: ConversationContextPanelProps) {
   const lang = useUiLanguage()
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshFlash, setRefreshFlash] = useState<string | null>(null)
+  const handleRefresh = async () => {
+    if (!onRefresh || refreshing) return
+    setRefreshing(true)
+    setRefreshFlash(null)
+    try {
+      const summary = await onRefresh()
+      setRefreshFlash(typeof summary === 'string' && summary
+        ? summary
+        : (lang === 'en' ? 'Context refreshed' : 'Contexte rafraîchi'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setRefreshFlash((lang === 'en' ? 'Refresh failed: ' : 'Échec : ') + msg)
+    } finally {
+      setRefreshing(false)
+      setTimeout(() => setRefreshFlash(null), 6000)
+    }
+  }
   // Fetch context-file freshness once per UI language; React Query dedupes
   // across the multiple pages that mount this panel.
   const { data: contextMeta } = useQuery<ContextFileMeta[]>({
@@ -139,22 +167,46 @@ export default function ConversationContextPanel({
     }
 
   const localizationFile = localizationContextFile(countryCode)
-  const selectionRows = [
-    { label: c.project, value: project || c.general },
-    { label: c.environment, value: environment },
-    { label: c.company, value: company },
-    { label: c.complexity, value: complexity },
-    { label: c.version, value: version || undefined },
-    { label: c.target, value: targetVersion || undefined },
-    { label: c.repository, value: repo ? repo.split('/').slice(-2).join('/') : undefined },
-  ].filter(row => row.value)
 
   return (
     <aside className="workspace-context conversation-context" aria-label={c.title}>
-      <div className="workspace-context-header">
-        <PanelRight size={16} />
-        <span>{c.title}</span>
+      <div className="workspace-context-header" style={{ justifyContent: 'space-between' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+          <PanelRight size={16} />
+          <span>{c.title}</span>
+        </span>
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="ui-icon-button"
+            aria-label={lang === 'en' ? 'Refresh project context' : 'Rafraîchir le contexte projet'}
+            title={lang === 'en'
+              ? 'Refresh repo + localization + complexity'
+              : 'Rafraîchir dépôt + localisation + complexité'}
+            style={{ opacity: refreshing ? 0.55 : 1 }}
+          >
+            <RefreshCw size={14} className={refreshing ? 'cc-refresh-spin' : undefined} />
+          </button>
+        )}
       </div>
+      {refreshFlash && (
+        <div className="cc-refresh-flash"
+          role="status"
+          style={{
+            margin: '0 12px 6px',
+            padding: '6px 10px',
+            borderRadius: 6,
+            fontSize: 11,
+            background: 'color-mix(in srgb, var(--brand) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--brand) 35%, transparent)',
+            color: 'var(--th-text, inherit)',
+            lineHeight: 1.35,
+          }}>
+          {refreshFlash}
+        </div>
+      )}
 
       <ContextBlock icon={<Sparkles size={15} />} label={c.profile}>
         {lockedProfileLabel ? (
@@ -168,6 +220,13 @@ export default function ConversationContextPanel({
               <span>{lockedProfileHint ?? (lang === 'en' ? 'Locked for this mode' : 'Verrouillé pour ce mode')}</span>
             </div>
           </div>
+        ) : onModeChange ? (
+          <PerspectiveSelect
+            value={mode}
+            effectiveValue={effectivePerspective}
+            onChange={onModeChange}
+            disabled={disabled}
+          />
         ) : (
           <div className="conversation-profile-card">
             <div className="conversation-profile-live"
@@ -175,15 +234,6 @@ export default function ConversationContextPanel({
               <strong>{perspectiveLabel(effectivePerspective, lang)}</strong>
               <span>{mode === 'auto' ? c.automatic : c.manual}</span>
             </div>
-            {onModeChange && (
-              <PerspectiveToggle
-                value={mode}
-                effectiveValue={effectivePerspective}
-                onChange={onModeChange}
-                size="sm"
-                disabled={disabled}
-              />
-            )}
           </div>
         )}
       </ContextBlock>
@@ -194,16 +244,43 @@ export default function ConversationContextPanel({
       </ContextBlock>
 
       <ContextBlock icon={<Workflow size={15} />} label={c.selection}>
-        {selectionRows.length > 0 ? (
-          <div className="conversation-selection-list">
-            {selectionRows.map(row => (
-              <div key={row.label} className="conversation-selection-row">
-                <span>{row.label}</span>
-                <strong>{row.value}</strong>
-              </div>
-            ))}
+        {project || environment || company || version ? (
+          <div className="conversation-selection-chips" style={{
+            display: 'flex', flexWrap: 'wrap', gap: 5,
+          }}>
+            {project && (
+              <ContextChip tone="brand" title={c.project}>
+                {project}
+              </ContextChip>
+            )}
+            {environment && (
+              <ContextChip tone="neutral" title={c.environment}>
+                {environment}
+              </ContextChip>
+            )}
+            {company && (
+              <ContextChip tone="neutral" title={c.company}>
+                {countryCode && <span style={{ fontSize: 12 }}>{countryFlag(countryCode)}</span>}
+                {company}
+              </ContextChip>
+            )}
+            {version && (
+              <ContextChip tone="accent" title={c.version}>
+                {targetVersion ? `v${version} → v${targetVersion}` : `v${version}`}
+              </ContextChip>
+            )}
+            {complexity && (
+              <ContextChip tone="muted" title={c.complexity} icon={<Layers3 size={10} />}>
+                {complexity}
+              </ContextChip>
+            )}
+            {repo && (
+              <ContextChip tone="muted" title={c.repository} icon={<GitBranch size={10} />}>
+                {repo.split('/').slice(-2).join('/')}
+              </ContextChip>
+            )}
           </div>
-        ) : <span>{c.none}</span>}
+        ) : <span>{c.general}</span>}
       </ContextBlock>
 
       {localization && (
@@ -223,9 +300,11 @@ export default function ConversationContextPanel({
           sources={contextFileSources} lang={lang} />
       </ContextBlock>
 
-      <ContextBlock icon={<Database size={15} />} label={c.sources}>
-        <PillList items={sources} empty={c.none} tone="success" />
-      </ContextBlock>
+      {sources.length > 0 && (
+        <ContextBlock icon={<Database size={15} />} label={c.sources}>
+          <PillList items={sources} empty={c.none} tone="success" />
+        </ContextBlock>
+      )}
 
       {attachments.length > 0 && (
         <ContextBlock icon={<FolderCode size={15} />} label={c.attachments}>
@@ -259,6 +338,33 @@ function localizationBadgeStyle(countryCode?: string | null): React.CSSPropertie
   }
 }
 
+function ContextChip({ children, tone, title, icon }: {
+  children: React.ReactNode
+  tone: 'brand' | 'accent' | 'neutral' | 'muted'
+  title?: string
+  icon?: React.ReactNode
+}) {
+  const toneStyles: Record<string, React.CSSProperties> = {
+    brand:   { background: 'var(--brand)', color: 'var(--brand-contrast, #fff)', borderColor: 'var(--brand)' },
+    accent:  { background: 'color-mix(in srgb, var(--brand) 18%, transparent)', color: 'var(--th-text)', borderColor: 'color-mix(in srgb, var(--brand) 40%, transparent)' },
+    neutral: { background: 'var(--th-surface-2, #f3f4f6)', color: 'var(--th-text)', borderColor: 'var(--th-border)' },
+    muted:   { background: 'transparent', color: 'var(--th-muted)', borderColor: 'var(--th-border)' },
+  }
+  return (
+    <span
+      title={title}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '3px 8px', borderRadius: 5,
+        fontSize: 11, fontWeight: 600, lineHeight: 1.3,
+        border: '1px solid', ...toneStyles[tone],
+      }}>
+      {icon}
+      {children}
+    </span>
+  )
+}
+
 function ContextBlock({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <section className="workspace-context-block">
@@ -287,9 +393,23 @@ function FreshnessPillList({
     if (source === 'keyword') return lang === 'en' ? 'keyword' : 'mots-clés'
     return null
   }
+  // Surface the outliers (aging/stale) and the keyword/complexity-tagged
+  // files; collapse the rest of the "fresh & untagged" pile into a single
+  // counter so the panel doesn't drown the user in pills they don't need to act on.
+  const flagged: string[] = []
+  const quiet: string[] = []
+  for (const item of items) {
+    const age = ageByName.get(item)
+    const tone = age !== undefined ? freshnessTone(age) : 'fresh'
+    const source = sources?.get(item)
+    const tagged = source === 'complexity' || source === 'keyword'
+    if (tone !== 'fresh' || tagged) flagged.push(item)
+    else quiet.push(item)
+  }
+  const visible = flagged.length ? flagged : items.slice(0, 8)
   return (
     <div className="context-pill-row">
-      {items.slice(0, 8).map(item => {
+      {visible.slice(0, 8).map(item => {
         const age = ageByName.get(item)
         const hasAge = age !== undefined
         // Only show the freshness dot when it's an outlier (aging or stale).
@@ -349,7 +469,17 @@ function FreshnessPillList({
           </span>
         )
       })}
-      {items.length > 8 && <span className="ui-badge ui-badge-neutral">+{items.length - 8}</span>}
+      {visible.length > 8 && (
+        <span className="ui-badge ui-badge-neutral">+{visible.length - 8}</span>
+      )}
+      {flagged.length > 0 && quiet.length > 0 && (
+        <span className="ui-badge ui-badge-neutral"
+          title={lang === 'en'
+            ? `${quiet.length} fresh context file(s) not shown`
+            : `${quiet.length} fichier(s) à jour non affichés`}>
+          {lang === 'en' ? `+${quiet.length} fresh` : `+${quiet.length} à jour`}
+        </span>
+      )}
     </div>
   )
 }
