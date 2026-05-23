@@ -5,12 +5,10 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.50.0** — refonte UX :
-> - **Bouton Rafraîchir unifié** sur la carte projet : un seul clic enchaîne vérification d'accès + pull du dépôt custom + localisation fiscale + complexité technique + auto-fill du contexte IA.
-> - **Carte projet simplifiée** (Modifier · Rafraîchir · Maintenance), modal Maintenance pour les actions rares (VS Code, liens externes, contexte markdown, suppression).
-> - **Wizard 2 étapes** pour ajouter un environnement (connexion testée avant la config dépôt).
-> - **Panneau de contexte** condensé : chips colorés (drapeau pays, badge version `v18 → v17`, complexité, dépôt) + bouton refresh intégré + sélecteur de profil compact (`PerspectiveSelect`).
-> - **`WorkspaceShell` partagé** entre Creator / Assistant / Migration — squelette JSX unifié, classes CSS `workspace-*` côte à côte avec les classes existantes.
+> Version actuelle : **0.51.0** — contextualisation des suggestions Migration :
+> - **Suggestions Migration ancrées au projet** : noms de modules notables installés (sale_subscription, helpdesk, mrp, pos, hr_payroll…), localisation comptable détectée (code pays + module `l10n_*`), nom du projet + environnement, dépôt custom nommé, comptage d'apps installées, clause Studio dédiée.
+> - Les propositions se rafraîchissent quand on change de projet, d'environnement, de versions ou de perspective — `useQuery(['project-modules', sourceProfile.id])`.
+> - **Sources Odoo** : retrait du SHA de commit dans la ligne Community / Enterprise, remplacé par un libellé clair `Dernière mise à jour <relatif>` (hier, 3 jours, …).
 
 ---
 

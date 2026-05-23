@@ -1,18 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, ArrowUp, Check, CheckCheck, Code, Copy, FileText, Image as ImageIcon, Maximize2, Paperclip, Square, Timer, TriangleAlert, X } from 'lucide-react'
-import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getUserProfile } from '../api/client'
+import { useLocation } from 'react-router-dom'
+import { ArrowRightLeft, ArrowUp, Check, CheckCheck, Code, Copy, FileText, Image as ImageIcon, Loader2, Maximize2, Paperclip, Square, Timer, TriangleAlert, X } from 'lucide-react'
+import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getModules } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
-import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import ConversationHistoryPanel from '../components/ConversationHistoryPanel'
 import WorkspaceShell from '../components/WorkspaceShell'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
+import Markdown from '../components/Markdown'
 import AiSelector from '../components/AiSelector'
 import { useWorkspaceContext } from '../components/Layout'
 import { PROVIDERS } from '../constants/providers'
@@ -211,37 +212,175 @@ function fmtDate(ts: number) {
 // Module-level buffer: survives component unmount during streaming
 const _migBuffer = new Map<string, Message[]>()
 
-const SUGGESTIONS_MIGRATION_TECHNICAL = [
-  'Quels champs ont changé sur sale.order entre les deux versions ?',
-  'Comment migrer les vues XML avec attrs= ?',
-  'Quels modules custom risquent d\'être incompatibles ?',
-  'Quelles API Python ont été supprimées ou renommées ?',
-  'Analyse les différences de stock.move entre les deux versions',
+interface InstalledModule { name?: string; shortdesc?: string; application?: boolean }
+
+// Labels lisibles pour les modules « notables » qu'on aime nommer dans les suggestions.
+// Tu peux étoffer cette liste — toute correspondance exacte ou par préfixe est utilisée.
+const NOTABLE_MODULE_LABELS: Array<{ match: RegExp; fr: string; en: string }> = [
+  { match: /^sale_subscription$/, fr: 'les abonnements (sale_subscription)', en: 'subscriptions (sale_subscription)' },
+  { match: /^sale_renting$/, fr: 'la location (sale_renting)', en: 'rentals (sale_renting)' },
+  { match: /^sale_loyalty$/, fr: 'la fidélité / promotions (sale_loyalty)', en: 'loyalty / promotions (sale_loyalty)' },
+  { match: /^helpdesk(_|$)/, fr: 'le helpdesk', en: 'helpdesk' },
+  { match: /^pos(_|$)/, fr: 'le point de vente (PoS)', en: 'point of sale (PoS)' },
+  { match: /^website_sale$/, fr: 'l\'e-commerce (website_sale)', en: 'eCommerce (website_sale)' },
+  { match: /^mrp_workorder$/, fr: 'les ordres de travail MRP (mrp_workorder)', en: 'MRP work orders (mrp_workorder)' },
+  { match: /^mrp(_|$)/, fr: 'la production (MRP)', en: 'manufacturing (MRP)' },
+  { match: /^hr_payroll(_|$)/, fr: 'la paie (hr_payroll)', en: 'payroll (hr_payroll)' },
+  { match: /^hr_appraisal$/, fr: 'les évaluations RH (hr_appraisal)', en: 'HR appraisals (hr_appraisal)' },
+  { match: /^hr_timesheet$/, fr: 'les feuilles de temps (hr_timesheet)', en: 'timesheets (hr_timesheet)' },
+  { match: /^hr_expense$/, fr: 'les notes de frais (hr_expense)', en: 'expenses (hr_expense)' },
+  { match: /^account_accountant$/, fr: 'la comptabilité complète (account_accountant)', en: 'full accounting (account_accountant)' },
+  { match: /^account_followup$/, fr: 'la relance client (account_followup)', en: 'customer follow-ups (account_followup)' },
+  { match: /^stock_landed_costs$/, fr: 'les coûts logistiques (stock_landed_costs)', en: 'landed costs (stock_landed_costs)' },
+  { match: /^purchase_requisition$/, fr: 'les appels d\'offres achat (purchase_requisition)', en: 'purchase tenders (purchase_requisition)' },
+  { match: /^marketing_automation$/, fr: 'le marketing automation', en: 'marketing automation' },
+  { match: /^mass_mailing$/, fr: 'les emailings (mass_mailing)', en: 'mass mailings (mass_mailing)' },
+  { match: /^project_forecast$/, fr: 'la planification projet (project_forecast)', en: 'project forecast' },
+  { match: /^project(_|$)/, fr: 'la gestion de projet', en: 'project management' },
+  { match: /^website(_|$)/, fr: 'le site web', en: 'website' },
+  { match: /^documents(_|$)/, fr: 'la GED Documents', en: 'Documents module' },
+  { match: /^sign$/, fr: 'la signature électronique (sign)', en: 'eSign (sign)' },
+  { match: /^iot(_|$)/, fr: 'la box IoT', en: 'IoT box' },
+  { match: /^fleet$/, fr: 'la flotte (fleet)', en: 'fleet (fleet)' },
 ]
 
-const SUGGESTIONS_MIGRATION_FUNCTIONAL = [
-  'Quelles nouvelles fonctionnalités standard sont disponibles dans la version cible ?',
+const LOCALIZATION_LABELS: Record<string, string> = {
+  CH: 'Suisse', FR: 'France', BE: 'Belgique', LU: 'Luxembourg', CA: 'Canada',
+  DE: 'Allemagne', ES: 'Espagne', IT: 'Italie', NL: 'Pays-Bas', PT: 'Portugal',
+  US: 'États-Unis', UK: 'Royaume-Uni', GB: 'Royaume-Uni',
+}
+
+const SUGGESTIONS_MIGRATION_TECHNICAL_GENERIC = (src: string, tgt: string) => [
+  `Quels champs ont changé sur sale.order entre ${src} et ${tgt} ?`,
+  'Comment migrer les vues XML avec attrs= ?',
+  'Quelles API Python ont été supprimées ou renommées ?',
+  `Analyse les différences de stock.move entre ${src} et ${tgt}`,
+]
+
+const SUGGESTIONS_MIGRATION_FUNCTIONAL_GENERIC = (src: string, tgt: string) => [
+  `Quelles nouvelles fonctionnalités standard apparaissent en ${tgt} ?`,
   'Quels modules nouveaux pourraient remplacer nos modules custom ?',
   'Quels changements UX/menus impactent les key users ?',
-  'Quel est l\'impact formation pour les commerciaux ?',
-  'Y a-t-il des modules dépréciés ou remplacés entre ces deux versions ?',
+  `Y a-t-il des modules dépréciés ou remplacés entre ${src} et ${tgt} ?`,
 ]
 
-const SUGGESTIONS_MIGRATION_TECHNICAL_EN = [
-  'Which fields changed on sale.order between the two versions?',
+const SUGGESTIONS_MIGRATION_TECHNICAL_GENERIC_EN = (src: string, tgt: string) => [
+  `Which fields changed on sale.order between ${src} and ${tgt}?`,
   'How should we migrate XML views using attrs= ?',
-  'Which custom modules are likely to be incompatible?',
   'Which Python APIs were removed or renamed?',
-  'Analyze stock.move differences between the two versions',
+  `Analyze stock.move differences between ${src} and ${tgt}`,
 ]
 
-const SUGGESTIONS_MIGRATION_FUNCTIONAL_EN = [
-  'Which new standard features are available in the target version?',
+const SUGGESTIONS_MIGRATION_FUNCTIONAL_GENERIC_EN = (src: string, tgt: string) => [
+  `Which new standard features appear in ${tgt}?`,
   'Which new modules could replace our custom modules?',
   'Which UX or menu changes will impact key users?',
-  'What is the training impact for sales users?',
-  'Are there deprecated or replaced modules between these versions?',
+  `Are there deprecated or replaced modules between ${src} and ${tgt}?`,
 ]
+
+function buildMigrationSuggestions({
+  lang, isFunctional, sourceVersion, targetVersion, projectName, envName,
+  modules, complexityMode, repoName, countryCode,
+}: {
+  lang: 'fr' | 'en'
+  isFunctional: boolean
+  sourceVersion: string | null
+  targetVersion: string | null
+  projectName: string | null
+  envName: string | null
+  modules: InstalledModule[]
+  complexityMode: ComplexityMode | null
+  repoName: string | null
+  countryCode: string | null
+}): string[] {
+  const src = sourceVersion ?? '?'
+  const tgt = targetVersion ?? '?'
+
+  // Étiquette projet : "AlaMaison (Production) 17.0 → 18.0" ou juste version
+  const where = projectName
+    ? `${projectName}${envName ? ` (${envName})` : ''}`
+    : null
+  const projectClause = where
+    ? (lang === 'fr' ? `sur ${where}` : `on ${where}`)
+    : (lang === 'fr' ? 'sur ce projet' : 'on this project')
+
+  // 1) Suggestions ancrées sur les modules « notables » réellement installés.
+  const moduleNames = modules.map(m => (m.name ?? '').toLowerCase()).filter(Boolean)
+  const installedSet = new Set(moduleNames)
+  const notableHits: string[] = []
+  for (const rule of NOTABLE_MODULE_LABELS) {
+    if (moduleNames.some(n => rule.match.test(n))) {
+      const lbl = lang === 'fr' ? rule.fr : rule.en
+      notableHits.push(
+        lang === 'fr'
+          ? `Qu'est-ce qui change pour ${lbl} entre ${src} et ${tgt} ${projectClause} ?`
+          : `What changes for ${lbl} between ${src} and ${tgt} ${projectClause}?`
+      )
+      if (notableHits.length >= 3) break
+    }
+  }
+
+  // 2) Localisation comptable : repérée via country_code OU module l10n_*
+  const l10nMatch = moduleNames.find(n => n.startsWith('l10n_'))
+  const countryLabel = countryCode ? (LOCALIZATION_LABELS[countryCode.toUpperCase()] ?? countryCode.toUpperCase()) : null
+  const localizationLine = (countryLabel || l10nMatch)
+    ? (lang === 'fr'
+        ? `Quels impacts sur la localisation comptable${countryLabel ? ` ${countryLabel}` : ''}${l10nMatch ? ` (${l10nMatch})` : ''} entre ${src} et ${tgt} ?`
+        : `Which accounting localization impacts${countryLabel ? ` for ${countryLabel}` : ''}${l10nMatch ? ` (${l10nMatch})` : ''} between ${src} and ${tgt}?`)
+    : null
+
+  // 3) Studio / dépôt custom — utilise le nom de dépôt s'il existe
+  const isStudio = complexityMode === 'studio' || complexityMode === 'studio_dev'
+  const isDev = complexityMode === 'dev' || complexityMode === 'studio_dev' || !!repoName
+  const repoShort = repoName ? repoName.split('/').slice(-2).join('/').replace(/\.git$/, '') : null
+  const studioLine = isStudio
+    ? (lang === 'fr'
+        ? `Quelles personnalisations Studio ${projectClause} risquent d'être à refaire en ${tgt} ?`
+        : `Which Studio customizations ${projectClause} risk breaking on ${tgt}?`)
+    : null
+  const devLine = isDev
+    ? (lang === 'fr'
+        ? `Quels modules custom${repoShort ? ` du dépôt ${repoShort}` : ` ${projectClause}`} risquent d'être incompatibles avec ${tgt} ?`
+        : `Which custom modules${repoShort ? ` in repo ${repoShort}` : ` ${projectClause}`} are likely incompatible with ${tgt}?`)
+    : null
+
+  // 4) Volume installé : signal de couverture (combien d'apps actives)
+  const appsCount = modules.filter(m => m.application).length
+  const coverageLine = appsCount > 0
+    ? (lang === 'fr'
+        ? `Établis une checklist de migration ${src} → ${tgt} adaptée aux ${appsCount} apps installées${where ? ` sur ${where}` : ''}`
+        : `Build a ${src} → ${tgt} migration checklist tailored to the ${appsCount} apps installed${where ? ` on ${where}` : ''}`)
+    : null
+
+  // 5) Profil métier vs technique — orient questions
+  const businessTilt = isFunctional
+    ? (lang === 'fr'
+        ? `Quels changements UX et menus entre ${src} et ${tgt} demandent une formation key-user ${projectClause} ?`
+        : `Which UX/menu changes between ${src} and ${tgt} need key-user training ${projectClause}?`)
+    : (lang === 'fr'
+        ? `Quels modèles ORM (champs renommés, supprimés) ont changé entre ${src} et ${tgt} parmi les apps installées ${projectClause} ?`
+        : `Which ORM models (renamed/removed fields) changed between ${src} and ${tgt} among installed apps ${projectClause}?`)
+
+  // 6) Fallback générique uniquement si la liste contextuelle est mince
+  const generic = lang === 'en'
+    ? (isFunctional ? SUGGESTIONS_MIGRATION_FUNCTIONAL_GENERIC_EN(src, tgt) : SUGGESTIONS_MIGRATION_TECHNICAL_GENERIC_EN(src, tgt))
+    : (isFunctional ? SUGGESTIONS_MIGRATION_FUNCTIONAL_GENERIC(src, tgt) : SUGGESTIONS_MIGRATION_TECHNICAL_GENERIC(src, tgt))
+
+  // Note: installedSet was computed for future filters; reference here so TS doesn't whine.
+  void installedSet
+
+  return [
+    ...notableHits,
+    localizationLine,
+    studioLine,
+    devLine,
+    businessTilt,
+    coverageLine,
+    ...generic,
+  ]
+    .filter((v, i, arr): v is string => typeof v === 'string' && v.trim().length > 0 && arr.indexOf(v) === i)
+    .slice(0, 5)
+}
 
 const migrationCopy = {
   fr: {
@@ -597,11 +736,9 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, mascotType, mascotColor, onAskMore }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, onAskMore }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
-  mascotType?: 'robot' | 'cat' | 'dog'
-  mascotColor?: string
   onAskMore?: (selectedText: string) => void
 }) {
   const lang = useUiLanguage()
@@ -733,11 +870,11 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
             marginTop: toolEvents.length > 0 ? 10 : 0,
-            padding: '8px 14px 8px 8px', background: t.bgMuted,
-            border: `1px solid ${t.border}`, borderRadius: t.radiusLg,
+            padding: '8px 14px', background: t.bgMuted,
+            border: `1px solid ${t.border}`, borderRadius: 0,
             fontSize: 13, color: t.textSub,
           }}>
-            <MascotThinking size={44} mascot={mascotType} color={mascotColor} />
+            <Loader2 size={15} className="creator-spin" style={{ color: 'var(--brand-fg)' }} />
             <span style={{ fontWeight: 500 }}>
               {toolEvents.length > 0 ? c.analyzing : c.thinking}
             </span>
@@ -803,155 +940,17 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
   )
 }
 
-// ── Markdown ──────────────────────────────────────────────────────
-
-function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: string[][] }) {
-  const [hovered, setHovered] = useState(false)
-
-  const downloadCsv = () => {
-    const escape = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-    const lines = [headers.map(escape).join(','), ...dataRows.map(row => row.map(escape).join(','))]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'export.csv'; a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  return (
-    <div style={{ overflowX: 'auto', margin: '8px 0', position: 'relative' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {hovered && (
-        <button onClick={downloadCsv} title="Exporter en CSV" style={{
-          position: 'absolute', top: 4, right: 4, zIndex: 10,
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          padding: '3px 9px', fontSize: 11, fontWeight: 600,
-          background: t.bgCard, color: t.action,
-          border: `1px solid ${t.brand40}`, borderRadius: t.radius,
-          cursor: 'pointer', boxShadow: t.shadow, transition: 'opacity .15s',
-        }}>
-          ↓ CSV
-        </button>
-      )}
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-        <thead>
-          <tr>
-            {headers.map((h, j) => (
-              <th key={j} style={{ padding: '6px 12px', textAlign: 'left', background: t.bgMuted, borderBottom: `2px solid ${t.border}`, fontWeight: 600, color: t.textSub }}>
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {dataRows.map((row, ri) => (
-            <tr key={ri} style={{ background: ri % 2 === 0 ? t.bgCard : t.bgMuted }}>
-              {row.map((cell, ci) => (
-                <td key={ci} style={{ padding: '5px 12px', borderBottom: `1px solid ${t.border}`, fontSize: 13 }}>
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function inlineMarkdown(text: string): React.ReactNode {
-  return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} style={{ color: 'color-mix(in srgb, var(--brand) 40%, var(--th-text))' }}>{part.slice(2, -2)}</strong>
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) return <em key={i}>{part.slice(1, -1)}</em>
-    if (part.startsWith('`') && part.endsWith('`')) return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
-    return part
-  })
-}
-
-function Markdown({ text }: { text: string }) {
-  const lines = text.split('\n')
-  const result: React.ReactNode[] = []
-  let i = 0
-
-  while (i < lines.length) {
-    const line = lines[i]
-
-    if (line.startsWith('```')) {
-      const codeLines: string[] = []
-      i++
-      while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++ }
-      result.push(
-        <pre key={i} style={{ background: 'var(--code-bg)', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
-          <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{codeLines.join('\n')}</code>
-        </pre>
-      )
-      i++; continue
-    }
-
-    if (line.startsWith('|')) {
-      const tableLines: string[] = []
-      while (i < lines.length && lines[i].startsWith('|')) { tableLines.push(lines[i]); i++ }
-      const rows = tableLines.filter(l => !l.match(/^\|[-| :]+\|$/))
-      if (rows.length) {
-        const headers = rows[0].split('|').filter(Boolean).map(s => s.trim())
-        const dataRows = rows.slice(1).map(row => row.split('|').filter(Boolean).map(c => c.trim()))
-        result.push(<MarkdownTable key={i} headers={headers} dataRows={dataRows} />)
-      }
-      continue
-    }
-
-    const hMatch = line.match(/^(#{1,3})\s+(.+)/)
-    if (hMatch) {
-      const sizes = [18, 16, 14]
-      result.push(<div key={i} style={{ fontSize: sizes[hMatch[1].length - 1], fontWeight: 700, color: t.text, margin: '12px 0 4px' }}>{hMatch[2]}</div>)
-      i++; continue
-    }
-
-    const listMatch = line.match(/^[-*]\s+(.+)/)
-    if (listMatch) {
-      result.push(
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brandFg, flexShrink: 0 }}>•</span>
-          <span>{inlineMarkdown(listMatch[1])}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    const olMatch = line.match(/^(\d+)\.\s+(.+)/)
-    if (olMatch) {
-      result.push(
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brandFg, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
-          <span>{inlineMarkdown(olMatch[2])}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    if (!line.trim()) { result.push(<div key={i} style={{ height: 8 }} />); i++; continue }
-
-    result.push(<p key={i} style={{ margin: '0 0 4px' }}>{inlineMarkdown(line)}</p>)
-    i++
-  }
-
-  return <>{result}</>
-}
-
 // ── Main page ─────────────────────────────────────────────────────
 
 export default function Migration() {
   const lang = useUiLanguage()
   const { contextOpen } = useWorkspaceContext()
+  const location = useLocation()
   const c = migrationCopy[lang]
   const { data: profilesData } = useQuery({ queryKey: ['profiles'],     queryFn: listProfiles })
   const { data: sourcesData }  = useQuery({ queryKey: ['sources-all'],  queryFn: checkAllSources, staleTime: 30_000 })
   const { data: provData }     = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
   const { data: modelCfg }     = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
-  const { data: userProfileData } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
-  const userProfile = userProfileData?.data as { mascotType?: 'robot' | 'cat' | 'dog'; mascotColor?: string } | undefined
-
   const profiles: Profile[] = profilesData?.data ?? []
   const allProviders: Record<string, boolean> = provData?.data ?? {}
   const modelConfig: Record<string, string[]> = modelCfg?.data ?? {}
@@ -991,6 +990,17 @@ export default function Migration() {
     setTargetState(cfg)
     try { localStorage.setItem(LS_MIG_TARGET, JSON.stringify(cfg)) } catch { /* quota */ }
   }
+
+  useEffect(() => {
+    const state = location.state as { profileId?: number; envId?: string } | null
+    if (!state?.profileId || profiles.length === 0) return
+    const profile = profiles.find(p => p.id === state.profileId)
+    if (!profile) return
+    const envs = profileEnvs(profile)
+    const envId = state.envId ?? profile.active_env_id ?? envs[0]?.id ?? null
+    setSource({ mode: 'environment', version: '', profileId: profile.id, envId })
+    window.history.replaceState({}, '')
+  }, [location.state, profiles])
 
   const [perspectiveMode, setPerspectiveState] = useState<PerspectiveMode>(() => loadPerspective('migration', 'auto'))
   const setPerspective = (p: PerspectiveMode) => { setPerspectiveState(p); savePerspective('migration', p) }
@@ -1401,9 +1411,32 @@ export default function Migration() {
 
   const showSuggestions = messages.length === 0 && ready && !input.trim()
   const isFunctionalProfile = perspective === 'support' || perspective === 'business_analyst'
-  const suggestionList = lang === 'en'
-    ? (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL_EN : SUGGESTIONS_MIGRATION_TECHNICAL_EN)
-    : (isFunctionalProfile ? SUGGESTIONS_MIGRATION_FUNCTIONAL : SUGGESTIONS_MIGRATION_TECHNICAL)
+
+  const { data: modulesData } = useQuery({
+    queryKey: ['project-modules', sourceProfile?.id],
+    queryFn: () => getModules(sourceProfile!.id),
+    enabled: !!sourceProfile && messages.length === 0,
+    staleTime: 5 * 60_000,
+  })
+  const installedModules: InstalledModule[] = useMemo(
+    () => (modulesData?.data?.modules ?? []) as InstalledModule[],
+    [modulesData],
+  )
+  const suggestionList = useMemo(
+    () => buildMigrationSuggestions({
+      lang,
+      isFunctional: isFunctionalProfile,
+      sourceVersion,
+      targetVersion,
+      projectName: sourceProfile?.name ?? null,
+      envName: sourceEnv?.name ?? null,
+      modules: installedModules,
+      complexityMode: sourceComplexityMode,
+      repoName: sourceRepoIsCloned ? sourceRepoName : null,
+      countryCode: sourceCompany?.country_code ?? null,
+    }),
+    [lang, isFunctionalProfile, sourceVersion, targetVersion, sourceProfile?.name, sourceEnv?.name, installedModules, sourceComplexityMode, sourceRepoName, sourceRepoIsCloned, sourceCompany?.country_code],
+  )
 
   const { configured: aiConfigured, loading: aiProvLoading } = useAiProvidersConfigured()
   const [aiGuardDismissed, setAiGuardDismissed] = useState(false)
@@ -1704,8 +1737,6 @@ export default function Migration() {
                 startTime={m.startTime}
                 inputTokens={m.inputTokens}
                 outputTokens={m.outputTokens}
-                mascotType={userProfile?.mascotType}
-                mascotColor={userProfile?.mascotColor}
                 onAskMore={askMoreOnSelection}
               />
             </div>

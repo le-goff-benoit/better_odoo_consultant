@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, Building2, Check, ChevronRight, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Layers3, Loader2, MoreHorizontal, Pencil, Play, Plus, RefreshCw, Trash2, TriangleAlert, UserRound, Wrench, X } from 'lucide-react'
+import { ArrowRightLeft, Bot, Building2, Check, ChevronRight, ClipboardList, Cloud, Code2, ExternalLink, GitBranch, Globe2, Layers3, Loader2, MoreHorizontal, Pencil, Play, Plus, RefreshCw, Trash2, TriangleAlert, UserRound, Wand2, Wrench, X } from 'lucide-react'
 import { listProfiles, createProfile, updateProfile, deleteProfile, testProfile, diagnoseOdoo, getProfileApps, refreshProjectContext, getProfileContext, saveProfileContext, autoFillContext, addProfileEnv, updateProfileEnv, deleteProfileEnv, activateProfileEnv, testProfileEnv, getEnvRepoStatus, syncEnvRepoUrl, openProfileWorkspace } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -935,6 +936,7 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onRef
 }) {
   const lang = useUiLanguage()
   const c = profilesCopy[lang]
+  const navigate = useNavigate()
   const [envs, setEnvs] = useState<EnvEntry[]>(() => { try { return JSON.parse(profile.environments ?? '[]') as EnvEntry[] } catch { return [] } })
   // Use first env with a github_repo for the GitHub quick link
   const ghUrl = (() => {
@@ -967,6 +969,15 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onRef
   const [workspaceOpening, setWorkspaceOpening] = useState(false)
   const repoAbortRef = useRef<AbortController | null>(null)
   const activeEnvId = profile.active_env_id || envs[0]?.id
+  const goToWorkspace = (target: 'assistant' | 'migration' | 'creator') => {
+    if (target === 'assistant') {
+      navigate('/assistant', { state: { profileId: profile.id } })
+    } else if (target === 'migration') {
+      navigate('/migration', { state: { profileId: profile.id, envId: activeEnvId } })
+    } else {
+      navigate('/creator', { state: { profileId: profile.id, envId: activeEnvId } })
+    }
+  }
 
   const { data: appsData } = useQuery({
     queryKey: ['profile-apps', profile.id],
@@ -1179,6 +1190,17 @@ function ProjectCard({ profile, onTest, onDelete, onEdit, onSelectCompany, onRef
                   {profile.company_name}{profile.company_city ? ` · ${profile.company_city}` : ''}
                 </div>
               )}
+            </div>
+            <div className="project-quick-nav" aria-label={lang === 'en' ? 'Open project in' : 'Ouvrir le projet dans'}>
+              <button type="button" onClick={() => goToWorkspace('assistant')} title="Assistant IA" aria-label="Assistant IA">
+                <Bot size={13} />
+              </button>
+              <button type="button" onClick={() => goToWorkspace('migration')} title="Migration" aria-label="Migration">
+                <ArrowRightLeft size={13} />
+              </button>
+              <button type="button" onClick={() => goToWorkspace('creator')} title="Creator" aria-label="Creator">
+                <Wand2 size={13} />
+              </button>
             </div>
           </div>
           {/* Badges row */}

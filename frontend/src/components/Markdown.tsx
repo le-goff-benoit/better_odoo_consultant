@@ -3,7 +3,84 @@ import { t } from '../theme'
 
 // ── Markdown table with CSV export ────────────────────────────
 
-function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: string[][] }) {
+type TableAlign = 'left' | 'center' | 'right'
+
+export interface ParsedMarkdownTable {
+  headers: string[]
+  aligns: TableAlign[]
+  dataRows: string[][]
+}
+
+function isEscaped(value: string, index: number): boolean {
+  let slashCount = 0
+  for (let i = index - 1; i >= 0 && value[i] === '\\'; i--) slashCount++
+  return slashCount % 2 === 1
+}
+
+export function splitMarkdownTableRow(row: string): string[] {
+  let value = row.trim()
+  if (value.startsWith('|')) value = value.slice(1)
+  if (value.endsWith('|') && !isEscaped(value, value.length - 1)) value = value.slice(0, -1)
+
+  const cells: string[] = []
+  let current = ''
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]
+    if (ch === '\\' && value[i + 1] === '|') {
+      current += '|'
+      i++
+      continue
+    }
+    if (ch === '|') {
+      cells.push(current.trim())
+      current = ''
+      continue
+    }
+    current += ch
+  }
+  cells.push(current.trim())
+  return cells
+}
+
+function parseAlignment(cell: string): TableAlign | null {
+  const normalized = cell.trim().replace(/\s+/g, '')
+  if (!/^:?-{3,}:?$/.test(normalized)) return null
+  if (normalized.startsWith(':') && normalized.endsWith(':')) return 'center'
+  if (normalized.endsWith(':')) return 'right'
+  return 'left'
+}
+
+function normalizeRow(cells: string[], width: number): string[] {
+  const row = cells.slice(0, width)
+  while (row.length < width) row.push('')
+  return row
+}
+
+export function parseMarkdownTable(tableLines: string[]): ParsedMarkdownTable | null {
+  if (tableLines.length < 2) return null
+  const headers = splitMarkdownTableRow(tableLines[0])
+  const separator = splitMarkdownTableRow(tableLines[1])
+  if (!headers.length || separator.length < headers.length) return null
+  const aligns = separator.slice(0, headers.length).map(parseAlignment)
+  if (aligns.some(align => align === null)) return null
+  return {
+    headers,
+    aligns: aligns as TableAlign[],
+    dataRows: tableLines.slice(2).map(row => normalizeRow(splitMarkdownTableRow(row), headers.length)),
+  }
+}
+
+function isPotentialTableStart(lines: string[], index: number): boolean {
+  if (index + 1 >= lines.length) return false
+  if (!lines[index].includes('|')) return false
+  return parseMarkdownTable([lines[index], lines[index + 1]]) !== null
+}
+
+function isTableContinuation(line: string): boolean {
+  return line.trim().length > 0 && line.includes('|')
+}
+
+function MarkdownTable({ headers, aligns, dataRows }: ParsedMarkdownTable) {
   const [hovered, setHovered] = useState(false)
 
   const downloadCsv = () => {
@@ -23,7 +100,7 @@ function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: str
 
   return (
     <div
-      style={{ overflowX: 'auto', margin: '8px 0', position: 'relative' }}
+      className="markdown-table-wrap"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -31,35 +108,27 @@ function MarkdownTable({ headers, dataRows }: { headers: string[]; dataRows: str
         <button
           onClick={downloadCsv}
           title="Exporter en CSV"
-          style={{
-            position: 'absolute', top: 4, right: 4, zIndex: 10,
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '3px 9px', fontSize: 11, fontWeight: 600,
-            background: t.bgCard, color: t.action,
-            border: `1px solid ${t.brand40}`, borderRadius: t.radius,
-            cursor: 'pointer', boxShadow: t.shadow,
-            transition: 'opacity .15s',
-          }}
+          className="markdown-table-export"
         >
           ↓ CSV
         </button>
       )}
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+      <table className="markdown-table">
         <thead>
           <tr>
             {headers.map((h, j) => (
-              <th key={j} style={{ padding: '6px 12px', textAlign: 'left', background: t.bgMuted, borderBottom: `2px solid ${t.border}`, fontWeight: 600, color: t.textSub }}>
-                {h}
+              <th key={j} style={{ textAlign: aligns[j] }}>
+                {inlineMarkdown(h)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {dataRows.map((row, ri) => (
-            <tr key={ri} style={{ background: ri % 2 === 0 ? t.bgCard : t.bgMuted }}>
-              {row.map((cell, ci) => (
-                <td key={ci} style={{ padding: '5px 12px', borderBottom: `1px solid ${t.border}`, fontSize: 13 }}>
-                  {cell}
+            <tr key={ri}>
+              {headers.map((_, ci) => (
+                <td key={ci} style={{ textAlign: aligns[ci] }}>
+                  {inlineMarkdown(row[ci] ?? '')}
                 </td>
               ))}
             </tr>
@@ -101,15 +170,11 @@ export default function Markdown({ text }: { text: string }) {
       i++; continue
     }
 
-    if (line.startsWith('|')) {
+    if (isPotentialTableStart(lines, i)) {
       const tableLines: string[] = []
-      while (i < lines.length && lines[i].startsWith('|')) { tableLines.push(lines[i]); i++ }
-      const rows = tableLines.filter(l => !l.match(/^\|[-| :]+\|$/))
-      if (rows.length) {
-        const headers = rows[0].split('|').filter(Boolean).map(s => s.trim())
-        const dataRows = rows.slice(1).map(row => row.split('|').filter(Boolean).map(c => c.trim()))
-        result.push(<MarkdownTable key={i} headers={headers} dataRows={dataRows} />)
-      }
+      while (i < lines.length && isTableContinuation(lines[i])) { tableLines.push(lines[i]); i++ }
+      const table = parseMarkdownTable(tableLines)
+      if (table) result.push(<MarkdownTable key={i} {...table} />)
       continue
     }
 

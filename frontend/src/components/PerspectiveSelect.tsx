@@ -41,14 +41,6 @@ export default function PerspectiveSelect({
     }
   }, [open])
 
-  const activePersp: Perspective = value === 'auto'
-    ? (effectiveValue ?? 'developer')
-    : value
-  const dotColor = PERSPECTIVE_COLORS[activePersp]
-  const subLabel = value === 'auto'
-    ? (lang === 'en' ? 'auto' : 'auto')
-    : (lang === 'en' ? 'manual' : 'manuel')
-
   const items: { id: PerspectiveMode; icon: React.ReactNode; label: string }[] = [
     { id: 'auto',             icon: <Sparkles size={14} />,  label: lang === 'en' ? 'Automatic' : 'Automatique' },
     { id: 'support',          icon: <Wrench size={14} />,    label: 'Support' },
@@ -56,6 +48,14 @@ export default function PerspectiveSelect({
     { id: 'architect',        icon: <Building2 size={14} />, label: lang === 'en' ? 'Architect' : 'Architecte' },
     { id: 'developer',        icon: <Code2 size={14} />,     label: lang === 'en' ? 'Developer' : 'Développeur' },
   ]
+  const activePersp: Perspective = value === 'auto'
+    ? (effectiveValue ?? 'developer')
+    : value
+  const dotColor = PERSPECTIVE_COLORS[activePersp]
+  const subLabel = value === 'auto'
+    ? (lang === 'en' ? 'auto' : 'auto')
+    : (lang === 'en' ? 'manual' : 'manuel')
+  const activeIcon = items.find(item => item.id === (value === 'auto' ? 'auto' : activePersp))?.icon
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -66,16 +66,11 @@ export default function PerspectiveSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         className="perspective-select-trigger"
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          width: '100%', padding: '7px 10px',
-          background: 'transparent', cursor: disabled ? 'not-allowed' : 'pointer',
-          border: '1px solid var(--th-border)', borderRadius: 6,
-          color: 'var(--th-text)',
-        }}>
+        style={{ '--persp-color': dotColor } as React.CSSProperties}>
         <span aria-hidden="true" style={{
           width: 8, height: 8, borderRadius: 4, background: dotColor, flexShrink: 0,
         }} />
+        <span className="perspective-select-icon" aria-hidden>{activeIcon}</span>
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, lineHeight: 1.15 }}>
           <strong style={{ fontSize: 12.5, fontWeight: 650 }}>
             {perspectiveLabel(activePersp, lang)}
@@ -108,13 +103,8 @@ export default function PerspectiveSelect({
                 role="option"
                 aria-selected={selected}
                 onClick={() => { onChange(it.id); setOpen(false) }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 9,
-                  width: '100%', padding: '7px 9px',
-                  background: selected ? 'color-mix(in srgb, var(--brand) 10%, transparent)' : 'transparent',
-                  border: 'none', borderRadius: 5, cursor: 'pointer',
-                  textAlign: 'left', color: 'var(--th-text)', fontSize: 12.5,
-                }}>
+                className={`perspective-select-option${selected ? ' is-selected' : ''}`}
+                style={{ '--persp-color': dotIfNotAuto ?? PERSPECTIVE_COLORS[activePersp] } as React.CSSProperties}>
                 {dotIfNotAuto
                   ? <span aria-hidden="true" style={{
                       width: 7, height: 7, borderRadius: 4, background: dotIfNotAuto, flexShrink: 0,

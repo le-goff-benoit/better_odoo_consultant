@@ -66,10 +66,10 @@ const sourcesCopy = {
     description: 'Téléchargez et maintenez les sources Odoo localement pour consultation et analyse.',
     add: 'Ajouter',
     cancel: 'Annuler',
-    intermediateVersion: 'Version intermédiaire',
+    intermediateVersion: 'Ajouter une version',
     updateAllSources: 'Mettre à jour les sources',
     updatingSources: 'Mise à jour…',
-    customPlaceholder: 'ex: 19.1 ou 18.2',
+    customPlaceholder: 'ex: 14.0, 13.0 ou 19.1',
     sshCheckingTitle: 'Vérification de la clé SSH…',
     sshCheckingDesc: 'Connexion à GitHub en cours',
     sshOkTitle: 'Accès SSH GitHub disponible',
@@ -90,6 +90,7 @@ const sourcesCopy = {
     download: 'Télécharger',
     notInstalled: 'Non installé',
     behind: 'en retard',
+    lastUpdated: 'Dernière mise à jour',
     hide: 'Masquer',
     aiSummary: 'Résumé 30 j',
     checking: 'Vérif…',
@@ -120,10 +121,10 @@ const sourcesCopy = {
     description: 'Download and maintain Odoo sources locally for consulting and analysis.',
     add: 'Add',
     cancel: 'Cancel',
-    intermediateVersion: 'Intermediate version',
+    intermediateVersion: 'Add version',
     updateAllSources: 'Update sources',
     updatingSources: 'Updating…',
-    customPlaceholder: 'e.g. 19.1 or 18.2',
+    customPlaceholder: 'e.g. 14.0, 13.0, or 19.1',
     sshCheckingTitle: 'Checking SSH key…',
     sshCheckingDesc: 'Connecting to GitHub',
     sshOkTitle: 'GitHub SSH access available',
@@ -144,6 +145,7 @@ const sourcesCopy = {
     download: 'Download',
     notInstalled: 'Not installed',
     behind: 'behind',
+    lastUpdated: 'Last updated',
     hide: 'Hide',
     aiSummary: '30d summary',
     checking: 'Checking…',
@@ -277,6 +279,17 @@ export default function Sources() {
       return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
     })
   }, [customVersions])
+
+  useEffect(() => {
+    if (!sshOk) return
+    setEnterprise(prev => {
+      const next = { ...prev }
+      for (const { version } of allVersionDefs) {
+        if (next[version] === undefined) next[version] = true
+      }
+      return next
+    })
+  }, [sshOk, allVersionDefs])
   const installedVersionsToUpdate = useMemo(() => (
     allVersionDefs
       .filter(({ version }) => allVersionStatus[version]?.installed || allVersionStatus[`${version}-enterprise`]?.installed)
@@ -678,8 +691,7 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
           <span className="source-repo-kind source-repo-kind-community">
             <CheckCircle2 size={12} /> Community
           </span>
-          <span className="source-repo-sha">{info.head}</span>
-          <span className="source-repo-date">· {relativeDate(info.date, lang)}</span>
+          <span className="source-repo-date">{labels.lastUpdated} {relativeDate(info.date, lang)}</span>
           {(info.behind ?? 0) > 0 && (
             <span className="source-repo-warning">{info.behind} {labels.behind}</span>
           )}
@@ -690,8 +702,7 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
           <span className="source-repo-kind source-repo-kind-enterprise">
             <CheckCircle2 size={12} /> Enterprise
           </span>
-          <span className="source-repo-sha">{entInfo.head}</span>
-          <span className="source-repo-date">· {relativeDate(entInfo.date, lang)}</span>
+          <span className="source-repo-date">{labels.lastUpdated} {relativeDate(entInfo.date, lang)}</span>
           {(entInfo.behind ?? 0) > 0 && (
             <span className="source-repo-warning">{entInfo.behind} {labels.behind}</span>
           )}

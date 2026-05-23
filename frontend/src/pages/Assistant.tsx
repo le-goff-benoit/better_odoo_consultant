@@ -1,14 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Code, Copy, FileText, Globe2, History, Image as ImageIcon, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
-import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getUserProfile } from '../api/client'
+import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Code, Copy, FileText, Globe2, History, Image as ImageIcon, Loader2, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
+import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getModules } from '../api/client'
 import { t } from '../theme'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
 import PageHeader from '../components/PageHeader'
 import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
-import MascotThinking from '../components/MascotThinking'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import ConversationHistoryPanel from '../components/ConversationHistoryPanel'
 import WorkspaceShell from '../components/WorkspaceShell'
@@ -50,6 +49,7 @@ const _msgBuffer = new Map<string, Message[]>()
 interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string; technical_complexity?: string }
 interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string; github_repo?: string; repo_branch?: string }
 interface L10nModule { name: string; source?: string; path?: string }
+interface InstalledModule { name?: string; shortdesc?: string; author?: string; installed_version?: string; application?: boolean }
 interface CompanyOption {
   id: number
   name: string
@@ -209,6 +209,120 @@ const SUGGESTIONS_GENERAL_EN = [
   'Show the stock.move model structure',
 ]
 
+const MODULE_SUGGESTIONS = [
+  {
+    keys: ['account', 'account_accountant', 'l10n_'],
+    fr: {
+      support: 'Pourquoi certaines factures restent-elles ouvertes ?',
+      business_analyst: 'Quels indicateurs comptables dois-je contrôler en priorité ?',
+      architect: 'Explique le flux facture, paiement et lettrage sur ce projet',
+      developer: 'Quels modèles et champs comptables dois-je inspecter ?',
+      creator: 'Quelles adaptations Studio sont raisonnables sur les factures ?',
+    },
+    en: {
+      support: 'Why are some invoices still open?',
+      business_analyst: 'Which accounting KPIs should I check first?',
+      architect: 'Explain the invoice, payment and reconciliation flow for this project',
+      developer: 'Which accounting models and fields should I inspect?',
+      creator: 'Which Studio changes are reasonable on invoices?',
+    },
+  },
+  {
+    keys: ['sale', 'sale_management', 'crm'],
+    fr: {
+      support: 'Montre les commandes récentes qui demandent une action',
+      business_analyst: 'Analyse le tunnel CRM et ventes de ce projet',
+      architect: 'Explique le flux opportunité, devis, commande et facture',
+      developer: 'Inspecte les champs clés des commandes et opportunités',
+      creator: 'Quelles automatisations Studio peut-on ajouter sur les ventes ?',
+    },
+    en: {
+      support: 'Show recent sales orders that need action',
+      business_analyst: 'Analyze this project’s CRM and sales pipeline',
+      architect: 'Explain the lead, quotation, sales order and invoice flow',
+      developer: 'Inspect key fields on sales orders and opportunities',
+      creator: 'Which Studio automations could be added to sales?',
+    },
+  },
+  {
+    keys: ['stock', 'purchase', 'mrp'],
+    fr: {
+      support: 'Quels transferts ou achats semblent bloqués ?',
+      business_analyst: 'Quels points de contrôle stock et achat faut-il suivre ?',
+      architect: 'Explique le flux achat, réception, stock et fabrication',
+      developer: 'Inspecte les vues et champs stock utilisés par ce projet',
+      creator: 'Quelles alertes Studio peut-on ajouter sur les opérations stock ?',
+    },
+    en: {
+      support: 'Which transfers or purchases look blocked?',
+      business_analyst: 'Which stock and purchasing controls should we monitor?',
+      architect: 'Explain the purchase, receipt, stock and manufacturing flow',
+      developer: 'Inspect the stock views and fields used by this project',
+      creator: 'Which Studio alerts could be added to stock operations?',
+    },
+  },
+  {
+    keys: ['project', 'helpdesk', 'timesheet', 'hr'],
+    fr: {
+      support: 'Quelles tâches ou tickets nécessitent un suivi ?',
+      business_analyst: 'Analyse l’activité projet, support et temps passé',
+      architect: 'Explique le flux ticket, tâche et feuille de temps',
+      developer: 'Quels modèles projet/support dois-je inspecter ?',
+      creator: 'Quelles actions Studio peut-on ajouter sur tâches ou tickets ?',
+    },
+    en: {
+      support: 'Which tasks or tickets need follow-up?',
+      business_analyst: 'Analyze project, support and timesheet activity',
+      architect: 'Explain the ticket, task and timesheet flow',
+      developer: 'Which project/support models should I inspect?',
+      creator: 'Which Studio actions could be added on tasks or tickets?',
+    },
+  },
+]
+
+function buildPromptSuggestions({
+  lang,
+  perspective,
+  isGeneralMode,
+  modules,
+  complexityMode,
+  hasRepo,
+}: {
+  lang: 'fr' | 'en'
+  perspective: Perspective
+  isGeneralMode: boolean
+  modules: InstalledModule[]
+  complexityMode: ComplexityMode | null
+  hasRepo: boolean
+}): string[] {
+  if (isGeneralMode) return lang === 'en' ? SUGGESTIONS_GENERAL_EN.slice(0, 4) : SUGGESTIONS_GENERAL.slice(0, 4)
+
+  const names = modules.map(m => `${m.name ?? ''} ${m.shortdesc ?? ''}`.toLowerCase())
+  const perspectiveKey = perspective
+  const moduleDriven = MODULE_SUGGESTIONS
+    .filter(entry => entry.keys.some(key => names.some(name => name.includes(key))))
+    .map(entry => entry[lang][perspectiveKey])
+
+  const contextual = lang === 'en'
+    ? [
+      complexityMode === 'studio' || complexityMode === 'studio_dev' ? 'What was likely customized with Studio on this project?' : null,
+      complexityMode === 'dev' || complexityMode === 'studio_dev' || hasRepo ? 'Which custom modules should I inspect first?' : null,
+      perspective === 'developer' ? 'Show the technical structure behind the active business flow' : null,
+      perspective === 'architect' ? 'Map the main Odoo apps installed on this project' : null,
+    ]
+    : [
+      complexityMode === 'studio' || complexityMode === 'studio_dev' ? 'Qu’est-ce qui semble avoir été personnalisé avec Studio sur ce projet ?' : null,
+      complexityMode === 'dev' || complexityMode === 'studio_dev' || hasRepo ? 'Quels modules custom faut-il inspecter en priorité ?' : null,
+      perspective === 'developer' ? 'Montre la structure technique derrière le flux métier actif' : null,
+      perspective === 'architect' ? 'Cartographie les principales apps Odoo installées sur ce projet' : null,
+    ]
+
+  const fallback = lang === 'en' ? SUGGESTIONS_EN : SUGGESTIONS
+  return [...moduleDriven, ...contextual.filter(Boolean), ...fallback]
+    .filter((value, idx, arr): value is string => typeof value === 'string' && value.trim().length > 0 && arr.indexOf(value) === idx)
+    .slice(0, 4)
+}
+
 const assistantCopy = {
   fr: {
     title: 'Assistant IA',
@@ -364,9 +478,6 @@ export default function Assistant() {
   const { data: provData }  = useQuery({ queryKey: ['ai-providers'],  queryFn: getAiProviders })
   const { data: srcData }   = useQuery({ queryKey: ['sources-all'],   queryFn: checkAllSources, staleTime: 30_000 })
   const { data: modelCfg }  = useQuery({ queryKey: ['model-config'],  queryFn: getModelConfig })
-  const { data: userProfileData } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
-  const userProfile = userProfileData?.data as { mascotType?: 'robot' | 'cat' | 'dog'; mascotColor?: string } | undefined
-
   const profiles: Profile[] = profData?.data ?? []
   const allProviders: Record<string, boolean> = provData?.data ?? {}
 
@@ -502,12 +613,14 @@ export default function Assistant() {
 
   // Pre-fill input from navigation state (e.g. from Sources "IA" button)
   useEffect(() => {
-    const state = location.state as { prefill?: string; version?: string; autoSend?: boolean } | null
-    if (!state?.prefill) return
+    const state = location.state as { prefill?: string; version?: string; autoSend?: boolean; profileId?: number } | null
+    if (!state?.prefill && !state?.profileId) return
     const { prefill, version: navVersion, autoSend } = state
     window.history.replaceState({}, '')
+    if (state.profileId) setProfileId(state.profileId)
+    if (!prefill) return
     if (navVersion) setGeneralVersion(navVersion)
-    setProfileId(GENERAL_KEY)
+    if (!state.profileId) setProfileId(GENERAL_KEY)
     setInput(prefill)
     if (autoSend && navVersion) pendingSendRef.current = { text: prefill, version: navVersion }
   }, [location.state])
@@ -546,13 +659,6 @@ export default function Assistant() {
   const isGeneralMode = profileId === GENERAL_KEY
   const selectedProfile = profiles.find(p => p.id === profileId)
   const currentProv = configuredProviders.find(p => p.id === provider)
-
-  const promptSuggestions =
-    messages.length === 0 && profileId !== null && !input.trim()
-      ? (lang === 'en'
-        ? (isGeneralMode ? SUGGESTIONS_GENERAL_EN : SUGGESTIONS_EN)
-        : (isGeneralMode ? SUGGESTIONS_GENERAL : SUGGESTIONS))
-      : []
 
   const sourcesStatus: Record<string, { installed: boolean }> = srcData?.data ?? {}
   const activeVersion = isGeneralMode ? generalVersion : (selectedProfile?.odoo_version ?? null)
@@ -606,6 +712,29 @@ export default function Assistant() {
     activeVersion && sourcesInstalled ? `Sources Odoo ${activeVersion}${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' Community' : ' Enterprise'}` : null,
     activeEnvRepo && repoIsCloned ? activeEnvRepo.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
   ].filter(Boolean) as string[]
+  const { data: modulesData } = useQuery({
+    queryKey: ['project-modules', selectedProfile?.id],
+    queryFn: () => getModules(selectedProfile!.id),
+    enabled: !!selectedProfile && !isGeneralMode && messages.length === 0,
+    staleTime: 5 * 60_000,
+  })
+  const installedModules = useMemo(
+    () => ((modulesData?.data?.modules ?? []) as InstalledModule[]),
+    [modulesData],
+  )
+  const promptSuggestions = useMemo(
+    () => messages.length === 0 && profileId !== null && !input.trim()
+      ? buildPromptSuggestions({
+        lang,
+        perspective,
+        isGeneralMode,
+        modules: installedModules,
+        complexityMode,
+        hasRepo: !!activeEnvRepo || repoIsCloned,
+      })
+      : [],
+    [messages.length, profileId, input, lang, perspective, isGeneralMode, installedModules, complexityMode, activeEnvRepo, repoIsCloned],
+  )
 
   // Deduplicate versions: strip -enterprise suffix, keep one entry per base version
   // Show community + enterprise availability indicators in the dropdown
@@ -1263,7 +1392,7 @@ export default function Assistant() {
                 ref={el => { assistantRefs.current.set(msg.id, el) }}
                 style={{ scrollMarginTop: 8 }}
               >
-                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} mascotType={userProfile?.mascotType} mascotColor={userProfile?.mascotColor} onAskMore={askMoreOnSelection} />
+                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} onAskMore={askMoreOnSelection} />
               </div>
             )
         ))}
@@ -1759,12 +1888,10 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, mascotType, mascotColor, onAskMore }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, onAskMore }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
-  mascotType?: 'robot' | 'cat' | 'dog'
-  mascotColor?: string
   onAskMore?: (selectedText: string) => void
 }) {
   const lang = useUiLanguage()
@@ -1905,13 +2032,13 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
             marginTop: toolEvents.length > 0 ? 10 : 0,
-            padding: '8px 14px 8px 8px',
+            padding: '8px 14px',
             background: t.bgMuted,
             border: `1px solid ${t.border}`,
-            borderRadius: t.radiusLg,
+            borderRadius: 0,
             fontSize: 13, color: t.textSub,
           }}>
-            <MascotThinking size={44} mascot={mascotType} color={mascotColor} />
+            <Loader2 size={15} className="creator-spin" style={{ color: 'var(--brand-fg)' }} />
             <span style={{ fontWeight: 500 }}>
               {toolEvents.length > 0 ? c.analyzing : c.thinking}
             </span>

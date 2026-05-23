@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Loader2 } from 'lucide-react'
 import { useUiLanguage } from '../i18n'
 import { getToolMeta, humanModel } from '../utils/toolMeta'
 
@@ -60,31 +60,31 @@ function toolSummary(name: string | undefined, args: Record<string, unknown> | u
 
   switch (name) {
     case 'query_odoo':
-      return { title: fr ? 'Base client' : 'Client DB', detail: model ? humanModel(model, lang) : (fr ? 'Requête Odoo' : 'Odoo query') }
+      return { title: fr ? 'Lit les données' : 'Reads data', detail: model ? humanModel(model, lang) : (fr ? 'Base Odoo' : 'Odoo database') }
     case 'count_odoo':
-      return { title: fr ? 'Comptage' : 'Count', detail: model ? humanModel(model, lang) : (fr ? 'Enregistrements Odoo' : 'Odoo records') }
+      return { title: fr ? 'Compte' : 'Counts', detail: model ? humanModel(model, lang) : (fr ? 'Enregistrements Odoo' : 'Odoo records') }
     case 'get_odoo_fields':
-      return { title: fr ? 'Champs' : 'Fields', detail: model ? humanModel(model, lang) : (fr ? 'Structure modèle' : 'Model structure') }
+      return { title: fr ? 'Inspecte les champs' : 'Inspects fields', detail: model ? humanModel(model, lang) : (fr ? 'Structure modèle' : 'Model structure') }
     case 'search_odoo_source':
-      return { title: fr ? 'Sources Odoo' : 'Odoo sources', detail: pattern ? truncate(pattern) : (version ? `v${version}` : (fr ? 'Recherche code standard' : 'Standard-code search')) }
+      return { title: fr ? 'Cherche dans Odoo' : 'Searches Odoo', detail: pattern ? truncate(pattern) : (version ? `v${version}` : (fr ? 'Code standard' : 'Standard code')) }
     case 'read_odoo_file':
-      return { title: fr ? 'Fichier Odoo' : 'Odoo file', detail: basename(path) || (fr ? 'Lecture fichier' : 'Reading file') }
+      return { title: fr ? 'Ouvre un fichier Odoo' : 'Opens Odoo file', detail: basename(path) || (fr ? 'Fichier standard' : 'Standard file') }
     case 'search_target_source':
-      return { title: fr ? 'Sources cible' : 'Target sources', detail: pattern ? truncate(pattern) : (version ? `v${version}` : (fr ? 'Recherche cible' : 'Target search')) }
+      return { title: fr ? 'Cherche en version cible' : 'Searches target version', detail: pattern ? truncate(pattern) : (version ? `v${version}` : (fr ? 'Code cible' : 'Target code')) }
     case 'read_target_file':
-      return { title: fr ? 'Fichier cible' : 'Target file', detail: basename(path) || (fr ? 'Lecture cible' : 'Reading target') }
+      return { title: fr ? 'Ouvre un fichier cible' : 'Opens target file', detail: basename(path) || (fr ? 'Fichier cible' : 'Target file') }
     case 'search_project_source':
-      return { title: fr ? 'Code custom' : 'Custom code', detail: pattern ? truncate(pattern) : (fr ? 'Recherche repo client' : 'Client-repo search') }
+      return { title: fr ? 'Cherche dans le custom' : 'Searches custom code', detail: pattern ? truncate(pattern) : (fr ? 'Dépôt client' : 'Client repository') }
     case 'read_project_file':
-      return { title: fr ? 'Fichier custom' : 'Custom file', detail: basename(path) || (fr ? 'Lecture repo client' : 'Reading client repo') }
+      return { title: fr ? 'Ouvre un fichier custom' : 'Opens custom file', detail: basename(path) || (fr ? 'Dépôt client' : 'Client repository') }
     case 'count_source_lines':
-      return { title: fr ? 'Volumétrie' : 'Line count', detail: String(args?.scope ?? '') || (fr ? 'Sources' : 'Sources') }
+      return { title: fr ? 'Mesure le volume' : 'Measures volume', detail: String(args?.scope ?? '') || (fr ? 'Sources' : 'Sources') }
     case 'inspect_studio':
-      return { title: 'Studio', detail: String(args?.model_filter ?? '') || (fr ? 'Personnalisations' : 'Customizations') }
+      return { title: fr ? 'Inspecte Studio' : 'Inspects Studio', detail: String(args?.model_filter ?? '') || (fr ? 'Personnalisations' : 'Customizations') }
     case 'inspect_odoo_view':
-      return { title: fr ? 'Vue Odoo' : 'Odoo view', detail: [viewType, model ? humanModel(model, lang) : ''].filter(Boolean).join(' · ') || (fr ? 'Inspection vue' : 'View inspection') }
+      return { title: fr ? 'Inspecte une vue' : 'Inspects view', detail: [viewType, model ? humanModel(model, lang) : ''].filter(Boolean).join(' · ') || (fr ? 'Vue Odoo' : 'Odoo view') }
     case 'inspect_odoo_report':
-      return { title: fr ? 'Rapport PDF' : 'PDF report', detail: reportName || (model ? humanModel(model, lang) : (fr ? 'Inspection rapport' : 'Report inspection')) }
+      return { title: fr ? 'Inspecte un rapport' : 'Inspects report', detail: reportName || (model ? humanModel(model, lang) : (fr ? 'Rapport PDF' : 'PDF report')) }
     default:
       return { title: fr ? 'Outil' : 'Tool', detail: name ?? (fr ? 'Appel outil' : 'Tool call') }
   }
@@ -111,12 +111,13 @@ function RecordsTable({ records }: { records: Record<string, unknown>[] }) {
 
 export default function ToolCallGroup({ events, projectName }: ToolCallGroupProps) {
   const lang = useUiLanguage()
+  const [open, setOpen] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const calls = events.filter(e => e.type === 'tool_call')
   const results = events.filter(e => e.type === 'tool_result')
   const c = lang === 'fr'
-    ? { results: 'résultats', calls: 'appels', project: 'Projet', open: 'Voir les résultats', close: 'Masquer les résultats' }
-    : { results: 'results', calls: 'calls', project: 'Project', open: 'Show results', close: 'Hide results' }
+    ? { results: 'résultats', calls: 'passages', open: 'Voir les résultats', close: 'Masquer les résultats', workDone: 'Recherche terminée', workRunning: 'Recherche en cours', operation: 'opération', operations: 'opérations', done: 'terminées', running: 'en cours', details: 'Détails', db: 'Base active' }
+    : { results: 'results', calls: 'passes', open: 'Show results', close: 'Hide results', workDone: 'Search complete', workRunning: 'Search in progress', operation: 'operation', operations: 'operations', done: 'done', running: 'running', details: 'Details', db: 'Active DB' }
 
   const dedupedCalls = calls.reduce<ToolCallItem[]>((acc, call) => {
     const key = toolKey(call)
@@ -125,10 +126,34 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
     return [...acc, { call, count: 1, key }]
   }, [])
 
+  const doneCount = dedupedCalls.filter(({ call }) => results.some(r => r.name === call.name)).length
+  const runningCount = Math.max(0, dedupedCalls.length - doneCount)
+  const activityPreview = dedupedCalls
+    .map(({ call }) => toolSummary(call.name, call.args, lang).title)
+    .filter((label, idx, arr) => arr.indexOf(label) === idx)
+    .slice(0, 3)
+    .join(' · ')
+
   return (
     <div className="tool-call-group">
-      <div className="tool-chip-row">
-        {dedupedCalls.map(({ call, count, key }, idx) => {
+      <button type="button" className="tool-call-summary" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <span className={`tool-call-summary-icon${runningCount ? ' is-running' : ''}`}>
+          {runningCount ? <Loader2 size={14} /> : <CheckCircle2 size={14} />}
+        </span>
+        <span className="tool-call-summary-main">
+          <strong>{runningCount ? c.workRunning : c.workDone}</strong>
+          <span>
+            {dedupedCalls.length} {dedupedCalls.length > 1 ? c.operations : c.operation}
+            {runningCount ? ` · ${runningCount} ${c.running}` : ` · ${doneCount} ${c.done}`}
+            {activityPreview ? ` · ${activityPreview}` : ''}
+          </span>
+        </span>
+        <ChevronDown className={`tool-chip-chevron${open ? ' is-open' : ''}`} size={15} />
+      </button>
+
+      {open && (
+        <div className="tool-step-list">
+          {dedupedCalls.map(({ call, count, key }, idx) => {
           const meta = getToolMeta(call.name!, call.args, lang)
           const result = results.find(r => r.name === call.name)
           const done = !!result
@@ -138,33 +163,33 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
           const summary = toolSummary(call.name, call.args, lang)
 
           return (
-            <div key={key} className={`tool-timeline-step${idx === dedupedCalls.length - 1 ? ' is-last' : ''}`}>
+            <div key={key} className="tool-step-wrap">
               <button
                 type="button"
-                className={`tool-chip${done ? ' is-done' : ' is-running'}${hasRecords ? ' is-clickable' : ''}`}
+                className={`tool-step${done ? ' is-done' : ' is-running'}${hasRecords ? ' is-clickable' : ''}`}
                 style={{ '--tool-color': meta.color } as CSSProperties}
                 onClick={() => hasRecords && setOpenKey(expanded ? null : key)}
                 aria-expanded={hasRecords ? expanded : undefined}
                 title={hasRecords ? (expanded ? c.close : c.open) : undefined}
               >
-                <span className="tool-chip-step" aria-hidden>{String(idx + 1).padStart(2, '0')}</span>
-                <span className="tool-chip-main">
-                  <span className="tool-chip-titleline">
-                    <span className="tool-chip-title">{summary.title}</span>
-                  </span>
-                  <span className="tool-chip-detail">{summary.detail}</span>
+                <span className="tool-step-index" aria-hidden>{String(idx + 1).padStart(2, '0')}</span>
+                <span className={`tool-step-status${done ? ' is-done' : ' is-running'}`} aria-hidden />
+                <span className="tool-step-main">
+                  <span className="tool-step-title">{summary.title}</span>
+                  <span className="tool-step-detail">{summary.detail}</span>
                 </span>
-                <span className="tool-chip-meta">
-                  {meta.liveDb && projectName && <span className="tool-chip-badge tool-chip-badge-project">{c.project} · {projectName}</span>}
-                  {done && result?.count !== undefined && <span className="tool-chip-badge">{result.count} {c.results}</span>}
-                  {count > 1 && <span className="tool-chip-badge">{count} {c.calls}</span>}
+                <span className="tool-step-meta">
+                  {meta.liveDb && projectName && <span>{c.db}</span>}
+                  {done && result?.count !== undefined && <span>{result.count} {c.results}</span>}
+                  {count > 1 && <span>{count} {c.calls}</span>}
                   {hasRecords && <ChevronDown className={`tool-chip-chevron${expanded ? ' is-open' : ''}`} size={16} />}
                 </span>
               </button>
             </div>
           )
-        })}
-      </div>
+          })}
+        </div>
+      )}
 
       {dedupedCalls.map(({ key, call }) => {
         const result = results.find(r => r.name === call.name)

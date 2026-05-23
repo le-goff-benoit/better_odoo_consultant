@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.47.0',
+    version: '0.51.0',
     date: '2026-05-23',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Migration — suggestions contextualisées au projet source : noms des modules notables installés (sale_subscription, helpdesk, mrp, pos, hr_payroll, sign, website_sale…) mentionnés explicitement dans les questions src → tgt',
+      'Migration — localisation comptable détectée via le code pays ET le module `l10n_*` réellement installé, mentionnés tels quels (« impacts l10n_ch entre 17.0 et 18.0… »)',
+      'Migration — clauses dédiées Studio et dépôt custom (« modules custom du dépôt org/repo »), comptage des apps installées dans la checklist',
+      'Migration — propositions rerafraîchies à chaque changement de projet/env/version/perspective via `useQuery([\'project-modules\', sourceProfile.id])`',
+      'Sources — suppression du SHA de commit dans la ligne Community / Enterprise ; remplacé par « Dernière mise à jour <relatif> » (hier, 3 jours…)',
+    ],
+  },
+  {
+    version: '0.47.0',
+    date: '2026-05-23',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Wireframe — masquage intelligent des conditionnels : quand des données sample d\'Odoo sont disponibles, un élément dont on ne peut pas évaluer le domaine est masqué (au lieu de polluer le rendu en grisé). Plus de boutons fantômes qui n\'apparaissent pas dans la vraie UI',
       'Wireframe — évaluation de domaine étendue : prend en charge `not field`, `field and other`, `field or other`, `len(field) > 0`, parenthèses — patterns Odoo très fréquents qui restaient en `conditional` faute d\'être parsés',

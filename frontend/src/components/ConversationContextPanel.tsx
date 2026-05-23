@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import { Bot, Database, FileText, FolderCode, GitBranch, Globe2, Layers3, Lock, PanelRight, RefreshCw, Sparkles, Workflow } from 'lucide-react'
+import { Bot, FileText, FolderCode, GitBranch, Globe2, Layers3, Lock, PanelRight, RefreshCw, Sparkles, Workflow } from 'lucide-react'
 import { countryFlag } from '../utils/countryFlag'
 import { useQuery } from '@tanstack/react-query'
 import { useUiLanguage } from '../i18n'
@@ -8,7 +8,6 @@ import type { Perspective, PerspectiveMode } from './PerspectiveToggle'
 import { PERSPECTIVE_COLORS } from './PerspectiveToggle'
 import PerspectiveSelect from './PerspectiveSelect'
 import { perspectiveLabel } from '../utils/aiContext'
-import type { ContextFileSource } from '../utils/aiContext'
 import { listContextFiles } from '../api/client'
 
 interface ContextFileMeta { name: string; size: number; modified: number }
@@ -47,9 +46,9 @@ interface ConversationContextPanelProps {
   targetVersion?: string | null
   repo?: string | null
   contextFiles: string[]
-  /** Optional per-file source — when supplied, pills show a small origin tag
-   * ("from project" vs "from keyword"). Files not in the map render plainly. */
-  contextFileSources?: Map<string, ContextFileSource>
+  /** Optional per-file source kept for API compatibility. The panel renders
+   * plain markdown names; routing details stay out of the compact context UI. */
+  contextFileSources?: Map<string, unknown>
   sources: string[]
   attachments: string[]
   /** When set, the profile section displays this label with a lock icon and
@@ -83,7 +82,6 @@ export default function ConversationContextPanel({
   targetVersion,
   repo,
   contextFiles,
-  contextFileSources,
   sources,
   attachments,
   lockedProfileLabel,
@@ -134,15 +132,19 @@ export default function ConversationContextPanel({
       company: 'Company',
       complexity: 'Complexity',
       repository: 'Repository',
+      codeSources: 'Code sources',
       localization: 'Fiscal localization',
       ai: 'AI',
-      context: 'Markdown context',
+      context: 'Markdown files',
       sources: 'Sources used',
       attachments: 'Attachments',
       none: 'None yet',
       general: 'General mode',
       version: 'Version',
       target: 'Target',
+      groupProject: 'Project',
+      groupScope: 'Scope',
+      groupCode: 'Code',
     }
     : {
       title: title ?? 'Contexte de discussion',
@@ -155,18 +157,39 @@ export default function ConversationContextPanel({
       company: 'Société',
       complexity: 'Complexité',
       repository: 'Dépôt',
+      codeSources: 'Sources code',
       localization: 'Localisation fiscale',
       ai: 'IA',
-      context: 'Contexte Markdown',
+      context: 'Fichiers Markdown',
       sources: 'Sources utilisées',
       attachments: 'Pièces jointes',
       none: 'Aucun pour le moment',
       general: 'Mode général',
       version: 'Version',
       target: 'Cible',
+      groupProject: 'Projet',
+      groupScope: 'Cadre',
+      groupCode: 'Code',
     }
 
   const localizationFile = localizationContextFile(countryCode)
+  const selectedCodeSource = repo
+    ? repo.split('/').slice(-2).join('/').replace(/\.git$/, '')
+    : null
+  const projectItems = [
+    project ? { key: 'project', label: c.project, value: project, tone: 'brand' as const, icon: null } : null,
+    environment ? { key: 'environment', label: c.environment, value: environment, tone: 'neutral' as const, icon: null } : null,
+    company ? { key: 'company', label: c.company, value: `${countryCode ? `${countryFlag(countryCode)} ` : ''}${company}`, tone: 'neutral' as const, icon: null } : null,
+  ].filter(Boolean) as SelectionItem[]
+  const scopeItems = [
+    version ? { key: 'version', label: targetVersion ? c.target : c.version, value: targetVersion ? `v${version} -> v${targetVersion}` : `v${version}`, tone: 'accent' as const, icon: null } : null,
+    complexity ? { key: 'complexity', label: c.complexity, value: complexity, tone: 'muted' as const, icon: <Layers3 size={10} /> } : null,
+  ].filter(Boolean) as SelectionItem[]
+  const codeItems = [
+    ...sources.map((source, idx) => ({ key: `source-${idx}`, label: c.codeSources, value: source, tone: 'neutral' as const, icon: null })),
+    selectedCodeSource ? { key: 'repo', label: c.repository, value: selectedCodeSource, tone: 'muted' as const, icon: <GitBranch size={10} /> } : null,
+  ].filter(Boolean) as SelectionItem[]
+  const hasSelection = projectItems.length > 0 || scopeItems.length > 0 || codeItems.length > 0
 
   return (
     <aside className="workspace-context conversation-context" aria-label={c.title}>
@@ -244,41 +267,11 @@ export default function ConversationContextPanel({
       </ContextBlock>
 
       <ContextBlock icon={<Workflow size={15} />} label={c.selection}>
-        {project || environment || company || version ? (
-          <div className="conversation-selection-chips" style={{
-            display: 'flex', flexWrap: 'wrap', gap: 5,
-          }}>
-            {project && (
-              <ContextChip tone="brand" title={c.project}>
-                {project}
-              </ContextChip>
-            )}
-            {environment && (
-              <ContextChip tone="neutral" title={c.environment}>
-                {environment}
-              </ContextChip>
-            )}
-            {company && (
-              <ContextChip tone="neutral" title={c.company}>
-                {countryCode && <span style={{ fontSize: 12 }}>{countryFlag(countryCode)}</span>}
-                {company}
-              </ContextChip>
-            )}
-            {version && (
-              <ContextChip tone="accent" title={c.version}>
-                {targetVersion ? `v${version} → v${targetVersion}` : `v${version}`}
-              </ContextChip>
-            )}
-            {complexity && (
-              <ContextChip tone="muted" title={c.complexity} icon={<Layers3 size={10} />}>
-                {complexity}
-              </ContextChip>
-            )}
-            {repo && (
-              <ContextChip tone="muted" title={c.repository} icon={<GitBranch size={10} />}>
-                {repo.split('/').slice(-2).join('/')}
-              </ContextChip>
-            )}
+        {hasSelection ? (
+          <div className="conversation-selection-summary">
+            <SelectionGroup label={c.groupProject} items={projectItems} />
+            <SelectionGroup label={c.groupScope} items={scopeItems} />
+            <SelectionGroup label={c.groupCode} items={codeItems} />
           </div>
         ) : <span>{c.general}</span>}
       </ContextBlock>
@@ -297,14 +290,8 @@ export default function ConversationContextPanel({
 
       <ContextBlock icon={<FileText size={15} />} label={c.context}>
         <FreshnessPillList items={contextFiles} empty={c.none} ageByName={ageByName}
-          sources={contextFileSources} lang={lang} />
+          lang={lang} />
       </ContextBlock>
-
-      {sources.length > 0 && (
-        <ContextBlock icon={<Database size={15} />} label={c.sources}>
-          <PillList items={sources} empty={c.none} tone="success" />
-        </ContextBlock>
-      )}
 
       {attachments.length > 0 && (
         <ContextBlock icon={<FolderCode size={15} />} label={c.attachments}>
@@ -312,6 +299,30 @@ export default function ConversationContextPanel({
         </ContextBlock>
       )}
     </aside>
+  )
+}
+
+type SelectionItem = {
+  key: string
+  label: string
+  value: string
+  tone: 'brand' | 'accent' | 'neutral' | 'muted'
+  icon: React.ReactNode
+}
+
+function SelectionGroup({ label, items }: { label: string; items: SelectionItem[] }) {
+  if (!items.length) return null
+  return (
+    <div className="conversation-selection-group">
+      <span className="conversation-selection-group-label">{label}</span>
+      <div className="conversation-selection-group-items">
+        {items.map(item => (
+          <ContextChip key={item.key} tone={item.tone} title={item.label} icon={item.icon}>
+            {item.value}
+          </ContextChip>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -378,38 +389,17 @@ function ContextBlock({ icon, label, children }: { icon: React.ReactNode; label:
 }
 
 function FreshnessPillList({
-  items, empty, ageByName, sources, lang,
+  items, empty, ageByName, lang,
 }: {
   items: string[]
   empty: string
   ageByName: Map<string, number>
-  sources?: Map<string, ContextFileSource>
   lang: 'fr' | 'en'
 }) {
   if (!items.length) return <span>{empty}</span>
-  const sourceLabel = (source?: ContextFileSource): string | null => {
-    if (!source || source === 'system') return null
-    if (source === 'complexity') return lang === 'en' ? 'project' : 'projet'
-    if (source === 'keyword') return lang === 'en' ? 'keyword' : 'mots-clés'
-    return null
-  }
-  // Surface the outliers (aging/stale) and the keyword/complexity-tagged
-  // files; collapse the rest of the "fresh & untagged" pile into a single
-  // counter so the panel doesn't drown the user in pills they don't need to act on.
-  const flagged: string[] = []
-  const quiet: string[] = []
-  for (const item of items) {
-    const age = ageByName.get(item)
-    const tone = age !== undefined ? freshnessTone(age) : 'fresh'
-    const source = sources?.get(item)
-    const tagged = source === 'complexity' || source === 'keyword'
-    if (tone !== 'fresh' || tagged) flagged.push(item)
-    else quiet.push(item)
-  }
-  const visible = flagged.length ? flagged : items.slice(0, 8)
   return (
-    <div className="context-pill-row">
-      {visible.slice(0, 8).map(item => {
+    <div className="context-file-list">
+      {items.map(item => {
         const age = ageByName.get(item)
         const hasAge = age !== undefined
         // Only show the freshness dot when it's an outlier (aging or stale).
@@ -430,56 +420,24 @@ function FreshnessPillList({
           : lang === 'en'
             ? `Last edited ${age} day(s) ago`
             : `Dernière modification il y a ${age} jour(s)`
-        const source = sources?.get(item)
-        const srcLabel = sourceLabel(source)
-        const srcHint = source === 'complexity'
-          ? (lang === 'en' ? 'Loaded from project complexity' : 'Chargé via la complexité du projet')
-          : source === 'keyword'
-            ? (lang === 'en' ? 'Loaded from prompt keyword' : 'Chargé via un mot-clé du prompt')
-            : null
-        const title = [ageHint, srcHint].filter(Boolean).join(' · ') || undefined
+        const title = ageHint ?? undefined
         const dotColor = tone === 'stale' ? '#b02626' : '#caa804'
-        const hasExtras = showDot || ageLabel || srcLabel
         return (
-          <span key={item} className="ui-badge ui-badge-brand" title={title}
-            style={hasExtras
-              ? { display: 'inline-flex', alignItems: 'center', gap: 5 }
-              : undefined}>
+          <span key={item} className="context-file-pill" title={title}>
             {showDot && (
               <span aria-hidden="true" style={{
                 width: 6, height: 6, borderRadius: 3, background: dotColor, flexShrink: 0,
               }} />
             )}
-            <span>{item}</span>
+            <span className="context-file-name">{item}</span>
             {ageLabel && (
-              <span style={{ fontSize: 9.5, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
+              <span className="context-file-meta">
                 {ageLabel}
               </span>
-            )}
-            {srcLabel && (
-              <span style={{
-                fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4,
-                padding: '1px 5px', borderRadius: 4,
-                background: source === 'complexity'
-                  ? 'color-mix(in srgb, var(--brand-contrast) 14%, transparent)'
-                  : 'color-mix(in srgb, var(--brand-contrast) 8%, transparent)',
-                opacity: 0.95,
-              }}>{srcLabel}</span>
             )}
           </span>
         )
       })}
-      {visible.length > 8 && (
-        <span className="ui-badge ui-badge-neutral">+{visible.length - 8}</span>
-      )}
-      {flagged.length > 0 && quiet.length > 0 && (
-        <span className="ui-badge ui-badge-neutral"
-          title={lang === 'en'
-            ? `${quiet.length} fresh context file(s) not shown`
-            : `${quiet.length} fichier(s) à jour non affichés`}>
-          {lang === 'en' ? `+${quiet.length} fresh` : `+${quiet.length} à jour`}
-        </span>
-      )}
     </div>
   )
 }

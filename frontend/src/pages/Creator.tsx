@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
 import {
   Wand2, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Loader2,
   FileText, Download, RotateCcw, Pencil, Play, Hammer, Database,
@@ -166,6 +167,7 @@ function fmtDate(raw?: string | null) {
 export default function Creator() {
   const lang = useUiLanguage()
   const { contextOpen } = useWorkspaceContext()
+  const location = useLocation()
   const en = lang === 'en'
   const c = useMemo(() => ({
     title: en ? 'Creator' : 'Création',
@@ -374,6 +376,14 @@ export default function Creator() {
     () => (projectsData?.data ?? []) as CreatorProject[],
     [projectsData],
   )
+
+  useEffect(() => {
+    const state = location.state as { profileId?: number; envId?: string } | null
+    if (!state?.profileId || projects.length === 0) return
+    setProjectId(state.profileId)
+    if (state.envId) setEnvId(state.envId)
+    window.history.replaceState({}, '')
+  }, [location.state, projects])
 
   const selectedProject = projects.find(p => p.id === projectId) ?? null
   const envs: EnvEntry[] = useMemo(

@@ -712,6 +712,7 @@ export function ViewWireframe({ arch, added, fieldInfo, sampleValues, record, mo
     if (!added.fields.size && !added.pages.size) return
     const target = ref.current?.querySelector('[data-preview-added="true"]')
     if (!target) return
+    if (typeof target.scrollIntoView !== 'function') return
     window.setTimeout(() => target.scrollIntoView({ block: 'center', inline: 'nearest' }), 60)
   }, [arch, added])
   if (!arch) return <HintInline>Vue indisponible.</HintInline>
