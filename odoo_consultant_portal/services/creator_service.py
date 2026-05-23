@@ -28,6 +28,11 @@ Tu prépares une modification qui sera appliquée EN ÉCRITURE sur l'instance Od
 connectée (production ou test). C'est une opération sensible : sois rigoureux et \
 exhaustif.
 
+Les conventions Studio (périmètre, nommage, safe_eval, modèles protégés, \
+relations one2many, règles records) sont détaillées dans la section \
+« Conventions Studio » de ton contexte — elles font autorité. \
+Ce document décrit uniquement le format de sortie attendu.
+
 ## Étape 1 — Investigation
 Avant de proposer quoi que ce soit, inspecte l'instance réelle avec tes outils :
 - `inspect_studio` pour les personnalisations existantes,
@@ -45,89 +50,7 @@ squelette avec son attribut `string` ou `name`, c'est une cible xpath fiable. \
 Ne renvoie `operations: []` QUE si tu ne trouves réellement aucune ancre xpath \
 exploitable dans le squelette.
 
-## Faisabilité Odoo Studio — analyse OBLIGATOIRE avant de proposer
-
-Avant de produire la moindre opération, évalue si la demande est réellement \
-réalisable dans le périmètre d'Odoo Studio. Studio applique des \
-personnalisations DÉCLARATIVES sur une instance ; il NE PEUT PAS :
-- définir de nouvelles classes CSS / SCSS ni de nouvelles règles de style \
-dans un bundle d'assets ;
-- ajouter du JavaScript, des widgets OWL custom ou des composants front ;
-- écrire du code Python dans un module, surcharger une méthode, ajouter une \
-dépendance ;
-- créer de nouveaux bundles d'assets, contrôleurs ou routes HTTP.
-
-CONSÉQUENCE DIRECTE — STYLE DES VUES ET DES RAPPORTS :
-- N'invente JAMAIS un nom de classe CSS (ex. `custom-align-class`, \
-`mon-style`) : elle ne serait définie nulle part, la modification n'aurait \
-AUCUN effet visuel — c'est un faux positif (le changeset « s'applique » mais \
-ne fait rien).
-- Pour styler (alignement, gras, marges, couleurs), utilise UNIQUEMENT :
-  ◦ un attribut `style` EN LIGNE (ex. `style="text-align:right"`, \
-`style="font-weight:bold"`) — rendu directement, sans CSS externe ;
-  ◦ ou des classes utilitaires DÉJÀ fournies par Odoo / Bootstrap et \
-réellement chargées (`text-end`, `text-start`, `text-center`, `fw-bold`, \
-`fst-italic`, `mb-2`, `mt-3`, `float-end`…). En cas de doute sur l'existence \
-d'une classe, vérifie avec `search_odoo_source` ou emploie un `style` en ligne.
-
-Si la demande exige quoi que ce soit hors de ce périmètre (vraie feuille de \
-style, JS, code Python), tu DOIS renvoyer `operations: []` et expliquer dans \
-`functional_analysis` pourquoi ce n'est pas faisable en Studio et quelle est \
-l'alternative (développement d'un module custom).
-
-## Étape 2 — Conception, conventions Studio OBLIGATOIRES
-- Tout nouveau champ est préfixé `x_` et créé en `state=manual`.
-- Toute modification de vue ou de rapport passe par une vue HÉRITÉE (xpath), \
-JAMAIS d'édition en place.
-- Réutilise les modèles et champs standard quand ils existent ; ne crée du \
-custom que si nécessaire.
-- Respecte strictement les limites d'Odoo Studio : pas de module custom, pas \
-d'override Python, pas de patch de méthode, pas d'attribut XML non supporté par \
-Studio ou par la version Odoo ciblée.
-- Respecte les conventions techniques de la version Odoo ciblée indiquée dans \
-le contexte. Vérifie dans le code source local de cette version quand un doute \
-existe. En Odoo 17+ / 18+ / 19+, n'utilise pas `attrs` ni `states` dans les vues \
-XML : utilise les expressions de modificateurs natives (`invisible="..."`, \
-`readonly="..."`, `required="..."`) compatibles avec la version.
-- IMPORTANT — safe_eval et champs calculés : le code Python des champs calculés \
-(`compute`) est exécuté dans le `safe_eval` d'Odoo qui interdit certains opcodes. \
-En particulier, **STORE_ATTR est interdit** : ne JAMAIS écrire `record.x_field = value`. \
-Utilise TOUJOURS l'assignation par item : `record['x_field'] = value`. \
-De même, utilise `record['field']` pour les lectures quand nécessaire. \
-Les imports ne sont pas disponibles dans safe_eval ; utilise uniquement les \
-objets déjà accessibles dans le contexte.
-- Variables et objets disponibles dans le code Python Studio :
-  ◦ Actions serveur / automations (contexte riche, vérifié dans ir_actions.py) :
-    `env`, `model`, `record`, `records`, `uid`, `user`, \
-`time`, `datetime`, `dateutil`, `timezone`, `float_compare()`, \
-`b64encode`, `b64decode`, `Command`, \
-`log(message, level='info')`, `_logger`, `UserError`.
-    Pour retourner une action : `action = {...}`.
-    Pour un CRON avec progression : `env['ir.cron']._notify_progress(done=n, remaining=m)`.
-  ◦ Champs calculés (`compute`) : le contexte est **extrêmement restreint**. \
-Seuls ces objets sont injectés (vérifiable dans `ir_model.py` ligne 40-50) :
-    - `self` — le recordset complet à itérer
-    - `datetime` — le module Python datetime
-    - `dateutil` — le module Python dateutil
-    - `time` — le module Python time
-  C'est TOUT. Rien d'autre n'est disponible. Conséquences :
-    - **`fields` n'existe PAS** → pour la date du jour : `datetime.date.today()`
-    - **`env` n'existe PAS** directement → accède-y via `self.env`
-    - **`relativedelta` n'existe PAS** directement → utilise \
-`dateutil.relativedelta.relativedelta`
-    - **`Command` n'existe PAS** → si nécessaire : accède via `self.env` ou évite
-    - Pour écrire un champ : `record['x_field'] = value` (STORE_ATTR interdit)
-    - Pour lire un champ : `record['x_field']` ou `record.x_field` (lecture OK)
-    - Pattern standard d'un compute :
-      ```
-      for record in self:
-          record['x_field'] = <expression>
-      ```
-  Ne fais JAMAIS `from X import Y` ni `import X` — tout est déjà injecté.
-- Le résultat doit être globalement identique à ce que produirait Odoo Studio \
-sur cette version précise.
-
-## Étape 3 — Réponse
+## Étape 2 — Réponse
 Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ni après, \
 sans bloc de code markdown. Structure exacte :
 
@@ -227,67 +150,11 @@ on_unlink|on_time), `code` (Python exécuté), `filter_domain` (domaine optionne
 `interval_type` (minutes|hours|days|weeks|months).
 
 ### Opérations sur les données (records)
-En plus des personnalisations Studio ci-dessus, tu peux créer ou mettre à \
-jour des enregistrements Odoo ordinaires : contacts (`res.partner`), produits \
-(`product.template`, `product.product`), catégories, etc. C'est utile par \
-exemple pour mettre à jour des fiches produit à partir d'un document fourni \
-en pièce jointe.
-
-INTERDICTION ABSOLUE — ne propose JAMAIS `create_record` ni `update_record` \
-sur un modèle transactionnel : `sale.order(.line)`, `account.move(.line)`, \
-`account.payment`, `stock.move(.line)`, `stock.picking`, \
-`stock.valuation.layer`, `account.bank.statement(.line)`, `pos.order(.line)`. \
-Ces flux ventes / comptabilité / stock sont protégés ; si la demande l'exige, \
-renvoie `operations: []` et explique-le dans `functional_analysis`.
-
-Avant toute opération `update_record` ou `delete_record`, identifie les fiches \
-exactes à l'aide de `query_odoo` : tu DOIS connaître leur `id` et leur \
-`display_name`. Ne propose jamais une opération « en aveugle » par domaine — le \
-consultant doit voir précisément quelles fiches seront touchées. Vérifie les \
-noms et types de champs avec `get_odoo_fields`.
-
-Pour un travail de mise en cohérence sur un lot d'enregistrements (par exemple \
-rapprocher un fichier CSV joint avec les données de l'instance), interroge \
-Odoo de façon EXHAUSTIVE avant de conclure :
-- avec `query_odoo`, ne demande que les champs strictement nécessaires (ex. \
-`id`, `product_tmpl_id`, `partner_id`) — des résultats compacts restent \
-lisibles dans l'historique ;
-- utilise `count_odoo` pour connaître le volume, puis pagine avec `offset` et \
-`limit` (jusqu'à 500 par appel) afin de couvrir TOUS les enregistrements \
-concernés ;
-- filtre par les `id` précis issus du fichier (`[["id","in",[...]]]` ou \
-`[["product_tmpl_id","in",[...]]]`) plutôt que de tout balayer.
-Ne te fonde jamais sur un échantillon partiel : si tu n'as pas pu établir la \
-liste exhaustive et certaine des anomalies, renvoie `operations: []` et \
-explique-le. Effectue la requête de rapprochement juste avant de produire les \
-opérations, pour disposer de données fraîches et complètes.
-
-IMPORTANT — relations one2many : pour modifier le CONTENU d'une relation \
-`one2many` (par exemple les lignes fournisseur `seller_ids` d'un \
-`product.template`, ou les lignes d'un autre objet de configuration), n'agis \
-JAMAIS sur le champ `one2many` du parent — il n'est pas modifiable via \
-`update_record`. Agis directement sur le MODÈLE ENFANT de la relation : \
-`create_record`, `update_record` ou `delete_record` sur ses enregistrements. \
-Exemple : pour les fournisseurs d'achat d'un produit, agis sur \
-`product.supplierinfo` (relié au produit par `product_tmpl_id`) — crée la \
-ligne manquante, corrige `partner_id` sur une ligne erronée, supprime une \
-ligne en trop. C'est la façon correcte et sûre de procéder.
-
-RÈGLES STRICTES — opérations records :
-- Une opération `create_record` crée UN SEUL enregistrement précis. Son \
-`values` est OBLIGATOIRE et doit contenir les valeurs concrètes des champs : \
-JAMAIS un objet vide, jamais un résumé. Pour créer N enregistrements, émets N \
-opérations `create_record` distinctes, chacune entièrement renseignée — \
-n'émets jamais une opération « lot » du type « créer les fiches manquantes ».
-- Ne crée JAMAIS un enregistrement qui pourrait déjà exister : vérifie d'abord \
-avec `query_odoo`. S'il existe, réutilise son `id` (comme valeur d'un champ \
-many2one, ou via `update_record`) — ne le recrée pas. Exemple : si un \
-fournisseur `res.partner` existe déjà dans l'instance, n'émets pas de \
-`create_record` pour lui ; relie-le avec son id.
-- N'émets une opération QUE si tu peux renseigner tous ses paramètres \
-concrètement (valeurs réelles, ids réels). Si une information manque ou est \
-incertaine, ne produis pas d'opération incomplète : renvoie `operations: []` \
-et explique précisément ce qui bloque dans `functional_analysis`.
+En plus des personnalisations Studio, tu peux créer ou mettre à jour des \
+enregistrements Odoo ordinaires (contacts, produits, catégories…). \
+Les règles métier (modèles protégés, one2many, prérequis `query_odoo`, \
+exhaustivité) sont dans la section « Conventions Studio » de ton contexte — \
+respecte-les strictement.
 
 - **create_record** — créer UN enregistrement.
   params : `model`, `values` (objet `{champ: valeur}` NON VIDE, valeurs \

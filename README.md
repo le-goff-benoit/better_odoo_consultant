@@ -5,7 +5,7 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.33.0** — résumé 30 j Community + Enterprise · inspection des vues & rapports Odoo · pages Assistant et Migration homogénéisées
+> Version actuelle : **0.45.0** — performance du contexte (cache LRU, dédup creation/creator, filtrage des notes de version par domaine → ~45% de tokens en moins) · routage Studio/dev plus strict · observabilité (log DEBUG des sections assemblées) · snapshot front↔back des termes de routage
 
 ---
 

@@ -385,6 +385,16 @@ def dump_technical_complexity(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def complexity_mode_from_raw(raw: Optional[str]) -> Optional[str]:
+    """Extract just the ``mode`` from a stored technical_complexity JSON —
+    helper for callers that route context based on the project profile."""
+    value = parse_technical_complexity(raw)
+    if not value:
+        return None
+    mode = value.get("mode")
+    return mode if isinstance(mode, str) else None
+
+
 def build_technical_complexity_context(raw: Optional[str]) -> str:
     value = parse_technical_complexity(raw)
     if not value:

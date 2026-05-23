@@ -22,7 +22,7 @@ import Markdown from '../components/Markdown'
 import AiSelector from '../components/AiSelector'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import { useWorkspaceContext } from '../components/Layout'
-import { routedContextFiles } from '../utils/aiContext'
+import { routedContextFiles, routedContextFilesWithSource, type ComplexityMode } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
 import {
   ATTACHMENT_ACCEPT, ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_MB,
@@ -49,6 +49,18 @@ interface CreatorProject {
   eligible: boolean
 }
 interface Operation { type: string; summary: string; params: Record<string, unknown> }
+
+type StudioVerdict = 'feasible' | 'with_caveats' | 'not_feasible'
+interface AnalysisFeasibility {
+  verdict: StudioVerdict
+  summary: string
+  operations: Array<{ index: number; type: string; verdict: StudioVerdict; reasons: string[] }>
+}
+interface ValidationIssue { field: string | null; severity: 'error' | 'warning'; message: string }
+interface AnalysisValidation {
+  ok: boolean
+  operations: Array<{ index: number; type: string; issues: ValidationIssue[] }>
+}
 interface OpResult {
   index: number; type: string; summary: string
   status: 'success' | 'failed' | 'skipped' | 'rolled_back' | 'ok'
@@ -280,6 +292,8 @@ export default function Creator() {
   const [analysis, setAnalysis] = useState<Operation[] | null>(null)
   const [funcAnalysis, setFuncAnalysis] = useState('')
   const [techAnalysis, setTechAnalysis] = useState('')
+  const [studioFeasibility, setStudioFeasibility] = useState<AnalysisFeasibility | null>(null)
+  const [validation, setValidation] = useState<AnalysisValidation | null>(null)
   const [streamErr, setStreamErr] = useState('')
 
   const [showModify, setShowModify] = useState(false)
@@ -375,16 +389,21 @@ export default function Creator() {
   const activeComplexity = technicalComplexityLabel(selectedProject?.technical_complexity)
   const activeCompanyLocalization = companyLocalizationLabel(activeCompany)
   const complexityParsed = parseJson<Record<string, unknown>>(selectedProject?.technical_complexity, {})
+  const complexityMode = (complexityParsed?.mode as ComplexityMode | undefined) ?? null
   const sourceRepoIsCloned = ((complexityParsed?.dev as { repositories?: Array<{ cloned: boolean }> } | undefined)?.repositories ?? []).some(r => r.cloned)
   const sourceCommunity = activeVersion ? srcStatus[activeVersion]?.installed === true : false
   const sourceEnterprise = activeVersion ? srcStatus[`${activeVersion}-enterprise`]?.installed === true : false
   const sourceEdition = sourceCommunity && sourceEnterprise ? 'C+E' : sourceCommunity ? 'C' : sourceEnterprise ? 'E' : ''
-  const contextFiles = routedContextFiles({
+  const contextFilesWithSource = routedContextFilesWithSource({
     prompt: request,
     perspective: 'developer',
     version: activeVersion,
     migration: false,
+    creation: true,
+    complexityMode,
   })
+  const contextFiles = contextFilesWithSource.map(f => f.name)
+  const contextFileSources = new Map(contextFilesWithSource.map(f => [f.name, f.source]))
   const conversationSources = [
     activeVersion && (sourceCommunity || sourceEnterprise) ? `Sources Odoo ${activeVersion}${sourceEdition ? ` ${sourceEdition}` : ''}` : null,
     activeEnvRepo && sourceRepoIsCloned ? activeEnvRepo.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
@@ -496,6 +515,8 @@ export default function Creator() {
     setAnalysis(null)
     setFuncAnalysis('')
     setTechAnalysis('')
+    setStudioFeasibility(null)
+    setValidation(null)
     setStreamErr('')
 
     abortRef.current?.abort()
@@ -557,6 +578,8 @@ export default function Creator() {
             setFuncAnalysis((evt.functional_analysis as string) ?? '')
             setTechAnalysis((evt.technical_analysis as string) ?? '')
             setAnalysis((evt.operations as Operation[]) ?? [])
+            setStudioFeasibility((evt.studio_feasibility as AnalysisFeasibility | undefined) ?? null)
+            setValidation((evt.validation as AnalysisValidation | undefined) ?? null)
           } else if (type === 'error') {
             gotError = true
             setStreamErr((evt.msg as string) ?? 'Erreur inconnue')
@@ -704,6 +727,8 @@ export default function Creator() {
     setAnalysis(null)
     setFuncAnalysis('')
     setTechAnalysis('')
+    setStudioFeasibility(null)
+    setValidation(null)
     setStreamErr('')
     setPreflight(null)
     setApplyResult(null)
@@ -1148,8 +1173,14 @@ export default function Creator() {
               </div>
               {opCount === 0 && <p className="ui-empty-description">{c.noOps}</p>}
               {analysis && analysis.length > 0 && <ChangesetSummary ops={analysis} en={en} />}
+              {analysis && analysis.length > 0 && (
+                <PreflightBanner feasibility={studioFeasibility} validation={validation} en={en} />
+              )}
               {analysis?.map((op, i) => (
-                <OperationRow key={i} op={op} index={i} en={en} onPreview={runPreview} />
+                <OperationRow key={i} op={op} index={i} en={en} onPreview={runPreview}
+                  feasibility={studioFeasibility?.operations.find(o => o.index === i)}
+                  issues={validation?.operations.find(o => o.index === i)?.issues}
+                />
               ))}
 
               {applyErr && (
@@ -1358,6 +1389,10 @@ export default function Creator() {
             title={en ? 'Creator context' : 'Contexte Creator'}
             mode="developer"
             effectivePerspective="developer"
+            lockedProfileLabel={en ? 'Creator' : 'Créateur'}
+            lockedProfileHint={en
+              ? 'Locked — Studio production conventions enforced'
+              : 'Verrouillé — conventions Studio appliquées'}
             provider={activeProvDef?.label}
             model={activeProvDef?.models.find(m => m.id === activeModelId)?.label}
             project={selectedProject?.name}
@@ -1369,6 +1404,7 @@ export default function Creator() {
             version={activeVersion}
             repo={activeEnvRepo}
             contextFiles={contextFiles}
+            contextFileSources={contextFileSources}
             sources={conversationSources}
             attachments={[]}
           />
@@ -1557,8 +1593,10 @@ function CreatorHistoryPanel({ rows, empty, title, close, labels, resume, onResu
 
 // ── Operation row (proposal) ──────────────────────────────────────
 
-function OperationRow({ op, index, en, onPreview }: {
+function OperationRow({ op, index, en, onPreview, feasibility, issues }: {
   op: Operation; index: number; en: boolean; onPreview: (index: number) => void
+  feasibility?: { verdict: StudioVerdict; reasons: string[] }
+  issues?: ValidationIssue[]
 }) {
   const meta = OP_META[op.type]
   const previewable = op.type === 'modify_view' || op.type === 'modify_report'
@@ -1638,6 +1676,132 @@ function OperationRow({ op, index, en, onPreview }: {
           <pre className="ui-code-block" style={{ marginTop: 0, fontSize: 11.5 }}>{value}</pre>
         </details>
       ))}
+      <OperationFlags feasibility={feasibility} issues={issues} en={en} />
+    </div>
+  )
+}
+
+const STUDIO_OP_TONE: Record<StudioVerdict, { bg: string; fg: string; border: string; label: string; labelEn: string; icon: string }> = {
+  feasible:     { bg: 'rgba(26,122,60,.10)', fg: '#1a7a3c', border: '#1a7a3c', label: 'Studio',          labelEn: 'Studio',        icon: '✓' },
+  with_caveats: { bg: 'rgba(202,138,4,.12)', fg: '#8a5b00', border: '#caa804', label: 'Studio + manuel', labelEn: 'Studio + manual', icon: '◐' },
+  not_feasible: { bg: 'rgba(176,38,38,.10)', fg: '#a51717', border: '#b02626', label: 'Hors Studio',     labelEn: 'Outside Studio', icon: '✕' },
+}
+
+function OperationFlags({ feasibility, issues, en }: {
+  feasibility?: { verdict: StudioVerdict; reasons: string[] }
+  issues?: ValidationIssue[]
+  en: boolean
+}) {
+  const errors = (issues ?? []).filter(i => i.severity === 'error')
+  const warnings = (issues ?? []).filter(i => i.severity === 'warning')
+  const showStudio = feasibility && feasibility.verdict !== 'feasible'
+  if (!showStudio && errors.length === 0 && warnings.length === 0) return null
+  return (
+    <div style={{ marginTop: 10, marginLeft: 30, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {showStudio && (() => {
+        const tone = STUDIO_OP_TONE[feasibility!.verdict]
+        return (
+          <div style={{
+            display: 'flex', gap: 8, padding: '7px 10px', borderRadius: 6,
+            border: `1px solid ${tone.border}`, background: tone.bg, color: tone.fg,
+            fontSize: 11.5, lineHeight: 1.45,
+          }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 16, height: 16, borderRadius: 8, background: tone.fg, color: 'white',
+              fontSize: 10, fontWeight: 800, flexShrink: 0, marginTop: 1,
+            }}>{tone.icon}</span>
+            <div>
+              <strong>{en ? tone.labelEn : tone.label}</strong> — {feasibility!.reasons.join(' ')}
+            </div>
+          </div>
+        )
+      })()}
+      {errors.map((iss, i) => (
+        <div key={`e${i}`} style={{
+          display: 'flex', gap: 8, padding: '7px 10px', borderRadius: 6,
+          border: '1px solid #b02626', background: 'rgba(176,38,38,.10)', color: '#a51717',
+          fontSize: 11.5, lineHeight: 1.45,
+        }}>
+          <XCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            {iss.field && <span style={{ fontFamily: 'monospace', opacity: 0.9 }}>{iss.field}</span>}
+            {iss.field && ' — '}
+            {iss.message}
+          </div>
+        </div>
+      ))}
+      {warnings.map((iss, i) => (
+        <div key={`w${i}`} style={{
+          display: 'flex', gap: 8, padding: '7px 10px', borderRadius: 6,
+          border: '1px solid #caa804', background: 'rgba(202,138,4,.12)', color: '#8a5b00',
+          fontSize: 11.5, lineHeight: 1.45,
+        }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            {iss.field && <span style={{ fontFamily: 'monospace', opacity: 0.9 }}>{iss.field}</span>}
+            {iss.field && ' — '}
+            {iss.message}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PreflightBanner({ feasibility, validation, en }: {
+  feasibility: AnalysisFeasibility | null
+  validation: AnalysisValidation | null
+  en: boolean
+}) {
+  const errorCount = (validation?.operations ?? [])
+    .reduce((n, op) => n + op.issues.filter(i => i.severity === 'error').length, 0)
+  const warningCount = (validation?.operations ?? [])
+    .reduce((n, op) => n + op.issues.filter(i => i.severity === 'warning').length, 0)
+  if (!feasibility && errorCount === 0 && warningCount === 0) return null
+  const studioBadge = feasibility ? STUDIO_OP_TONE[feasibility.verdict] : null
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+      padding: '8px 10px', borderRadius: 8, marginTop: 8,
+      border: '1px solid var(--th-border)', background: 'var(--th-bg-muted)',
+      fontSize: 11.5,
+    }}>
+      <strong>{en ? 'Pre-flight' : 'Pré-vol'} :</strong>
+      {studioBadge && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '2px 8px', borderRadius: 999,
+          border: `1px solid ${studioBadge.border}`,
+          background: studioBadge.bg, color: studioBadge.fg, fontWeight: 700,
+        }}>
+          <span aria-hidden="true">{studioBadge.icon}</span>
+          {en ? studioBadge.labelEn : studioBadge.label}
+        </span>
+      )}
+      {errorCount > 0 && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '2px 8px', borderRadius: 999,
+          border: '1px solid #b02626', background: 'rgba(176,38,38,.10)', color: '#a51717', fontWeight: 700,
+        }}>
+          <XCircle size={11} />
+          {errorCount} {en ? 'error(s)' : 'erreur(s)'}
+        </span>
+      )}
+      {warningCount > 0 && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '2px 8px', borderRadius: 999,
+          border: '1px solid #caa804', background: 'rgba(202,138,4,.12)', color: '#8a5b00', fontWeight: 700,
+        }}>
+          <AlertTriangle size={11} />
+          {warningCount} {en ? 'warning(s)' : 'avertissement(s)'}
+        </span>
+      )}
+      {feasibility && (
+        <span style={{ color: 'var(--th-muted)' }}>{feasibility.summary}</span>
+      )}
     </div>
   )
 }

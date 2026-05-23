@@ -168,6 +168,14 @@ const DEV_STRONG = [
 
 const MEETING_TERMS = ['compte-rendu', 'compte rendu', 'meeting minute', 'réunion', 'reunion', 'pv de réunion', 'pv de reunion']
 const STUDIO_TERMS = ['studio', 'x_studio', 'personnalisation', 'customisation', 'champ custom', 'modèle custom', 'modele custom', 'inspect_studio']
+// Mirrors the backend `_DEV_TERMS` in context_service.py — keep in sync.
+const DEV_FILE_TERMS = [
+  'module custom', 'custom module', 'dev custom', 'custom dev',
+  '_inherit', '_inherits', '@api.depends', '@api.constrains', '@api.onchange',
+  'search_project_source', 'read_project_file', 'code custom',
+  'depot client', 'dépôt client', 'client repo', 'modules sur mesure',
+  'surcharge', 'monkey patch', 'monkey_patch',
+]
 const VERSION_TERMS = ['version', 'migration', 'upgrade', 'nouveauté', 'nouveaute', 'changement', 'différence', 'difference', 'breaking', 'deprecated', 'dépréci', 'depreci', 'renommé', 'renomme', 'compatib', 'odoo 15', 'odoo 16', 'odoo 17', 'odoo 18', 'odoo 19']
 const FISCAL_TERMS = ['compta', 'comptabil', 'account', 'accounting', 'fiscal', 'tax', 'taxe', 'tva', 'vat', 'factur', 'invoice', 'journal', 'plan comptable', 'chart of accounts', 'fec', 'intrastat', 'qr-bill', 'qr bill', 'pos cert', 'paie', 'payroll']
 
@@ -309,6 +317,9 @@ export function perspectiveLabel(value: Perspective, lang: 'fr' | 'en') {
   return labels[value]
 }
 
+export type ComplexityMode = 'standard' | 'studio' | 'dev' | 'studio_dev'
+export type ContextFileSource = 'complexity' | 'keyword' | 'system'
+
 export function routedContextFiles(params: {
   prompt: string
   perspective: Perspective
@@ -317,19 +328,60 @@ export function routedContextFiles(params: {
   migration?: boolean
   countryCode?: string | null
   forceLocalization?: boolean
-}) {
+  complexityMode?: ComplexityMode | null
+  creation?: boolean
+}): string[] {
+  return routedContextFilesWithSource(params).map(f => f.name)
+}
+
+/** Same as `routedContextFiles` but returns each file with WHY it was loaded
+ * (project complexity, prompt keyword, or system default). Used by the
+ * context panel to display a small origin tag next to each pill. */
+export function routedContextFilesWithSource(params: {
+  prompt: string
+  perspective: Perspective
+  version?: string | null
+  targetVersion?: string | null
+  migration?: boolean
+  countryCode?: string | null
+  forceLocalization?: boolean
+  complexityMode?: ComplexityMode | null
+  creation?: boolean
+}): Array<{ name: string; source: ContextFileSource }> {
   const text = params.prompt.toLocaleLowerCase()
-  const files = new Set<string>(['skills.md', `profile-${params.perspective === 'business_analyst' ? 'business-analyst' : params.perspective}.md`])
-  if (params.migration) files.add('migration.md')
-  if (hasAny(text, MEETING_TERMS)) files.add('meeting-minute.md')
-  if (hasAny(text, STUDIO_TERMS)) files.add('studio.md')
-  if (params.version) files.add(`odoo-${params.version}.md`)
-  if (params.targetVersion && params.targetVersion !== params.version) files.add(`odoo-${params.targetVersion}.md`)
+  const out: Array<{ name: string; source: ContextFileSource }> = []
+  const seen = new Set<string>()
+  const add = (name: string, source: ContextFileSource) => {
+    if (seen.has(name)) return
+    seen.add(name)
+    out.push({ name, source })
+  }
+  add('skills.md', 'system')
+  add(`profile-${params.perspective === 'business_analyst' ? 'business-analyst' : params.perspective}.md`, 'system')
+  if (params.creation) add('profile-creator.md', 'system')
+  if (params.migration) add('migration.md', 'system')
+  if (params.creation) add('creation.md', 'system')
+  if (hasAny(text, MEETING_TERMS)) add('meeting-minute.md', 'keyword')
+  // Studio guide: complexity wins as source; keyword as fallback; creation
+  // always loads it as part of the Creator briefing.
+  const complexity = params.complexityMode ?? null
+  const studioByComplexity = complexity === 'studio' || complexity === 'studio_dev'
+  if (params.creation) add('studio.md', 'system')
+  else if (studioByComplexity) add('studio.md', 'complexity')
+  else if (hasAny(text, STUDIO_TERMS)) add('studio.md', 'keyword')
+  // Custom-dev guide: same OR logic.
+  const devByComplexity = complexity === 'dev' || complexity === 'studio_dev'
+  if (devByComplexity) add('dev.md', 'complexity')
+  else if (hasAny(text, DEV_FILE_TERMS)) add('dev.md', 'keyword')
+  if (params.version) add(`odoo-${params.version}.md`, 'system')
+  if (params.targetVersion && params.targetVersion !== params.version) {
+    add(`odoo-${params.targetVersion}.md`, 'system')
+  }
   const countryCode = (params.countryCode ?? '').trim().toLocaleLowerCase()
   if (/^[a-z]{2}$/.test(countryCode) && (params.forceLocalization || hasAny(text, FISCAL_TERMS))) {
-    files.add(`l10n_${countryCode}.md`)
+    add(`l10n_${countryCode}.md`, 'keyword')
   }
-  return Array.from(files)
+  return out
 }
 
 export function extractToolContextItems(events: AiEventLike[]): ContextItem[] {

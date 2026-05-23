@@ -1,9 +1,29 @@
 import type React from 'react'
-import { Bot, Database, FileText, FolderCode, Globe2, PanelRight, Sparkles, Workflow } from 'lucide-react'
+import { Bot, Database, FileText, FolderCode, Globe2, Lock, PanelRight, Sparkles, Workflow } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useUiLanguage } from '../i18n'
 import type { Perspective, PerspectiveMode } from './PerspectiveToggle'
 import PerspectiveToggle, { PERSPECTIVE_COLORS } from './PerspectiveToggle'
 import { perspectiveLabel } from '../utils/aiContext'
+import type { ContextFileSource } from '../utils/aiContext'
+import { listContextFiles } from '../api/client'
+
+interface ContextFileMeta { name: string; size: number; modified: number }
+
+/** Days since the file was last edited on disk. Used to flag stale context
+ * documents so the user knows to refresh outdated guides. */
+function daysSince(modifiedEpochSeconds: number): number {
+  return Math.floor((Date.now() / 1000 - modifiedEpochSeconds) / 86400)
+}
+
+const STALE_DAYS = 180   // editable files unchanged for 6 months → "vieux"
+const AGING_DAYS = 90    // unchanged for 3 months → "à revoir"
+
+function freshnessTone(days: number): 'fresh' | 'aging' | 'stale' {
+  if (days >= STALE_DAYS) return 'stale'
+  if (days >= AGING_DAYS) return 'aging'
+  return 'fresh'
+}
 
 interface ConversationContextPanelProps {
   title?: string
@@ -24,8 +44,17 @@ interface ConversationContextPanelProps {
   targetVersion?: string | null
   repo?: string | null
   contextFiles: string[]
+  /** Optional per-file source — when supplied, pills show a small origin tag
+   * ("from project" vs "from keyword"). Files not in the map render plainly. */
+  contextFileSources?: Map<string, ContextFileSource>
   sources: string[]
   attachments: string[]
+  /** When set, the profile section displays this label with a lock icon and
+   * hides the perspective toggle — used by the Creator where the profile is
+   * fixed. Backend perspective is still computed normally. */
+  lockedProfileLabel?: string
+  /** Helper text under the lock chip (e.g. why it's locked). */
+  lockedProfileHint?: string
 }
 
 export default function ConversationContextPanel({
@@ -46,10 +75,25 @@ export default function ConversationContextPanel({
   targetVersion,
   repo,
   contextFiles,
+  contextFileSources,
   sources,
   attachments,
+  lockedProfileLabel,
+  lockedProfileHint,
 }: ConversationContextPanelProps) {
   const lang = useUiLanguage()
+  // Fetch context-file freshness once per UI language; React Query dedupes
+  // across the multiple pages that mount this panel.
+  const { data: contextMeta } = useQuery<ContextFileMeta[]>({
+    queryKey: ['context-files-meta', lang],
+    queryFn: async () => {
+      const res = await listContextFiles(lang)
+      return res.data ?? []
+    },
+    staleTime: 60_000,
+  })
+  const ageByName = new Map<string, number>()
+  for (const meta of contextMeta ?? []) ageByName.set(meta.name, daysSince(meta.modified))
   const c = lang === 'en'
     ? {
       title: title ?? 'Conversation context',
@@ -113,22 +157,35 @@ export default function ConversationContextPanel({
       </div>
 
       <ContextBlock icon={<Sparkles size={15} />} label={c.profile}>
-        <div className="conversation-profile-card">
-          <div className="conversation-profile-live"
-            style={{ '--persp-color': PERSPECTIVE_COLORS[effectivePerspective] } as React.CSSProperties}>
-            <strong>{perspectiveLabel(effectivePerspective, lang)}</strong>
-            <span>{mode === 'auto' ? c.automatic : c.manual}</span>
+        {lockedProfileLabel ? (
+          <div className="conversation-profile-card">
+            <div className="conversation-profile-live"
+              style={{ '--persp-color': 'var(--brand)' } as React.CSSProperties}>
+              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Lock size={12} style={{ opacity: 0.75 }} aria-hidden="true" />
+                {lockedProfileLabel}
+              </strong>
+              <span>{lockedProfileHint ?? (lang === 'en' ? 'Locked for this mode' : 'Verrouillé pour ce mode')}</span>
+            </div>
           </div>
-          {onModeChange && (
-            <PerspectiveToggle
-              value={mode}
-              effectiveValue={effectivePerspective}
-              onChange={onModeChange}
-              size="sm"
-              disabled={disabled}
-            />
-          )}
-        </div>
+        ) : (
+          <div className="conversation-profile-card">
+            <div className="conversation-profile-live"
+              style={{ '--persp-color': PERSPECTIVE_COLORS[effectivePerspective] } as React.CSSProperties}>
+              <strong>{perspectiveLabel(effectivePerspective, lang)}</strong>
+              <span>{mode === 'auto' ? c.automatic : c.manual}</span>
+            </div>
+            {onModeChange && (
+              <PerspectiveToggle
+                value={mode}
+                effectiveValue={effectivePerspective}
+                onChange={onModeChange}
+                size="sm"
+                disabled={disabled}
+              />
+            )}
+          </div>
+        )}
       </ContextBlock>
 
       <ContextBlock icon={<Bot size={15} />} label={c.ai}>
@@ -162,7 +219,8 @@ export default function ConversationContextPanel({
       )}
 
       <ContextBlock icon={<FileText size={15} />} label={c.context}>
-        <PillList items={contextFiles} empty={c.none} tone="brand" />
+        <FreshnessPillList items={contextFiles} empty={c.none} ageByName={ageByName}
+          sources={contextFileSources} lang={lang} />
       </ContextBlock>
 
       <ContextBlock icon={<Database size={15} />} label={c.sources}>
@@ -210,6 +268,82 @@ function ContextBlock({ icon, label, children }: { icon: React.ReactNode; label:
       </div>
       <div className="workspace-context-content">{children}</div>
     </section>
+  )
+}
+
+function FreshnessPillList({
+  items, empty, ageByName, sources, lang,
+}: {
+  items: string[]
+  empty: string
+  ageByName: Map<string, number>
+  sources?: Map<string, ContextFileSource>
+  lang: 'fr' | 'en'
+}) {
+  if (!items.length) return <span>{empty}</span>
+  const sourceLabel = (source?: ContextFileSource): string | null => {
+    if (!source || source === 'system') return null
+    if (source === 'complexity') return lang === 'en' ? 'project' : 'projet'
+    if (source === 'keyword') return lang === 'en' ? 'keyword' : 'mots-clés'
+    return null
+  }
+  return (
+    <div className="context-pill-row">
+      {items.slice(0, 8).map(item => {
+        const age = ageByName.get(item)
+        const tone = age !== undefined ? freshnessTone(age) : 'fresh'
+        const ageLabel = age === undefined
+          ? null
+          : age < 1
+            ? (lang === 'en' ? 'today' : "aujourd'hui")
+            : age < 30
+              ? `${age}${lang === 'en' ? 'd' : 'j'}`
+              : age < 365
+                ? `${Math.round(age / 30)}${lang === 'en' ? 'mo' : 'm'}`
+                : `${Math.round(age / 365)}${lang === 'en' ? 'y' : 'a'}`
+        const ageHint = age === undefined
+          ? null
+          : lang === 'en'
+            ? `Last edited ${age} day(s) ago`
+            : `Dernière modification il y a ${age} jour(s)`
+        const source = sources?.get(item)
+        const srcLabel = sourceLabel(source)
+        const srcHint = source === 'complexity'
+          ? (lang === 'en' ? 'Loaded from project complexity' : 'Chargé via la complexité du projet')
+          : source === 'keyword'
+            ? (lang === 'en' ? 'Loaded from prompt keyword' : 'Chargé via un mot-clé du prompt')
+            : null
+        const title = [ageHint, srcHint].filter(Boolean).join(' · ') || undefined
+        const dotColor =
+          tone === 'stale' ? '#b02626' :
+          tone === 'aging' ? '#caa804' : 'var(--brand)'
+        return (
+          <span key={item} className="ui-badge ui-badge-brand" title={title}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span aria-hidden="true" style={{
+              width: 6, height: 6, borderRadius: 3, background: dotColor, flexShrink: 0,
+            }} />
+            <span>{item}</span>
+            {ageLabel && (
+              <span style={{ fontSize: 9.5, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
+                {ageLabel}
+              </span>
+            )}
+            {srcLabel && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4,
+                padding: '1px 5px', borderRadius: 4,
+                background: source === 'complexity'
+                  ? 'color-mix(in srgb, var(--brand-contrast) 14%, transparent)'
+                  : 'color-mix(in srgb, var(--brand-contrast) 8%, transparent)',
+                opacity: 0.95,
+              }}>{srcLabel}</span>
+            )}
+          </span>
+        )
+      })}
+      {items.length > 8 && <span className="ui-badge ui-badge-neutral">+{items.length - 8}</span>}
+    </div>
   )
 }
 

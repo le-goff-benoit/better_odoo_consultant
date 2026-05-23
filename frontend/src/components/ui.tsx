@@ -1,5 +1,5 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { Component, type ButtonHTMLAttributes, type ErrorInfo, type HTMLAttributes, type ReactNode } from 'react'
+import { Loader2, X } from 'lucide-react'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'muted'
 type Size = 'sm' | 'md' | 'xs'
@@ -184,4 +184,45 @@ export function EmptyState({
       {action && <div className="ui-empty-action">{action}</div>}
     </div>
   )
+}
+
+export function Pending({ label }: { label?: ReactNode }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center',
+      padding: '40px 0', color: 'var(--th-muted)', fontSize: 13,
+    }}>
+      <Loader2 size={18} className="creator-spin" />
+      {label}
+    </div>
+  )
+}
+
+interface ErrorBoundaryProps {
+  fallback: (error: Error, reset: () => void) => ReactNode
+  children: ReactNode
+}
+
+interface ErrorBoundaryState { error: Error | null }
+
+/** Catches render errors in its subtree so a single bad component does not
+ * crash the surrounding page. */
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error('ErrorBoundary caught', error, info)
+  }
+
+  reset = () => this.setState({ error: null })
+
+  render() {
+    if (this.state.error) return this.props.fallback(this.state.error, this.reset)
+    return this.props.children
+  }
 }

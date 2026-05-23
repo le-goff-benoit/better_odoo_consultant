@@ -24,16 +24,20 @@ from ...core.models import Profile, CreatorRequest
 from ...services.odoo_client import OdooClient
 from ...services.profile_manager import get_active_env_from_json, get_active_api_key
 from ...services.ai_service import stream_chat
-from ...services.context_service import load_context_for_prompt
+from ...services.context_service import load_context_for_prompt, complexity_profile_block
 from ...services.localization_service import active_company_from_cache, build_localization_context
 from ...services.technical_complexity_service import (
     build_technical_complexity_context, parse_technical_complexity,
+    complexity_mode_from_raw,
 )
 from ...services.creator_service import (
     build_analysis_message, parse_analysis, build_documentation_message,
 )
 from ...services.creator_executor import apply_changeset
 from ...services.preview_service import preview_operation, PREVIEWABLE_OPS
+from ...services.studio_feasibility_service import evaluate_changeset
+from ...services.creator_intents import build_creator_intent_block
+from ...services.creator_validators import validate_changeset
 from ...services.attachment_service import ChatAttachment, inject_attachments
 from .ai import _ai_key, _sse, _exchange_copilot_token, _PROVIDERS
 
@@ -172,11 +176,20 @@ def _build_context_md(profile: Profile, version, user_prompt, company_id):
     localization_md = build_localization_context(
         profile.company_ids, company_id, version, user_prompt, "developer")
     complexity_md = build_technical_complexity_context(profile.technical_complexity)
+    # Detect the kind of Creator operation the user is asking for (compute,
+    # cron, automation, report, bulk records…) and inject a focused snippet —
+    # routed as a priority block so it sits before the general routed sections.
+    intent_md = build_creator_intent_block(user_prompt or "", locale="fr")
+    if intent_md:
+        intent_md = "## Spécificité de l'opération demandée\n\n" + intent_md
+    complexity_mode = complexity_mode_from_raw(profile.technical_complexity)
+    profile_tuning = complexity_profile_block(complexity_mode, locale="fr")
     return load_context_for_prompt(
         version, user_prompt=user_prompt, perspective="developer", locale="fr",
         creation=True,
         country_code=active_company.get("country_code") if active_company else None,
-        priority_blocks=[b for b in (localization_md, complexity_md) if b])
+        complexity_mode=complexity_mode,
+        priority_blocks=[b for b in (localization_md, complexity_md, profile_tuning, intent_md) if b])
 
 
 # ── Analyze (SSE) ────────────────────────────────────────────────
@@ -235,6 +248,13 @@ async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session
                     yield _sse(evt)
             analysis = parse_analysis("".join(collected))
             if analysis.get("ok"):
+                # Pre-flight: Studio feasibility + structural validation. Both
+                # are advisory at this stage — the consultant decides whether
+                # to apply, fix, or reject. They are stored on the SSE
+                # analysis event so the UI can flag each op immediately.
+                ops_list = analysis.get("operations") or []
+                analysis["studio_feasibility"] = evaluate_changeset(ops_list)
+                analysis["validation"] = validate_changeset(ops_list)
                 record = CreatorRequest(
                     profile_id=profile.id,
                     profile_name=profile.name,
@@ -420,11 +440,17 @@ async def preview(body: PreviewBody, session: AsyncSession = Depends(get_session
     odoo, _src, _repo, version, _env, _cid = _build_runtime(
         profile, body.env_id, body.company_id)
     try:
-        return await preview_operation(odoo, operations, body.index, version)
+        result = await preview_operation(odoo, operations, body.index, version)
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(500, f"Échec de l'aperçu : {exc}")
+    # Studio feasibility verdict for the changeset — purely advisory, shown
+    # alongside the visual preview so the user sees where the Studio frontier
+    # sits for this specific request.
+    if isinstance(result, dict):
+        result["studio_feasibility"] = evaluate_changeset(operations)
+    return result
 
 
 # ── Reject ───────────────────────────────────────────────────────

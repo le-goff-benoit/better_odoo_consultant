@@ -31,7 +31,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
+import { routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
 import { History } from 'lucide-react'
@@ -1119,14 +1119,18 @@ export default function Migration() {
   const sourceLocalization = companyLocalizationLabel(sourceCompany)
   const sourceComplexity = technicalComplexityLabel(sourceProfile?.technical_complexity)
   const sourceComplexityParsed = (() => { try { return JSON.parse(sourceProfile?.technical_complexity ?? '{}') } catch { return {} } })()
+  const sourceComplexityMode = (sourceComplexityParsed?.mode as ComplexityMode | undefined) ?? null
   const sourceRepoIsCloned = ((sourceComplexityParsed?.dev?.repositories ?? []) as Array<{ cloned: boolean }>).some(r => r.cloned)
-  const contextFiles = routedContextFiles({
+  const contextFilesWithSource = routedContextFilesWithSource({
     prompt: perspectivePrompt,
     perspective,
     version: sourceVersion,
     targetVersion,
     migration: true,
+    complexityMode: sourceComplexityMode,
   })
+  const contextFiles = contextFilesWithSource.map(f => f.name)
+  const contextFileSources = new Map(contextFilesWithSource.map(f => [f.name, f.source]))
   const srcComm   = sourceVersion ? (srcStatus[sourceVersion]?.installed === true) : false
   const srcEnt    = sourceVersion ? (srcStatus[`${sourceVersion}-enterprise`]?.installed === true) : false
   const tgtComm   = targetVersion ? (srcStatus[targetVersion]?.installed === true) : false
@@ -1672,6 +1676,7 @@ export default function Migration() {
             targetVersion={targetVersion}
             repo={sourceRepoName}
             contextFiles={contextFiles}
+            contextFileSources={contextFileSources}
             sources={conversationSources}
             attachments={readyAttachments.map(a => a.name)}
           />

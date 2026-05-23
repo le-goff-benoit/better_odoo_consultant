@@ -16,9 +16,9 @@ from ...services.ai_service import (
     stream_chat, DEFAULT_MODELS,
     GITHUB_MODELS_BASE_URL, COPILOT_BASE_URL, COPILOT_HEADERS,
 )
-from ...services.context_service import load_context_for_prompt
+from ...services.context_service import load_context_for_prompt, complexity_profile_block
 from ...services.localization_service import active_company_from_cache, build_localization_context
-from ...services.technical_complexity_service import build_technical_complexity_context
+from ...services.technical_complexity_service import build_technical_complexity_context, complexity_mode_from_raw
 from ...services.attachment_service import ChatAttachment, inject_attachments
 
 router = APIRouter()
@@ -450,6 +450,8 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         req.perspective or "developer",
     )
     complexity_md = build_technical_complexity_context(profile.technical_complexity)
+    _complexity_mode = complexity_mode_from_raw(profile.technical_complexity)
+    profile_tuning = complexity_profile_block(_complexity_mode, locale=_context_locale)
     context_md = load_context_for_prompt(
         _version_to_use,
         target_version=_target_version,
@@ -458,7 +460,8 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         perspective=req.perspective or "developer",
         locale=_context_locale,
         country_code=_active_company.get("country_code") if _active_company else None,
-        priority_blocks=[b for b in (_source_warning, localization_md, complexity_md) if b],
+        complexity_mode=_complexity_mode,
+        priority_blocks=[b for b in (_source_warning, localization_md, complexity_md, profile_tuning) if b],
     )
 
     async def generate():

@@ -30,7 +30,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { routedContextFiles, useResolvedPerspective } from '../utils/aiContext'
+import { routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
 import { countryFlag } from '../utils/countryFlag'
 import { streamingSignals } from '../utils/streamingSignals'
 import ResponseModal from '../components/ResponseModal'
@@ -581,15 +581,19 @@ export default function Assistant() {
   const effectiveLocalization = isGeneralMode ? generalLocalization : activeCompanyLocalization
   const activeComplexity = technicalComplexityLabel(selectedProfile?.technical_complexity)
   const complexityParsed = (() => { try { return JSON.parse(selectedProfile?.technical_complexity ?? '{}') } catch { return {} } })()
+  const complexityMode = (complexityParsed?.mode as ComplexityMode | undefined) ?? null
   const repoIsCloned = ((complexityParsed?.dev?.repositories ?? []) as Array<{ cloned: boolean }>).some(r => r.cloned)
-  const contextFiles = routedContextFiles({
+  const contextFilesWithSource = routedContextFilesWithSource({
     prompt: perspectivePrompt,
     perspective,
     version: activeVersion,
     migration: false,
     countryCode: effectiveCountryCode,
     forceLocalization: isGeneralMode && !!generalCountryCode,
+    complexityMode,
   })
+  const contextFiles = contextFilesWithSource.map(f => f.name)
+  const contextFileSources = new Map(contextFilesWithSource.map(f => [f.name, f.source]))
   const conversationSources = [
     activeVersion && sourcesInstalled ? `Sources Odoo ${activeVersion}${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' Community' : ' Enterprise'}` : null,
     activeEnvRepo && repoIsCloned ? activeEnvRepo.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
@@ -1277,6 +1281,7 @@ export default function Assistant() {
           version={activeVersion}
           repo={activeEnvRepo}
           contextFiles={contextFiles}
+          contextFileSources={contextFileSources}
           sources={conversationSources}
           attachments={readyAttachments.map(a => a.name)}
         />

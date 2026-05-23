@@ -1,6 +1,10 @@
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
+node_modules/
+.vite/
+*.bak
 
 # Odoo sources téléchargées localement
 ~/odoo-sources/

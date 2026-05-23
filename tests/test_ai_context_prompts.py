@@ -149,8 +149,8 @@ def test_context_router_includes_studio_context_only_when_relevant():
     normal = load_context_for_prompt("18.0", user_prompt="Analyse les commandes de vente")
     studio = load_context_for_prompt("18.0", user_prompt="Quels champs Studio x_studio existent sur sale.order ?")
 
-    assert "Inspection Studio" not in normal
-    assert "Inspection Studio" in studio
+    assert "Projet avec Studio" not in normal
+    assert "Projet avec Studio" in studio
 
 
 def test_context_router_includes_version_notes_for_version_sensitive_prompts():
@@ -206,7 +206,7 @@ def test_context_router_supports_english_specialized_files():
     version = load_context_for_prompt("18.0", user_prompt="What are the Odoo 18 upgrade highlights?", locale="en")
 
     assert "Meeting minutes template" in meeting
-    assert "Studio inspection" in studio
+    assert "Project with Studio" in studio
     assert "Odoo 18.0 release notes" in version
 
 
@@ -870,3 +870,48 @@ def test_infer_perspective_strong_signals():
     assert _infer_perspective("salut", fallback=PERSPECTIVE_DEVELOPER) == PERSPECTIVE_DEVELOPER
     # Empty → fallback
     assert _infer_perspective("", fallback=PERSPECTIVE_BA) == PERSPECTIVE_BA
+
+
+# ── Context assembly contract: ordered sections ──────────────────
+# The "predictable context" guarantee — these tests fail if the section
+# order changes silently, which would shift LLM attention without notice.
+
+
+def test_context_assembly_order_is_stable_for_business_question():
+    """For an accounting question on v18 with a CH company, the assembled
+    context must contain these sections in a fixed order. Any reordering
+    changes how the LLM weighs information and must be an explicit decision."""
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Comment diagnostiquer les factures clients en retard ?",
+        perspective="technical",
+        country_code="CH",
+    )
+
+    expected_order = [
+        "Compétences consultant",
+        "Comptabilité & Finance",
+        "Localisation fiscale CH",
+    ]
+    positions = [context.find(section) for section in expected_order]
+    # Every expected section must be present.
+    assert all(p >= 0 for p in positions), (
+        f"Missing sections: {[s for s, p in zip(expected_order, positions) if p < 0]}"
+    )
+    # And appear in the declared order.
+    assert positions == sorted(positions), (
+        f"Section order drifted: {list(zip(expected_order, positions))}"
+    )
+
+
+def test_context_assembly_priority_blocks_always_lead():
+    """Priority blocks must come first, period — that's the contract."""
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Quelles factures clients sont en retard ?",
+        perspective="technical",
+        priority_blocks=["## URGENT\nDeadline demain."],
+    )
+
+    assert context.find("URGENT") >= 0
+    assert context.find("URGENT") < context.find("Compétences consultant")
