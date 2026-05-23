@@ -467,7 +467,7 @@ function SideSelector({
           <button key={m} onClick={() => onChange({ ...cfg, mode: m })} style={{
             flex: 1, padding: '6px 10px', fontSize: 12, fontWeight: 600,
             background: cfg.mode === m ? `var(--brand, ${t.brand})` : t.bgMuted,
-            color: cfg.mode === m ? '#fff' : t.muted,
+            color: cfg.mode === m ? t.brandContrast : t.muted,
             border: `1px solid ${cfg.mode === m ? `var(--brand, ${t.brand})` : t.border}`,
             borderRadius: t.radius, cursor: 'pointer', transition: 'all .15s',
           }}>
@@ -575,7 +575,8 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
                 <span key={`${att.name}-${att.size}`} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '3px 7px', borderRadius: 999,
-                  background: 'rgba(0,0,0,.18)', border: '1px solid rgba(0,0,0,.22)',
+                  background: 'color-mix(in srgb, var(--brand-contrast) 14%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--brand-contrast) 22%, transparent)',
                   color: 'var(--brand-contrast)', fontSize: 11, fontWeight: 650, maxWidth: 260,
                 }}>
                   {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={12} /> : att.kind === 'image' ? <ImageIcon size={12} /> : <Paperclip size={12} />}
@@ -911,7 +912,7 @@ function Markdown({ text }: { text: string }) {
     if (listMatch) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brand, flexShrink: 0 }}>•</span>
+          <span style={{ color: t.brandFg, flexShrink: 0 }}>•</span>
           <span>{inlineMarkdown(listMatch[1])}</span>
         </div>
       )
@@ -922,7 +923,7 @@ function Markdown({ text }: { text: string }) {
     if (olMatch) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brand, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
+          <span style={{ color: t.brandFg, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
           <span>{inlineMarkdown(olMatch[2])}</span>
         </div>
       )

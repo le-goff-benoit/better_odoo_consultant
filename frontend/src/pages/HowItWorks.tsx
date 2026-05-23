@@ -591,7 +591,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: t.radiusLg, padding: 18, boxShadow: t.shadow, marginBottom: 22,
   },
   heroIcon: {
-    width: 44, height: 44, borderRadius: 8, background: t.brand10, color: t.brand,
+    width: 44, height: 44, borderRadius: 8, background: t.brand10, color: t.brandFg,
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   heroTitle: { fontSize: 16, fontWeight: 750, color: t.text, marginBottom: 5 },
@@ -608,7 +608,7 @@ const styles: Record<string, CSSProperties> = {
   },
   nodeIcon: {
     width: 42, height: 42, borderRadius: 8, background: t.bgMuted, border: `1px solid ${t.border}`,
-    color: t.brand, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    color: t.brandFg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   badgeRow: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   badge: {
@@ -639,7 +639,7 @@ const styles: Record<string, CSSProperties> = {
   },
   connector: {
     width: 42, height: 42, display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center', color: t.brand,
+    alignItems: 'center', justifyContent: 'center', color: t.brandFg,
   },
   connectorLine: { width: 2, height: 22, background: t.brand40 },
   connectorArrow: { fontSize: 16, fontWeight: 800, lineHeight: 1, marginTop: -2 },
@@ -647,7 +647,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 22, background: t.bgCard, border: `1px solid ${t.border}`,
     borderRadius: t.radiusLg, boxShadow: t.shadow, padding: 18,
   },
-  tipsHeader: { display: 'flex', alignItems: 'center', gap: 8, color: t.brand, marginBottom: 14 },
+  tipsHeader: { display: 'flex', alignItems: 'center', gap: 8, color: t.brandFg, marginBottom: 14 },
   tipsTitle: { margin: 0, color: t.text, fontSize: 16 },
   tipGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 },
   tipItem: {

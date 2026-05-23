@@ -839,7 +839,7 @@ export default function Creator() {
         <Card className="page-card">
           <div className="page-card-body">
             <div style={{ maxWidth: 400, margin: '20px auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: 'var(--brand)' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: 'var(--brand-fg)' }}>
                 <ShieldCheck size={34} />
               </div>
               <div className="ui-section-title" style={{ justifyContent: 'center' }}>{c.gateTitle}</div>
@@ -1137,7 +1137,7 @@ export default function Creator() {
               <div className="ui-section-title">{c.instructionsApplied}</div>
               {instructions.map((ins, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, marginTop: 4 }}>
-                  <Pencil size={14} style={{ flexShrink: 0, marginTop: 2, color: 'var(--brand)' }} />
+                  <Pencil size={14} style={{ flexShrink: 0, marginTop: 2, color: 'var(--brand-fg)' }} />
                   <span>{ins}</span>
                 </div>
               ))}
@@ -1384,7 +1384,7 @@ export default function Creator() {
         >
           {preflightLoading && (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '14px 0', fontSize: 13 }}>
-              <Loader2 size={18} className="creator-spin" style={{ color: 'var(--brand)' }} />
+              <Loader2 size={18} className="creator-spin" style={{ color: 'var(--brand-fg)' }} />
               {c.preflightRunning}
             </div>
           )}
@@ -1629,7 +1629,7 @@ function OperationRow({ op, index, en, onPreview, feasibility, issues }: {
       padding: '10px 14px', marginTop: 8,
     }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--brand)', minWidth: 22, textAlign: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--brand-fg)', minWidth: 22, textAlign: 'center' }}>
           #{index + 1}
         </span>
         <Badge tone="info">{label}</Badge>

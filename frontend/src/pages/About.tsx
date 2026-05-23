@@ -827,7 +827,7 @@ export default function About() {
           width: 56, height: 56, borderRadius: '50%',
           background: `linear-gradient(135deg, ${t.brand}, ${t.brandDark})`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 24, fontWeight: 800, color: '#fff', flexShrink: 0,
+          fontSize: 24, fontWeight: 800, color: t.brandContrast, flexShrink: 0,
         }}>B</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 2 }}>Benoît Le Goff</div>
@@ -856,7 +856,7 @@ export default function About() {
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 11, color: t.muted, marginBottom: 4 }}>{c.version}</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: t.brand }}>{VERSION}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: t.brandFg }}>{VERSION}</div>
         </div>
       </div>
 

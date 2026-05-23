@@ -3,7 +3,8 @@ export const t = {
   // Brand (set dynamically via --brand CSS var) — Better Odoo Assistant green.
   brand:       'var(--brand, #33f06f)',
   brandContrast: 'var(--brand-contrast, #0a0a0a)',
-  brandDark:   '#18b94b',
+  brandFg:     'var(--brand-fg, #117a35)',
+  brandDark:   'color-mix(in srgb, var(--brand, #33f06f) 72%, black)',
   brandLight:  'color-mix(in srgb, var(--brand, #33f06f) 10%, white)',
   // Transparent brand variants — use these instead of ${t.brand}XX (invalid on CSS vars)
   brand10: 'var(--brand-10)',
@@ -50,7 +51,7 @@ export const t = {
   // are not safe as backgrounds with white text because the dark-mode
   // variant is too light for AA contrast.
   successSolid: '#2f7a3f',
-  warningSolid: '#c97a00',
+  warningSolid: '#8a5500',
   dangerSolid:  '#c0392b',
   infoSolid:    '#1f4ec3',
 

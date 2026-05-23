@@ -339,17 +339,18 @@ function fiscalCountryLabel(code: string | null | undefined, lang: 'fr' | 'en') 
 }
 
 function countryToneStyle(code: string | null | undefined): React.CSSProperties {
-  const tones: Record<string, { accent: string; bg: string; fg: string }> = {
-    CH: { accent: '#ff3341', bg: 'color-mix(in srgb, #ff3341 15%, var(--th-bg-card))', fg: '#ff3341' },
-    FR: { accent: '#114ee8', bg: 'color-mix(in srgb, #114ee8 13%, var(--th-bg-card))', fg: '#114ee8' },
-    BE: { accent: '#ffd735', bg: 'color-mix(in srgb, #ffd735 18%, var(--th-bg-card))', fg: '#8a5500' },
-    LU: { accent: '#48e7ff', bg: 'color-mix(in srgb, #48e7ff 16%, var(--th-bg-card))', fg: '#0f6282' },
+  const tones: Record<string, { accent: string; bg: string; fg: string; onAccent: string }> = {
+    CH: { accent: '#ff3341', bg: 'color-mix(in srgb, #ff3341 15%, var(--th-bg-card))', fg: '#ff3341', onAccent: '#0a0a0a' },
+    FR: { accent: '#114ee8', bg: 'color-mix(in srgb, #114ee8 13%, var(--th-bg-card))', fg: '#114ee8', onAccent: '#ffffff' },
+    BE: { accent: '#ffd735', bg: 'color-mix(in srgb, #ffd735 18%, var(--th-bg-card))', fg: '#8a5500', onAccent: '#0a0a0a' },
+    LU: { accent: '#48e7ff', bg: 'color-mix(in srgb, #48e7ff 16%, var(--th-bg-card))', fg: '#0f6282', onAccent: '#0a0a0a' },
   }
-  const tone = tones[(code || '').toUpperCase()] ?? { accent: 'var(--th-border)', bg: 'var(--th-bg-card)', fg: 'var(--th-text-sub)' }
+  const tone = tones[(code || '').toUpperCase()] ?? { accent: 'var(--th-border)', bg: 'var(--th-bg-card)', fg: 'var(--th-text-sub)', onAccent: 'var(--th-text-sub)' }
   return {
     '--l10n-accent': tone.accent,
     '--l10n-bg': tone.bg,
     '--l10n-fg': tone.fg,
+    '--l10n-on-accent': tone.onAccent,
   } as React.CSSProperties
 }
 // ── Main page ─────────────────────────────────────────────────
@@ -1036,7 +1037,7 @@ export default function Assistant() {
           {configuredProviders.length === 0 ? (
             <div style={{ fontSize: 13, color: t.muted }}>
               {c.noProvider}{' '}
-              <Link to="/settings" style={{ color: t.brand, fontWeight: 600 }}>{c.addApi}</Link>
+              <Link to="/settings" style={{ color: t.brandFg, fontWeight: 600 }}>{c.addApi}</Link>
             </div>
           ) : (
             <>
@@ -1736,7 +1737,8 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
                 <span key={`${att.name}-${att.size}`} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '3px 7px', borderRadius: 999,
-                  background: 'rgba(0,0,0,.18)', border: '1px solid rgba(0,0,0,.22)',
+                  background: 'color-mix(in srgb, var(--brand-contrast) 14%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--brand-contrast) 22%, transparent)',
                   color: 'var(--brand-contrast)', fontSize: 11, fontWeight: 650, maxWidth: 260,
                 }}>
                   {att.kind === 'pdf' || att.kind === 'office' ? <FileText size={12} /> : att.kind === 'image' ? <ImageIcon size={12} /> : <Paperclip size={12} />}

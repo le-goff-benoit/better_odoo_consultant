@@ -76,7 +76,7 @@ export default function ConversationHistoryPanel<T extends HistoryItem>({
               {item.badge && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
-                  background: t.brand20, color: t.brand,
+                  background: t.brand20, color: t.brandFg,
                 }}>{item.badge}</span>
               )}
               <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto' }}>

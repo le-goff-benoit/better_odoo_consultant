@@ -821,7 +821,7 @@ function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onR
 function SshStep({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
-      <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: t.action, color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n}</div>
+      <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: t.action, color: t.brandContrast, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n}</div>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600, fontSize: 13, color: t.text }}>{title}</div>
         {children}
@@ -841,10 +841,10 @@ function bannerStyle(color: string): React.CSSProperties {
 }
 
 function btnDownload(status: CardState, installed?: boolean): React.CSSProperties {
-  const bg = status === 'running' ? t.danger : installed ? t.brand : t.action
+  const bg = status === 'running' ? t.dangerSolid : installed ? t.brand : t.action
   return {
     marginTop: 'auto', padding: '8px 0', width: '100%',
-    background: bg, color: '#fff', border: 'none',
+    background: bg, color: status === 'running' ? '#fff' : t.brandContrast, border: 'none',
     borderRadius: t.radius, fontWeight: 600, fontSize: 13, cursor: 'pointer',
   }
 }

@@ -17,6 +17,7 @@ interface ProviderDef {
   id: string
   label: string
   color: string
+  textColor?: string
   logoUrl: string
   placeholder: string
   docsUrl: string
@@ -31,6 +32,7 @@ const PROVIDERS: ProviderDef[] = [
     id: 'claude',
     label: 'Claude (Anthropic)',
     color: '#D97706',
+    textColor: '#0a0a0a',
     logoUrl: 'https://www.anthropic.com/favicon.ico',
     placeholder: 'sk-ant-api03-…',
     docsUrl: 'https://console.anthropic.com/settings/keys',
@@ -41,6 +43,7 @@ const PROVIDERS: ProviderDef[] = [
     id: 'openai',
     label: 'OpenAI (GPT-4o)',
     color: '#16A34A',
+    textColor: '#0a0a0a',
     logoUrl: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64',
     placeholder: 'sk-…',
     docsUrl: 'https://platform.openai.com/api-keys',
@@ -323,7 +326,7 @@ function InterfaceSection() {
               {isActive && (
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 8px',
-                  background: `var(--brand, ${t.brand})`, color: '#fff', borderRadius: 9999,
+                  background: `var(--brand, ${t.brand})`, color: t.brandContrast, borderRadius: 9999,
                 }}>{c.active}</span>
               )}
             </button>
@@ -584,7 +587,7 @@ function ApiSection() {
                           disabled={copilotLoading}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '9px 18px', background: p.color, color: '#fff',
+                            padding: '9px 18px', background: p.color, color: p.textColor ?? '#fff',
                             border: 'none', borderRadius: t.radius, fontWeight: 600, fontSize: 13,
                             cursor: copilotLoading ? 'default' : 'pointer', opacity: copilotLoading ? 0.7 : 1,
                           }}>
@@ -616,7 +619,7 @@ function ApiSection() {
                               {copilotFlow.user_code}
                             </div>
                             <a href={copilotFlow.verification_uri} target="_blank" rel="noreferrer"
-                              style={{ fontSize: 12, color: t.brand, fontWeight: 500 }}>
+                              style={{ fontSize: 12, color: t.brandFg, fontWeight: 500 }}>
                               {c.openDevice}
                             </a>
                           </div>
@@ -660,7 +663,7 @@ function ApiSection() {
                           onClick={() => save.mutate({ provider: p.id, key: keyVal })}
                           style={{
                             padding: '8px 16px', background: keyVal.trim() ? p.color : t.borderLight,
-                            color: keyVal.trim() ? '#fff' : t.muted,
+                            color: keyVal.trim() ? (p.textColor ?? '#fff') : t.muted,
                             border: 'none', borderRadius: t.radius, fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>
                           {save.isPending ? '…' : c.save}
@@ -674,7 +677,7 @@ function ApiSection() {
                       </div>
                       <div style={{ marginTop: 6, fontSize: 12, color: t.muted }}>
                         {c.getKey}{' '}
-                        <a href={p.docsUrl} target="_blank" rel="noreferrer" style={{ color: t.brand, fontWeight: 500 }}>
+                        <a href={p.docsUrl} target="_blank" rel="noreferrer" style={{ color: t.brandFg, fontWeight: 500 }}>
                           {p.docsLabel} →
                         </a>
                       </div>
@@ -1274,7 +1277,7 @@ function UserProfileEditor() {
                     transition: 'all .15s',
                   }}>
                     <div style={{ height: 44, display: 'flex', alignItems: 'flex-end' }}>{preview}</div>
-                    <span style={{ fontSize: 11, fontWeight: active ? 600 : 400, color: active ? (form.mascotColor ?? t.brand) : t.muted }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: active ? 600 : 400, color: active ? t.text : t.muted }}>{label}</span>
                   </button>
                 )
               })}

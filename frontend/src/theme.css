@@ -14,6 +14,7 @@
   /* Brand: Better Odoo Assistant. User accent can still override --brand. */
   --brand: #33f06f;
   --brand-contrast: #0a0a0a;
+  --brand-fg: #117a35;
   --brand-10: color-mix(in srgb, var(--brand) 10%, transparent);
   --brand-15: color-mix(in srgb, var(--brand) 14%, transparent);
   --brand-20: color-mix(in srgb, var(--brand) 18%, transparent);
@@ -21,7 +22,7 @@
   --brand-60: color-mix(in srgb, var(--brand) 50%, transparent);
 
   --brand-strong: #18b94b;
-  --brand-muted-text: color-mix(in srgb, var(--brand) 78%, var(--th-text));
+  --brand-muted-text: color-mix(in srgb, var(--brand-fg) 78%, var(--th-text));
 
   --boa-cyan: #48e7ff;
   --boa-green: #33f06f;
@@ -41,6 +42,8 @@
   --th-bg: color-mix(in srgb, var(--brand) 5%, #f5f5f3);
   --th-bg-card: color-mix(in srgb, var(--brand) 2%, #ffffff);
   --th-bg-muted: color-mix(in srgb, var(--brand) 4%, #ebebe7);
+  --th-surface: var(--th-bg-card);
+  --th-surface-2: var(--th-bg-muted);
   --th-text: #0a0a0a;
   --th-text-sub: #2a2a2a;
   --th-muted: #6b6b6b;
@@ -118,9 +121,12 @@
 
 [data-theme="dark"] {
   /* Dark theme: "terminal console" — near-black with phosphor highlights */
+  --brand-fg: var(--brand);
   --th-bg: color-mix(in srgb, var(--brand) 5%, #1b1f27);
   --th-bg-card: color-mix(in srgb, var(--brand) 3%, #232832);
   --th-bg-muted: color-mix(in srgb, var(--brand) 4%, #2c323d);
+  --th-surface: var(--th-bg-card);
+  --th-surface-2: var(--th-bg-muted);
   --th-text: #f4f5f7;
   --th-text-sub: #d9dde4;
   --th-muted: #aab2c0;
@@ -149,9 +155,12 @@
 }
 
 [data-theme="sepia"] {
+  --brand-fg: #117a35;
   --th-bg: color-mix(in srgb, var(--brand) 4%, #f5f0e8);
   --th-bg-card: color-mix(in srgb, var(--brand) 2%, #faf7f2);
   --th-bg-muted: color-mix(in srgb, var(--brand) 3%, #ede8de);
+  --th-surface: var(--th-bg-card);
+  --th-surface-2: var(--th-bg-muted);
   --th-text: #2c1a0a;
   --th-text-sub: #5c3d1e;
   --th-muted: #8b6a45;
@@ -332,7 +341,7 @@ samp {
 
 .btn-outline, .ui-button-outline {
   padding: 7px 14px; background: transparent;
-  color: var(--brand); border: var(--neo-border-w) solid var(--brand); font-size: var(--font-md);
+  color: var(--brand-fg); border: var(--neo-border-w) solid var(--brand); font-size: var(--font-md);
 }
 .btn-outline:hover:not(:disabled), .ui-button-outline:hover:not(:disabled) { background: var(--brand); color: var(--brand-contrast); }
 
@@ -404,14 +413,14 @@ textarea:focus-visible {
 .ui-badge-md, .ui-status-pill-md { min-height: 24px; padding: 4px 9px; font-size: var(--font-sm); }
 .ui-badge-brand { color: var(--brand-contrast); background: var(--brand); border-color: var(--brand); }
 .ui-badge-success { color: #fff; background: #2f7a3f; border-color: #2f7a3f; }
-.ui-badge-warning { color: #fff; background: #c97a00; border-color: #c97a00; }
+.ui-badge-warning { color: #fff; background: #8a5500; border-color: #8a5500; }
 .ui-badge-danger { color: #fff; background: #b32c2c; border-color: #b32c2c; }
 .ui-badge-info { color: #fff; background: #1f4ec3; border-color: #1f4ec3; }
 .ui-badge-neutral { color: var(--th-bg-card); background: var(--th-text); border-color: var(--th-text); }
 
 .ui-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .ui-status-ok { color: #fff; background: #2f7a3f; border-color: #2f7a3f; }
-.ui-status-warning { color: #fff; background: #c97a00; border-color: #c97a00; }
+.ui-status-warning { color: #fff; background: #8a5500; border-color: #8a5500; }
 .ui-status-error { color: #fff; background: #c0392b; border-color: #c0392b; }
 .ui-status-idle { color: var(--th-text-sub); background: var(--th-bg-muted); border-color: var(--th-border); }
 .ui-status-running { color: var(--brand-contrast); background: var(--brand); border-color: var(--brand); }
@@ -604,7 +613,7 @@ textarea:focus-visible {
 .ui-empty-icon {
   width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--brand-10); color: var(--brand);
+  background: var(--brand-10); color: var(--brand-fg);
 }
 .ui-empty-title { font-size: 15px; font-weight: 750; color: var(--th-text); }
 .ui-empty-description { margin-top: 6px; font-size: 13px; color: var(--th-muted); }
@@ -856,7 +865,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   background: #f97316;
-  color: #fff;
+  color: #0a0a0a;
   border: 1px solid color-mix(in srgb, #f97316 70%, var(--boa-topbar-border));
   font-family: var(--font-mono);
   font-size: 10px;
@@ -987,7 +996,7 @@ textarea:focus-visible {
 }
 .workspace-context-label::before {
   content: "▪";
-  color: var(--brand);
+  color: var(--brand-fg);
 }
 
 .workspace-context-content {
@@ -1299,13 +1308,13 @@ textarea:focus-visible {
 
 .ui-chip-button:hover:not(:disabled) {
   border-color: var(--brand-40);
-  color: var(--brand);
+  color: var(--brand-fg);
   background: var(--brand-10);
 }
 
 .ui-chip-button.is-active {
   border-color: var(--brand);
-  color: var(--brand);
+  color: var(--brand-fg);
   background: var(--brand-10);
 }
 
@@ -1386,7 +1395,7 @@ textarea:focus-visible {
 }
 
 .ui-link {
-  color: var(--brand);
+  color: var(--brand-fg);
   font-weight: 650;
   text-decoration: none;
 }
@@ -1433,10 +1442,10 @@ textarea:focus-visible {
 }
 
 .dashboard-stat-icon { width: 40px; height: 40px; }
-.dashboard-action-icon { width: 34px; height: 34px; background: var(--th-bg-muted); color: var(--brand); }
+.dashboard-action-icon { width: 34px; height: 34px; background: var(--th-bg-muted); color: var(--brand-fg); }
 
 .dashboard-stat-value {
-  color: var(--brand);
+  color: var(--brand-fg);
   font-size: 22px;
   font-weight: 750;
   line-height: 1;
@@ -1510,7 +1519,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--brand);
+  color: var(--brand-fg);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -1829,7 +1838,7 @@ textarea:focus-visible {
 .project-env-pill:hover,
 .project-company-pill:hover:not(:disabled) {
   border-color: var(--brand-40);
-  color: var(--brand);
+  color: var(--brand-fg);
   background: var(--brand-10);
 }
 
@@ -1869,7 +1878,7 @@ textarea:focus-visible {
   border: 1px solid var(--th-border);
   border-radius: 6px;
   background: var(--th-bg-card);
-  color: var(--brand);
+  color: var(--brand-fg);
   cursor: pointer;
 }
 
@@ -2069,7 +2078,7 @@ textarea:focus-visible {
 }
 .sidebar-link:hover { background: var(--th-bg-muted); color: var(--th-text); text-decoration: none; }
 .sidebar-link.active { background: var(--th-bg-card); color: var(--th-text); border-left-color: var(--brand); }
-.sidebar-link.active svg { color: var(--brand); }
+.sidebar-link.active svg { color: var(--brand-fg); }
 
 @media (max-width: 1120px) {
   .topbar-clock { display: none; }
@@ -2231,11 +2240,11 @@ textarea:focus-visible {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 800;
-  color: var(--brand);
+  color: var(--brand-fg);
 }
 .migration-side-compact-arrow {
   flex-shrink: 0;
-  color: var(--brand);
+  color: var(--brand-fg);
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 900;
@@ -2451,7 +2460,7 @@ textarea:focus-visible {
   flex-shrink: 0;
   border: 1px solid var(--l10n-accent);
   background: var(--l10n-accent);
-  color: #fff;
+  color: var(--l10n-on-accent, #fff);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 800;
@@ -2557,7 +2566,7 @@ textarea:focus-visible {
 
 .assistant-soft-action.is-active {
   background: var(--brand-10);
-  color: var(--brand);
+  color: var(--brand-fg);
   border-color: var(--brand);
 }
 
@@ -2682,7 +2691,7 @@ textarea:focus-visible {
 }
 
 .tool-chip {
-  --tool-color: var(--brand);
+  --tool-color: var(--brand-fg);
   min-width: 174px;
   max-width: min(310px, 100%);
   display: inline-grid;
@@ -3033,7 +3042,7 @@ textarea:focus-visible {
 .assistant-composer-suggestion:hover {
   background: var(--brand-10);
   border-color: var(--brand-40);
-  color: var(--brand);
+  color: var(--brand-fg);
 }
 
 .assistant-attachments {
@@ -3052,7 +3061,7 @@ textarea:focus-visible {
   background: var(--brand-10);
   border: 1px solid var(--brand-40);
   border-radius: 999px;
-  color: var(--brand);
+  color: var(--brand-fg);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
@@ -3148,7 +3157,7 @@ textarea:focus-visible {
 .assistant-attach-button:hover:not(:disabled) {
   border-color: var(--brand);
   background: var(--brand-10);
-  color: var(--brand);
+  color: var(--brand-fg);
 }
 
 .assistant-attach-button:disabled {

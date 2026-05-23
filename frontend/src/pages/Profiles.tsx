@@ -550,7 +550,7 @@ export default function Profiles() {
       {toast && (
         <div style={{
           position: 'fixed', top: 20, right: 20, zIndex: 1000,
-          background: toast.ok ? t.success : t.danger,
+          background: toast.ok ? t.successSolid : t.dangerSolid,
           color: '#fff', padding: '12px 20px', borderRadius: t.radius,
           boxShadow: '0 4px 16px rgba(0,0,0,.2)', fontSize: 13, fontWeight: 600,
           display: 'flex', alignItems: 'center', gap: 8,
@@ -1730,7 +1730,7 @@ function MaintenanceAction({ icon, label, description, onClick, loading, dotColo
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
         width: 28, height: 28, flexShrink: 0,
         background: 'color-mix(in srgb, var(--brand) 12%, transparent)',
-        borderRadius: 6, color: 'var(--brand)' }}>
+        borderRadius: 6, color: 'var(--brand-fg)' }}>
         {loading ? <Loader2 size={14} style={{ animation: 'spin .9s linear infinite' }} /> : icon}
       </span>
       <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
@@ -1753,7 +1753,7 @@ function QuickLink({ href, label, icon, color }: { href: string; label: string; 
       display: 'inline-flex', alignItems: 'center', gap: 4,
       padding: '3px 9px', borderRadius: 3,
       border: `1px solid ${t.brand40}`, background: t.brand10,
-      color: t.action, fontSize: 11, fontWeight: 600, textDecoration: 'none',
+      color: t.brandFg, fontSize: 11, fontWeight: 600, textDecoration: 'none',
     }}>
       {icon} {label} <ExternalLink size={10} style={{ opacity: .65 }} />
     </a>

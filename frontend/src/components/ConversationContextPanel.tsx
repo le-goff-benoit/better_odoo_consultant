@@ -347,7 +347,7 @@ function ContextChip({ children, tone, title, icon }: {
   const toneStyles: Record<string, React.CSSProperties> = {
     brand:   { background: 'var(--brand)', color: 'var(--brand-contrast, #fff)', borderColor: 'var(--brand)' },
     accent:  { background: 'color-mix(in srgb, var(--brand) 18%, transparent)', color: 'var(--th-text)', borderColor: 'color-mix(in srgb, var(--brand) 40%, transparent)' },
-    neutral: { background: 'var(--th-surface-2, #f3f4f6)', color: 'var(--th-text)', borderColor: 'var(--th-border)' },
+    neutral: { background: 'var(--th-surface-2)', color: 'var(--th-text)', borderColor: 'var(--th-border)' },
     muted:   { background: 'transparent', color: 'var(--th-muted)', borderColor: 'var(--th-border)' },
   }
   return (

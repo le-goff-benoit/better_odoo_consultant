@@ -124,7 +124,7 @@ export default function Markdown({ text }: { text: string }) {
     if (listMatch) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brand, flexShrink: 0 }}>•</span>
+          <span style={{ color: t.brandFg, flexShrink: 0 }}>•</span>
           <span>{inlineMarkdown(listMatch[1])}</span>
         </div>
       )
@@ -135,7 +135,7 @@ export default function Markdown({ text }: { text: string }) {
     if (olMatch) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brand, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
+          <span style={{ color: t.brandFg, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
           <span>{inlineMarkdown(olMatch[2])}</span>
         </div>
       )

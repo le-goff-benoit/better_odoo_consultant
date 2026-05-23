@@ -93,7 +93,7 @@ export default function PerspectiveSelect({
         <div role="listbox"
           style={{
             position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-            background: 'var(--th-surface, #fff)',
+            background: 'var(--th-surface)',
             border: '1px solid var(--th-border)', borderRadius: 7,
             boxShadow: '0 8px 24px rgba(0,0,0,.12)',
             padding: 4, zIndex: 50,
@@ -124,7 +124,7 @@ export default function PerspectiveSelect({
                   {it.icon}
                   <span>{it.label}</span>
                 </span>
-                {selected && <Check size={13} style={{ color: 'var(--brand)' }} />}
+                {selected && <Check size={13} style={{ color: 'var(--brand-fg)' }} />}
               </button>
             )
           })}
