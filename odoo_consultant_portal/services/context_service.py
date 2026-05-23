@@ -652,15 +652,19 @@ def _load_context_for_prompt_impl(
 
     # Role-specific profile file (support / BA / architect / developer).
     # Treated as a core section so the role guidance is never crowded out.
+    # Skipped in Creator mode: the Creator profile (profile-creator.md, loaded
+    # below) is the locked authority — adding a second role profile underneath
+    # is both redundant and conceptually inconsistent with the locked badge.
     _profile_title = None
-    profile_filename = _PROFILE_FILES.get(perspective or "")
-    if profile_filename:
-        try:
-            _profile_content = read_file(profile_filename, lang)
-            _profile_title = titles["profile"]
-            sections.append((_profile_title, _profile_content))
-        except FileNotFoundError:
-            pass
+    if not creation:
+        profile_filename = _PROFILE_FILES.get(perspective or "")
+        if profile_filename:
+            try:
+                _profile_content = read_file(profile_filename, lang)
+                _profile_title = titles["profile"]
+                sections.append((_profile_title, _profile_content))
+            except FileNotFoundError:
+                pass
 
     if not migration and _has_any(prompt, _MEETING_TERMS):
         try:

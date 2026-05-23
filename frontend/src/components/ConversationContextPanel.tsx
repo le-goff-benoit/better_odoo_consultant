@@ -291,8 +291,12 @@ function FreshnessPillList({
     <div className="context-pill-row">
       {items.slice(0, 8).map(item => {
         const age = ageByName.get(item)
-        const tone = age !== undefined ? freshnessTone(age) : 'fresh'
-        const ageLabel = age === undefined
+        const hasAge = age !== undefined
+        // Only show the freshness dot when it's an outlier (aging or stale).
+        // A fresh file gets a plain pill — no need to flag the obvious.
+        const tone = hasAge ? freshnessTone(age) : 'fresh'
+        const showDot = tone === 'aging' || tone === 'stale'
+        const ageLabel = !hasAge
           ? null
           : age < 1
             ? (lang === 'en' ? 'today' : "aujourd'hui")
@@ -301,7 +305,7 @@ function FreshnessPillList({
               : age < 365
                 ? `${Math.round(age / 30)}${lang === 'en' ? 'mo' : 'm'}`
                 : `${Math.round(age / 365)}${lang === 'en' ? 'y' : 'a'}`
-        const ageHint = age === undefined
+        const ageHint = !hasAge
           ? null
           : lang === 'en'
             ? `Last edited ${age} day(s) ago`
@@ -314,15 +318,18 @@ function FreshnessPillList({
             ? (lang === 'en' ? 'Loaded from prompt keyword' : 'Chargé via un mot-clé du prompt')
             : null
         const title = [ageHint, srcHint].filter(Boolean).join(' · ') || undefined
-        const dotColor =
-          tone === 'stale' ? '#b02626' :
-          tone === 'aging' ? '#caa804' : 'var(--brand)'
+        const dotColor = tone === 'stale' ? '#b02626' : '#caa804'
+        const hasExtras = showDot || ageLabel || srcLabel
         return (
           <span key={item} className="ui-badge ui-badge-brand" title={title}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span aria-hidden="true" style={{
-              width: 6, height: 6, borderRadius: 3, background: dotColor, flexShrink: 0,
-            }} />
+            style={hasExtras
+              ? { display: 'inline-flex', alignItems: 'center', gap: 5 }
+              : undefined}>
+            {showDot && (
+              <span aria-hidden="true" style={{
+                width: 6, height: 6, borderRadius: 3, background: dotColor, flexShrink: 0,
+              }} />
+            )}
             <span>{item}</span>
             {ageLabel && (
               <span style={{ fontSize: 9.5, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>

@@ -357,8 +357,14 @@ export function routedContextFilesWithSource(params: {
     out.push({ name, source })
   }
   add('skills.md', 'system')
-  add(`profile-${params.perspective === 'business_analyst' ? 'business-analyst' : params.perspective}.md`, 'system')
-  if (params.creation) add('profile-creator.md', 'system')
+  // In Creator mode, profile-creator.md is the authoritative locked profile —
+  // we skip the role-perspective profile to avoid a redundant doublon. Outside
+  // Creator, the role profile (developer/architect/BA/support) drives the tone.
+  if (params.creation) {
+    add('profile-creator.md', 'system')
+  } else {
+    add(`profile-${params.perspective === 'business_analyst' ? 'business-analyst' : params.perspective}.md`, 'system')
+  }
   if (params.migration) add('migration.md', 'system')
   if (params.creation) add('creation.md', 'system')
   if (hasAny(text, MEETING_TERMS)) add('meeting-minute.md', 'keyword')

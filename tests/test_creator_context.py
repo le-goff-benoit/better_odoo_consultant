@@ -190,7 +190,8 @@ def test_dev_md_absent_for_pure_studio_project_without_dev_keyword():
 def test_creator_context_assembly_order_is_stable():
     """The Creator context must contain these sections, in this order. Any
     drift changes how the LLM weighs the guidance and must be an explicit
-    decision."""
+    decision. The role profile (Profil de réponse) is NOT loaded in Creator
+    mode — profile-creator.md ("Conventions Studio") is the locked authority."""
     context = load_context_for_prompt(
         "18.0",
         user_prompt="Crée un champ calculé x_total sur sale.order",
@@ -201,7 +202,6 @@ def test_creator_context_assembly_order_is_stable():
     # Sections that must all be present.
     expected_present = [
         "Compétences consultant",
-        "Profil de réponse",
         "Projet avec Studio",
         "Méthodologie de création Studio",
         "Conventions Studio",
@@ -209,6 +209,10 @@ def test_creator_context_assembly_order_is_stable():
     positions = {name: context.find(name) for name in expected_present}
     missing = [n for n, p in positions.items() if p < 0]
     assert not missing, f"missing sections: {missing}"
+
+    # The role profile must NOT leak into Creator mode.
+    assert "Profil de réponse" not in context
+    assert "Profil Développeur" not in context
 
     # And the Studio creation methodology must come before its conventions
     # profile (methodology = WHY, conventions = HOW).
