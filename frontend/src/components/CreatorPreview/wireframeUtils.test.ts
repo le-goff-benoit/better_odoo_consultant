@@ -120,10 +120,35 @@ describe('visibilityState / isHiddenForSample', () => {
     expect(visibilityState(el, { state: 'draft' })).toBe('hidden')
     expect(visibilityState(el, { state: 'sale' })).toBe('visible')
   })
-  it('returns conditional when sample missing', () => {
+  it('resolves `not field` patterns with the bare-field truthiness rule', () => {
+    // `not partner_id` — when partner_id is empty, expression is True → invisible → hidden.
     const el = $(`<form><field name="x" invisible="not partner_id"/></form>`).querySelector('field')!
-    // unparseable expression → conditional
-    expect(visibilityState(el)).toBe('conditional')
+    expect(visibilityState(el)).toBe('hidden')
+    expect(visibilityState(el, { partner_id: [7, 'Acme'] })).toBe('visible')
+  })
+  it('resolves `field and other` patterns', () => {
+    const el = $(`<form><field name="x" invisible="state == 'draft' and not partner_id"/></form>`)
+      .querySelector('field')!
+    expect(visibilityState(el, { state: 'draft', partner_id: false })).toBe('hidden')
+    expect(visibilityState(el, { state: 'sale', partner_id: false })).toBe('visible')
+  })
+  it('resolves `len(field) > 0` patterns', () => {
+    const el = $(`<form><field name="x" invisible="len(child_ids) > 0"/></form>`)
+      .querySelector('field')!
+    expect(visibilityState(el, { child_ids: [] })).toBe('visible')
+    expect(visibilityState(el, { child_ids: [1, 2] })).toBe('hidden')
+  })
+})
+
+describe('effectiveVisibility', () => {
+  it('collapses conditional → hidden when sample data is present', async () => {
+    const { effectiveVisibility } = await import('./wireframeUtils')
+    // Truly unparseable expression — would return null → conditional.
+    const el = $(`<form><field name="x" invisible="foo(bar, baz) * 3"/></form>`).querySelector('field')!
+    // No sample → stays conditional.
+    expect(effectiveVisibility(el)).toBe('conditional')
+    // With sample present → collapses to hidden (safer default).
+    expect(effectiveVisibility(el, { state: 'sale' })).toBe('hidden')
   })
 })
 

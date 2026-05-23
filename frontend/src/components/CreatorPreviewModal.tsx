@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  X, Loader2, CheckCircle2, AlertTriangle, FileText, PanelsTopLeft,
+  X, Loader2, CheckCircle2, AlertTriangle, Eye, EyeOff, FileText, PanelsTopLeft,
   Maximize2, Minimize2, Wand2,
 } from 'lucide-react'
 
-import { ViewWireframe } from './CreatorPreview/Wireframe'
+import { ViewWireframe, WireframeOptionsProvider } from './CreatorPreview/Wireframe'
 import {
   NO_ADD, ODOO, collectNames,
   type Added, type FieldInfoMap, type SampleValues,
@@ -198,6 +198,7 @@ export default function CreatorPreviewModal({
 }) {
   const [expanded, setExpanded] = useState(true)
   const [changeText, setChangeText] = useState('')
+  const [showAll, setShowAll] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -209,6 +210,7 @@ export default function CreatorPreviewModal({
   useEffect(() => {
     if (open) {
       setExpanded(true)
+      setShowAll(false)
       return
     }
     setChangeText('')
@@ -279,6 +281,18 @@ export default function CreatorPreviewModal({
               }}>{opSummary}</div>
             )}
           </div>
+          {result?.kind === 'view' && (
+            <button
+              type="button" className="ui-icon-button"
+              onClick={() => setShowAll(s => !s)}
+              aria-label={showAll ? 'Masquer les éléments conditionnels' : 'Afficher tous les éléments'}
+              title={showAll
+                ? 'Wireframe nettoyé — masque ce qui dépend de conditions non évaluables'
+                : 'Wireframe complet — affiche aussi ce qui dépend de conditions non évaluables (en grisé)'}
+            >
+              {showAll ? <Eye size={15} /> : <EyeOff size={15} />}
+            </button>
+          )}
           <button
             type="button" className="ui-icon-button"
             onClick={() => setExpanded(e => !e)}
@@ -361,7 +375,7 @@ export default function CreatorPreviewModal({
                     </Pane>
                   </>
                 ) : (
-                  <>
+                  <WireframeOptionsProvider showAll={showAll}>
                     <Pane title="Avant">
                       <ErrorBoundary fallback={(err) => (
                         <WireframeFallback arch={result.before_arch || ''} error={err} />
@@ -380,7 +394,7 @@ export default function CreatorPreviewModal({
                           record={result.record} model={result.model} />
                       </ErrorBoundary>
                     </Pane>
-                  </>
+                  </WireframeOptionsProvider>
                 )}
               </div>
 

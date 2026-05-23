@@ -7,10 +7,25 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.46.0',
+    version: '0.47.0',
     date: '2026-05-23',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Wireframe — masquage intelligent des conditionnels : quand des données sample d\'Odoo sont disponibles, un élément dont on ne peut pas évaluer le domaine est masqué (au lieu de polluer le rendu en grisé). Plus de boutons fantômes qui n\'apparaissent pas dans la vraie UI',
+      'Wireframe — évaluation de domaine étendue : prend en charge `not field`, `field and other`, `field or other`, `len(field) > 0`, parenthèses — patterns Odoo très fréquents qui restaient en `conditional` faute d\'être parsés',
+      'Wireframe — toggle « Tout afficher » dans le header du modal : œil ouvert = wireframe nettoyé (défaut), œil barré = mode complet avec conditionnels ghostés. Le consultant arbitre selon son besoin',
+      'Wireframe — X2Many (sale.order.line, supplierinfo…) : 12 colonnes au lieu de 8 — on perdait quantité / prix / total sur les listes plus larges',
+      'Wireframe — fin du marqueur ◇ à côté des labels (doublon visuel avec l\'opacité grisée, supprimé)',
+      'Pré-vol — fond coloré selon le statut : vert si tout est ok, ambre s\'il y a des warnings ou un verdict Studio mitigé, rouge s\'il y a des erreurs ou « hors Studio » — visible d\'un coup d\'œil sans lire',
+      '3 nouveaux tests : effectiveVisibility avec/sans sample, patterns `not`/`and`/`or`/`len`, parenthèses',
+    ],
+  },
+  {
+    version: '0.46.0',
+    date: '2026-05-23',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Fix faisabilité Studio sur modify_view / modify_report : le verdict mentait — il regardait `op.xpath` (jamais rempli) au lieu de parser les `<xpath expr="...">` dans le `arch`. Un xpath profond `//form/sheet/notebook/page[…]/group` était classé « Studio » alors qu\'il déclenche systématiquement « XPath sans cible » au dry-run',
       'Validateur préflight enrichi : un xpath non Studio (chemin absolu, axes, prédicat) lève désormais un warning précis avec l\'expression fautive — visible AVANT de cliquer Aperçu',

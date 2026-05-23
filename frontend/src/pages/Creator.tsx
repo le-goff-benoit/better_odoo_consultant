@@ -1760,11 +1760,34 @@ function PreflightBanner({ feasibility, validation, en }: {
     .reduce((n, op) => n + op.issues.filter(i => i.severity === 'warning').length, 0)
   if (!feasibility && errorCount === 0 && warningCount === 0) return null
   const studioBadge = feasibility ? STUDIO_OP_TONE[feasibility.verdict] : null
+  // Pick the banner colour by the worst signal — error > warning > Studio caveat > ok.
+  // `color-mix` keeps the tone subtle (10-14% of the strong colour) so the
+  // banner is unmistakable at a glance without screaming.
+  const bannerTone: 'error' | 'warning' | 'ok' =
+    errorCount > 0 || feasibility?.verdict === 'not_feasible'
+      ? 'error'
+      : warningCount > 0 || feasibility?.verdict === 'with_caveats'
+        ? 'warning'
+        : 'ok'
+  const bannerStyle = {
+    error: {
+      background: 'color-mix(in srgb, #b02626 14%, var(--th-bg-card, transparent))',
+      border: '1px solid color-mix(in srgb, #b02626 55%, transparent)',
+    },
+    warning: {
+      background: 'color-mix(in srgb, #caa804 18%, var(--th-bg-card, transparent))',
+      border: '1px solid color-mix(in srgb, #caa804 55%, transparent)',
+    },
+    ok: {
+      background: 'color-mix(in srgb, #1a7a3c 14%, var(--th-bg-card, transparent))',
+      border: '1px solid color-mix(in srgb, #1a7a3c 55%, transparent)',
+    },
+  }[bannerTone]
   return (
     <div style={{
       display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
-      padding: '8px 10px', borderRadius: 8, marginTop: 8,
-      border: '1px solid var(--th-border)', background: 'var(--th-bg-muted)',
+      padding: '9px 12px', borderRadius: 8, marginTop: 8,
+      ...bannerStyle,
       fontSize: 11.5,
     }}>
       <strong>{en ? 'Pre-flight' : 'Pré-vol'} :</strong>

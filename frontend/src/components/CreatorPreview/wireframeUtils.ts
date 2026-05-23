@@ -218,6 +218,37 @@ export function evalInlineExpression(expr: string | null, sampleValues?: SampleV
   const raw = (expr || '').trim()
   if (!raw || raw === '0' || raw.toLowerCase() === 'false') return false
   if (raw === '1' || raw.toLowerCase() === 'true') return true
+  // Parenthesised expression — strip one balanced level and recurse.
+  if (raw.startsWith('(') && raw.endsWith(')') && _isBalanced(raw.slice(1, -1))) {
+    return evalInlineExpression(raw.slice(1, -1), sampleValues)
+  }
+  // Python `not <expr>` — common in Odoo modifiers.
+  if (/^not\s+/.test(raw)) {
+    const inner = evalInlineExpression(raw.replace(/^not\s+/, ''), sampleValues)
+    return inner === null ? null : !inner
+  }
+  // Top-level `and` / `or` split (cheap, no operator precedence — Odoo modifiers
+  // rarely mix them anyway).
+  for (const conn of [' and ', ' or '] as const) {
+    const idx = _findTopLevel(raw, conn)
+    if (idx >= 0) {
+      const left = evalInlineExpression(raw.slice(0, idx), sampleValues)
+      const right = evalInlineExpression(raw.slice(idx + conn.length), sampleValues)
+      if (left === null || right === null) return null
+      return conn === ' and ' ? left && right : left || right
+    }
+  }
+  // `len(field) op value` — a very common Odoo modifier pattern.
+  const lenMatch = raw.match(/^len\(([A-Za-z_][\w.]*)\)\s*(==|=|!=|<>|>=|<=|>|<)\s*(\d+)\s*$/)
+  if (lenMatch) {
+    const [, field, op, rhs] = lenMatch
+    const val = sampleValues?.[field]
+    const length = Array.isArray(val) ? val.length
+      : (val && typeof val === 'object' && Array.isArray((val as { ids?: unknown[] }).ids))
+        ? (val as { ids: unknown[] }).ids.length
+        : typeof val === 'string' ? val.length : 0
+    return evalCondition(['__len__', op, Number(rhs)], { __len__: length })
+  }
   const match = raw.match(/^([A-Za-z_][\w.]*)\s*(==|=|!=|<>|not in|in|>=|<=|>|<)\s*(.+)$/)
   if (!match) {
     if (/^[A-Za-z_]\w*$/.test(raw)) return !isEmptyOdooValue(sampleValues?.[raw])
@@ -229,6 +260,32 @@ export function evalInlineExpression(expr: string | null, sampleValues?: SampleV
     ? parsed
     : rhs.replace(/^["']|["']$/g, '')
   return evalCondition([field, op, expected], sampleValues)
+}
+
+function _isBalanced(s: string): boolean {
+  let depth = 0
+  for (const ch of s) {
+    if (ch === '(') depth++
+    else if (ch === ')') { depth--; if (depth < 0) return false }
+  }
+  return depth === 0
+}
+
+function _findTopLevel(s: string, needle: string): number {
+  let depth = 0
+  let inString: string | null = null
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (inString) {
+      if (ch === inString) inString = null
+      continue
+    }
+    if (ch === '"' || ch === "'") { inString = ch; continue }
+    if (ch === '(') depth++
+    else if (ch === ')') depth--
+    else if (depth === 0 && s.startsWith(needle, i)) return i
+  }
+  return -1
 }
 
 export function invisibleCondition(el: Element): unknown {
@@ -262,7 +319,33 @@ export function visibilityState(el: Element, sampleValues?: SampleValues): Visib
 }
 
 export function isHiddenForSample(el: Element, sampleValues?: SampleValues): boolean {
-  return visibilityState(el, sampleValues) === 'hidden'
+  return effectiveVisibility(el, sampleValues) === 'hidden'
+}
+
+/** When the parent view was rendered with real sample data, a domain that
+ * we couldn't evaluate is almost always one that referenced a field NOT in
+ * the actual Odoo response — i.e. the element was hidden in the live UI.
+ * Collapse `conditional` to `hidden` in that case to avoid polluting the
+ * wireframe with ghost buttons / fields that the user would never see.
+ *
+ * When sample data is empty (no Odoo record available), keep `conditional`
+ * so the consultant still sees what *might* appear. */
+export function effectiveVisibility(
+  el: Element,
+  sampleValues?: SampleValues,
+): VisibilityState {
+  const raw = visibilityState(el, sampleValues)
+  if (raw !== 'conditional') return raw
+  return hasSampleData(sampleValues) ? 'hidden' : 'conditional'
+}
+
+export function hasSampleData(sampleValues?: SampleValues): boolean {
+  if (!sampleValues) return false
+  for (const key of Object.keys(sampleValues)) {
+    const v = sampleValues[key]
+    if (v !== undefined && v !== null && v !== false && v !== '') return true
+  }
+  return false
 }
 
 export function kindFromOdooType(ttype?: string): FieldKind | null {
@@ -381,12 +464,12 @@ export function relatedColumns(el: Element, sample?: RelatedRowsSample) {
       } : null
     })
     .filter(Boolean) as Array<{ name: string; label: string; kind: FieldKind; info?: FieldInfo }>
-  if (fromArch.length) return fromArch.slice(0, 8)
+  if (fromArch.length) return fromArch.slice(0, 12)
   const first = sample?.records?.[0]
   if (!first) return []
   return Object.keys(first)
     .filter(name => name !== 'id' && name !== 'display_name')
-    .slice(0, 8)
+    .slice(0, 12)
     .map(name => ({
       name,
       label: sample?.field_info?.[name]?.string || humanize(name),

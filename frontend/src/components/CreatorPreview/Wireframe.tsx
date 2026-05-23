@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import {
   ODOO,
   NO_ADD,
   containsAddedField,
+  effectiveVisibility,
   embeddedListFieldElements,
   fieldKind,
   fieldLabel,
   humanize,
-  isHiddenForSample,
   isStaticInvisible,
   pageLabel,
   parseArch,
@@ -24,7 +24,31 @@ import {
   type RelatedRowsSample,
   type SampleValues,
   type ViewSampleProps,
+  type VisibilityState,
 } from './wireframeUtils'
+
+// Context-aware visibility: when the user enables "Tout afficher" in the
+// preview modal, an indeterminate `conditional` element is rendered as
+// `visible` (ghosted) instead of being collapsed to `hidden`. Without that
+// override we ship the safer default — hide what we can't prove visible.
+const ShowAllContext = createContext(false)
+
+export function WireframeOptionsProvider({ showAll, children }: {
+  showAll: boolean
+  children: ReactNode
+}) {
+  return <ShowAllContext.Provider value={showAll}>{children}</ShowAllContext.Provider>
+}
+
+function useVis(): (el: Element, sample?: SampleValues) => VisibilityState {
+  const showAll = useContext(ShowAllContext)
+  return (el, sample) => (showAll ? visibilityState(el, sample) : effectiveVisibility(el, sample))
+}
+
+function useIsHidden(): (el: Element, sample?: SampleValues) => boolean {
+  const vis = useVis()
+  return (el, sample) => vis(el, sample) === 'hidden'
+}
 
 function NewBadge() {
   return (
@@ -213,8 +237,10 @@ export function FieldValue({ kind, value, info }: { kind: FieldKind; value?: unk
 export function FieldRow({ el, added, fieldInfo, sampleValues }: {
   el: Element; added: Added
 } & ViewSampleProps) {
+  const vis = useVis()
+  const isHidden = useIsHidden()
   const name = el.getAttribute('name') || ''
-  const visibility = visibilityState(el, sampleValues)
+  const visibility = vis(el, sampleValues)
   if (visibility === 'hidden') return null
   if ((el.getAttribute('widget') || '').toLowerCase() === 'statusbar') return null
   const label = fieldLabel(el, fieldInfo)
@@ -240,9 +266,6 @@ export function FieldRow({ el, added, fieldInfo, sampleValues }: {
           fontSize: 10.5, color: ODOO.muted, fontWeight: 700,
         }}>
           {label}
-          {conditional && !isNew && (
-            <span title="Affichage conditionnel" style={{ fontSize: 9 }}>◇</span>
-          )}
           {isNew && <NewBadge />}
         </div>
         <X2ManyRows el={el} value={value} label={label} />
@@ -279,9 +302,10 @@ export function FieldRow({ el, added, fieldInfo, sampleValues }: {
 function GroupColumn({ el, added, fieldInfo, sampleValues }: {
   el: Element; added: Added
 } & ViewSampleProps) {
+  const isHidden = useIsHidden()
   const rows: ReactNode[] = []
   Array.from(el.children).forEach((child, i) => {
-    if (isHiddenForSample(child, sampleValues)) return
+    if (isHidden(child, sampleValues)) return
     const tag = child.tagName.toLowerCase()
     if (tag === 'field') {
       rows.push(<FieldRow key={i} el={child} added={added}
@@ -295,7 +319,7 @@ function GroupColumn({ el, added, fieldInfo, sampleValues }: {
       // Odoo label/field manual pairs — the field carries its own label.
     } else if (child.querySelector?.('field')) {
       Array.from(child.querySelectorAll(':scope field'))
-        .filter(f => !isHiddenForSample(f, sampleValues))
+        .filter(f => !isHidden(f, sampleValues))
         .forEach((f, j) => rows.push(<FieldRow key={`${i}-${j}`} el={f} added={added}
           fieldInfo={fieldInfo} sampleValues={sampleValues} />))
     }
@@ -307,9 +331,10 @@ function GroupColumn({ el, added, fieldInfo, sampleValues }: {
 function GroupNode({ el, added, fieldInfo, sampleValues }: {
   el: Element; added: Added
 } & ViewSampleProps) {
+  const isHidden = useIsHidden()
   const title = el.getAttribute('string')
   const childGroups = Array.from(el.children)
-    .filter(c => c.tagName.toLowerCase() === 'group' && !isHiddenForSample(c, sampleValues))
+    .filter(c => c.tagName.toLowerCase() === 'group' && !isHidden(c, sampleValues))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {title && <SectionTitle>{title}</SectionTitle>}
@@ -331,10 +356,11 @@ function GroupNode({ el, added, fieldInfo, sampleValues }: {
 }
 
 function HeaderButton({ el, sampleValues }: { el: Element; sampleValues?: SampleValues }) {
+  const vis = useVis()
   const label = el.getAttribute('string') || humanize(el.getAttribute('name') || 'Action')
   const cls = el.getAttribute('class') || ''
   const primary = cls.includes('oe_highlight') || cls.includes('btn-primary')
-  const visibility = visibilityState(el, sampleValues)
+  const visibility = vis(el, sampleValues)
   if (visibility === 'hidden') return null
   const conditional = visibility === 'conditional'
   return (
@@ -352,8 +378,9 @@ function HeaderButton({ el, sampleValues }: { el: Element; sampleValues?: Sample
 function StatusBar({ el, fieldInfo, sampleValues }: {
   el: Element
 } & ViewSampleProps) {
+  const isHidden = useIsHidden()
   const buttons = Array.from(el.querySelectorAll(':scope > button'))
-    .filter(b => !isHiddenForSample(b, sampleValues))
+    .filter(b => !isHidden(b, sampleValues))
   const statusField = Array.from(el.querySelectorAll(':scope > field'))
     .find(f => (f.getAttribute('widget') || '') === 'statusbar')
   const steps = statusbarSteps(statusField, fieldInfo)
@@ -398,13 +425,15 @@ function StatusBar({ el, fieldInfo, sampleValues }: {
 }
 
 function ButtonBox({ el, sampleValues }: { el: Element; sampleValues?: SampleValues }) {
+  const vis = useVis()
+  const isHidden = useIsHidden()
   const buttons = Array.from(el.querySelectorAll(':scope > button'))
-    .filter(b => !isHiddenForSample(b, sampleValues))
+    .filter(b => !isHidden(b, sampleValues))
   if (!buttons.length) return null
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
       {buttons.slice(0, 8).map((b, i) => {
-        const conditional = visibilityState(b, sampleValues) === 'conditional'
+        const conditional = vis(b, sampleValues) === 'conditional'
         return (
           <span key={i} style={{
             display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr)', alignItems: 'center',
@@ -432,8 +461,9 @@ function ButtonBox({ el, sampleValues }: { el: Element; sampleValues?: SampleVal
 function Notebook({ el, added, fieldInfo, sampleValues }: {
   el: Element; added: Added
 } & ViewSampleProps) {
+  const isHidden = useIsHidden()
   const pages = Array.from(el.children)
-    .filter(c => c.tagName.toLowerCase() === 'page' && !isHiddenForSample(c, sampleValues))
+    .filter(c => c.tagName.toLowerCase() === 'page' && !isHidden(c, sampleValues))
   const [active, setActive] = useState(0)
   const preferred = pages.findIndex((p, i) => added.pages.has(pageLabel(p, i)) || containsAddedField(p, added))
   useEffect(() => {
@@ -470,7 +500,8 @@ function Notebook({ el, added, fieldInfo, sampleValues }: {
         })}
       </div>
       <div style={{ padding: '16px 0 4px' }}>
-        {renderSheetChildren(page, added, fieldInfo, sampleValues)}
+        <SheetChildren el={page} added={added}
+          fieldInfo={fieldInfo} sampleValues={sampleValues} />
       </div>
     </div>
   )
@@ -481,8 +512,9 @@ function Notebook({ el, added, fieldInfo, sampleValues }: {
 function TitleBlock({ el, added, fieldInfo, sampleValues }: {
   el: Element; added: Added
 } & ViewSampleProps) {
+  const isHidden = useIsHidden()
   const fields = Array.from(el.querySelectorAll('field'))
-    .filter(f => !isHiddenForSample(f, sampleValues))
+    .filter(f => !isHidden(f, sampleValues))
   if (!fields.length) return null
   return (
     <div style={{ borderBottom: `1px solid ${ODOO.border}`, paddingBottom: 8 }}>
@@ -515,14 +547,12 @@ function TitleBlock({ el, added, fieldInfo, sampleValues }: {
 
 /** Render the children of a <sheet> (or a notebook page). Consecutive sibling
  *  <group> elements are laid out side by side as columns, the way Odoo does. */
-function renderSheetChildren(
-  el: Element,
-  added: Added,
-  fieldInfo?: FieldInfoMap,
-  sampleValues?: SampleValues,
-): ReactNode {
+function SheetChildren({ el, added, fieldInfo, sampleValues }: {
+  el: Element; added: Added
+} & ViewSampleProps) {
+  const isHidden = useIsHidden()
   const out: ReactNode[] = []
-  const children = Array.from(el.children).filter(c => !isHiddenForSample(c, sampleValues))
+  const children = Array.from(el.children).filter(c => !isHidden(c, sampleValues))
   let i = 0
   let k = 0
   while (i < children.length) {
@@ -566,7 +596,8 @@ function renderSheetChildren(
       out.push(<Separator key={k++} el={child} />)
     } else if (child.children.length) {
       out.push(<div key={k++}>
-        {renderSheetChildren(child, added, fieldInfo, sampleValues)}
+        <SheetChildren el={child} added={added}
+          fieldInfo={fieldInfo} sampleValues={sampleValues} />
       </div>)
     }
     i++
@@ -589,7 +620,8 @@ function FormView({ root, added, fieldInfo, sampleValues }: {
         boxShadow: '0 1px 4px rgba(0,0,0,.10)', padding: '24px 28px 30px',
         maxWidth: 980, width: '100%', margin: '0 auto',
       }}>
-        {renderSheetChildren(sheet || root, added, fieldInfo, sampleValues)}
+        <SheetChildren el={sheet || root} added={added}
+          fieldInfo={fieldInfo} sampleValues={sampleValues} />
       </div>
     </div>
   )
@@ -598,8 +630,9 @@ function FormView({ root, added, fieldInfo, sampleValues }: {
 function ListView({ root, added, fieldInfo, sampleValues }: {
   root: Element; added: Added
 } & ViewSampleProps) {
+  const isHidden = useIsHidden()
   const cols = Array.from(root.querySelectorAll(':scope > field'))
-    .filter(f => !isHiddenForSample(f, sampleValues))
+    .filter(f => !isHidden(f, sampleValues))
   const hasSample = cols.some(f => sampleValues?.[f.getAttribute('name') || ''] !== undefined)
   return (
     <div style={{
