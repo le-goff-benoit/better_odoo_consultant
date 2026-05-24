@@ -1,7 +1,10 @@
 import asyncio
 import json
+import os
 import re
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -278,3 +281,68 @@ async def commits_since(path: str, days: int = 30):
     from ...services.source_manager import get_commits_since
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, lambda: get_commits_since(path, days))
+
+
+# ── Maintenance: open VS Code workspace ─────────────────────────────
+
+def _vscode_cmd(workspace_path: Path) -> list[str]:
+    if code := shutil.which("code"):
+        return [code, str(workspace_path)]
+    if codium := shutil.which("codium"):
+        return [codium, str(workspace_path)]
+    if sys.platform == "darwin":
+        return ["open", "-a", "Visual Studio Code", str(workspace_path)]
+    raise HTTPException(400, "VS Code introuvable. Installez la commande 'code'.")
+
+
+@router.post("/{version}/vscode")
+async def open_source_workspace(version: str):
+    if not VERSION_RE.match(version):
+        raise HTTPException(400, "Version invalide")
+    community = SOURCES_BASE / version
+    enterprise = SOURCES_BASE / f"{version}-enterprise"
+    folders: list[dict[str, str]] = []
+    if community.is_dir():
+        folders.append({"name": f"Odoo {version} Community", "path": str(community)})
+    if enterprise.is_dir():
+        folders.append({"name": f"Odoo {version} Enterprise", "path": str(enterprise)})
+    if not folders:
+        raise HTTPException(400, f"Aucune source installée pour Odoo {version}.")
+
+    workspace_dir = Path.home() / ".odoo-consultant" / "workspaces"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    workspace_path = workspace_dir / f"odoo-{version}.code-workspace"
+    workspace = {
+        "folders": folders,
+        "settings": {
+            "files.exclude": {"**/.git": True, "**/__pycache__": True, "**/node_modules": True},
+            "search.exclude": {"**/.git": True, "**/__pycache__": True, "**/node_modules": True},
+        },
+    }
+    workspace_path.write_text(json.dumps(workspace, indent=2, ensure_ascii=False), encoding="utf-8")
+    subprocess.Popen(_vscode_cmd(workspace_path), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {"ok": True, "workspace": str(workspace_path), "folders": folders}
+
+
+# ── Maintenance: open the sources folder in file manager ───────────
+
+@router.post("/{version}/open-folder")
+async def open_source_folder(version: str):
+    if not VERSION_RE.match(version):
+        raise HTTPException(400, "Version invalide")
+    community = SOURCES_BASE / version
+    target = community if community.is_dir() else SOURCES_BASE
+    if not target.exists():
+        raise HTTPException(404, "Dossier introuvable")
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", str(target)])
+        elif sys.platform.startswith("win"):
+            os.startfile(str(target))  # type: ignore[attr-defined]
+        else:
+            subprocess.Popen(["xdg-open", str(target)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as exc:
+        raise HTTPException(500, f"Impossible d'ouvrir : {exc}")
+    return {"ok": True, "path": str(target)}
+
+

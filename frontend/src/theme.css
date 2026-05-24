@@ -3861,3 +3861,16 @@ input::placeholder, textarea::placeholder {
   color: var(--brand-fg);
   font-weight: 600;
 }
+
+/* Commit row in CommitsModal — AI button reveals on hover */
+.commit-row .commit-row-ai {
+  opacity: 0;
+  transition: opacity .12s;
+}
+.commit-row:hover {
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+}
+.commit-row:hover .commit-row-ai,
+.commit-row:focus-within .commit-row-ai {
+  opacity: 1;
+}

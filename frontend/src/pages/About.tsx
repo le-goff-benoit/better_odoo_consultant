@@ -7,10 +7,24 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.54.0',
+    version: '0.55.0',
     date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Assistant — restauration automatique de la dernière conversation à l\'arrivée sur la page (sinon « Odoo général » par défaut)',
+      'Sources — modal « Dernières mises à jour » enrichi : recherche (message / SHA / auteur), période en jours configurable (défaut 30, jusqu\'à 10 ans), chips de filtre par tag Odoo (FIX, IMP, ADD, PERF…) avec compteurs colorés',
+      'Sources — chaque commit affiche désormais sa nature (Community / Enterprise / Les deux) après dédup par SHA',
+      'Sources — bouton « Fermer » du modal retiré (la croix suffit), bouton « Résumé IA » utilise les commits filtrés',
+      'Sources — hover sur une ligne de commit révèle un bouton IA qui ouvre l\'assistant pré-rempli pour ce commit précis',
+      'Sources — bouton « poubelle » remplacé par un bouton « Maintenance » en bas de carte (parité avec Projets) : ouverture VS Code workspace, ouverture du dossier local, édition du contexte version (mêmes notes que Settings), liens GitHub Community/Enterprise sur la bonne branche, retrait des versions custom',
+    ],
+  },
+  {
+    version: '0.54.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Sidebar — À propos / Fonctionnement / Paramètres déplacés dans un menu déroulant ouvert depuis l\'avatar utilisateur, libère la barre du haut',
       'Sidebar — libellés complets des onglets principaux à nouveau visibles en permanence (plus de hover pour les lire)',

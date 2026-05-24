@@ -501,6 +501,7 @@ const ODOO_VERSIONS_BASE = ['19.0', '18.0', '17.0', '16.0', '15.0']
 
 const GENERAL_KEY = 'general'
 const LS_GENERAL_COUNTRY = 'odoo-general-fiscal-country'
+const LS_LAST_KEY = 'odoo-assistant-last-key'
 const FISCAL_COUNTRIES = [
   { code: '', labelFr: 'Aucune localisation', labelEn: 'No localization', short: '—' },
   { code: 'CH', labelFr: 'Suisse', labelEn: 'Switzerland', short: 'CH' },
@@ -656,13 +657,25 @@ export default function Assistant() {
     }
   }, [allProviders])
 
-  // Auto-select first profile (or general if no profiles)
+  // Restore last viewed conversation key on mount; fall back to general.
   useEffect(() => {
-    if (profileId === null) {
-      if (profiles.length) setProfileId(profiles[0].id)
-      else setProfileId(GENERAL_KEY)
+    if (profileId !== null) return
+    let last: string | null = null
+    try { last = localStorage.getItem(LS_LAST_KEY) } catch { /* unavailable */ }
+    if (last === GENERAL_KEY) { setProfileId(GENERAL_KEY); return }
+    const lastNum = last ? Number(last) : NaN
+    if (Number.isFinite(lastNum) && profiles.some(p => p.id === lastNum)) {
+      setProfileId(lastNum)
+    } else {
+      setProfileId(GENERAL_KEY)
     }
   }, [profiles])
+
+  // Persist current conversation key so we can restore it next visit.
+  useEffect(() => {
+    if (profileId === null) return
+    try { localStorage.setItem(LS_LAST_KEY, String(profileId)) } catch { /* quota */ }
+  }, [profileId])
 
   // Sync selectedCompanyId when active profile changes
   useEffect(() => {

@@ -22,6 +22,8 @@ export const checkSourceUpdates = (version: string, path?: string) =>
   api.get(`/sources/check-updates/${version}${path ? `?path=${encodeURIComponent(path)}` : ''}`)
 export const getCommitsSince = (path: string, days = 30) =>
   api.get(`/sources/commits-since?path=${encodeURIComponent(path)}&days=${days}`)
+export const openSourceWorkspace = (version: string) => api.post(`/sources/${version}/vscode`)
+export const openSourceFolder = (version: string) => api.post(`/sources/${version}/open-folder`)
 
 // Profiles
 export const listProfiles = () => api.get('/profiles/')
