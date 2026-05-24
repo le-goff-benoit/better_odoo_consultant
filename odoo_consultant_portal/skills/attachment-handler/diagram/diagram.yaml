@@ -1,0 +1,21 @@
+inputs:
+  - Pièce jointe uploadée (PDF ou image)
+  - Provider IA sélectionné (Claude / OpenAI / Gemini / GitHub / Copilot)
+  - Prompt utilisateur (demande d'extraction / comparaison / vision libre)
+inputs_en:
+  - Uploaded attachment (PDF or image)
+  - Selected AI provider (Claude / OpenAI / Gemini / GitHub / Copilot)
+  - User prompt (extraction / comparison / free vision request)
+steps:
+  - Routage provider — Claude et Gemini reçoivent le PDF en bloc natif (vision intégrée)
+  - OpenAI / GitHub / Copilot — fallback chain pypdf (texte) puis pdf2image (image) si scanné
+  - Images — toujours envoyées comme blocs vision natifs (tous providers compatibles)
+  - Tools optionnels appelés par le LLM (extract_pdf_text, pdf_to_images, compare_documents)
+outputs:
+  - Contenu du document accessible à l'IA dans son format provider-natif
+  - Résultats de tool (texte extrait, images converties, diff) renvoyés en JSON
+outputs_en:
+  - Document content accessible to the AI in its provider-native format
+  - Tool results (extracted text, converted images, diff) returned as JSON
+notes: "Désactiver le skill empêche les tools d'extraction/comparaison mais ne casse PAS l'upload de base — le service `attachment_service` continue de router au format provider-natif."
+notes_en: "Disabling the skill removes the extraction/comparison tools but does NOT break basic uploads — the `attachment_service` keeps routing to the provider-native format."

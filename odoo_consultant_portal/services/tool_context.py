@@ -21,3 +21,7 @@ class ToolContext:
     repo_path: Optional[str]        # ~/.odoo-consultant/repos/<profile>/<env>
     target_path: Optional[str]      # version cible (migration)
     loop: asyncio.AbstractEventLoop
+    # v0.64 — Session key under which `attachment_store` publishes the
+    # validated binary attachments for the current chat turn. Used by the
+    # ``attachment_handler`` skill tools to look up PDFs/images by filename.
+    session_id: Optional[str] = None

@@ -294,18 +294,97 @@ def _claude_content(text: str, binary: list[dict]) -> list[dict]:
     return blocks
 
 
-def _openai_content(text: str, binary: list[dict]) -> list[dict]:
-    # github / copilot proxy OpenAI models and share this dialect. The `file`
-    # part for PDFs may be rejected by those proxies — that surfaces as a
-    # provider error; the openai provider itself (gpt-4o) supports it.
+_PDF_FALLBACK_MAX_PAGES = 10
+_PDF_FALLBACK_MIN_TEXT_CHARS = 50
+
+
+def _pypdf_extract_text(b64_data: str) -> str:
+    """Best-effort PDF→text via pypdf. Returns empty string on any failure
+    (the caller will fall through to image rendering)."""
+    try:
+        import pypdf
+    except ImportError:
+        return ""
+    try:
+        raw = base64.b64decode(b64_data)
+        reader = pypdf.PdfReader(io.BytesIO(raw))
+        pages = [(p.extract_text() or "").strip() for p in reader.pages]
+        return "\n\n".join(p for p in pages if p).strip()
+    except Exception:
+        return ""
+
+
+def _pdf_to_image_blocks(b64_data: str, max_pages: int = _PDF_FALLBACK_MAX_PAGES) -> list[dict]:
+    """Render PDF pages to PNG images, return OpenAI-style image_url blocks.
+
+    Returns an empty list if pdf2image or poppler are missing — the caller
+    will surface a clear error to the user instead of a cryptic 400."""
+    try:
+        from pdf2image import convert_from_bytes
+    except ImportError:
+        return []
+    try:
+        raw = base64.b64decode(b64_data)
+        images = convert_from_bytes(raw, dpi=120, last_page=max_pages, fmt="png")
+    except Exception:
+        return []
+    blocks: list[dict] = []
+    for img in images:
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        blocks.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{img_b64}"},
+        })
+    return blocks
+
+
+def _openai_content(text: str, binary: list[dict], provider: str = "openai") -> list[dict]:
+    """Build the OpenAI-style content parts for the last user message.
+
+    - **openai** (direct API) keeps the native `file` part for PDFs, which
+      gpt-4o-mini and gpt-4o accept on Pro tier.
+    - **github** and **copilot** proxies refuse the `file` part with the
+      cryptic ``type has to be either 'image_url' or 'text'`` 400. For them
+      we run a fallback chain: pypdf → text part, then pdf2image → image
+      parts when the PDF is scanned (no extractable text).
+    """
     parts: list[dict] = [{"type": "text", "text": text}]
     for b in binary:
         data_uri = f"data:{b['mime_type']};base64,{b['data']}"
         if b["kind"] == "image":
             parts.append({"type": "image_url", "image_url": {"url": data_uri}})
-        else:  # pdf
+            continue
+        # PDF path
+        if provider == "openai":
             parts.append({"type": "file", "file": {
                 "filename": b["name"], "file_data": data_uri}})
+            continue
+        # github / copilot — fallback chain
+        extracted = _pypdf_extract_text(b["data"])
+        if extracted and len(extracted) >= _PDF_FALLBACK_MIN_TEXT_CHARS:
+            parts.append({"type": "text", "text": (
+                f"\n\n[Pièce jointe PDF — `{b['name']}` — texte extrait via pypdf "
+                f"({len(extracted)} caractères, le provider ne supporte pas le PDF natif)]\n\n"
+                f"```\n{extracted}\n```"
+            )})
+            continue
+        # Scanned PDF (no extractable text) → render pages as images
+        image_blocks = _pdf_to_image_blocks(b["data"])
+        if image_blocks:
+            parts.append({"type": "text", "text": (
+                f"\n\n[Pièce jointe PDF — `{b['name']}` — converti en {len(image_blocks)} "
+                f"image(s) via pdf2image (PDF scanné, sans texte extractible)]"
+            )})
+            parts.extend(image_blocks)
+        else:
+            parts.append({"type": "text", "text": (
+                f"\n\n[Pièce jointe PDF — `{b['name']}` — IMPOSSIBLE À LIRE : "
+                f"le provider {provider} ne supporte pas les PDFs en natif, "
+                f"pypdf n'a rien extrait, et pdf2image/poppler n'est pas disponible. "
+                f"Installez `pdf2image` + `poppler-utils` ou utilisez Claude/Gemini.]"
+            )})
     return parts
 
 
@@ -336,7 +415,7 @@ def apply_provider_attachments(messages: list[dict], provider: str) -> list[dict
     if provider == "claude":
         content: object = _claude_content(text, binary)
     elif provider in _OPENAI_FAMILY:
-        content = _openai_content(text, binary)
+        content = _openai_content(text, binary, provider=provider)
     elif provider == "gemini":
         content = _gemini_parts(text, binary)
     else:

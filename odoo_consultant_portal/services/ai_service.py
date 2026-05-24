@@ -250,6 +250,41 @@ _TOOL_RUN_SCRIPT = {
     ),
 }
 
+_TOOL_EXTRACT_PDF_TEXT = {
+    "name": "extract_pdf_text",
+    "description": (
+        "Extraire le texte d'un PDF uploadé par le consultant dans cette conversation. "
+        "Utiliser quand l'utilisateur demande explicitement le contenu textuel, ou pour "
+        "parser des données structurées d'une facture/devis. Le `attachment_name` doit "
+        "être exactement le nom du fichier visible dans la dernière requête utilisateur. "
+        "Sur Claude/Gemini qui voient déjà le PDF nativement, ce tool reste utile pour "
+        "obtenir une version texte propre et citable."
+    ),
+}
+
+_TOOL_PDF_TO_IMAGES = {
+    "name": "pdf_to_images",
+    "description": (
+        "Convertir certaines pages d'un PDF uploadé en images PNG (via pdf2image). "
+        "Utile pour cibler une page précise (« montre-moi la page 3 »), pour relire "
+        "visuellement un PDF scanné dont l'extraction texte est faible, ou pour zoomer "
+        "sur un détail de mise en page. Cap à 10 pages par appel. "
+        "Paramètres : attachment_name, pages (optionnel, liste ou range '1-3,5'), dpi (défaut 120)."
+    ),
+}
+
+_TOOL_COMPARE_DOCUMENTS = {
+    "name": "compare_documents",
+    "description": (
+        "Comparer deux PDFs uploadés. mode='text' produit un diff unifié ligne par ligne "
+        "(rapide, déterministe, bon sur des documents textuels comme des devis générés). "
+        "mode='structure' détecte les sections (headings, numérotation) et compare section "
+        "par section (meilleur sur des rapports / contrats). Retourne similarity + diff. "
+        "Pour une comparaison visuelle (mise en page, logos), demander plutôt `pdf_to_images` "
+        "sur chaque document et laisser la vision du LLM faire le diff."
+    ),
+}
+
 _TOOL_INSPECT_REPORT = {
     "name": "inspect_odoo_report",
     "description": (
@@ -348,6 +383,20 @@ TOOLS_CLAUDE = [
         "filename": {"type": "string", "description": "Nom du script (ex 'scan_studio_customizations.py')"},
         "args":     {"type": "array",  "items": {"type": "string"}, "description": "Arguments CLI", "default": []},
     }}},
+    {**_TOOL_EXTRACT_PDF_TEXT, "input_schema": {"type": "object", "required": ["attachment_name"], "properties": {
+        "attachment_name": {"type": "string", "description": "Nom exact du PDF uploadé (ex 'facture-acme.pdf')"},
+        "pages":           {"type": "string", "description": "Pages à extraire (ex '1,2,5-7'). Vide = toutes.", "default": ""},
+    }}},
+    {**_TOOL_PDF_TO_IMAGES, "input_schema": {"type": "object", "required": ["attachment_name"], "properties": {
+        "attachment_name": {"type": "string"},
+        "pages":           {"type": "string", "description": "Pages à convertir. Vide = toutes (cap 10).", "default": ""},
+        "dpi":             {"type": "integer", "description": "DPI (60-240, défaut 120).", "default": 120},
+    }}},
+    {**_TOOL_COMPARE_DOCUMENTS, "input_schema": {"type": "object", "required": ["name_a", "name_b"], "properties": {
+        "name_a": {"type": "string"},
+        "name_b": {"type": "string"},
+        "mode":   {"type": "string", "enum": ["text", "structure"], "default": "text"},
+    }}},
 ]
 
 # ── OpenAI tool schemas ───────────────────────────────────────────
@@ -423,6 +472,20 @@ TOOLS_OPENAI = [
         "skill":    {"type": "string"},
         "filename": {"type": "string"},
         "args":     {"type": "array",  "items": {"type": "string"}, "default": []},
+    }}}},
+    {"type": "function", "function": {**_TOOL_EXTRACT_PDF_TEXT, "parameters": {"type": "object", "required": ["attachment_name"], "properties": {
+        "attachment_name": {"type": "string"},
+        "pages":           {"type": "string", "default": ""},
+    }}}},
+    {"type": "function", "function": {**_TOOL_PDF_TO_IMAGES, "parameters": {"type": "object", "required": ["attachment_name"], "properties": {
+        "attachment_name": {"type": "string"},
+        "pages":           {"type": "string", "default": ""},
+        "dpi":             {"type": "integer", "default": 120},
+    }}}},
+    {"type": "function", "function": {**_TOOL_COMPARE_DOCUMENTS, "parameters": {"type": "object", "required": ["name_a", "name_b"], "properties": {
+        "name_a": {"type": "string"},
+        "name_b": {"type": "string"},
+        "mode":   {"type": "string", "enum": ["text", "structure"], "default": "text"},
     }}}},
 ]
 
@@ -502,6 +565,23 @@ TOOLS_GEMINI = [
                  "skill":    {"type": "string"},
                  "filename": {"type": "string"},
                  "args":     {"type": "array"},
+             }}},
+            {"name": "extract_pdf_text", "description": _TOOL_EXTRACT_PDF_TEXT["description"],
+             "parameters": {"type": "object", "required": ["attachment_name"], "properties": {
+                 "attachment_name": {"type": "string"},
+                 "pages":           {"type": "string"},
+             }}},
+            {"name": "pdf_to_images", "description": _TOOL_PDF_TO_IMAGES["description"],
+             "parameters": {"type": "object", "required": ["attachment_name"], "properties": {
+                 "attachment_name": {"type": "string"},
+                 "pages":           {"type": "string"},
+                 "dpi":             {"type": "integer"},
+             }}},
+            {"name": "compare_documents", "description": _TOOL_COMPARE_DOCUMENTS["description"],
+             "parameters": {"type": "object", "required": ["name_a", "name_b"], "properties": {
+                 "name_a": {"type": "string"},
+                 "name_b": {"type": "string"},
+                 "mode":   {"type": "string"},
              }}},
         ]
     }
@@ -1690,6 +1770,15 @@ from .tool_context import ToolContext as _ToolContext
 _HANDLER_CACHE: dict = {}
 _HANDLER_MISS: set = set()
 
+# Multi-tool handlers: a single skill exposes multiple LLM-visible tools.
+# When the LLM calls one of these names, resolve the named skill rather than
+# looking up a same-named skill.
+_TOOL_TO_SKILL_ALIAS = {
+    "extract_pdf_text":  "attachment_handler",
+    "pdf_to_images":     "attachment_handler",
+    "compare_documents": "attachment_handler",
+}
+
 
 def _resolve_handler(tool_name: str):
     if tool_name in _HANDLER_CACHE:
@@ -1697,7 +1786,8 @@ def _resolve_handler(tool_name: str):
     if tool_name in _HANDLER_MISS:
         return None
     from ..skills.registry import skill_by_name
-    skill = skill_by_name(tool_name)
+    skill_lookup = _TOOL_TO_SKILL_ALIAS.get(tool_name, tool_name)
+    skill = skill_by_name(skill_lookup)
     if skill is None or not skill.folder:
         _HANDLER_MISS.add(tool_name)
         return None
@@ -1778,6 +1868,10 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
             if getattr(handler, flag, False) and getattr(ctx, attr) is None:
                 return {"ok": False, "error": error_msg}
 
+        # Multi-tool handlers (one skill, several tools) read the tool name
+        # from args["_tool"]. Inject it transparently for aliased names.
+        if name in _TOOL_TO_SKILL_ALIAS:
+            args = {**args, "_tool": name}
         return await handler.run(args, ctx)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
@@ -2094,6 +2188,19 @@ async def stream_chat(
     # Trim conversation history to avoid context-window overflow on long sessions.
     messages = _trim_history(messages)
 
+    # Capture the binary attachments BEFORE apply_provider_attachments strips
+    # them — the attachment_handler skill tools (extract_pdf_text, pdf_to_images,
+    # compare_documents) read them by filename from the per-task store.
+    import uuid as _uuid
+    from . import attachment_store as _att_store
+    _attachment_session_id: Optional[str] = None
+    if messages and isinstance(messages[-1], dict):
+        _att_payload = messages[-1].get("_attachments") or []
+        if _att_payload:
+            _attachment_session_id = f"chat-{_uuid.uuid4().hex[:12]}"
+            _att_store.publish(_attachment_session_id, _att_payload)
+            _att_store.set_current_session(_attachment_session_id)
+
     # Rewrite the last user turn into the provider's native multimodal format
     # when it carries image / PDF attachments (no-op for text-only turns).
     messages = apply_provider_attachments(messages, provider)
@@ -2206,20 +2313,27 @@ async def stream_chat(
         else:
             system = system + _hint
 
-    if provider == "claude":
-        async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path, target_path):
-            yield evt
-    elif provider == "openai":
-        async for evt in _chat_openai(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
-            yield evt
-    elif provider == "gemini":
-        async for evt in _chat_gemini(api_key, model, system, messages, odoo, source_path, tools_g, repo_path, target_path):
-            yield evt
-    elif provider == "github":
-        async for evt in _chat_github(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
-            yield evt
-    elif provider == "copilot":
-        async for evt in _chat_copilot(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
-            yield evt
-    else:
-        yield {"type": "error", "msg": f"Fournisseur inconnu : {provider}"}
+    try:
+        if provider == "claude":
+            async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path, target_path):
+                yield evt
+        elif provider == "openai":
+            async for evt in _chat_openai(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
+                yield evt
+        elif provider == "gemini":
+            async for evt in _chat_gemini(api_key, model, system, messages, odoo, source_path, tools_g, repo_path, target_path):
+                yield evt
+        elif provider == "github":
+            async for evt in _chat_github(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
+                yield evt
+        elif provider == "copilot":
+            async for evt in _chat_copilot(api_key, model, system, messages, odoo, source_path, tools_o, repo_path, target_path):
+                yield evt
+        else:
+            yield {"type": "error", "msg": f"Fournisseur inconnu : {provider}"}
+    finally:
+        # Clear the per-task attachment store entry so a new chat doesn't
+        # accidentally see stale binaries (the contextvar resets naturally).
+        if _attachment_session_id:
+            _att_store.clear(_attachment_session_id)
+            _att_store.set_current_session(None)

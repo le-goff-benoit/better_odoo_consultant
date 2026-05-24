@@ -78,6 +78,29 @@ elif { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 11 ]; }; then
 fi
 success "Python $PY_VERSION"
 
+# ── 1b. Poppler (PDF→image fallback) ─────────────────────────
+# Used by the `attachment_handler` skill when a PDF is uploaded with a
+# provider that does not support PDFs natively (GitHub Models, Copilot).
+# Non-blocking : si poppler manque, le skill bascule sur pypdf seul.
+if ! command -v pdftoppm &>/dev/null; then
+  info "poppler-utils non trouvé — tentative d'installation (pour le fallback PDF→image)..."
+  if command -v apt-get &>/dev/null; then
+    sudo apt-get install -y poppler-utils 2>/dev/null \
+      && success "poppler-utils installé" \
+      || warn "Échec apt — installe manuellement: sudo apt install poppler-utils"
+  elif command -v brew &>/dev/null; then
+    brew install poppler 2>/dev/null \
+      && success "poppler installé via Homebrew" \
+      || warn "Échec brew — installe manuellement: brew install poppler"
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y poppler-utils 2>/dev/null && success "poppler-utils installé" || warn "Échec dnf"
+  else
+    warn "poppler-utils non installé — les PDFs scannés ne pourront pas être convertis en images sur GitHub/Copilot. Installation manuelle requise."
+  fi
+else
+  success "poppler-utils déjà installé"
+fi
+
 # ── 2. Virtualenv ────────────────────────────────────────────
 VENV_DIR="$(dirname "$0")/.venv"
 

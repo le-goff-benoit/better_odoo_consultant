@@ -307,6 +307,7 @@ _CORE_ORDER = (
     "complexity-analyzer",
     "localization-detector",
     "report-writer",
+    "attachment-handler",
 )
 
 
