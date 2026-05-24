@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.51.0',
+    version: '0.52.0',
     date: '2026-05-23',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Exploration données — playbook Odoo embarqué dans le system prompt : relations projet ↔ compta (via `account.analytic.line`), commande ↔ facture, contournement du JSON non-filtrable `analytic_distribution`',
+      'Exploration données — `get_odoo_fields` retourne désormais relations et `relation_field`, priorise les champs custom `x_*` et relations en tête, et accepte `field_names=[...]` pour cibler le détail complet d\'un champ',
+      'Exploration données — consigne « introspecte avant de deviner » et boucle d\'exploration autonome (jusqu\'à ~6 appels) sans redemander la permission entre deux requêtes en lecture seule',
+      'Markdown — détection des code fences tolérante à l\'indentation (les ```plaintext imbriqués dans une liste s\'affichent désormais en bloc)',
+    ],
+  },
+  {
+    version: '0.51.0',
+    date: '2026-05-23',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Migration — suggestions contextualisées au projet source : noms des modules notables installés (sale_subscription, helpdesk, mrp, pos, hr_payroll, sign, website_sale…) mentionnés explicitement dans les questions src → tgt',
       'Migration — localisation comptable détectée via le code pays ET le module `l10n_*` réellement installé, mentionnés tels quels (« impacts l10n_ch entre 17.0 et 18.0… »)',

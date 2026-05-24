@@ -158,10 +158,10 @@ export default function Markdown({ text }: { text: string }) {
   while (i < lines.length) {
     const line = lines[i]
 
-    if (line.startsWith('```')) {
+    if (line.trimStart().startsWith('```')) {
       const codeLines: string[] = []
       i++
-      while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++ }
+      while (i < lines.length && !lines[i].trimStart().startsWith('```')) { codeLines.push(lines[i]); i++ }
       result.push(
         <pre key={i} style={{ background: 'var(--code-bg)', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
           <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{codeLines.join('\n')}</code>

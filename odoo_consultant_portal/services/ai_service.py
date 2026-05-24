@@ -33,7 +33,17 @@ _TOOL_COUNT = {
 }
 _TOOL_FIELDS = {
     "name": "get_odoo_fields",
-    "description": "Lister les champs disponibles d'un modèle Odoo (pour découvrir quoi requêter).",
+    "description": (
+        "Lister les champs d'un modèle Odoo — à appeler AVANT toute requête sur un "
+        "modèle dont la structure n'est pas certaine, surtout si le client a des "
+        "personnalisations Studio (champs `x_*`).\n"
+        "Sans `field_names` : retourne un index condensé (label, type, relation) en "
+        "priorisant les champs custom `x_*` et les relations (many2one, one2many, "
+        "many2many) — c'est ce qu'il faut pour découvrir les jointures.\n"
+        "Avec `field_names` : retourne le détail complet (relation, relation_field, "
+        "store, required, help) UNIQUEMENT pour ces champs — utilise-le pour confirmer "
+        "le nom exact d'un champ deviné ou pour comprendre une relation inverse."
+    ),
 }
 _TOOL_SEARCH_SRC = {
     "name": "search_odoo_source",
@@ -171,6 +181,9 @@ TOOLS_CLAUDE = [
     }}},
     {**_TOOL_FIELDS, "input_schema": {"type": "object", "required": ["model"], "properties": {
         "model": {"type": "string"},
+        "field_names": {"type": "array", "items": {"type": "string"},
+            "description": "Si fourni : détail complet uniquement de ces champs. Sinon : index condensé du modèle.",
+            "default": []},
     }}},
     {**_TOOL_SEARCH_SRC, "input_schema": {"type": "object", "required": ["pattern"], "properties": {
         "pattern":    {"type": "string", "description": "Texte ou regex à chercher (ex: 'sale_line_id', 'class AccountMove', '_name = ')"},
@@ -202,6 +215,7 @@ TOOLS_OPENAI = [
     }}}},
     {"type": "function", "function": {**_TOOL_FIELDS, "parameters": {"type": "object", "required": ["model"], "properties": {
         "model": {"type": "string"},
+        "field_names": {"type": "array", "items": {"type": "string"}, "default": []},
     }}}},
     {"type": "function", "function": {**_TOOL_SEARCH_SRC, "parameters": {"type": "object", "required": ["pattern"], "properties": {
         "pattern":    {"type": "string"},
@@ -234,6 +248,7 @@ TOOLS_GEMINI = [
             {"name": "get_odoo_fields", "description": _TOOL_FIELDS["description"],
              "parameters": {"type": "object", "required": ["model"], "properties": {
                  "model": {"type": "string"},
+                 "field_names": {"type": "array"},
              }}},
             {"name": "search_odoo_source", "description": _TOOL_SEARCH_SRC["description"],
              "parameters": {"type": "object", "required": ["pattern"], "properties": {
@@ -1003,6 +1018,30 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
     return "\n\n".join(parts)
 
 
+_DATA_PLAYBOOK = """## Exploration des données — méthode
+
+### Introspection avant de deviner
+- Avant d'écrire un domain sur un modèle dont la structure n'est pas certaine (surtout en présence de Studio ou de modules custom), appelle `get_odoo_fields(model)` pour cartographier les relations, puis `get_odoo_fields(model, field_names=[...])` pour confirmer les champs précis. Ne fabrique pas un nom de champ — vérifie-le.
+- Si un champ deviné n'existe pas (erreur "Invalid field"), n'abandonne pas la piste : ré-introspect, cherche le bon nom (variantes `x_*`, renommé entre versions), et ré-essaye.
+
+### Cartes de relations Odoo (raccourcis utiles)
+- **Projet ↔ Comptabilité** : `project.project.analytic_account_id` ↔ `account.analytic.account`. La consommation comptable d'un projet se lit sur `account.analytic.line` (champs `account_id` = compte analytique, `move_line_id` = ligne comptable d'origine, `general_account_id`, `amount`, `date`). Pour remonter aux factures : `account.analytic.line.move_line_id.move_id` (modèle `account.move`).
+- **Projet ↔ Ventes / Achats** : selon les modules installés, `sale.order.project_id` / `sale.order.analytic_account_id` ; `purchase.order.line.analytic_distribution`. La distribution analytique peut aussi être directement sur les lignes (`sale.order.line` / `purchase.order.line` / `account.move.line`).
+- **Commande ↔ Facture** : `sale.order.invoice_ids` (many2many vers `account.move`) et `sale.order.invoice_status` ; côté achat `purchase.order.invoice_ids`. Sur la facture, `account.move.invoice_origin` (texte = numéro de commande) et `account.move.line.sale_line_ids` / `purchase_line_id` pour la traçabilité ligne à ligne.
+- **Timesheets** : `account.analytic.line` (mêmes lignes que la compta analytique — différenciées par `project_id` / `task_id` renseignés).
+
+### Pièges connus et contournements
+- **`analytic_distribution` est un JSON `{account_id: pourcentage}`, NON filtrable par domaine** (`like`, `=`, `in` échouent sur ce champ). Pour trouver toutes les pièces liées à un compte analytique, requête `account.analytic.line` avec `[("account_id", "=", <id>)]` — chaque distribution y est matérialisée en lignes, et `move_line_id`/`move_id` donnent la facture ou l'écriture associée.
+- **Pas de `project_id` direct sur `account.move`** : passer par (a) `account.move.line.analytic_distribution` ↔ `project.analytic_account_id`, ou (b) `account.move.invoice_origin` ↔ `sale.order.name`, ou (c) `account.move.line.sale_line_ids.order_id.project_id`.
+- **Variations de version** : `analytic_account_id` (singulier, Odoo ≤15 sur les lignes) a été remplacé par `analytic_distribution` (dict, Odoo 16+). Vérifie avant de filtrer.
+- **Champs custom (`x_*`)** : toujours possibles sur les modèles standards. Si une question parle de "lien projet/commande", appelle `get_odoo_fields` sur les deux modèles concernés et cherche des `x_*` qui font le pont, en plus des champs standards.
+
+### Boucle d'exploration
+- Pour une question d'exploration de données, enchaîne plusieurs appels d'outils (introspecter → essayer → corriger → conclure) AVANT de rendre la main. Ne demande pas la permission de continuer entre deux requêtes en lecture seule — explore, puis réponds avec le récap final.
+- Si après ~6 tentatives la piste reste bloquée, alors signale honnêtement ce qui a été tenté et ce qui manque, plutôt que d'inventer.
+"""
+
+
 def _format_access_context(raw: Optional[str]) -> str:
     """One-line summary of the connected Odoo user's rights.
 
@@ -1085,6 +1124,7 @@ def build_system(
         "pour un rapport PDF, utilise `inspect_odoo_report`.\n"
         "- Sois concis et orienté résultats."
     )
+    stable_parts.append(_DATA_PLAYBOOK.strip())
     if project_context:
         stable_parts.append(f"## Contexte projet\n{_trim_project_context(project_context.strip())}")
 
@@ -1197,6 +1237,8 @@ def build_system_migration(
         "- Présente les comparaisons sous forme de tableaux (Source | Cible | Impact).\n"
         "- Signale clairement les breaking changes avec ⚠️."
     )
+    if has_instance:
+        stable_parts.append(_DATA_PLAYBOOK.strip())
     if project_context:
         stable_parts.append(f"## Contexte projet\n{_trim_project_context(project_context.strip())}")
 
@@ -1639,12 +1681,51 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
             return {"ok": True, "count": count}
 
         elif name == "get_odoo_fields":
+            attrs = ["string", "type", "relation", "relation_field",
+                     "required", "store", "help"]
             raw = await loop.run_in_executor(None, lambda: odoo.fields_get(
-                args["model"], ["string", "type"]
+                args["model"], attrs
             ))
-            condensed = {k: {"label": v.get("string"), "type": v.get("type")}
-                         for k, v in list(raw.items())[:80]}
-            return {"ok": True, "fields": condensed}
+            wanted = [str(n).strip() for n in (args.get("field_names") or []) if str(n).strip()]
+            if wanted:
+                detail = {}
+                missing = []
+                for fname in wanted:
+                    if fname in raw:
+                        v = raw[fname]
+                        entry = {"label": v.get("string"), "type": v.get("type")}
+                        for k in ("relation", "relation_field", "required", "store", "help"):
+                            val = v.get(k)
+                            if val not in (None, "", False):
+                                entry[k] = val
+                        detail[fname] = entry
+                    else:
+                        missing.append(fname)
+                return {"ok": True, "model": args["model"], "fields": detail,
+                        **({"missing": missing} if missing else {})}
+            # Condensed index — prioritize custom (x_*) and relational fields, cap to 150.
+            def _priority(item):
+                fname, v = item
+                t = v.get("type") or ""
+                is_custom = fname.startswith("x_")
+                is_rel = t in ("many2one", "one2many", "many2many")
+                return (0 if is_custom else (1 if is_rel else 2), fname)
+            ordered = sorted(raw.items(), key=_priority)
+            condensed = {}
+            for fname, v in ordered[:150]:
+                entry = {"label": v.get("string"), "type": v.get("type")}
+                rel = v.get("relation")
+                if rel:
+                    entry["relation"] = rel
+                rel_f = v.get("relation_field")
+                if rel_f:
+                    entry["relation_field"] = rel_f
+                condensed[fname] = entry
+            return {"ok": True, "model": args["model"],
+                    "total_fields": len(raw), "fields": condensed,
+                    "note": ("Index condensé (max 150, custom + relations en tête). "
+                             "Rappelle get_odoo_fields avec field_names=[...] pour le détail complet.")
+                            if len(raw) > 150 else None}
 
         elif name == "search_odoo_source":
             if not source_path:
