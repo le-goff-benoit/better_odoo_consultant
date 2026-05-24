@@ -7,10 +7,25 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.63.0',
+    version: '0.64.0',
     date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skills — playbooks opérationnels complétés sur les 27 SKILL.md : déclencheurs, séquence recommandée, paramètres, pièges, combinaisons et critères de réponse systématiques',
+      'IA — sélecteur de skills enrichi par familles d’intention : données live, KPI, vues, rapports, sécurité, Studio, source Odoo, source projet, migration cible, volumétrie et commits. Les bundles chargent les skills complémentaires dès le premier prompt',
+      'IA — nouvel événement SSE `skills_selected` : le panneau de contexte affiche désormais les skills routés, pas seulement les tools effectivement appelés par le modèle',
+      'Données Odoo — `query_odoo` passe en lecture exhaustive bornée par défaut (`limit=0`, pages de 500, plafond 5000 records) avec `total_count`, `truncated`, `pages_fetched` et warning explicite si le résultat reste partiel',
+      'Contexte — budget de résultats data augmenté et message de compression explicite pour éviter les analyses silencieusement tronquées sur gros records',
+      'UI — panneau Contexte sticky sur Assistant / Migration / Creator en desktop, et suppression de la scrollbar interne du bloc “Skills utilisés” pour afficher toute la liste',
+      'Tests — couverture ajoutée sur pagination `query_odoo`, bundles du dispatcher, intégrité du registre skills, affichage complet des skills sélectionnés et compatibilité Python 3.10',
+    ],
+  },
+  {
+    version: '0.63.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skills — 27 nouveaux fichiers authored : 19 examples « good usage » (un par skill outil) montrant le pattern canonique prompt → tool call → résultat → interprétation, plus 8 références pointues (patterns d\'agrégation, types de champs, graphe menus/actions, héritage de vues, internals QWeb, carte des sources Odoo, conventions de commits)',
       'Skills — smart injection : top-3 examples globaux rankés par pertinence au prompt (max 4 000 chars total) au lieu d\'éparpiller un example par skill. Le contexte gagne en pertinence sans exploser le budget',

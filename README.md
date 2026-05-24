@@ -5,10 +5,11 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.58.0** — onglet Skills dans les Paramètres :
-> - **Paramètres — onglet Skills** : liste exhaustive des 12 outils IA regroupés en 3 familles (Données live, Code source, Code projet), avec toggle individuel enable/disable, description et prérequis de chaque outil.
-> - **Skills — filtrage côté serveur** : les outils désactivés ne sont plus exposés au modèle. Si un skill désactivé aurait amélioré la réponse, l'IA le mentionne et invite à le réactiver dans Paramètres → Skills.
-> - **Skills — persistance** : config dans `~/.odoo-consultant/tool-config.json`, propagée à chaque requête chat (Assistant et Migration).
+> Version actuelle : **0.64.0** — assistant piloté par skills :
+> - **Skills — playbooks complets** : les 27 `SKILL.md` décrivent quand utiliser chaque capacité, les déclencheurs FR/EN, la séquence recommandée, les paramètres, les pièges et les combinaisons utiles.
+> - **Sélection IA — routage par intention** : le dispatcher combine les skills pertinents dès le premier prompt (record métier, KPI, vue, sécurité, Studio, migration, source projet/Odoo, volumétrie, commit).
+> - **Données Odoo — lectures exhaustives bornées** : `query_odoo` récupère tous les records visibles par défaut jusqu'au plafond configuré, avec pagination, compte total et warning explicite en cas de résultat partiel.
+> - **Contexte — plus lisible** : le panneau Contexte reste visible en desktop sur Assistant, Migration et Creator, et la liste des skills utilisés n'est plus tronquée.
 
 ---
 
@@ -44,7 +45,7 @@ Better Odoo Assistant est une application web qui tourne sur votre machine. Elle
 
 | Outil | Version minimum |
 |---|---|
-| Python | 3.11+ |
+| Python | 3.10+ |
 | Node.js | 18+ |
 | Git | toute version récente |
 
@@ -98,6 +99,13 @@ Elle détaille comment le portail combine :
 - les **outils IA** : données live Odoo, lecture du code source, inspection Studio, comptage de lignes, etc.
 
 Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
+
+La version 0.64 **fiabilise le pilotage par skills et les analyses Odoo volumineuses** :
+- **27 playbooks SKILL.md complétés** : chaque skill documente ses cas d'usage, déclencheurs, séquence recommandée, paramètres, pièges, combinaisons et critères de réponse ;
+- **sélecteur de skills plus pertinent** : scoring par familles d'intention et bundles automatiques pour les analyses de record métier, KPI, vues, sécurité, Studio et migrations ;
+- **événement SSE `skills_selected`** : l'interface affiche les skills routés par l'assistant, pas seulement les outils effectivement appelés ;
+- **`query_odoo` exhaustif borné** : `limit=0` récupère tous les records visibles jusqu'à 5000, par pages de 500, avec `total_count`, `pages_fetched`, `truncated` et warning explicite ;
+- **contexte sticky** : le panneau de contexte reste accessible pendant le scroll sur Assistant, Migration et Creator, et la liste des skills utilisés s'affiche entièrement.
 
 La version 0.40 **affine l'aperçu du Creator et la faisabilité Studio** :
 - **rendu des vues redessiné façon Odoo** : feuille blanche, colonnes, statusbar, button box, palette aubergine ;

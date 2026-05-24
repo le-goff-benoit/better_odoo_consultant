@@ -9,7 +9,7 @@ Better Odoo Assistant est une web-app **locale** (FastAPI backend + React/Vite f
 ## Layout du repo
 
 ```
-backend (Python 3.11+, FastAPI, SQLAlchemy async, SQLite)
+backend (Python 3.10+, FastAPI, SQLAlchemy async, SQLite)
   odoo_consultant_portal/
     api/routes/        ← endpoints REST (sources, profiles, ai, settings, creator, …)
     services/          ← logique métier (source_manager, project_manager, ai_service, context_service, …)
@@ -33,7 +33,10 @@ data           ~/.odoo-consultant/  (hors repo) — sources/, context/, workspac
 1. **Sources Odoo** — clones (shallow par défaut) de `odoo/odoo` et `odoo/enterprise` sous `~/.odoo-consultant/sources/{version}` et `{version}-enterprise`. La branche est `19.0` pour les majeures, `saas-19.2` pour les intermédiaires.
 2. **Profiles (Projets)** — instance Odoo cliente : URL, credentials chiffrés, version, dépôt custom GitHub, environnements multiples (prod/staging/dev) avec branches Git distinctes, contexte projet en markdown.
 3. **Assistant IA** — chat multi-tour qui injecte : (a) le profil utilisateur, (b) les notes de version `odoo-{X.Y}.md`, (c) le contexte projet, (d) optionnellement les modules installés (XML-RPC live), (e) optionnellement des extraits du code source.
-4. **Migration / Creator** — workflows IA spécialisés qui partagent l'assistant mais avec un prompt système différent.
+4. **Skills** — toute capacité IA est décrite par un dossier `odoo_consultant_portal/skills/<slug>/` avec `SKILL.md` comme source de vérité. Le registre scanne ces fichiers, injecte les playbooks utiles, annonce les scripts/références disponibles et route les handlers self-contained.
+5. **Sélecteur de skills** — scoring par familles d'intention (données live, KPI, champs, vues, rapports, sécurité, Studio, sources, migration, volumétrie, commits) avec bundles automatiques pour charger les skills complémentaires dès le premier prompt.
+6. **Requêtes Odoo live** — les lectures restent read-only. `query_odoo` est exhaustif borné par défaut : `limit=0`, pages de 500, plafond 5000, retour obligatoire de `total_count`, `count`, `pages_fetched`, `truncated` et `warning` si partiel.
+7. **Migration / Creator** — workflows IA spécialisés qui partagent l'assistant mais avec un prompt système différent.
 
 ## Conventions de code
 
@@ -44,7 +47,7 @@ data           ~/.odoo-consultant/  (hors repo) — sources/, context/, workspac
 - **Endpoints** : préfixe `/api`. Ressources REST plates. Noms cohérents avec les fonctions client TS.
 
 ### Frontend
-- **TypeScript strict** : `npx tsc --noEmit` doit passer après chaque modif. C'est le check rapide qu'on fait au lieu des tests.
+- **TypeScript strict** : `npx tsc --noEmit` doit passer après chaque modif TypeScript. Pour les changements UI, lancer aussi `npm test` et `npm run build` quand c'est pertinent.
 - **Pas de react-markdown** : `components/Markdown.tsx` est notre implémentation custom — supporte `#` à `######`, tableaux, code fences (tolérant à l'indentation), avec un `MarkdownActionsProvider` pour les actions (édition table, copie).
 - **Pas de styled-components** : CSS classique via `theme.css` (CSS variables `--th-*`, `--brand`, etc.) + styles inline pour le ponctuel.
 - **i18n** : labels groupés dans des objets `copy = { fr: {…}, en: {…} }` au début du fichier de page. Pas de gettext.
@@ -58,11 +61,12 @@ data           ~/.odoo-consultant/  (hors repo) — sources/, context/, workspac
 ### Versioning
 - **Garder sous v1.x**. Bumper le minor à chaque batch de changements user-visible.
 - Le bump = `frontend/src/version.ts` + entrée en haut du `CHANGELOG` de `frontend/src/pages/About.tsx` (en français, badge `Actuel` sur l'entrée en cours, retiré sur les précédentes).
-- Format commit : `vX.YY — résumé court` puis bullets, finir par le co-author Claude.
+- Mettre à jour `README.md` quand le bandeau de version ou les capacités principales changent.
+- Format commit recommandé pour une release applicative : `vX.YY — résumé court`. Garder le message court et factuel.
 
 ## Pièges connus
 
-- **Sandbox interactif manquant** : `pytest` n'est pas installé localement dans cet env. Pas de tests Python automatisés — se fier à `tsc --noEmit` + tests manuels côté UI.
+- **Tests disponibles** : backend via `.venv/bin/pytest -q`; frontend via `npm test`; build de validation via `npm run build`. Ne pas supposer que `tsc --noEmit` suffit si du comportement UI ou IA a changé.
 - **Shallow clones** : `get_commits_since` fait un `git fetch --shallow-since` à la demande pour deepen l'historique. Le SHA renvoyé est `%H` (long) côté backend, mais l'UI affiche `sha.slice(0, 8)`.
 - **Tags de commits Odoo** : convention `[TAG] module: msg`. Tags fréquents : FIX, IMP, ADD, REM, REF, MOV, REV, MERGE, PERF, TYP, CLA, DOC, I18N, FW. Le modal Sources les détecte via `parseTag(subject)`.
 - **Locale du contexte IA** : `userProfile.contextLanguage` ≠ `userProfile.language` (UI). Quand on lit/écrit des fichiers de `~/.odoo-consultant/context/`, toujours résoudre `contextLanguage || language || 'fr'`.
@@ -74,9 +78,9 @@ data           ~/.odoo-consultant/  (hors repo) — sources/, context/, workspac
 
 1. Comprendre la demande (souvent FR, parfois batch de 5–10 items à la fois).
 2. Implémenter en parallélisant les edits indépendants.
-3. `npx tsc --noEmit` (frontend) et `python3 -c "import ast; ast.parse(open(...).read())"` pour valider le Python si touché.
-4. Demander avant de bumper la version / committer.
-5. Sur OK : bumper `version.ts`, ajouter l'entrée en haut du `CHANGELOG` de `About.tsx`, commit (jamais `--no-verify`, jamais `--amend` sauf demande explicite).
+3. Valider selon le périmètre : `.venv/bin/pytest -q` pour backend/skills, `npm test` pour frontend, `npm run build` pour vérifier TypeScript + bundling.
+4. Demander avant de bumper la version / committer sauf si le user l'a explicitement demandé.
+5. Sur OK : bumper `version.ts`, ajouter l'entrée en haut du `CHANGELOG` de `About.tsx`, mettre à jour README/CLAUDE si nécessaire, commit (jamais `--no-verify`, jamais `--amend` sauf demande explicite).
 
 ## Ce que le user attend en pratique
 
