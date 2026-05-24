@@ -33,3 +33,24 @@ Sous-skill du `context_aggregator` : injecte les notes de version Odoo X.Y filtr
 - Aucune note de version n'entre dans le contexte.
 - Utile pour économiser du budget quand la question ne dépend pas de la version.
 - Risque : l'IA peut donner une réponse correcte sur la version courante mais cassée sur la version cible.
+
+## Déclencheurs
+- Migration, upgrade, breaking change, nouveauté, dépréciation, compatibilité version.
+
+## Séquence recommandée
+1. Identifier version source et cible si présentes.
+2. Charger les notes locales filtrées par domaine.
+3. Croiser avec le code source quand une décision technique dépend du comportement réel.
+
+## Paramètres
+- `odoo_version`, `target_version`, domaine déduit du prompt.
+
+## Pièges
+- Les notes de version ne remplacent pas une vérification code/source live.
+
+## Combinaisons
+- `search_odoo_source` et `search_target_source` pour preuve technique.
+- `inspect_installed_modules` pour savoir si le module concerné est utilisé.
+
+## Critères de réponse
+- Relier nouveauté/changement à la version exacte et à l'impact projet.

@@ -148,6 +148,72 @@ _PROFILE_FILES = {
 
 _BA_LIKE = {"business_analyst", "functional"}
 
+_SKILL_INTENT_BUNDLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("record_analysis", (
+        "analyse", "analyser", "analyze", "detail", "détail", "record", "records",
+        "fiche", "ligne", "lignes", "line", "lines", "commande", "order",
+        "sale.order", "facture", "invoice", "devis", "partner", "contact",
+    ), ("get_odoo_fields", "query_odoo", "count_odoo")),
+    ("live_data", (
+        "liste", "lister", "list", "montre", "show", "affiche", "display",
+        "donnée", "données", "data", "enregistrement", "enregistrements",
+        "search_read", "export", "voir les", "récupère", "recupere",
+    ), ("get_odoo_fields", "query_odoo", "count_odoo")),
+    ("kpi", (
+        "kpi", "indicateur", "dashboard", "tableau de bord", "synthèse",
+        "synthese", "summary", "agrég", "aggregate", "group by", "par mois",
+        "par statut", "par commercial", "chiffre d'affaires", "ca par",
+        "total par", "somme", "moyenne", "average",
+    ), ("read_group_odoo", "count_odoo")),
+    ("fields", (
+        "champ", "champs", "field", "fields", "relation", "many2one",
+        "one2many", "many2many", "x_", "x_studio", "invalid field",
+        "structure", "schema", "schéma",
+    ), ("get_odoo_fields",)),
+    ("view_screen", (
+        "écran", "ecran", "screen", "vue", "view", "formulaire", "form",
+        "liste", "kanban", "readonly", "invisible", "onglet", "bouton",
+        "button", "où cliquer", "ou cliquer", "where click", "menu",
+        "navigation", "accéder", "acceder",
+    ), ("inspect_menus_actions", "inspect_odoo_view", "inspect_security")),
+    ("report", (
+        "rapport", "report", "pdf", "qweb", "template", "xpath",
+        "facture pdf", "devis pdf", "bon de livraison", "layout",
+    ), ("inspect_odoo_report", "inspect_odoo_view")),
+    ("security", (
+        "sécurité", "securite", "security", "droit", "droits", "access",
+        "acl", "ir.model.access", "record rule", "ir.rule", "permission",
+        "groupe", "groups", "ne voit pas", "invisible",
+    ), ("inspect_security", "inspect_menus_actions")),
+    ("studio", (
+        "studio", "x_studio", "personnalisation", "customization",
+        "automatisation", "automation", "base.automation", "action serveur",
+        "server action", "modèle custom", "modele custom", "champ custom",
+    ), ("inspect_studio", "get_odoo_fields", "inspect_odoo_view")),
+    ("odoo_source", (
+        "source odoo", "standard odoo", "code odoo", "méthode", "methode",
+        "method", "class", "_name", "_inherit", "orm", "api.", "@api",
+        "comportement standard", "standard behavior",
+    ), ("search_odoo_source", "read_odoo_file")),
+    ("project_source", (
+        "repo", "dépôt", "depot", "code custom", "module custom",
+        "modules custom", "override", "surcharge", "spécifique", "specifique",
+        "client repo", "project source", "__manifest__",
+    ), ("list_project_modules", "search_project_source", "read_project_file")),
+    ("migration_target", (
+        "migration", "upgrade", "version cible", "target version", "breaking",
+        "compatibilité", "compatibilite", "renommé", "renomme", "supprimé",
+        "supprime", "deprecated", "dépréci",
+    ), ("inspect_installed_modules", "inspect_studio", "list_project_modules", "search_target_source")),
+    ("volume", (
+        "volumétrie", "volumetrie", "loc", "lignes de code", "lines of code",
+        "taille", "size", "effort", "combien de lignes",
+    ), ("count_source_lines", "list_project_modules")),
+    ("commit", (
+        "commit", "sha", "diff", "patch", "git show", "régression", "regression",
+    ), ("git_show_commit",)),
+)
+
 # Short profile-shaping snippets injected as priority blocks when the project
 # complexity tells us the role should adapt. They are intentionally tiny
 # (~300-500 chars) so the budget cost is negligible while the LLM gets the
@@ -554,6 +620,15 @@ def _select_skill_playbooks(
         if skill.keywords and _has_any(prompt_norm, tuple(k.casefold() for k in skill.keywords)):
             add(skill.name)
 
+    # Intent bundles: route complementary skills together from user phrasing,
+    # not only from exact tool names. This avoids multi-prompt clarification
+    # loops for common Odoo work such as "analyse cette commande avec ses
+    # lignes" or "pourquoi l'utilisateur ne voit pas le menu".
+    for _intent, terms, skills in _SKILL_INTENT_BUNDLES:
+        if _has_any(prompt_norm, tuple(t.casefold() for t in terms)):
+            for name in skills:
+                add(name)
+
     # Explicit trigger patterns that are stronger than generic domain keywords.
     if re.search(r"\b[0-9a-f]{7,40}\b", prompt_norm):
         add("git_show_commit")
@@ -594,6 +669,7 @@ def _select_skill_playbooks(
             enriched = _enrich_skill_chunk(skill, content)
             if skill.name not in matched_skill_names:
                 matched_skill_names.append(skill.name)
+        enriched = _redact_disabled_skill_mentions(enriched, disabled)
         chunks.append(enriched)
     # Expose matched names on the function via a module-level side channel
     # consumed by ``_load_context_for_prompt_impl``. Keeping the return type
@@ -623,6 +699,23 @@ def _enrich_skill_chunk(skill, body: str) -> str:
         )
         parts.append(f"### Scripts exécutables\n{items}")
     return "\n\n".join(parts)
+
+
+def _redact_disabled_skill_mentions(content: str, disabled: set[str]) -> str:
+    """Remove playbook lines that promote disabled skills.
+
+    A skill can legitimately mention related skills in its "Combinaisons"
+    section. When the user disables one of those skills, the injected context
+    must not keep nudging the model toward it.
+    """
+    if not disabled or not content:
+        return content
+    lines = []
+    for line in content.splitlines():
+        if any(name in line for name in disabled):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
 
 
 # Budget constants — kept generous so the assembled context stays under the
@@ -818,7 +911,7 @@ _CONTEXT_CACHE_MAX = 64
 # Plafond per priority_block. Priority blocks bypass the routed-context
 # packer; without an individual cap a runaway block (huge technical complexity
 # JSON, a misformatted localization snippet) could starve the routed sections.
-_MAX_PRIORITY_BLOCK_CHARS = 10_000
+_MAX_PRIORITY_BLOCK_CHARS = 6_000
 
 
 def _truncate_priority_block(block: str) -> str:
@@ -869,6 +962,16 @@ def load_context_for_prompt(
     )
     cached = _CONTEXT_CACHE.get(cache_key)
     if cached is not None:
+        if "skill_dispatcher" in set(disabled_tools or []):
+            _select_skill_playbooks._last_matched = []  # type: ignore[attr-defined]
+        else:
+            _select_skill_playbooks(
+                user_prompt or "",
+                migration=migration,
+                creation=creation,
+                disabled_tools=disabled_tools,
+                locale=locale,
+            )
         _CONTEXT_CACHE.move_to_end(cache_key)
         return cached
     result = _load_context_for_prompt_impl(
@@ -882,6 +985,15 @@ def load_context_for_prompt(
     if len(_CONTEXT_CACHE) > _CONTEXT_CACHE_MAX:
         _CONTEXT_CACHE.popitem(last=False)
     return result
+
+
+def last_selected_skill_names() -> list[str]:
+    """Return the tool-skill playbooks selected during the last context build.
+
+    This is a lightweight observability hook for SSE/UI display; it does not
+    affect prompt construction.
+    """
+    return list(getattr(_select_skill_playbooks, "_last_matched", []))
 
 
 def clear_context_cache() -> None:
@@ -982,9 +1094,11 @@ def _load_context_for_prompt_impl(
     # technical complexity flags Studio use, or (c) the prompt is *about*
     # Studio (not just incidentally mentions it — stricter `_is_topic_of`).
     studio_project = (complexity_mode or "").lower() in {"studio", "studio_dev"}
+    _studio_title = None
     if creation or studio_project or _is_topic_of(prompt, _STUDIO_TERMS):
         try:
-            sections.append((titles["studio"], read_file("studio.md", lang)))
+            _studio_title = titles["studio"]
+            sections.append((_studio_title, read_file("studio.md", lang)))
         except FileNotFoundError:
             pass
     # Custom-dev guide: same OR logic but driven by `dev` / `studio_dev`
@@ -1001,18 +1115,23 @@ def _load_context_for_prompt_impl(
     # _VERSION_TERMS so a routine functional question keeps its budget. When
     # included, route by domain to trim 40-70% of irrelevant sections.
     _version_sensitive = migration or _has_any(prompt, _VERSION_TERMS)
+    _version_titles: list[str] = []
     if odoo_version and _version_sensitive and _release_notes_active:
         try:
             content = _filter_version_note_by_domain(
                 read_file(f"odoo-{odoo_version}.md", lang), prompt)
-            sections.append((titles["version"].format(version=odoo_version), content))
+            _title = titles["version"].format(version=odoo_version)
+            sections.append((_title, content))
+            _version_titles.append(_title)
         except FileNotFoundError:
             pass
     if target_version and target_version != odoo_version and _version_sensitive and _release_notes_active:
         try:
             content = _filter_version_note_by_domain(
                 read_file(f"odoo-{target_version}.md", lang), prompt)
-            sections.append((titles["version"].format(version=target_version), content))
+            _title = titles["version"].format(version=target_version)
+            sections.append((_title, content))
+            _version_titles.append(_title)
         except FileNotFoundError:
             pass
     # Curated fiscal-localization knowledge (l10n_<cc>.md) for the active /
@@ -1080,14 +1199,16 @@ def _load_context_for_prompt_impl(
         core.add(_skills_title)
     if _profile_title:
         core.add(_profile_title)
-    if _skill_playbooks_title:
-        core.add(_skill_playbooks_title)
     if _migration_title:
         core.add(_migration_title)
+    for _title in _version_titles:
+        core.add(_title)
     if _creation_title:
         core.add(_creation_title)
     if _creator_profile_title:
         core.add(_creator_profile_title)
+    if _studio_title and creation:
+        core.add(_studio_title)
     if _localization_title:
         core.add(_localization_title)
     # Priority blocks consume the budget first; the routed sections fit in what

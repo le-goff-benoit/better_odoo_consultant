@@ -35,3 +35,25 @@ Utilise `read_odoo_file` après une recherche source pour lire l'implémentation
 - Lis une fenêtre courte autour des lignes trouvées.
 - Si le fichier est long, fais plusieurs lectures ciblées.
 - Ne colle pas de gros blocs : synthétise le comportement utile.
+
+## Déclencheurs
+- Après une recherche source, besoin de comprendre une méthode, vue, champ ou controller.
+
+## Séquence recommandée
+1. Pars d'un chemin trouvé par `search_odoo_source`.
+2. Lis une fenêtre courte autour des lignes pertinentes.
+3. Élargis seulement si les dépendances locales sont nécessaires.
+
+## Paramètres
+- `path`, `start_line`, `end_line`.
+
+## Pièges
+- Ne cite pas un extrait hors contexte.
+- Ne colle pas un fichier entier dans la réponse.
+
+## Combinaisons
+- `search_odoo_source` avant lecture.
+- `read_target_file` pour comparer une migration.
+
+## Critères de réponse
+- Citer fichier/lignes et résumer le comportement utile.

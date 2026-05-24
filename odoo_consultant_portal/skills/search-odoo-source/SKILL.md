@@ -36,3 +36,26 @@ Utilise `search_odoo_source` pour vérifier modèles, champs, méthodes, vues, c
 - Community : souvent `community/addons/<module>`.
 - Module `base` et coeur ORM : `community/odoo/...`.
 - Enterprise : `enterprise/<module>`, pas `addons/<module>`.
+
+## Déclencheurs
+- Question technique standard Odoo, nom de modèle/champ/méthode, comportement framework.
+
+## Séquence recommandée
+1. Cherche largement le symbole.
+2. Restreins au module ou au cœur si trop de résultats.
+3. Lis les fichiers avec `read_odoo_file`.
+
+## Paramètres
+- `pattern`, `path`, `file_types`, `case_sensitive`.
+
+## Pièges
+- Community, Enterprise et cœur framework n'ont pas la même racine.
+- Un résultat grep doit être lu dans son contexte.
+
+## Combinaisons
+- `read_odoo_file` pour preuve complète.
+- `search_project_source` pour vérifier une surcharge client.
+- `search_target_source` en migration.
+
+## Critères de réponse
+- Citer chemin/lignes et séparer standard, Enterprise et custom.

@@ -31,6 +31,6 @@
 > Si tu veux les voir une par une, je peux les lister avec `query_odoo` (préciser combien tu veux récupérer).
 
 **Pièges à éviter** :
-- Ne **pas** compter en appelant `query_odoo` puis en mesurant la taille du résultat — la `limit` par défaut tronque silencieusement à 20.
+- Ne **pas** compter en appelant `query_odoo` puis en mesurant la taille du résultat — `query_odoo` peut être borné par `max_records` ou limité explicitement.
 - Le compteur respecte les droits du user connecté : si tu vois `47` et l'utilisateur en attend `200`, il a peut-être un filtre multi-société qui restreint. Le signaler.
 - `state="open"` n'existe plus en Odoo 13+ pour `account.move` — c'est `state="posted"`. Vérifier la version cible.

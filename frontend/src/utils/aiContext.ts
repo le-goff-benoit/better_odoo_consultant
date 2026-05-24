@@ -5,6 +5,7 @@ export interface AiEventLike {
   type: string
   name?: string
   args?: Record<string, unknown>
+  skills?: string[]
 }
 
 export interface ContextItem {
@@ -436,10 +437,18 @@ export function extractUsedSkillNames(events: AiEventLike[]): string[] {
   const seen = new Set<string>()
   const names: string[] = []
   for (const evt of events) {
+    if (evt.type === 'skills_selected' && Array.isArray(evt.skills)) {
+      for (const name of evt.skills) {
+        if (!name || seen.has(name)) continue
+        seen.add(name)
+        names.push(name)
+      }
+      continue
+    }
     if (evt.type !== 'tool_call' || !evt.name) continue
     if (seen.has(evt.name)) continue
     seen.add(evt.name)
     names.push(evt.name)
   }
-  return names.slice(-12)
+  return names
 }

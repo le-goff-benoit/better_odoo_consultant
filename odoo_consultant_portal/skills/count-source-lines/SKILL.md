@@ -33,3 +33,25 @@ Utilise `count_source_lines` pour mesurer LOC par extension, module ou dossier.
 - Groupe par `extension` pour savoir où est l'effort Python/XML/JS.
 - Restreins `path` et `file_types` si le dépôt est très gros.
 - Présente la volumétrie comme un indicateur d'effort, pas comme une complexité suffisante à elle seule.
+
+## Déclencheurs
+- "combien de lignes", "volumétrie", "LOC", taille d'un module, effort de migration.
+
+## Séquence recommandée
+1. Choisis le `scope` (`odoo`, `target`, `project`).
+2. Restreins `path` si un module est ciblé.
+3. Groupe par `module`, `extension` ou `directory` selon la décision à prendre.
+
+## Paramètres
+- `scope`, `path`, `file_types`, `group_by`.
+
+## Pièges
+- Une volumétrie n'est pas une complexité métier.
+- Les résultats de recherche source ne remplacent jamais ce comptage exhaustif.
+
+## Combinaisons
+- `list_project_modules` pour relier LOC et dépendances.
+- `search_project_source` pour inspecter les modules les plus volumineux.
+
+## Critères de réponse
+- Donner total, répartition, périmètre exact et limite d'interprétation.

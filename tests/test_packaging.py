@@ -4,8 +4,11 @@ These run without any app dependencies — pure stdlib only.
 """
 import sys
 import subprocess
-import tomllib
 from pathlib import Path
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
@@ -63,7 +66,7 @@ def test_python_version_requirement():
 def test_package_importable():
     """Le package doit s'importer sans erreur."""
     import odoo_consultant_portal
-    assert odoo_consultant_portal.__version__ == "0.1.0"
+    assert odoo_consultant_portal.__version__ == "0.10.0"
 
 
 def test_cli_entry_point_importable():

@@ -31,3 +31,24 @@ Compose le system prompt à partir de tous les contributeurs et tient le budget 
 - Le system prompt assemblé devient vide : l'IA répond en mode « LLM nu ».
 - Les outils restent appelables mais sans walkthroughs ni profil de réponse.
 - À utiliser uniquement pour debug — désactiver casse la qualité globale.
+
+## Déclencheurs
+- Tous les appels IA qui doivent recevoir contexte, profils, skills, version, localisation ou projet.
+
+## Séquence recommandée
+1. Construire les blocs prioritaires.
+2. Router les playbooks et références.
+3. Ajuster au budget et conserver les sections cœur.
+
+## Paramètres
+- Prompt, perspective, versions, pays, complexité, skills désactivés.
+
+## Pièges
+- Un contexte trop large dégrade la précision ; router plutôt que tout charger.
+- Les blocs prioritaires doivent rester courts.
+
+## Combinaisons
+- Coordonne `skill_dispatcher`, `perspective_router`, `localization_detector`, `release_notes_injector`.
+
+## Critères de réponse
+- Le contexte assemblé doit être pertinent, borné et observable en debug.

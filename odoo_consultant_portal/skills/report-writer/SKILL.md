@@ -57,3 +57,24 @@ Suis exactement le template sélectionné. Le titre, l'ordre des sections et leu
 
 - Conversation rapide question/réponse — pas besoin d'imposer un format.
 - L'utilisateur demande explicitement un format libre (« en quelques lignes », « informel »).
+
+## Déclencheurs
+- Rapport, revue, email client, plan de migration, cahier des charges, spécification.
+
+## Séquence recommandée
+1. Choisir le template déclenché par le prompt.
+2. Charger les références d'écriture seulement si le ton est incertain.
+3. Remplir les sections sans changer l'ordre.
+
+## Paramètres
+- Template sélectionné, audience, faits vérifiés issus des autres skills.
+
+## Pièges
+- Ne pas imposer un template à une réponse courte.
+- Ne pas remplir avec des hypothèses non marquées.
+
+## Combinaisons
+- Tous les skills de preuve en amont : données live, source, sécurité, migration.
+
+## Critères de réponse
+- Document structuré, directement partageable, avec faits/hypothèses/actions séparés.

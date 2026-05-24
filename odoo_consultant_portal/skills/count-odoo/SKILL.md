@@ -12,7 +12,7 @@ description_en: Count records matching a filter domain.
 requirement: Connexion Odoo active
 requirement_en: Active Odoo connection
 modes: [assistant, migration, creator]
-keywords: [combien, count, nombre, volume, total, domain]
+keywords: [combien, count, nombre, volume, total, domain, périmètre, scope, records, combien de, volumétrie, taille]
 code_path: odoo_consultant_portal/skills/count-odoo/scripts/handler.py
 ---
 
@@ -34,3 +34,28 @@ Utilise `count_odoo` pour compter les enregistrements correspondant à un domain
 - Vérifie les champs du domain avec `get_odoo_fields` si la structure est incertaine.
 - Donne un résultat sous forme "N enregistrements correspondent à domain X".
 - Si plusieurs domains sont nécessaires, compare-les explicitement.
+
+## Déclencheurs
+- "combien", "nombre de", "volume", "périmètre", "risque de masse", "tous les".
+- Avant une lecture large avec `query_odoo`.
+
+## Séquence recommandée
+1. Valide le modèle et les champs du domain.
+2. Appelle `count_odoo`.
+3. Si le volume est important, choisis entre `read_group_odoo`, pagination `query_odoo`, ou analyse ciblée.
+
+## Paramètres
+- `model`: modèle à compter.
+- `domain`: filtre exact ; domain vide = tous les records visibles.
+
+## Pièges
+- Un count est soumis aux droits et à la société active.
+- Un count ne prouve pas la qualité des données ; il mesure seulement le périmètre.
+
+## Combinaisons
+- `query_odoo` pour inspecter les records après le count.
+- `read_group_odoo` pour répartir le volume par statut, période ou responsable.
+- `inspect_security` si le count varie selon les utilisateurs.
+
+## Critères de réponse
+- Donner le nombre, le domain et la réserve éventuelle liée aux droits.

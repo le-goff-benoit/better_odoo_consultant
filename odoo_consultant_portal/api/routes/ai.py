@@ -16,7 +16,7 @@ from ...services.ai_service import (
     stream_chat, DEFAULT_MODELS,
     GITHUB_MODELS_BASE_URL, COPILOT_BASE_URL, COPILOT_HEADERS,
 )
-from ...services.context_service import load_context_for_prompt, complexity_profile_block
+from ...services.context_service import load_context_for_prompt, complexity_profile_block, last_selected_skill_names
 from ...services.localization_service import active_company_from_cache, build_localization_context
 from ...services.technical_complexity_service import build_technical_complexity_context, complexity_mode_from_raw
 from ...services.attachment_service import ChatAttachment, inject_attachments
@@ -416,6 +416,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             force_localization=bool(req.country_code) and _localization_active,
             disabled_tools=req.disabled_tools,
         )
+        _selected_skills = last_selected_skill_names() if _aggregator_active else []
 
         # Migration target resolution
         _gen_target_path = None
@@ -429,6 +430,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
         async def generate_general():
             try:
+                yield _sse({"type": "skills_selected", "skills": _selected_skills})
                 async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, _effective_perspective, _response_language, disabled_tools=req.disabled_tools):
                     yield _sse(evt)
             except Exception as exc:
@@ -566,9 +568,11 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         disabled_tools=req.disabled_tools,
         priority_blocks=[b for b in (_source_warning, localization_md, complexity_md, profile_tuning) if b],
     )
+    _selected_skills = last_selected_skill_names() if _aggregator_active else []
 
     async def generate():
         try:
+            yield _sse({"type": "skills_selected", "skills": _selected_skills})
             async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, _effective_perspective, _response_language, disabled_tools=req.disabled_tools):
                 yield _sse(evt)
         except Exception as exc:

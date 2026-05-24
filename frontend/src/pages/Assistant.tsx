@@ -62,9 +62,10 @@ interface CompanyOption {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'text' | 'error' | 'warning' | 'done' | 'end'
+  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'text' | 'error' | 'warning' | 'done' | 'end'
   name?: string
   args?: Record<string, unknown>
+  skills?: string[]
   count?: number
   records?: Record<string, unknown>[]
   content?: string

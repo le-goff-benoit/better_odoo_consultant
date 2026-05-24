@@ -32,3 +32,25 @@ Utilise `search_target_source` pour vérifier un symbole, modèle, champ ou comp
 - Cherche le même symbole dans la source et la cible.
 - Structure la conclusion `Source | Cible | Impact | Action`.
 - Si la cible ne contient rien, cherche des variantes de nom avant de conclure.
+
+## Déclencheurs
+- Migration, breaking change, renommage, suppression, compatibilité version cible.
+
+## Séquence recommandée
+1. Cherche le symbole côté source avec `search_odoo_source`.
+2. Cherche le même symbole côté cible.
+3. Lis les deux implémentations si le résultat impacte une décision.
+
+## Paramètres
+- `pattern`, `path`, `file_types`, `case_sensitive`.
+
+## Pièges
+- Absence de résultat ne prouve pas suppression : chercher variantes et modules déplacés.
+- Enterprise cible n'est pas sous `addons/`.
+
+## Combinaisons
+- `read_target_file` et `read_odoo_file` pour comparer.
+- `search_project_source` pour mesurer impact custom.
+
+## Critères de réponse
+- Tableau Source | Cible | Impact | Action.

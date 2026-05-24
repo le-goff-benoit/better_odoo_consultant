@@ -32,3 +32,25 @@ Utilise `read_project_file` pour confirmer l'implémentation exacte d'un module 
 - Commence par le manifest pour comprendre dépendances et fichiers chargés.
 - Lis ensuite `models`, `views`, `security` ou `data` selon la demande.
 - En migration, croise avec `search_target_source`.
+
+## Déclencheurs
+- Après `search_project_source` ou `list_project_modules`, besoin de preuve complète.
+
+## Séquence recommandée
+1. Lis le manifest pour le module ciblé.
+2. Lis ensuite le fichier Python/XML/CSV pertinent.
+3. Croise l'effet live avec `inspect_odoo_view` ou `inspect_security`.
+
+## Paramètres
+- `path`, `start_line`, `end_line`.
+
+## Pièges
+- Un fichier data peut être chargé sous conditions ou en démo.
+- Une surcharge peut dépendre de l'ordre d'installation et des dépendances.
+
+## Combinaisons
+- `search_project_source` pour trouver les chemins.
+- `search_target_source` pour compatibilité migration.
+
+## Critères de réponse
+- Citer chemin/lignes et relier le code à l'effet observé.

@@ -30,3 +30,26 @@ Sélectionne dynamiquement les playbooks d'outils à injecter dans le contexte s
 - Aucun playbook d'outil n'est injecté.
 - L'IA peut toujours appeler les tools, mais sans guidance — elle improvise les paramètres.
 - Utile pour mesurer combien les playbooks contribuent à la qualité.
+
+## Déclencheurs
+- Chaque prompt utilisateur ; combine noms de skills, keywords et familles d'intention.
+
+## Séquence recommandée
+1. Ajouter les defaults de mode.
+2. Matcher noms/keywords.
+3. Ajouter les bundles d'intention (record, KPI, vue, sécurité, Studio, source, migration).
+4. Exclure les skills désactivés.
+
+## Paramètres
+- Prompt, mode (`assistant`, `migration`, `creator`), skills désactivés.
+
+## Pièges
+- Un seul prompt peut nécessiter plusieurs skills ; ne pas caper arbitrairement.
+- Un skill sélectionné n'est pas forcément appelé si le LLM n'en a finalement pas besoin.
+
+## Combinaisons
+- `context_aggregator` injecte le résultat.
+- L'événement `skills_selected` expose la sélection à l'UI.
+
+## Critères de réponse
+- Charger assez de playbooks pour éviter les relances utilisateur sans noyer le prompt.

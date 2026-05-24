@@ -35,3 +35,26 @@ Utilise `inspect_menus_actions` pour retrouver comment accéder à un écran dan
 - Recherche par `model` quand le modèle est connu, sinon par `query` sur le libellé.
 - Après avoir identifié l'action, utilise `inspect_odoo_view` pour les champs visibles et l'arch réelle.
 - Si aucun menu n'est trouvé, vérifie les droits avec `inspect_security`.
+
+## Déclencheurs
+- "où cliquer", menu, navigation, action fenêtre, écran introuvable.
+
+## Séquence recommandée
+1. Appelle avec `model` si connu, sinon avec `query`.
+2. Lis action, view modes et menus retournés.
+3. Appelle `inspect_odoo_view` pour le contenu de l'écran.
+4. Appelle `inspect_security` si le menu/action manque.
+
+## Paramètres
+- `model`, `query`, `limit`.
+
+## Pièges
+- Un menu peut exister mais être caché par groupes.
+- Une action peut exposer plusieurs types de vues.
+
+## Combinaisons
+- `inspect_odoo_view` pour champs/boutons.
+- `inspect_security` pour droits.
+
+## Critères de réponse
+- Donner chemin menu, action, modèle, vues disponibles et réserve d'accès.

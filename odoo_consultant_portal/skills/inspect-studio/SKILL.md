@@ -12,7 +12,7 @@ description_en: "Inventory Odoo Studio customizations: models, fields, views, me
 requirement: Connexion Odoo active
 requirement_en: Active Odoo connection
 modes: [assistant, migration, creator]
-keywords: [studio, x_studio, personnalisation, customization, automation, migration studio]
+keywords: [studio, x_studio, personnalisation, personnalisations, customization, custom field, automation, automatisation, base.automation, action serveur, migration studio, modèle custom]
 version: "1.0.0"
 tags: [odoo, studio, audit]
 permissions:
@@ -42,3 +42,30 @@ Utilise `inspect_studio` pour lister modèles `x_*`, champs `x_*`, vues, menus, 
 - Filtre par modèle avec `model_filter` quand la demande est ciblée.
 - En migration, lis modèles, champs, vues, server actions, crons et automations.
 - Croise les actions serveur et automatisations avec les risques safe_eval.
+
+## Déclencheurs
+- Mention de Studio, `x_*`, champs/modèles custom, automatisations, migration de personnalisations.
+- Projet marqué `studio` ou `studio_dev`.
+
+## Séquence recommandée
+1. Appelle `inspect_studio` avec `sections=['all']` pour un audit global.
+2. Filtre par modèle si la demande est ciblée.
+3. Croise vues avec `inspect_odoo_view`, champs avec `get_odoo_fields`.
+4. En migration, compare avec code source cible et limitations Studio.
+
+## Paramètres
+- `sections`: `models`, `fields`, `views`, `menus`, `server_actions`, `cron`, `automations`, `rules`, `all`.
+- `model_filter`: préfixe ou modèle métier.
+
+## Pièges
+- Une personnalisation Studio peut masquer un comportement standard.
+- Les actions serveur peuvent contenir du Python `safe_eval` risqué.
+- Tous les types de vues ne sont pas couverts par Studio.
+
+## Combinaisons
+- `load_skill_reference` pour `studio_limits.md` en cas de limite Studio.
+- `inspect_security` pour règles et groupes générés.
+- `search_project_source` pour distinguer Studio et code custom.
+
+## Critères de réponse
+- Classer standard / Studio / custom code et lister les impacts réels.

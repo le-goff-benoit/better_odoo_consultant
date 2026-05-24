@@ -32,3 +32,25 @@ Utilise `read_target_file` après `search_target_source` pour lire l'implémenta
 - Cite le chemin cible.
 - Compare avec `read_odoo_file` côté source si nécessaire.
 - Ne généralise pas un changement sans preuve dans les deux versions.
+
+## Déclencheurs
+- Après `search_target_source`, besoin de confirmer l'implémentation cible.
+
+## Séquence recommandée
+1. Lis la zone cible autour du symbole.
+2. Lis la source équivalente avec `read_odoo_file`.
+3. Conclus uniquement sur les différences vérifiées.
+
+## Paramètres
+- `path`, `start_line`, `end_line`.
+
+## Pièges
+- Une méthode peut être déplacée vers un mixin ou un service.
+- Un changement cible doit être relié au module exact.
+
+## Combinaisons
+- `search_target_source` avant lecture.
+- `read_project_file` pour adapter le custom.
+
+## Critères de réponse
+- Citer fichier/lignes cible et action de migration.

@@ -12,7 +12,7 @@ description_en: "Read ACLs, record rules and groups for a model to diagnose acce
 requirement: Connexion Odoo active
 requirement_en: Active Odoo connection
 modes: [assistant, migration, creator]
-keywords: [droits, "droit d'accès", "droits d'accès", access, access right, access rights, acl, ir.model.access, record rule, security rule, ir.rule, sécurité, securite, règle de sécurité, regle de securite, permission, groupe]
+keywords: [droits, "droit d'accès", "droits d'accès", access, access right, access rights, acl, ir.model.access, record rule, security rule, ir.rule, sécurité, securite, règle de sécurité, regle de securite, permission, groupe, invisible, accès refusé, ne voit pas]
 version: "1.0.0"
 tags: [odoo, security, acl]
 permissions:
@@ -49,3 +49,29 @@ Utilise `inspect_security` pour diagnostiquer droits d'accès, visibilité parti
 - ACL = droits CRUD globaux par groupe ; record rules = filtre sur les enregistrements.
 - Cite les groupes et domains de règles qui expliquent le symptôme.
 - Complète avec `inspect_menus_actions` si le problème concerne la navigation.
+
+## Déclencheurs
+- Accès refusé, records manquants, menus/boutons invisibles, droits, groupes, multi-société.
+- Incohérence entre deux utilisateurs.
+
+## Séquence recommandée
+1. Identifie le modèle exact.
+2. Appelle `inspect_security`.
+3. Si le symptôme est UI, ajoute `inspect_menus_actions` et `inspect_odoo_view`.
+4. Si modules custom mentionnés, lis `security/` avec les skills projet.
+
+## Paramètres
+- `model`: modèle à analyser.
+
+## Pièges
+- ACL autorise CRUD globalement ; record rules filtrent les records.
+- Les groupes impliqués peuvent être hérités.
+- Les requêtes live de l'assistant voient seulement ce que l'utilisateur API peut voir.
+
+## Combinaisons
+- `query_odoo` / `count_odoo` pour mesurer l'effet visible.
+- `search_project_source` pour règles custom.
+- `inspect_menus_actions` pour navigation et actions.
+
+## Critères de réponse
+- Séparer ACL, record rules, groupes, effet concret et vérification recommandée.

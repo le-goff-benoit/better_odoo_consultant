@@ -12,7 +12,7 @@ description_en: "Fetch records via search_read (orders, invoices, contacts...)."
 requirement: Connexion Odoo active
 requirement_en: Active Odoo connection
 modes: [assistant, migration, creator]
-keywords: [donnée, data, records, search_read, liste, facture, commande, contact]
+keywords: [donnée, données, data, records, search_read, liste, lister, analyse record, fiche, lignes, facture, commande, sale.order, contact, export, détail]
 version: "1.0.0"
 tags: [odoo, live-data, search-read]
 permissions:
@@ -40,6 +40,39 @@ Utilise `query_odoo` pour lire des enregistrements concrets via `search_read`.
 ## Bonnes pratiques
 - Appelle `get_odoo_fields` avant si le modèle, les champs ou les relations sont incertains.
 - Demande uniquement les champs utiles.
-- Utilise `limit` comme échantillon contrôlé ; ne présente jamais un échantillon comme exhaustif.
+- Par défaut, `limit=0` signifie lecture exhaustive bornée : vérifie toujours `total_count`, `count`, `truncated` et `warning`.
+- Si `truncated=true`, annonce explicitement que l'analyse est partielle et explique le plafond ou la limite utilisée.
 - Pour un total, utilise `count_odoo`; pour un KPI groupé, utilise `read_group_odoo`.
 - Dans la réponse, indique le domain utilisé et distingue faits vérifiés, hypothèses et recommandations.
+
+## Déclencheurs
+- "analyse cette commande/facture/fiche", "liste les lignes", "montre les enregistrements", "exporte", "vérifie l'état".
+- Toute demande qui nécessite des valeurs réelles et non une explication standard.
+
+## Séquence recommandée
+1. Si le modèle ou les champs ne sont pas sûrs, appelle `get_odoo_fields`.
+2. Appelle `count_odoo` quand le volume influence la réponse.
+3. Appelle `query_odoo` avec les champs strictement nécessaires.
+4. Si `truncated=true`, affine le domain, augmente `max_records`, ou réponds avec réserve.
+
+## Paramètres
+- `model`: modèle exact, jamais deviné si un doute existe.
+- `domain`: domain Odoo vérifié ; cite-le dans la réponse.
+- `fields`: inclure `id`, `display_name` et les champs métier utiles.
+- `limit=0`: exhaustif borné par `max_records`; `limit>0`: limite explicite.
+- `page_size` et `max_records`: pour grands volumes.
+
+## Pièges
+- Ne jamais conclure "il n'y a que N lignes" si `truncated=true`.
+- Ne jamais sommer manuellement un résultat borné pour produire un KPI global.
+- Les règles d'accès, sociétés actives et record rules peuvent cacher des records.
+
+## Combinaisons
+- `get_odoo_fields` avant les relations et champs `x_*`.
+- `count_odoo` pour confirmer le périmètre complet.
+- `read_group_odoo` pour totaux fiables.
+- `inspect_security` si le résultat semble anormalement faible.
+
+## Critères de réponse
+- Mentionner `count/total_count`, le modèle, le domain, les champs clés et toute troncature.
+- Dire clairement si la conclusion est exhaustive ou partielle.

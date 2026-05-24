@@ -34,3 +34,24 @@ Sous-skill du `context_aggregator` : injecte le profil technique du projet (vani
 ## Désactivé
 - Plus aucune adaptation au type de projet.
 - Ton uniforme, l'IA ne sait pas si elle doit privilégier Studio ou dev.
+
+## Déclencheurs
+- Projet avec diagnostic technique connu, prompt parlant de Studio, dev custom, dette ou migration.
+
+## Séquence recommandée
+1. Lire le mode calculé (`vanilla`, `studio`, `dev`, `studio_dev`).
+2. Injecter le bloc factuel et le tuning de réponse.
+3. Orienter les autres skills vers Studio ou dépôt custom selon le mode.
+
+## Paramètres
+- Aucun paramètre utilisateur ; dépend du profil projet.
+
+## Pièges
+- Le mode n'est qu'un cadrage : vérifier les faits avec `inspect_studio` ou les skills repo.
+
+## Combinaisons
+- `inspect_studio` pour projets Studio.
+- `list_project_modules` et `search_project_source` pour projets dev.
+
+## Critères de réponse
+- Adapter le niveau de solution et signaler si le diagnostic projet est absent ou ancien.

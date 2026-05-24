@@ -34,3 +34,23 @@ Action déclenchée par le bouton « Rafraîchir » du panneau de contexte de l'
 ## Désactivé
 - Le bouton « Rafraîchir » disparaît du panneau de contexte.
 - L'assistant continue de fonctionner mais avec le contexte projet figé à la dernière régénération.
+
+## Déclencheurs
+- Clic utilisateur sur le bouton refresh du panneau contexte Assistant.
+
+## Séquence recommandée
+1. Exécuter les sous-étapes indépendamment.
+2. Conserver les succès même si une étape échoue.
+3. Afficher un résumé court et exploitable.
+
+## Paramètres
+- Profil, environnement actif, société active.
+
+## Pièges
+- Ne pas bloquer toute la mise à jour si le dépôt Git ou la clé IA échoue.
+
+## Combinaisons
+- `localization_detector` et `complexity_analyzer` alimentent le prochain contexte.
+
+## Critères de réponse
+- Toast clair : accès, repo, localisation, complexité, contexte régénéré.

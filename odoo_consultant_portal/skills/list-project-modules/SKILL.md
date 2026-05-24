@@ -40,3 +40,25 @@ Utilise `list_project_modules` pour lister modules custom, dépendances, fichier
 - Regarde `data`, `demo`, `assets`, `installable`, `application`.
 - Si un manifest est invalide, signale-le comme risque de packaging.
 - Complète avec `read_project_file` pour les modules les plus critiques.
+
+## Déclencheurs
+- Inventaire dépôt, modules custom, dépendances, migration, packaging.
+
+## Séquence recommandée
+1. Appelle `list_project_modules` à la racine.
+2. Trie les modules par dépendances métier et fichiers chargés.
+3. Lis les manifests ou fichiers critiques avec `read_project_file`.
+
+## Paramètres
+- `path`, `include_invalid`, `limit`.
+
+## Pièges
+- Manifest valide ne veut pas dire module installé.
+- `depends` révèle la surface touchée mais pas toute la logique.
+
+## Combinaisons
+- `search_project_source` pour trouver overrides.
+- `count_source_lines` pour volumétrie.
+
+## Critères de réponse
+- Donner modules, dépendances, fichiers data/security/assets et risques.

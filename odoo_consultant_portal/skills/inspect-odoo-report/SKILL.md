@@ -12,7 +12,7 @@ description_en: "Read the QWeb template, inheritance tree and layout of a PDF re
 requirement: Connexion Odoo active
 requirement_en: Active Odoo connection
 modes: [assistant, migration, creator]
-keywords: [rapport, report, pdf, qweb, template, xpath, facture pdf]
+keywords: [rapport, report, pdf, qweb, template, xpath, facture pdf, devis pdf, bon de livraison, layout, paperformat, logo]
 code_path: odoo_consultant_portal/skills/inspect-odoo-report/scripts/handler.py
 references_auto_load:
   - file: qweb_layout_internals.md
@@ -36,3 +36,30 @@ Utilise `inspect_odoo_report` pour lire action de rapport, template QWeb, hérit
 - Pour contenu document, hérite du template document.
 - Pour en-tête/pied de page, hérite du layout actif de la société.
 - En QWeb rapport, utilise `t-field` ou `t-out`, pas `<field name="..."/>`.
+
+## Déclencheurs
+- Rapport PDF, QWeb, xpath, layout, logo, mentions légales, paperformat.
+- Creator doit modifier un rapport.
+
+## Séquence recommandée
+1. Identifie `report_name` ou `model`.
+2. Appelle `inspect_odoo_report`.
+3. Lis les `qweb_archs` retournés avant de proposer un xpath.
+4. Croise avec `get_odoo_fields` si un champ doit être affiché.
+
+## Paramètres
+- `report_name`: rapport précis.
+- `model`: liste des rapports disponibles sur un modèle.
+
+## Pièges
+- Le template document et le layout société ne sont pas le même niveau.
+- Un xpath générique sur un souvenir de version est fragile.
+- Certains contenus viennent du layout ou paperformat, pas du rapport lui-même.
+
+## Combinaisons
+- `inspect_odoo_view` pour comprendre l'écran source.
+- `read_project_file` si un module custom hérite déjà du rapport.
+- `search_odoo_source` pour le template standard.
+
+## Critères de réponse
+- Donner template/action/layout/paperformat, preuve XML, et xpath proposé seulement si vérifié.

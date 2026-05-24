@@ -963,6 +963,41 @@ def test_security_custom_modules_routes_project_and_acl_playbooks():
     assert "read_project_file" in context
 
 
+def test_record_analysis_routes_live_data_bundle():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Analyse la commande sale.order SO001 avec toutes ses lignes",
+        perspective="technical",
+    )
+
+    assert "get_odoo_fields" in context
+    assert "query_odoo" in context
+    assert "count_odoo" in context
+
+
+def test_view_question_routes_view_menu_security_bundle():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Pourquoi ce champ est invisible sur l'écran formulaire et dans quel menu cliquer ?",
+        perspective="technical",
+    )
+
+    assert "inspect_menus_actions" in context
+    assert "inspect_odoo_view" in context
+    assert "inspect_security" in context
+
+
+def test_report_question_routes_report_bundle():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Analyse le rapport PDF facture et propose un xpath QWeb fiable",
+        perspective="technical",
+    )
+
+    assert "inspect_odoo_report" in context
+    assert "inspect_odoo_view" in context
+
+
 def test_skill_playbook_selection_is_not_capped_to_six_skills():
     context = load_context_for_prompt(
         "18.0",

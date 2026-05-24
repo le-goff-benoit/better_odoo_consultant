@@ -46,3 +46,24 @@ Utilise `git_show_commit` dès que l'utilisateur référence un SHA de commit.
 - Choisis le bon scope : `odoo`, `enterprise`, `target`, `project`.
 - Résume auteur, date, message, fichiers touchés, insertions/suppressions et impact.
 - Si le diff est tronqué, signale-le et propose une lecture ciblée d'un fichier.
+
+## Déclencheurs
+- SHA Git, commit, patch, diff, régression, "qu'est-ce qui a changé".
+
+## Séquence recommandée
+1. Choisis le scope.
+2. Appelle `git_show_commit`.
+3. Si le diff est long, lis les fichiers critiques avec le skill de lecture adapté.
+
+## Paramètres
+- `sha`, `scope`, `max_lines`.
+
+## Pièges
+- Ne jamais inférer le contenu d'un SHA sans l'outil.
+- Un diff tronqué ne suffit pas pour conclure sur tous les impacts.
+
+## Combinaisons
+- `read_odoo_file`, `read_target_file` ou `read_project_file` après identification des fichiers.
+
+## Critères de réponse
+- Auteur/date/message, fichiers, stats, impact et suite de vérification.

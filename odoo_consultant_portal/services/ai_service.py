@@ -25,8 +25,14 @@ log = logging.getLogger(__name__)
 
 _TOOL_QUERY = {
     "name": "query_odoo",
-    "description": "Rechercher des enregistrements dans Odoo (search_read). "
-                   "Utilise cet outil pour répondre à toute question sur les données.",
+    "description": (
+        "Rechercher des enregistrements dans Odoo (search_read) avec pagination automatique. "
+        "Utilise cet outil pour répondre à toute question sur les données. Par défaut "
+        "`limit=0` récupère tous les enregistrements visibles jusqu'à `max_records` "
+        "(défaut 5000) en pages de `page_size` (défaut 500). Le résultat retourne "
+        "toujours total_count/truncated/warning : ne présente jamais un résultat "
+        "truncated comme exhaustif."
+    ),
 }
 _TOOL_COUNT = {
     "name": "count_odoo",
@@ -267,9 +273,11 @@ TOOLS_CLAUDE = [
         "model":  {"type": "string", "description": "Modèle Odoo (ex: account.move, sale.order, res.partner)"},
         "domain": {"type": "array",  "description": "Domaine Odoo, ex: [[\"state\",\"=\",\"posted\"]]", "default": []},
         "fields": {"type": "array",  "items": {"type": "string"}, "description": "Champs à récupérer"},
-        "limit":  {"type": "integer", "description": "Nombre max de résultats (défaut 20, max 500)", "default": 20},
+        "limit":  {"type": "integer", "description": "Nombre max de résultats. 0 ou absent = exhaustif borné par max_records.", "default": 0},
         "offset": {"type": "integer", "description": "Décalage pour paginer un grand ensemble (défaut 0)", "default": 0},
         "order":  {"type": "string",  "description": "Tri, ex: 'date desc'", "default": ""},
+        "page_size": {"type": "integer", "description": "Taille de page XML-RPC (défaut 500, max 1000)", "default": 500},
+        "max_records": {"type": "integer", "description": "Plafond quand limit=0 (défaut 5000, max 20000)", "default": 5000},
     }}},
     {**_TOOL_COUNT, "input_schema": {"type": "object", "required": ["model"], "properties": {
         "model":  {"type": "string"},
@@ -339,9 +347,11 @@ TOOLS_OPENAI = [
         "model":  {"type": "string"},
         "domain": {"type": "array",   "items": {}, "default": []},
         "fields": {"type": "array",   "items": {"type": "string"}},
-        "limit":  {"type": "integer", "default": 20},
+        "limit":  {"type": "integer", "description": "0 ou absent = exhaustif borné par max_records.", "default": 0},
         "offset": {"type": "integer", "default": 0},
         "order":  {"type": "string",  "default": ""},
+        "page_size": {"type": "integer", "default": 500},
+        "max_records": {"type": "integer", "default": 5000},
     }}}},
     {"type": "function", "function": {**_TOOL_COUNT, "parameters": {"type": "object", "required": ["model"], "properties": {
         "model":  {"type": "string"},
@@ -411,6 +421,7 @@ TOOLS_GEMINI = [
                  "model":  {"type": "string"},  "domain": {"type": "array"},
                  "fields": {"type": "array"},   "limit":  {"type": "integer"},
                  "offset": {"type": "integer"}, "order":  {"type": "string"},
+                 "page_size": {"type": "integer"}, "max_records": {"type": "integer"},
              }}},
             {"name": "count_odoo",   "description": _TOOL_COUNT["description"],
              "parameters": {"type": "object", "required": ["model"], "properties": {
@@ -1036,7 +1047,10 @@ def _compress_tool_result(result: dict) -> str:
            else _MAX_TOOL_RESULT_HISTORY_CHARS)
     if len(raw) <= cap:
         return raw
-    suffix = "...[résultat tronqué dans l'historique — complet dans le panneau contextuel]"
+    suffix = (
+        "...[résultat tronqué/compressé avant renvoi au modèle — le résultat complet a été "
+        "streamé à l'interface ; ne conclus pas que les records absents n'existent pas]"
+    )
     return raw[: cap - len(suffix)] + suffix
 
 
@@ -1713,6 +1727,22 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
         return await handler.run(args, ctx)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+async def _search_odoo_source(args: dict, source_path: str) -> dict:
+    """Backward-compatible wrapper for tests/legacy callers.
+
+    Runtime tool execution now goes through `skills/search-odoo-source`, but
+    older tests import this helper from ai_service directly.
+    """
+    from odoo_consultant_portal.skills._shared.source_search import search
+    return await search(args, source_path, include_enterprise=True)
+
+
+async def _read_odoo_file(args: dict, source_path: str) -> dict:
+    """Backward-compatible wrapper for tests/legacy callers."""
+    from odoo_consultant_portal.skills._shared.source_search import read_file
+    return await read_file(args, source_path, include_enterprise=True)
 
 
 # ── Claude ───────────────────────────────────────────────────────
