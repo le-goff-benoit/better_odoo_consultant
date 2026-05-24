@@ -13,7 +13,7 @@ import WorkspaceShell from '../components/WorkspaceShell'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
-import Markdown from '../components/Markdown'
+import Markdown, { MarkdownActionsProvider } from '../components/Markdown'
 import AiSelector from '../components/AiSelector'
 import { useWorkspaceContext } from '../components/Layout'
 import { PROVIDERS } from '../constants/providers'
@@ -737,10 +737,11 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, onAskMore }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, onAskMore, onPromptAction }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   onAskMore?: (selectedText: string) => void
+  onPromptAction?: (prompt: string) => void
 }) {
   const lang = useUiLanguage()
   const c = lang === 'en'
@@ -840,7 +841,11 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
                 {copied === 'md' ? <CheckCheck size={13} /> : <Code size={13} />}
               </button>
             </div>
-            <div ref={markdownRef}><Markdown text={textEvt.content} /></div>
+            <div ref={markdownRef}>
+              <MarkdownActionsProvider onPromptAction={onPromptAction}>
+                <Markdown text={textEvt.content} />
+              </MarkdownActionsProvider>
+            </div>
           </div>
         )}
 
@@ -1744,6 +1749,7 @@ export default function Migration() {
                 inputTokens={m.inputTokens}
                 outputTokens={m.outputTokens}
                 onAskMore={askMoreOnSelection}
+                onPromptAction={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
               />
             </div>
           )

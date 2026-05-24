@@ -10,8 +10,8 @@ interface Profile { id: number; name: string }
 export default function Query() {
   const lang = useUiLanguage()
   const c = lang === 'en'
-    ? { title: 'Query', description: 'Read live Odoo records from a configured project; large results are fetched safely with pagination.', profile: 'Profile', select: 'Select a project', model: 'Model', modelHint: 'Example: res.partner, sale.order, account.move', exportAs: 'Export as', none: 'None', loadFields: 'Load fields', loading: 'Loading…', search: 'Search', fields: 'Fields', more: 'more', records: 'records', result: 'Result preview', noResult: 'Run a search to preview records or an export.', shownOf: 'shown of' }
-    : { title: 'Requêtes', description: 'Lisez des enregistrements Odoo en direct ; les gros volumes sont récupérés proprement par pagination.', profile: 'Profil', select: 'Sélectionner un projet', model: 'Modèle', modelHint: 'Exemple : res.partner, sale.order, account.move', exportAs: 'Exporter en', none: 'Aucun', loadFields: 'Charger les champs', loading: 'Chargement…', search: 'Rechercher', fields: 'Champs', more: 'en plus', records: 'enregistrements', result: 'Aperçu du résultat', noResult: 'Lancez une recherche pour prévisualiser les enregistrements ou un export.', shownOf: 'affichés sur' }
+    ? { title: 'Query', description: 'Read live Odoo records from a configured project; large results are fetched safely with pagination.', profile: 'Profile', select: 'Select a project', model: 'Model', modelHint: 'Example: res.partner, sale.order, account.move', exportAs: 'Export as', none: 'None', loadFields: 'Load fields', loading: 'Loading…', search: 'Search', fields: 'Fields', more: 'more', records: 'records', result: 'Result preview', noResult: 'Run a search to preview records or an export.', shownOf: 'fetched of', preview: 'Preview: first 20 fetched records shown below.' }
+    : { title: 'Requêtes', description: 'Lisez des enregistrements Odoo en direct ; les gros volumes sont récupérés proprement par pagination.', profile: 'Profil', select: 'Sélectionner un projet', model: 'Modèle', modelHint: 'Exemple : res.partner, sale.order, account.move', exportAs: 'Exporter en', none: 'Aucun', loadFields: 'Charger les champs', loading: 'Chargement…', search: 'Rechercher', fields: 'Champs', more: 'en plus', records: 'enregistrements', result: 'Aperçu du résultat', noResult: 'Lancez une recherche pour prévisualiser les enregistrements ou un export.', shownOf: 'récupérés sur', preview: 'Aperçu : seuls les 20 premiers records récupérés sont affichés ci-dessous.' }
   const { data: profilesData } = useQuery({ queryKey: ['profiles'], queryFn: listProfiles })
   const profiles: Profile[] = profilesData?.data ?? []
   const [profileId, setProfileId] = useState<number | ''>('')
@@ -96,7 +96,10 @@ export default function Query() {
               {result.warning && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--th-warning-fg)' }}>{result.warning}</p>}
               {result.export && <pre className="ui-code-block">{result.export}</pre>}
               {result.records && !result.export && (
-                <pre className="ui-code-block">{JSON.stringify(result.records.slice(0, 5), null, 2)}</pre>
+                <>
+                  <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--th-muted)' }}>{c.preview}</p>
+                  <pre className="ui-code-block">{JSON.stringify(result.records.slice(0, 20), null, 2)}</pre>
+                </>
               )}
             </>
           )}

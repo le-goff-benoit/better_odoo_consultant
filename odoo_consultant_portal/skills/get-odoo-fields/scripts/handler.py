@@ -30,7 +30,12 @@ async def run(args: dict[str, Any], ctx) -> dict[str, Any]:
         return {"ok": True, "model": args["model"], "fields": detail,
                 **({"missing": missing} if missing else {})}
 
-    # Condensed index — prioritize custom (x_*) and relational fields, cap to 150.
+    try:
+        max_fields = max(50, min(int(args.get("max_fields") or 150), 1000))
+    except (TypeError, ValueError):
+        max_fields = 150
+
+    # Condensed index — prioritize custom (x_*) and relational fields.
     def _priority(item):
         fname, v = item
         t = v.get("type") or ""
@@ -39,7 +44,7 @@ async def run(args: dict[str, Any], ctx) -> dict[str, Any]:
         return (0 if is_custom else (1 if is_rel else 2), fname)
     ordered = sorted(raw.items(), key=_priority)
     condensed = {}
-    for fname, v in ordered[:150]:
+    for fname, v in ordered[:max_fields]:
         entry = {"label": v.get("string"), "type": v.get("type")}
         rel = v.get("relation")
         if rel:
@@ -48,8 +53,15 @@ async def run(args: dict[str, Any], ctx) -> dict[str, Any]:
         if rel_f:
             entry["relation_field"] = rel_f
         condensed[fname] = entry
+    truncated = len(raw) > len(condensed)
     return {"ok": True, "model": args["model"],
             "total_fields": len(raw), "fields": condensed,
-            "note": ("Index condensé (max 150, custom + relations en tête). "
+            "returned_fields": len(condensed),
+            "max_fields": max_fields,
+            "truncated": truncated,
+            "warning": (f"Index champs condensé : {len(condensed)} champs retournés sur {len(raw)}. "
+                        "Relance avec field_names=[...] pour le détail complet ou augmente max_fields.")
+                       if truncated else None,
+            "note": ("Custom + relations sont priorisés dans l'index condensé. "
                      "Rappelle get_odoo_fields avec field_names=[...] pour le détail complet.")
-                    if len(raw) > 150 else None}
+                    if truncated else None}

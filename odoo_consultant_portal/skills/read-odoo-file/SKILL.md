@@ -45,7 +45,8 @@ Utilise `read_odoo_file` après une recherche source pour lire l'implémentation
 3. Élargis seulement si les dépendances locales sont nécessaires.
 
 ## Paramètres
-- `path`, `start_line`, `end_line`.
+- `path`, `start_line`, `end_line`, `max_lines`.
+- Le retour contient `returned_lines`, `total_lines`, `truncated`, `warning`. Si `truncated=true`, relance avec une fenêtre suivante ou `max_lines` plus grand.
 
 ## Pièges
 - Ne cite pas un extrait hors contexte.

@@ -124,6 +124,10 @@ async def search(args: dict, source_path: str, include_enterprise: bool = True) 
     sub_path   = args.get("path", "") or ""
     file_types = args.get("file_types") or ["*.py"]
     case_sensitive = args.get("case_sensitive", True)
+    try:
+        max_matches = max(50, min(int(args.get("max_matches") or 500), 5000))
+    except (TypeError, ValueError):
+        max_matches = 500
 
     if not pattern or not pattern.strip():
         return {"ok": False, "error": "pattern manquant"}
@@ -139,7 +143,7 @@ async def search(args: dict, source_path: str, include_enterprise: bool = True) 
     grep_args = ["grep", "-r", "-n"]
     if not case_sensitive:
         grep_args.append("-i")
-    grep_args += ["-m", "200", *includes, pattern, *search_dirs]
+    grep_args += ["-m", str(max_matches), *includes, pattern, *search_dirs]
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -155,7 +159,7 @@ async def search(args: dict, source_path: str, include_enterprise: bool = True) 
     total_lines = len(raw_lines)
 
     by_file: dict = {}
-    for line in raw_lines[:200]:
+    for line in raw_lines[:max_matches]:
         parts = line.split(":", 2)
         if len(parts) < 3:
             continue
@@ -184,14 +188,21 @@ async def search(args: dict, source_path: str, include_enterprise: bool = True) 
             "suggestions": suggestions or None,
         }
 
-    truncated = total_lines > 200
+    truncated = total_lines > max_matches
     return {
         "ok": True,
         "matches": total_lines,
+        "returned_matches": sum(len(matches) for matches in by_file.values()),
+        "max_matches": max_matches,
         "files_count": len(by_file),
         "files": by_file,
         "truncated": truncated,
-        "note": "Résultats tronqués à 200 lignes — affinez le pattern ou utilisez path=." if truncated else None,
+        "warning": (
+            f"Résultats source bornés à {max_matches} lignes sur {total_lines} vues. "
+            "Affinez le pattern/path ou augmente max_matches pour poursuivre."
+            if truncated else None
+        ),
+        "note": "Recherche exhaustive sur la sortie collectée." if not truncated else None,
     }
 
 
@@ -199,6 +210,10 @@ async def read_file(args: dict, source_path: str, include_enterprise: bool = Tru
     rel_path   = args.get("path", "")
     start_line = max(1, int(args.get("start_line") or 1))
     end_line   = int(args.get("end_line") or 0)
+    try:
+        max_lines = max(50, min(int(args.get("max_lines") or 1000), 5000))
+    except (TypeError, ValueError):
+        max_lines = 1000
 
     file_abs = safe_source_path(source_path, rel_path, include_enterprise=include_enterprise)
     if not file_abs:
@@ -214,8 +229,9 @@ async def read_file(args: dict, source_path: str, include_enterprise: bool = Tru
 
     total = len(all_lines)
     s = start_line - 1
-    e = end_line if end_line > 0 else s + 150
-    e = min(e, s + 200, total)
+    requested_end = end_line if end_line > 0 else s + max_lines
+    e = min(requested_end, s + max_lines, total)
+    truncated = requested_end > e or (end_line <= 0 and e < total)
 
     content = "".join(all_lines[s:e])
     return {
@@ -224,5 +240,13 @@ async def read_file(args: dict, source_path: str, include_enterprise: bool = Tru
         "start_line": s + 1,
         "end_line":   e,
         "total_lines": total,
+        "returned_lines": max(e - s, 0),
+        "max_lines": max_lines,
+        "truncated": truncated,
+        "warning": (
+            f"Lecture partielle : lignes {s + 1}-{e} sur {total}. "
+            "Relance avec start_line/end_line ou augmente max_lines pour lire la suite."
+            if truncated else None
+        ),
         "content":    content,
     }

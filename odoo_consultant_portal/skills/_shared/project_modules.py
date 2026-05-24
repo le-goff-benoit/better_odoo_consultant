@@ -47,6 +47,7 @@ def list_project_modules(repo_path: str, *, path: str = "", include_invalid: boo
     modules: list[dict[str, Any]] = []
     invalid: list[dict[str, str]] = []
     scanned = 0
+    valid_total = 0
     base = Path(repo_path).resolve()
 
     for current, dirs, files in os.walk(root):
@@ -61,6 +62,9 @@ def list_project_modules(repo_path: str, *, path: str = "", include_invalid: boo
         if error or data is None:
             if include_invalid:
                 invalid.append({"path": str(manifest_path.resolve().relative_to(base)), "error": error or "Manifest invalide"})
+            continue
+        valid_total += 1
+        if len(modules) >= limit:
             continue
         modules.append({
             "technical_name": Path(current).name,
@@ -78,16 +82,23 @@ def list_project_modules(repo_path: str, *, path: str = "", include_invalid: boo
             "installable": data.get("installable", True),
             "application": bool(data.get("application")),
         })
-        if len(modules) >= limit:
-            break
 
     modules.sort(key=lambda m: (str(m["path"]).count(os.sep), str(m["technical_name"])))
+    truncated = valid_total > len(modules)
     return {
         "ok": True,
         "repo_path": repo_path,
         "sub_path": path or ".",
         "scanned_manifests": scanned,
+        "total_modules": valid_total,
+        "returned_modules": len(modules),
+        "limit": limit,
         "modules": modules,
         "invalid_manifests": invalid,
-        "truncated": len(modules) >= limit,
+        "truncated": truncated,
+        "warning": (
+            f"Liste modules bornée à {len(modules)} sur {valid_total}. "
+            "Relance avec un path plus précis ou augmente limit."
+            if truncated else None
+        ),
     }

@@ -57,6 +57,7 @@ Utilise `git_show_commit` dès que l'utilisateur référence un SHA de commit.
 
 ## Paramètres
 - `sha`, `scope`, `max_lines`.
+- Défaut `max_lines=2000`, maximum 10000. Vérifie `returned_diff_lines`, `diff_lines`, `truncated`, `warning`.
 
 ## Pièges
 - Ne jamais inférer le contenu d'un SHA sans l'outil.

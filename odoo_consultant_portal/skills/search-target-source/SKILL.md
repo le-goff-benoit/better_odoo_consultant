@@ -42,7 +42,8 @@ Utilise `search_target_source` pour vérifier un symbole, modèle, champ ou comp
 3. Lis les deux implémentations si le résultat impacte une décision.
 
 ## Paramètres
-- `pattern`, `path`, `file_types`, `case_sensitive`.
+- `pattern`, `path`, `file_types`, `case_sensitive`, `max_matches`.
+- Vérifie `returned_matches`, `truncated`, `warning` avant de conclure qu'un symbole n'existe plus côté cible.
 
 ## Pièges
 - Absence de résultat ne prouve pas suppression : chercher variantes et modules déplacés.

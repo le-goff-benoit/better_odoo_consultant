@@ -46,7 +46,9 @@ Utilise `inspect_menus_actions` pour retrouver comment accéder à un écran dan
 4. Appelle `inspect_security` si le menu/action manque.
 
 ## Paramètres
-- `model`, `query`, `limit`.
+- `model`, `query`, `limit`, `max_records`.
+- `limit=0` ou absent : actions et menus sont paginés jusqu'à `max_records`.
+- Vérifie `actions_meta`, `menus_meta`, `truncated` et `warning` avant de dire qu'aucun menu/action supplémentaire n'existe.
 
 ## Pièges
 - Un menu peut exister mais être caché par groupes.

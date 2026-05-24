@@ -51,6 +51,8 @@ Utilise `list_project_modules` pour lister modules custom, dépendances, fichier
 
 ## Paramètres
 - `path`, `include_invalid`, `limit`.
+- Le scan compte tous les manifests (`scanned_manifests`, `total_modules`) puis borne seulement la liste retournée (`returned_modules`, `truncated`, `warning`).
+- Si `truncated=true`, ne conclus pas que les modules absents de la liste n'existent pas.
 
 ## Pièges
 - Manifest valide ne veut pas dire module installé.

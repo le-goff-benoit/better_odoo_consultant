@@ -16,7 +16,7 @@
 **Pourquoi ces arguments** :
 - Pas de `path` : on parse tout le repo. Si le client a une convention (`modules-custom/` ou `local-src/`), restreindre via `path="modules-custom"`.
 - `include_invalid=true` : on veut voir les manifests cassés (typos, AST invalide) plutôt que les masquer — ils sont souvent la cause de modules « qui ne s'installent pas ».
-- `limit=300` : confortable pour la quasi-totalité des projets. Augmenter à 1000 pour des monorepos énormes.
+- `limit=300` : borne seulement la liste retournée. Le scan continue à compter `scanned_manifests` / `total_modules`; vérifier `truncated` avant de conclure.
 
 **Résultat retourné** :
 ```json

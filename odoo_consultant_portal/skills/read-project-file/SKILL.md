@@ -42,7 +42,8 @@ Utilise `read_project_file` pour confirmer l'implémentation exacte d'un module 
 3. Croise l'effet live avec `inspect_odoo_view` ou `inspect_security`.
 
 ## Paramètres
-- `path`, `start_line`, `end_line`.
+- `path`, `start_line`, `end_line`, `max_lines`.
+- Le retour contient `returned_lines`, `total_lines`, `truncated`, `warning`. Si `truncated=true`, relance avec une fenêtre suivante ou `max_lines` plus grand.
 
 ## Pièges
 - Un fichier data peut être chargé sous conditions ou en démo.

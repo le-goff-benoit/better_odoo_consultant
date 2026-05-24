@@ -48,6 +48,7 @@ Utilise `count_source_lines` pour mesurer LOC par extension, module ou dossier.
 ## Pièges
 - Une volumétrie n'est pas une complexité métier.
 - Les résultats de recherche source ne remplacent jamais ce comptage exhaustif.
+- Si `groups_truncated=true`, les totaux restent exhaustifs mais la répartition `by_group` est bornée : annoncer `warning`.
 
 ## Combinaisons
 - `list_project_modules` pour relier LOC et dépendances.

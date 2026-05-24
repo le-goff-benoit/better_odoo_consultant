@@ -15,16 +15,16 @@ async def show_commit(args: dict, source_path: Optional[str], repo_path: Optiona
 
     Tolerates shallow clones by deepening on demand (up to 3 × --deepen 500) when
     the SHA is unknown. Returns structured stats plus the textual diff capped to
-    ``max_lines``.
+    ``max_lines`` with explicit metadata when bounded.
     """
     sha = (args.get("sha") or "").strip()
     scope = (args.get("scope") or "").strip().lower()
     max_lines_raw = args.get("max_lines")
     try:
-        max_lines = int(max_lines_raw) if max_lines_raw is not None else 400
+        max_lines = int(max_lines_raw) if max_lines_raw is not None else 2000
     except (TypeError, ValueError):
-        max_lines = 400
-    max_lines = max(50, min(max_lines, 2000))
+        max_lines = 2000
+    max_lines = max(50, min(max_lines, 10000))
 
     if not sha or not _SHA_RE.match(sha):
         return {"ok": False, "error": "SHA invalide (7 à 40 caractères hexadécimaux attendus)."}
@@ -138,8 +138,13 @@ async def show_commit(args: dict, source_path: Optional[str], repo_path: Optiona
         "files": files,
         "diff": diff_text,
         "diff_lines": len(diff_lines),
+        "returned_diff_lines": min(len(diff_lines), max_lines),
+        "max_lines": max_lines,
         "truncated": truncated,
+        "warning": (f"Diff borné à {max_lines} lignes sur {len(diff_lines)}. "
+                    "Augmente max_lines (max 10000) ou inspecte les fichiers listés."
+                    if truncated else None),
         "deepened": deepened or None,
-        "note": (f"Diff tronqué à {max_lines} lignes — augmentez max_lines (max 2000) ou demandez un fichier précis."
+        "note": (f"Diff tronqué à {max_lines} lignes — augmentez max_lines (max 10000) ou demandez un fichier précis."
                  if truncated else None),
     }

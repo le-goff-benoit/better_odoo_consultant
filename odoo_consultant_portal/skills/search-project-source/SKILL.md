@@ -52,6 +52,8 @@ Utilise `search_project_source` pour trouver overrides, modèles custom, vues XM
 - `pattern`: texte ou regex utile.
 - `path`: sous-dossier module si connu.
 - `file_types`: `*.py`, `*.xml`, `*.csv`, `__manifest__.py` selon la question.
+- `max_matches`: nombre max de lignes retournées.
+- Vérifie `returned_matches`, `truncated`, `warning` avant de conclure qu'une occurrence n'existe pas.
 
 ## Pièges
 - Ne cherche pas un nom de fichier comme contenu sauf intention explicite.

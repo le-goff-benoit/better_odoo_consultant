@@ -6,11 +6,18 @@ import { t } from '../theme'
 // Lets a parent renderer hand the Markdown subtree a callback so the
 // MarkdownTable "edit with AI" button can dispatch a contextualised prompt
 // back to the assistant composer.
-const MarkdownActionsCtx = createContext<{ onEditTable?: (prompt: string) => void }>({})
+const MarkdownActionsCtx = createContext<{
+  onEditTable?: (prompt: string) => void
+  onPromptAction?: (prompt: string) => void
+}>({})
 export function MarkdownActionsProvider({
-  onEditTable, children,
-}: { onEditTable?: (prompt: string) => void; children: React.ReactNode }) {
-  return <MarkdownActionsCtx.Provider value={{ onEditTable }}>{children}</MarkdownActionsCtx.Provider>
+  onEditTable, onPromptAction, children,
+}: {
+  onEditTable?: (prompt: string) => void
+  onPromptAction?: (prompt: string) => void
+  children: React.ReactNode
+}) {
+  return <MarkdownActionsCtx.Provider value={{ onEditTable, onPromptAction }}>{children}</MarkdownActionsCtx.Provider>
 }
 
 // ── Markdown table with CSV export ────────────────────────────
@@ -239,10 +246,58 @@ export function inlineMarkdown(text: string): React.ReactNode {
   })
 }
 
+const ACTION_HEADING_RE = /\b(prochaines?\s+actions?|points?\s+d['’]actions?|actions?\s+à\s+faire|next\s+actions?|action\s+items?|todo)\b/i
+
+function stripMarkdownInline(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim()
+}
+
+function actionPrompt(actionText: string): string {
+  return [
+    "Réalise ce point d'action de ta réponse précédente :",
+    '',
+    actionText,
+    '',
+    "Utilise les outils nécessaires et restitue le résultat directement.",
+  ].join('\n')
+}
+
+function isListLine(line: string): boolean {
+  return /^[-*]\s+(.+)/.test(line) || /^(\d+)\.\s+(.+)/.test(line)
+}
+
+function nextContentLine(lines: string[], start: number): string {
+  for (let idx = start; idx < lines.length; idx++) {
+    if (lines[idx].trim()) return lines[idx]
+  }
+  return ''
+}
+
+function ActionPromptButton({ actionText }: { actionText: string }) {
+  const { onPromptAction } = useContext(MarkdownActionsCtx)
+  if (!onPromptAction) return null
+  return (
+    <button
+      type="button"
+      className="markdown-action-item-button"
+      title="Demander à l'IA de réaliser cette action"
+      aria-label="Demander à l'IA de réaliser cette action"
+      onClick={() => onPromptAction(actionPrompt(stripMarkdownInline(actionText)))}
+    >
+      <Send size={11} />
+    </button>
+  )
+}
+
 export default function Markdown({ text }: { text: string }) {
   const lines = text.split('\n')
   const result: React.ReactNode[] = []
   let i = 0
+  let inActionList = false
 
   while (i < lines.length) {
     const line = lines[i]
@@ -272,6 +327,7 @@ export default function Markdown({ text }: { text: string }) {
       const sizes = [18, 16, 14, 13, 12, 12]
       const margins = ['14px 0 4px', '12px 0 4px', '10px 0 3px', '8px 0 3px', '8px 0 3px', '8px 0 3px']
       const level = hMatch[1].length
+      inActionList = ACTION_HEADING_RE.test(stripMarkdownInline(hMatch[2]))
       result.push(<div key={i} style={{
         fontSize: sizes[level - 1], fontWeight: 700, color: t.text, margin: margins[level - 1],
       }}>{hMatch[2]}</div>)
@@ -283,7 +339,8 @@ export default function Markdown({ text }: { text: string }) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
           <span style={{ color: t.brandFg, flexShrink: 0 }}>•</span>
-          <span>{inlineMarkdown(listMatch[1])}</span>
+          <span className={inActionList ? 'markdown-action-item-text' : undefined}>{inlineMarkdown(listMatch[1])}</span>
+          {inActionList && <ActionPromptButton actionText={listMatch[1]} />}
         </div>
       )
       i++; continue
@@ -294,7 +351,8 @@ export default function Markdown({ text }: { text: string }) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
           <span style={{ color: t.brandFg, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
-          <span>{inlineMarkdown(olMatch[2])}</span>
+          <span className={inActionList ? 'markdown-action-item-text' : undefined}>{inlineMarkdown(olMatch[2])}</span>
+          {inActionList && <ActionPromptButton actionText={olMatch[2]} />}
         </div>
       )
       i++; continue
@@ -302,6 +360,16 @@ export default function Markdown({ text }: { text: string }) {
 
     if (!line.trim()) { result.push(<div key={i} style={{ height: 8 }} />); i++; continue }
 
+    if (
+      ACTION_HEADING_RE.test(stripMarkdownInline(line))
+      && isListLine(nextContentLine(lines, i + 1))
+    ) {
+      inActionList = true
+      result.push(<p key={i} style={{ margin: '0 0 4px', fontWeight: 700 }}>{inlineMarkdown(line)}</p>)
+      i++; continue
+    }
+
+    inActionList = false
     result.push(<p key={i} style={{ margin: '0 0 4px' }}>{inlineMarkdown(line)}</p>)
     i++
   }

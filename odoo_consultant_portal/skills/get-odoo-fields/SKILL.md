@@ -50,6 +50,8 @@ Utilise `get_odoo_fields` pour inspecter les champs d'un modèle Odoo.
 ## Paramètres
 - `model`: modèle exact.
 - `field_names`: liste courte quand tu veux les métadonnées détaillées.
+- `max_fields`: taille de l'index condensé sans `field_names` (défaut 150, max 1000).
+- Vérifie `truncated` / `warning` : si l'index est borné, ne conclus pas qu'un champ absent n'existe pas sans `field_names` ou `max_fields` plus grand.
 
 ## Pièges
 - Le label affiché n'est pas le nom technique.

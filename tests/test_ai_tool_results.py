@@ -17,3 +17,27 @@ def test_large_non_record_result_is_truncated():
     result = {"ok": True, "matches": ["x" * 60 for _ in range(200)]}
     out = _compress_tool_result(result)
     assert "tronqué" in out
+
+
+def test_large_studio_inventory_is_kept_for_model_reasoning():
+    result = {
+        "ok": True,
+        "studio_views": {
+            "count": 220,
+            "total_count": 220,
+            "truncated": False,
+            "items": [
+                {
+                    "id": i,
+                    "name": f"Studio PDF report {i}",
+                    "model": "sale.order",
+                    "type": "qweb",
+                    "key": f"studio_customization.report_{i}",
+                }
+                for i in range(220)
+            ],
+        },
+    }
+    out = _compress_tool_result(result, "inspect_studio")
+    assert "Studio PDF report 219" in out
+    assert "tronqué" not in out

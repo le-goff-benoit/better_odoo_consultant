@@ -11,11 +11,15 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any, Optional
 
+from .odoo_pagination import search_read_bounded
+
 # QWeb report templates reference each other through t-call; the AI must see
 # the real arch (classes, t-fields, table structure) to write valid xpath.
 _TCALL_RE = re.compile(r't-call="([\w.]+)"')
-_QWEB_ARCH_CAP = 8000
+_QWEB_ARCH_CAP = 50_000
 _QWEB_MAX_TEMPLATES = 5
+_QWEB_SUMMARY_ITEM_CAP = 400
+_QWEB_TEXT_VALUE_CAP = 300
 
 
 # Field attributes that matter when explaining "how is this field configured
@@ -162,6 +166,133 @@ def _summarize_arch(arch: str) -> dict[str, Any]:
     }
 
 
+def _local_tag(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _clean_text(value: Optional[str]) -> str:
+    text = " ".join((value or "").split())
+    if len(text) > _QWEB_TEXT_VALUE_CAP:
+        return text[:_QWEB_TEXT_VALUE_CAP] + "…"
+    return text
+
+
+def _append_unique(items: list[dict[str, Any]], seen: set[tuple], item: dict[str, Any], key: tuple) -> bool:
+    if key in seen:
+        return False
+    seen.add(key)
+    if len(items) >= _QWEB_SUMMARY_ITEM_CAP:
+        return True
+    items.append(item)
+    return False
+
+
+def _summarize_qweb_arch(arch: str) -> dict[str, Any]:
+    """Extract an exhaustive-enough QWeb map from the full arch, not the capped copy."""
+    try:
+        root = ET.fromstring(arch)
+    except Exception as exc:
+        return {"parse_error": str(exc), "arch_chars": len(arch)}
+
+    visible_text: list[dict[str, Any]] = []
+    field_refs: list[dict[str, Any]] = []
+    output_refs: list[dict[str, Any]] = []
+    foreach_blocks: list[dict[str, Any]] = []
+    t_calls: list[str] = []
+    tables: list[dict[str, Any]] = []
+    seen_text: set[tuple] = set()
+    seen_field: set[tuple] = set()
+    seen_output: set[tuple] = set()
+    seen_foreach: set[tuple] = set()
+    seen_calls: set[str] = set()
+    summary_truncated = False
+
+    for el in root.iter():
+        tag = _local_tag(el.tag)
+        text = _clean_text(el.text)
+        if text:
+            summary_truncated |= _append_unique(
+                visible_text,
+                seen_text,
+                {"tag": tag, "text": text},
+                (tag, text),
+            )
+        field_expr = el.get("t-field")
+        if field_expr:
+            summary_truncated |= _append_unique(
+                field_refs,
+                seen_field,
+                {"tag": tag, "expr": field_expr, "class": el.get("class")},
+                (tag, field_expr, el.get("class")),
+            )
+        for attr in ("t-out", "t-esc", "t-raw"):
+            expr = el.get(attr)
+            if expr:
+                summary_truncated |= _append_unique(
+                    output_refs,
+                    seen_output,
+                    {"tag": tag, "attr": attr, "expr": expr, "class": el.get("class")},
+                    (tag, attr, expr, el.get("class")),
+                )
+        foreach_expr = el.get("t-foreach")
+        if foreach_expr:
+            summary_truncated |= _append_unique(
+                foreach_blocks,
+                seen_foreach,
+                {"tag": tag, "expr": foreach_expr, "as": el.get("t-as"), "class": el.get("class")},
+                (tag, foreach_expr, el.get("t-as"), el.get("class")),
+            )
+        call = el.get("t-call")
+        if call and call not in seen_calls:
+            seen_calls.add(call)
+            if len(t_calls) >= _QWEB_SUMMARY_ITEM_CAP:
+                summary_truncated = True
+            else:
+                t_calls.append(call)
+
+    for table in root.iter():
+        if _local_tag(table.tag) != "table":
+            continue
+        headers: list[str] = []
+        refs: list[str] = []
+        for node in table.iter():
+            tag = _local_tag(node.tag)
+            if tag == "th":
+                label = _clean_text(" ".join(node.itertext()))
+                if label and label not in headers:
+                    headers.append(label)
+            for attr in ("t-field", "t-out", "t-esc", "t-raw"):
+                expr = node.get(attr)
+                if expr and expr not in refs:
+                    refs.append(expr)
+        if len(tables) >= _QWEB_SUMMARY_ITEM_CAP:
+            summary_truncated = True
+            break
+        tables.append({
+            "class": table.get("class"),
+            "headers": headers,
+            "expressions": refs,
+        })
+
+    return {
+        "arch_chars": len(arch),
+        "root_tag": _local_tag(root.tag),
+        "visible_text_count": len(seen_text),
+        "field_ref_count": len(seen_field),
+        "output_ref_count": len(seen_output),
+        "foreach_count": len(seen_foreach),
+        "t_call_count": len(seen_calls),
+        "table_count": len(tables),
+        "summary_truncated": summary_truncated,
+        "visible_text": visible_text,
+        "field_refs": field_refs,
+        "output_refs": output_refs,
+        "foreach_blocks": foreach_blocks,
+        "t_calls": t_calls,
+        "tables": tables,
+    }
+
+
 async def _assembled_view(odoo, model: str, view_type: str, view_id: Optional[int]) -> Optional[dict]:
     """Return the assembled view dict — get_view (Odoo 16+) with a
     fields_view_get fallback (Odoo 15)."""
@@ -190,8 +321,11 @@ async def inspect_odoo_view(
         return {"ok": False, "error": "Paramètre 'model' manquant."}
 
     try:
-        rows = await _run(lambda: odoo.search_read(
-            "ir.ui.view", [["model", "=", model]], ["type"], limit=400))
+        loop = asyncio.get_event_loop()
+        rows, view_type_meta = await search_read_bounded(
+            loop, odoo, "ir.ui.view", [["model", "=", model]], ["type"],
+            max_records=5000, label="Types de vues",
+        )
     except Exception as exc:
         return {"ok": False, "error": f"Lecture des vues impossible : {exc}"}
     available = sorted({r.get("type") for r in rows if r.get("type")})
@@ -219,17 +353,27 @@ async def inspect_odoo_view(
         view_meta = {"type": vt, "error": f"Vue de type '{vt}' indisponible pour ce modèle."}
 
     access_paths: list[dict] = []
+    access_meta: dict[str, Any] = {}
     try:
-        actions = await _run(lambda: odoo.search_read(
+        loop = asyncio.get_event_loop()
+        actions, actions_meta = await search_read_bounded(
+            loop,
+            odoo,
             "ir.actions.act_window", [["res_model", "=", model]],
-            ["name", "view_mode"], limit=20))
+            ["name", "view_mode"], max_records=1000, label="Actions fenêtre",
+        )
+        access_meta["actions"] = actions_meta
         if actions:
             # One batched menu query for all actions — avoids N sequential
             # XML-RPC round-trips (one per action).
             refs = [f"ir.actions.act_window,{a['id']}" for a in actions]
-            menus = await _run(lambda: odoo.search_read(
+            menus, menus_meta = await search_read_bounded(
+                loop,
+                odoo,
                 "ir.ui.menu", [["action", "in", refs]],
-                ["complete_name", "action"], limit=100))
+                ["complete_name", "action"], max_records=1000, label="Menus",
+            )
+            access_meta["menus"] = menus_meta
             by_ref: dict[str, list[str]] = {}
             for m in menus:
                 ref = m.get("action")
@@ -251,20 +395,24 @@ async def inspect_odoo_view(
         "model": model,
         "requested_view_type": vt,
         "available_view_types": available,
+        "available_view_types_meta": view_type_meta,
         "view": view_meta,
         "arch_summary": arch_summary,
+        "access_meta": access_meta,
         "access_paths": access_paths,
     }
 
 
-async def _collect_qweb_archs(odoo, seed_keys: list[str]) -> dict[str, str]:
+async def _collect_qweb_archs(odoo, seed_keys: list[str]) -> tuple[dict[str, str], dict[str, Any], dict[str, Any]]:
     """Breadth-first walk over t-call references starting from *seed_keys*.
 
-    Returns ``{template_key: arch}`` (each capped) so the AI can target xpath
-    against the real report structure — the document template and the layout
-    are reached through the report template's t-call chain.
+    Returns capped archs plus metadata and summaries. Summaries are extracted
+    from the full arch, so the model can still inventory visible blocks, tables
+    and field expressions when a raw XML template exceeds the transport cap.
     """
     archs: dict[str, str] = {}
+    meta: dict[str, Any] = {}
+    summaries: dict[str, Any] = {}
     seen: set[str] = set()
     queue = [k for k in seed_keys if k]
     while queue and len(archs) < _QWEB_MAX_TEMPLATES:
@@ -281,12 +429,35 @@ async def _collect_qweb_archs(odoo, seed_keys: list[str]) -> dict[str, str]:
         if not rows:
             continue
         arch = rows[0].get("arch") or ""
-        archs[key] = (arch[:_QWEB_ARCH_CAP] + "\n…[arch tronquée]"
-                      if len(arch) > _QWEB_ARCH_CAP else arch)
+        truncated = len(arch) > _QWEB_ARCH_CAP
+        archs[key] = (arch[:_QWEB_ARCH_CAP] + "\n…[arch tronquée — voir qweb_summaries pour l'inventaire structuré extrait de l'arch complète]"
+                      if truncated else arch)
+        meta[key] = {
+            "chars": len(arch),
+            "returned_chars": min(len(arch), _QWEB_ARCH_CAP),
+            "truncated": truncated,
+            "warning": (
+                "Arch QWeb brute bornée ; l'inventaire structuré qweb_summaries "
+                "a été extrait depuis l'arch complète."
+                if truncated else None
+            ),
+        }
+        summaries[key] = _summarize_qweb_arch(arch)
         for ref in _TCALL_RE.findall(arch):
             if ref not in seen and ref not in queue:
                 queue.append(ref)
-    return archs
+    if queue:
+        meta["_collection"] = {
+            "truncated": True,
+            "returned_templates": len(archs),
+            "max_templates": _QWEB_MAX_TEMPLATES,
+            "remaining_t_calls": queue,
+            "warning": (
+                f"Collecte QWeb bornée à {_QWEB_MAX_TEMPLATES} templates. "
+                "Relance une inspection ciblée sur les t-call restants si nécessaire."
+            ),
+        }
+    return archs, meta, summaries
 
 
 async def inspect_odoo_report(
@@ -307,39 +478,54 @@ async def inspect_odoo_report(
         domain = []
 
     try:
-        reports = await _run(lambda: odoo.search_read(
-            "ir.actions.report", domain, _REPORT_FIELDS, limit=60))
+        loop = asyncio.get_event_loop()
+        reports, reports_meta = await search_read_bounded(
+            loop, odoo, "ir.actions.report", domain, _REPORT_FIELDS,
+            max_records=1000, label="Rapports",
+        )
     except Exception as exc:
         return {"ok": False, "error": f"Lecture des rapports impossible : {exc}"}
 
     if not reports:
         scope = report_name or model or "cette instance"
-        return {"ok": True, "reports": [], "note": f"Aucun rapport trouvé pour '{scope}'."}
+        return {"ok": True, "reports": [], "reports_meta": reports_meta, "note": f"Aucun rapport trouvé pour '{scope}'."}
 
     # List mode: a model with several reports, no specific report requested.
     if len(reports) > 1 and not report_name:
-        return {"ok": True, "mode": "list", "count": len(reports), "reports": reports}
+        return {"ok": True, "mode": "list", **reports_meta, "reports": reports}
 
     # Detail mode.
     report = reports[0]
-    detail: dict[str, Any] = {"ok": True, "mode": "detail", "report": report}
+    detail: dict[str, Any] = {"ok": True, "mode": "detail", "reports_meta": reports_meta, "report": report}
     rname = report.get("report_name")
 
     if rname:
         try:
-            templates = await _run(lambda: odoo.search_read(
+            loop = asyncio.get_event_loop()
+            templates, templates_meta = await search_read_bounded(
+                loop,
+                odoo,
                 "ir.ui.view", [["key", "=", rname], ["type", "=", "qweb"]],
-                ["name", "key"], limit=10))
+                ["name", "key"], max_records=100, label="Templates QWeb",
+            )
             for tpl in templates:
-                children = await _run(lambda tpl=tpl: odoo.search_read(
+                children, children_meta = await search_read_bounded(
+                    loop,
+                    odoo,
                     "ir.ui.view", [["inherit_id", "=", tpl["id"]]],
-                    ["name", "key"], limit=40))
+                    ["name", "key"], max_records=1000, label="Héritages QWeb",
+                )
                 tpl["inherited_by"] = [c.get("name") for c in children if c.get("name")]
+                tpl["inherited_by_meta"] = children_meta
             detail["qweb_templates"] = templates
+            detail["qweb_templates_meta"] = templates_meta
             # Real arch of the report + the templates it t-calls (document,
             # layout) — so the AI writes xpath against confirmed elements.
             seeds = [t["key"] for t in templates if t.get("key")] or [rname]
-            detail["qweb_archs"] = await _collect_qweb_archs(odoo, seeds)
+            qweb_archs, qweb_meta, qweb_summaries = await _collect_qweb_archs(odoo, seeds)
+            detail["qweb_archs"] = qweb_archs
+            detail["qweb_arch_meta"] = qweb_meta
+            detail["qweb_summaries"] = qweb_summaries
         except Exception:
             pass
 

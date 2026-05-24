@@ -13,7 +13,7 @@
 **Pourquoi ces arguments** :
 - Pas de `apps_only` : on veut aussi les modules techniques (sécurité, helpers) qui peuvent être custom.
 - Pas de `filter` : on récupère tout puis on s'appuie sur `likely_custom` pour distinguer. Les heuristiques du tool flaguent automatiquement les modules dont l'author contient « custom », « odoo sh », « studio », « client » ou dont le nom commence par `x_`.
-- `limit=300` (défaut) suffit pour un projet typique. Le résumé en tête indique si on dépasse.
+- `limit=0` ou absent laisse le tool paginer jusqu'au plafond `max_records` et retourner `total_count/truncated/warning`.
 
 **Résultat retourné** :
 ```json

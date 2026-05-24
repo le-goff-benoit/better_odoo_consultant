@@ -42,7 +42,8 @@ Utilise `read_target_file` après `search_target_source` pour lire l'implémenta
 3. Conclus uniquement sur les différences vérifiées.
 
 ## Paramètres
-- `path`, `start_line`, `end_line`.
+- `path`, `start_line`, `end_line`, `max_lines`.
+- Le retour contient `returned_lines`, `total_lines`, `truncated`, `warning`. Si `truncated=true`, relance avec une fenêtre suivante ou `max_lines` plus grand.
 
 ## Pièges
 - Une méthode peut être déplacée vers un mixin ou un service.

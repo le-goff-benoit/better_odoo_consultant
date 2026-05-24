@@ -113,6 +113,13 @@ async def count(args: dict, base_dir: str) -> dict:
         "group_by":        group_by,
         "total_files":     len(files),
         "total_lines":     total_lines,
+        "total_groups":    len(sorted_groups),
+        "returned_groups":  len(capped),
         "by_group":        capped,
         "groups_truncated": truncated,
+        "warning": (
+            f"Groupes LOC bornés à {len(capped)} sur {len(sorted_groups)}. "
+            "Les totaux total_files/total_lines restent exhaustifs."
+            if truncated else None
+        ),
     }

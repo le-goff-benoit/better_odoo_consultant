@@ -1477,7 +1477,19 @@ export default function Assistant() {
                 ref={el => { assistantRefs.current.set(msg.id, el) }}
                 style={{ scrollMarginTop: 8 }}
               >
-                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} onAskMore={askMoreOnSelection} onEditTable={(prompt: string) => { if (!streaming) sendWithText(prompt) }} />
+                <AssistantBubble
+                  events={msg.events ?? []}
+                  loading={msg.loading}
+                  provider={provider}
+                  timestamp={msg.timestamp}
+                  startTime={msg.startTime}
+                  inputTokens={msg.inputTokens}
+                  outputTokens={msg.outputTokens}
+                  projectName={isGeneralMode ? undefined : selectedProfile?.name}
+                  onAskMore={askMoreOnSelection}
+                  onEditTable={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
+                  onPromptAction={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
+                />
               </div>
             )
         ))}
@@ -1973,12 +1985,13 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, onAskMore, onEditTable }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, onAskMore, onEditTable, onPromptAction }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
   onAskMore?: (selectedText: string) => void
   onEditTable?: (prompt: string) => void
+  onPromptAction?: (prompt: string) => void
 }) {
   const lang = useUiLanguage()
   const c = assistantCopy[lang]
@@ -2061,7 +2074,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               </button>
             </div>
             <div ref={markdownRef} className="assistant-msg-body">
-              <MarkdownActionsProvider onEditTable={onEditTable}>
+              <MarkdownActionsProvider onEditTable={onEditTable} onPromptAction={onPromptAction}>
                 <Markdown text={textEvt.content} />
               </MarkdownActionsProvider>
             </div>

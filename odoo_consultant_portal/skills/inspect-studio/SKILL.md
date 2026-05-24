@@ -56,11 +56,13 @@ Utilise `inspect_studio` pour lister modèles `x_*`, champs `x_*`, vues, menus, 
 ## Paramètres
 - `sections`: `models`, `fields`, `views`, `menus`, `server_actions`, `cron`, `automations`, `rules`, `all`.
 - `model_filter`: préfixe ou modèle métier.
+- Chaque section retourne `count`, `total_count`, `pages_fetched`, `truncated` et `warning`. Si `truncated=false`, la section est exhaustive pour les records visibles dans l'instance.
 
 ## Pièges
 - Une personnalisation Studio peut masquer un comportement standard.
 - Les actions serveur peuvent contenir du Python `safe_eval` risqué.
 - Tous les types de vues ne sont pas couverts par Studio.
+- Ne jamais dire qu'une liste Studio est complète si `truncated=true`; relancer avec un filtre plus ciblé.
 
 ## Combinaisons
 - `load_skill_reference` pour `studio_limits.md` en cas de limite Studio.

@@ -46,7 +46,8 @@ Utilise `search_odoo_source` pour vérifier modèles, champs, méthodes, vues, c
 3. Lis les fichiers avec `read_odoo_file`.
 
 ## Paramètres
-- `pattern`, `path`, `file_types`, `case_sensitive`.
+- `pattern`, `path`, `file_types`, `case_sensitive`, `max_matches`.
+- Le résultat expose `returned_matches`, `max_matches`, `truncated`, `warning`. Si `truncated=true`, lis les fichiers les plus pertinents ou affine `path/pattern`.
 
 ## Pièges
 - Community, Enterprise et cœur framework n'ont pas la même racine.

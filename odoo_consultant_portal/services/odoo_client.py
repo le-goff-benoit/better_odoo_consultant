@@ -123,20 +123,44 @@ class OdooClient:
         )
 
     def get_installed_modules(self) -> list[dict]:
-        return self.search_read(
-            "ir.module.module",
-            [["state", "=", "installed"]],
-            ["name", "shortdesc", "author", "installed_version", "application"],
-            limit=500,
-        )
+        domain = [["state", "=", "installed"]]
+        total = self.search_count("ir.module.module", domain)
+        records: list[dict] = []
+        page_size = 500
+        while len(records) < total:
+            page = self.search_read(
+                "ir.module.module",
+                domain,
+                ["name", "shortdesc", "author", "installed_version", "application"],
+                limit=min(page_size, total - len(records)),
+                offset=len(records),
+            )
+            if not page:
+                break
+            records.extend(page)
+            if len(page) < page_size:
+                break
+        return records
 
     def get_installed_apps(self) -> list[dict]:
-        return self.search_read(
-            "ir.module.module",
-            [["state", "=", "installed"], ["application", "=", True]],
-            ["name", "shortdesc", "category_id"],
-            limit=200,
-        )
+        domain = [["state", "=", "installed"], ["application", "=", True]]
+        total = self.search_count("ir.module.module", domain)
+        records: list[dict] = []
+        page_size = 500
+        while len(records) < total:
+            page = self.search_read(
+                "ir.module.module",
+                domain,
+                ["name", "shortdesc", "category_id"],
+                limit=min(page_size, total - len(records)),
+                offset=len(records),
+            )
+            if not page:
+                break
+            records.extend(page)
+            if len(page) < page_size:
+                break
+        return records
 
     def export_markdown(self, records: list[dict]) -> str:
         if not records:

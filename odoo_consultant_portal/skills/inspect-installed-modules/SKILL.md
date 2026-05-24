@@ -42,7 +42,9 @@ Utilise `inspect_installed_modules` pour lister applications, modules techniques
 3. Croise avec `inspect_studio` et `list_project_modules`.
 
 ## Paramètres
-- `filter`, `apps_only`, `limit`.
+- `filter`, `apps_only`, `limit`, `max_records`.
+- `limit=0` ou absent : lecture exhaustive bornée jusqu'à `max_records`.
+- Vérifie `total_count`, `count`, `truncated`, `warning` avant de conclure qu'un module est absent.
 
 ## Pièges
 - Module installé ne veut pas dire configuré ou utilisé.

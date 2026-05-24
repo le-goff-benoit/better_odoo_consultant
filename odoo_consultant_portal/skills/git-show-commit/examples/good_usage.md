@@ -55,4 +55,4 @@
 - Si le SHA est inconnu (clone shallow), le tool fait jusqu'à 3 deepens automatiques. Si toujours introuvable, message clair : SHA peut-être trop ancien ou sur une branche détachée.
 - `scope="project"` ne fonctionne que sur une conversation Assistant avec un projet actif ayant un repo cloné.
 - Tags Odoo conventionnels (à reconnaître dans le subject) : `[FIX]` bug, `[IMP]` amélioration, `[ADD]` nouvelle feature, `[REM]` suppression, `[REF]` refactor, `[MOV]` déplacement, `[REV]` revert. Voir `odoo_commit_conventions.md` pour le détail.
-- Pour un commit énorme (refactor cross-modules), `max_lines=400` peut tronquer — relancer avec un `max_lines=1500` ou demander le diff d'un fichier précis (pas supporté nativement, mais on peut lire le fichier à l'état pré/post commit avec `read_odoo_file`).
+- Pour un commit énorme (refactor cross-modules), `max_lines=2000` peut encore borner — relancer avec `max_lines=10000` ou lire les fichiers listés avec `read_odoo_file` / `read_project_file`.

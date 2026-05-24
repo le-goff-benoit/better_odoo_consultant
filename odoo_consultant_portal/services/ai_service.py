@@ -160,7 +160,7 @@ _TOOL_GIT_SHOW = {
         "    * `enterprise` — sources Odoo Enterprise de la version courante\n"
         "    * `target`     — sources Odoo de la version cible (mode migration)\n"
         "    * `project`    — dépôt custom du projet client\n"
-        "- `max_lines` (optionnel, défaut 400, max 2000) : limite du diff (le résumé `stats` et "
+        "- `max_lines` (optionnel, défaut 2000, max 10000) : limite du diff (le résumé `stats` et "
         "la liste `files` ne sont jamais tronqués).\n"
         "Retourne : sha complet, auteur, date, message, stats (nb fichiers, insertions, suppressions), "
         "liste des fichiers avec +/-, et le diff unifié."
@@ -181,6 +181,8 @@ _TOOL_INSPECT_STUDIO = {
         "Paramètres :\n"
         "- sections : liste parmi ['models','fields','views','menus','server_actions','cron','automations','rules','all'] — défaut ['all']\n"
         "- model_filter : filtre optionnel sur le nom de modèle (ex: 'x_' pour les modèles Studio, 'sale.' pour filtrer par app)\n"
+        "Retour : chaque section expose count, total_count, pages_fetched, truncated et warning. "
+        "Si truncated=false, tu peux considérer la section comme exhaustive pour les records visibles.\n"
         "Exemples :\n"
         "- Tout inspecter : inspect_studio(sections=['all'])\n"
         "- Seulement les champs custom : inspect_studio(sections=['fields'])\n"
@@ -255,8 +257,10 @@ _TOOL_INSPECT_REPORT = {
         "l'action de rapport (ir.actions.report), le template QWeb et son arbre "
         "d'héritage, l'ARCH XML RÉELLE des templates (champ `qweb_archs` : rapport + "
         "template document + mise en page — indispensable pour écrire des xpath "
-        "valides), le format papier (paperformat) et la mise en page document de la "
-        "société (layout, police, couleurs).\n"
+        "valides), `qweb_arch_meta` et `qweb_summaries` (inventaire extrait depuis "
+        "l'arch complète : textes visibles, t-field/t-out, t-foreach, t-call, tables), "
+        "le format papier (paperformat) et la mise en page document de la société "
+        "(layout, police, couleurs).\n"
         "Utilise cet outil quand l'utilisateur demande comment un rapport PDF est "
         "construit, pourquoi il a une certaine apparence, quel template ou layout est "
         "utilisé, ou la liste des rapports d'un modèle.\n"
@@ -288,7 +292,7 @@ TOOLS_CLAUDE = [
         "domain": {"type": "array", "default": []},
         "fields": {"type": "array", "items": {"type": "string"}, "description": "Mesures et champs, ex ['amount_total:sum','state']"},
         "groupby": {"type": "array", "items": {"type": "string"}, "description": "Groupements, ex ['state'] ou ['date_order:month']"},
-        "limit": {"type": "integer", "default": 80},
+        "limit": {"type": "integer", "description": "0 ou absent = tous les groupes retournés par Odoo.", "default": 0},
         "offset": {"type": "integer", "default": 0},
         "orderby": {"type": "string", "default": ""},
         "lazy": {"type": "boolean", "default": True},
@@ -298,11 +302,13 @@ TOOLS_CLAUDE = [
         "field_names": {"type": "array", "items": {"type": "string"},
             "description": "Si fourni : détail complet uniquement de ces champs. Sinon : index condensé du modèle.",
             "default": []},
+        "max_fields": {"type": "integer", "description": "Nombre max de champs dans l'index condensé (défaut 150, max 1000)", "default": 150},
     }}},
     {**_TOOL_INSTALLED_MODULES, "input_schema": {"type": "object", "properties": {
         "filter": {"type": "string", "description": "Filtre optionnel sur le nom technique, libellé ou auteur", "default": ""},
         "apps_only": {"type": "boolean", "description": "Limiter aux applications Odoo", "default": False},
-        "limit": {"type": "integer", "default": 300},
+        "limit": {"type": "integer", "description": "0 ou absent = exhaustif borné par max_records.", "default": 0},
+        "max_records": {"type": "integer", "default": 5000},
     }}},
     {**_TOOL_INSPECT_SECURITY, "input_schema": {"type": "object", "required": ["model"], "properties": {
         "model": {"type": "string", "description": "Modèle Odoo, ex 'sale.order'"},
@@ -310,24 +316,28 @@ TOOLS_CLAUDE = [
     {**_TOOL_INSPECT_MENUS, "input_schema": {"type": "object", "properties": {
         "model": {"type": "string", "description": "Modèle Odoo ciblé, ex 'sale.order'", "default": ""},
         "query": {"type": "string", "description": "Texte optionnel à chercher dans les noms de menus/actions", "default": ""},
-        "limit": {"type": "integer", "default": 80},
+        "limit": {"type": "integer", "description": "0 ou absent = exhaustif borné par max_records.", "default": 0},
+        "max_records": {"type": "integer", "default": 1000},
     }}},
     {**_TOOL_SEARCH_SRC, "input_schema": {"type": "object", "required": ["pattern"], "properties": {
         "pattern":    {"type": "string", "description": "Texte ou regex à chercher (ex: 'sale_line_id', 'class AccountMove', '_name = ')"},
         "path":       {"type": "string", "description": "Sous-dossier optionnel (ex: 'addons/stock', 'addons/sale')", "default": ""},
         "file_types": {"type": "array",  "items": {"type": "string"}, "description": "Extensions, ex: ['*.py'] ou ['*.xml']", "default": ["*.py"]},
         "case_sensitive": {"type": "boolean", "description": "Recherche sensible à la casse (défaut: true — recommandé pour les patterns de code).", "default": True},
+        "max_matches": {"type": "integer", "default": 500},
+        "max_matches": {"type": "integer", "description": "Nombre max de lignes de résultat retournées (défaut 500, max 5000)", "default": 500},
     }}},
     {**_TOOL_READ_SRC, "input_schema": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string",  "description": "Chemin relatif depuis la racine des sources (ex: 'addons/stock/models/stock_route.py')"},
         "start_line": {"type": "integer", "description": "Première ligne à lire (défaut: 1)", "default": 1},
-        "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + 150)", "default": 0},
+        "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + max_lines)", "default": 0},
+        "max_lines":  {"type": "integer", "description": "Nombre max de lignes lues si end_line=0 ou trop large (défaut 1000, max 5000)", "default": 1000},
     }}},
     {**_TOOL_GIT_SHOW, "input_schema": {"type": "object", "required": ["sha", "scope"], "properties": {
         "sha":       {"type": "string",  "description": "SHA court (≥7 caractères hex) ou complet (40 caractères hex)."},
         "scope":     {"type": "string",  "enum": ["odoo", "enterprise", "target", "project"],
                        "description": "Repo cible : 'odoo' = Community courant, 'enterprise' = Enterprise courant, 'target' = version cible, 'project' = dépôt client."},
-        "max_lines": {"type": "integer", "description": "Nombre max de lignes du diff (défaut 400, max 2000).", "default": 400},
+        "max_lines": {"type": "integer", "description": "Nombre max de lignes du diff (défaut 2000, max 10000).", "default": 2000},
     }}},
     {**_TOOL_LOAD_REFERENCE, "input_schema": {"type": "object", "required": ["skill", "filename"], "properties": {
         "skill":    {"type": "string", "description": "Nom technique du skill (ex 'inspect_studio')"},
@@ -362,7 +372,7 @@ TOOLS_OPENAI = [
         "domain": {"type": "array", "items": {}, "default": []},
         "fields": {"type": "array", "items": {"type": "string"}},
         "groupby": {"type": "array", "items": {"type": "string"}},
-        "limit": {"type": "integer", "default": 80},
+        "limit": {"type": "integer", "default": 0},
         "offset": {"type": "integer", "default": 0},
         "orderby": {"type": "string", "default": ""},
         "lazy": {"type": "boolean", "default": True},
@@ -370,11 +380,13 @@ TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_FIELDS, "parameters": {"type": "object", "required": ["model"], "properties": {
         "model": {"type": "string"},
         "field_names": {"type": "array", "items": {"type": "string"}, "default": []},
+        "max_fields": {"type": "integer", "default": 150},
     }}}},
     {"type": "function", "function": {**_TOOL_INSTALLED_MODULES, "parameters": {"type": "object", "properties": {
         "filter": {"type": "string", "default": ""},
         "apps_only": {"type": "boolean", "default": False},
-        "limit": {"type": "integer", "default": 300},
+        "limit": {"type": "integer", "default": 0},
+        "max_records": {"type": "integer", "default": 5000},
     }}}},
     {"type": "function", "function": {**_TOOL_INSPECT_SECURITY, "parameters": {"type": "object", "required": ["model"], "properties": {
         "model": {"type": "string"},
@@ -382,23 +394,26 @@ TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_INSPECT_MENUS, "parameters": {"type": "object", "properties": {
         "model": {"type": "string", "default": ""},
         "query": {"type": "string", "default": ""},
-        "limit": {"type": "integer", "default": 80},
+        "limit": {"type": "integer", "default": 0},
+        "max_records": {"type": "integer", "default": 1000},
     }}}},
     {"type": "function", "function": {**_TOOL_SEARCH_SRC, "parameters": {"type": "object", "required": ["pattern"], "properties": {
         "pattern":    {"type": "string"},
         "path":       {"type": "string",  "default": ""},
         "file_types": {"type": "array",   "items": {"type": "string"}, "default": ["*.py"]},
         "case_sensitive": {"type": "boolean", "default": True},
+        "max_matches": {"type": "integer", "default": 500},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_SRC, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string"},
         "start_line": {"type": "integer", "default": 1},
         "end_line":   {"type": "integer", "default": 0},
+        "max_lines":  {"type": "integer", "default": 1000},
     }}}},
     {"type": "function", "function": {**_TOOL_GIT_SHOW, "parameters": {"type": "object", "required": ["sha", "scope"], "properties": {
         "sha":       {"type": "string"},
         "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
-        "max_lines": {"type": "integer", "default": 400},
+        "max_lines": {"type": "integer", "default": 2000},
     }}}},
     {"type": "function", "function": {**_TOOL_LOAD_REFERENCE, "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
         "skill":    {"type": "string"},
@@ -438,10 +453,12 @@ TOOLS_GEMINI = [
              "parameters": {"type": "object", "required": ["model"], "properties": {
                  "model": {"type": "string"},
                  "field_names": {"type": "array"},
+                 "max_fields": {"type": "integer"},
              }}},
             {"name": "inspect_installed_modules", "description": _TOOL_INSTALLED_MODULES["description"],
              "parameters": {"type": "object", "properties": {
-                 "filter": {"type": "string"}, "apps_only": {"type": "boolean"}, "limit": {"type": "integer"},
+                 "filter": {"type": "string"}, "apps_only": {"type": "boolean"},
+                 "limit": {"type": "integer"}, "max_records": {"type": "integer"},
              }}},
             {"name": "inspect_security", "description": _TOOL_INSPECT_SECURITY["description"],
              "parameters": {"type": "object", "required": ["model"], "properties": {
@@ -449,7 +466,8 @@ TOOLS_GEMINI = [
              }}},
             {"name": "inspect_menus_actions", "description": _TOOL_INSPECT_MENUS["description"],
              "parameters": {"type": "object", "properties": {
-                 "model": {"type": "string"}, "query": {"type": "string"}, "limit": {"type": "integer"},
+                 "model": {"type": "string"}, "query": {"type": "string"},
+                 "limit": {"type": "integer"}, "max_records": {"type": "integer"},
              }}},
             {"name": "search_odoo_source", "description": _TOOL_SEARCH_SRC["description"],
              "parameters": {"type": "object", "required": ["pattern"], "properties": {
@@ -457,12 +475,16 @@ TOOLS_GEMINI = [
                  "path":       {"type": "string"},
                  "file_types": {"type": "array"},
                  "case_sensitive": {"type": "boolean"},
+                 "max_matches": {"type": "integer"},
+                 "max_matches": {"type": "integer"},
              }}},
             {"name": "read_odoo_file", "description": _TOOL_READ_SRC["description"],
              "parameters": {"type": "object", "required": ["path"], "properties": {
                  "path":       {"type": "string"},
                  "start_line": {"type": "integer"},
                  "end_line":   {"type": "integer"},
+                 "max_lines":  {"type": "integer"},
+                 "max_lines":  {"type": "integer"},
              }}},
             {"name": "git_show_commit", "description": _TOOL_GIT_SHOW["description"],
              "parameters": {"type": "object", "required": ["sha", "scope"], "properties": {
@@ -497,12 +519,13 @@ TOOLS_CLAUDE_SRC = [
     {**_TOOL_READ_SRC, "input_schema": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string",  "description": "Chemin relatif depuis la racine des sources (ex: 'addons/stock/models/stock_route.py')"},
         "start_line": {"type": "integer", "description": "Première ligne à lire (défaut: 1)", "default": 1},
-        "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + 150)", "default": 0},
+        "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + max_lines)", "default": 0},
+        "max_lines":  {"type": "integer", "default": 1000},
     }}},
     {**_TOOL_GIT_SHOW, "input_schema": {"type": "object", "required": ["sha", "scope"], "properties": {
         "sha":       {"type": "string"},
         "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
-        "max_lines": {"type": "integer", "default": 400},
+        "max_lines": {"type": "integer", "default": 2000},
     }}},
 ]
 
@@ -512,16 +535,18 @@ TOOLS_OPENAI_SRC = [
         "path":       {"type": "string",  "default": ""},
         "file_types": {"type": "array",   "items": {"type": "string"}, "default": ["*.py"]},
         "case_sensitive": {"type": "boolean", "default": True},
+        "max_matches": {"type": "integer", "default": 500},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_SRC, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string"},
         "start_line": {"type": "integer", "default": 1},
         "end_line":   {"type": "integer", "default": 0},
+        "max_lines":  {"type": "integer", "default": 1000},
     }}}},
     {"type": "function", "function": {**_TOOL_GIT_SHOW, "parameters": {"type": "object", "required": ["sha", "scope"], "properties": {
         "sha":       {"type": "string"},
         "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
-        "max_lines": {"type": "integer", "default": 400},
+        "max_lines": {"type": "integer", "default": 2000},
     }}}},
 ]
 
@@ -557,11 +582,13 @@ _REPO_INPUT_SCHEMA_SEARCH = {"type": "object", "required": ["pattern"], "propert
     "pattern":    {"type": "string", "description": "Texte ou regex à chercher"},
     "path":       {"type": "string", "description": "Sous-dossier optionnel (ex: 'addons/mon_module')", "default": ""},
     "file_types": {"type": "array",  "items": {"type": "string"}, "description": "Extensions, ex: ['*.py'] ou ['*.xml']", "default": ["*.py"]},
+    "max_matches": {"type": "integer", "description": "Nombre max de lignes de résultat retournées", "default": 500},
 }}
 _REPO_INPUT_SCHEMA_READ = {"type": "object", "required": ["path"], "properties": {
     "path":       {"type": "string",  "description": "Chemin relatif depuis la racine du dépôt"},
     "start_line": {"type": "integer", "description": "Première ligne à lire", "default": 1},
-    "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + 150)", "default": 0},
+    "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + max_lines)", "default": 0},
+    "max_lines":  {"type": "integer", "default": 1000},
 }}
 _REPO_INPUT_SCHEMA_MODULES = {"type": "object", "properties": {
     "path": {"type": "string", "description": "Sous-dossier optionnel à scanner", "default": ""},
@@ -579,9 +606,10 @@ REPO_TOOLS_OPENAI = [
         "pattern": {"type": "string"}, "path": {"type": "string", "default": ""},
         "file_types": {"type": "array", "items": {"type": "string"}, "default": ["*.py"]},
         "case_sensitive": {"type": "boolean", "default": True},
+        "max_matches": {"type": "integer", "default": 500},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_REPO, "parameters": {"type": "object", "required": ["path"], "properties": {
-        "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0},
+        "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0}, "max_lines": {"type": "integer", "default": 1000},
     }}}},
     {"type": "function", "function": {**_TOOL_LIST_PROJECT_MODULES, "parameters": {"type": "object", "properties": {
         "path": {"type": "string", "default": ""},
@@ -593,11 +621,11 @@ REPO_FUNCTION_DECLARATIONS = [
     {"name": "search_project_source", "description": _TOOL_SEARCH_REPO["description"],
      "parameters": {"type": "object", "required": ["pattern"], "properties": {
          "pattern": {"type": "string"}, "path": {"type": "string"}, "file_types": {"type": "array"},
-         "case_sensitive": {"type": "boolean"},
+         "case_sensitive": {"type": "boolean"}, "max_matches": {"type": "integer"},
      }}},
     {"name": "read_project_file", "description": _TOOL_READ_REPO["description"],
      "parameters": {"type": "object", "required": ["path"], "properties": {
-         "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"},
+         "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}, "max_lines": {"type": "integer"},
      }}},
     {"name": "list_project_modules", "description": _TOOL_LIST_PROJECT_MODULES["description"],
      "parameters": {"type": "object", "properties": {
@@ -632,11 +660,13 @@ TARGET_TOOLS_CLAUDE = [
         "pattern":    {"type": "string", "description": "Texte ou regex à chercher dans la version cible"},
         "path":       {"type": "string", "description": "Sous-dossier optionnel", "default": ""},
         "file_types": {"type": "array",  "items": {"type": "string"}, "default": ["*.py"]},
+        "max_matches": {"type": "integer", "default": 500},
     }}},
     {**_TOOL_READ_TARGET, "input_schema": {"type": "object", "required": ["path"], "properties": {
         "path":       {"type": "string",  "description": "Chemin relatif depuis la racine des sources cibles"},
         "start_line": {"type": "integer", "default": 1},
         "end_line":   {"type": "integer", "default": 0},
+        "max_lines":  {"type": "integer", "default": 1000},
     }}},
 ]
 TARGET_TOOLS_OPENAI = [
@@ -644,20 +674,21 @@ TARGET_TOOLS_OPENAI = [
         "pattern": {"type": "string"}, "path": {"type": "string", "default": ""},
         "file_types": {"type": "array", "items": {"type": "string"}, "default": ["*.py"]},
         "case_sensitive": {"type": "boolean", "default": True},
+        "max_matches": {"type": "integer", "default": 500},
     }}}},
     {"type": "function", "function": {**_TOOL_READ_TARGET, "parameters": {"type": "object", "required": ["path"], "properties": {
-        "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0},
+        "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0}, "max_lines": {"type": "integer", "default": 1000},
     }}}},
 ]
 TARGET_FUNCTION_DECLARATIONS = [
     {"name": "search_target_source", "description": _TOOL_SEARCH_TARGET["description"],
      "parameters": {"type": "object", "required": ["pattern"], "properties": {
          "pattern": {"type": "string"}, "path": {"type": "string"}, "file_types": {"type": "array"},
-         "case_sensitive": {"type": "boolean"},
+         "case_sensitive": {"type": "boolean"}, "max_matches": {"type": "integer"},
      }}},
     {"name": "read_target_file", "description": _TOOL_READ_TARGET["description"],
      "parameters": {"type": "object", "required": ["path"], "properties": {
-         "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"},
+         "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}, "max_lines": {"type": "integer"},
      }}},
 ]
 
@@ -1031,20 +1062,43 @@ def _trim_history(messages: list) -> list:
     return trimmed
 
 
-def _compress_tool_result(result: dict) -> str:
+_LARGE_RESULT_TOOL_NAMES = {
+    "query_odoo",
+    "read_group_odoo",
+    "get_odoo_fields",
+    "inspect_installed_modules",
+    "inspect_menus_actions",
+    "inspect_security",
+    "inspect_studio",
+    "inspect_odoo_view",
+    "inspect_odoo_report",
+    "search_odoo_source",
+    "read_odoo_file",
+    "search_project_source",
+    "read_project_file",
+    "search_target_source",
+    "read_target_file",
+    "list_project_modules",
+    "count_source_lines",
+    "git_show_commit",
+}
+
+
+def _compress_tool_result(result: dict, tool_name: str | None = None) -> str:
     """Serialize a tool result for storage in the messages array.
 
-    The returned string is capped so large tool outputs (Studio audit, source
-    searches) don’t bloat the context window across many turns. Record-bearing
-    results (query_odoo) get a larger budget — the model must keep the data it
-    queried to reason precisely, e.g. when building a changeset record by
-    record. The full result is still streamed to the frontend via the SSE
-    'tool_result' event before this compressed copy is stored.
+    The returned string is capped so large tool outputs don’t bloat the context
+    window across many turns. Data-heavy results the model must reason on
+    directly (query_odoo, Studio/view/report inspection) get a larger budget.
+    The full result is still streamed to the frontend via the SSE 'tool_result'
+    event before this compressed copy is stored.
     """
     raw = json.dumps(result, ensure_ascii=False, default=str)
-    cap = (_MAX_DATA_TOOL_RESULT_HISTORY_CHARS
-           if isinstance(result, dict) and isinstance(result.get("records"), list)
-           else _MAX_TOOL_RESULT_HISTORY_CHARS)
+    needs_data_budget = (
+        tool_name in _LARGE_RESULT_TOOL_NAMES
+        or (isinstance(result, dict) and isinstance(result.get("records"), list))
+    )
+    cap = _MAX_DATA_TOOL_RESULT_HISTORY_CHARS if needs_data_budget else _MAX_TOOL_RESULT_HISTORY_CHARS
     if len(raw) <= cap:
         return raw
     suffix = (
@@ -1826,7 +1880,7 @@ async def _chat_claude(api_key: str, model_id: str, system, messages: list, odoo
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
-                        "content": _compress_tool_result(result),
+                        "content": _compress_tool_result(result, block.name),
                     })
             # Cache breakpoint on the LAST tool_result so the next iteration
             # caches everything up to here (system + earlier turns + tool calls).
@@ -1898,7 +1952,7 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
                 yield {"type": "tool_result", "name": tc.function.name, **result}
                 oai_msgs.append({
                     "role": "tool", "tool_call_id": tc.id,
-                    "content": _compress_tool_result(result),
+                    "content": _compress_tool_result(result, tc.function.name),
                 })
         else:
             yield {"type": "text", "content": choice.message.content or ""}
@@ -1995,7 +2049,7 @@ async def _chat_gemini(api_key: str, model_id: str, system: str, messages: list,
             last_msg = genai.protos.Content(parts=[genai.protos.Part(
                 function_response=genai.protos.FunctionResponse(
                     name=fc.name,
-                    response={"result": _compress_tool_result(result)},
+                    response={"result": _compress_tool_result(result, fc.name)},
                 )
             )], role="user")
         else:

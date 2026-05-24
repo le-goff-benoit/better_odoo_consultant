@@ -38,6 +38,6 @@
 
 **Pièges à éviter** :
 - Si le fichier n'existe pas (mauvais nom de module, dépôt non cloné), le tool retourne une erreur `Fichier introuvable`. Vérifier la liste avec `list_project_modules`.
-- Lire un fichier > 200 lignes en un appel : impossible (cap dur). Découper en plusieurs appels (start_line glissant).
+- Si `truncated=true`, le tool a borné la fenêtre lue. Relancer avec `start_line` suivant ou `max_lines` plus grand.
 - Le `path` est relatif à la racine du **repo client** (`~/.odoo-consultant/repos/<profile>/<env>/`). Pas de préfixe `community/` ni `enterprise/` ici (c'est pour `read_odoo_file`).
 - Pour lire le code Odoo standard (pas custom client), utiliser `read_odoo_file`. Erreur courante : confondre les deux.

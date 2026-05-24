@@ -51,6 +51,8 @@ Utilise `read_group_odoo` pour calculer des agrégats Odoo fiables avec `read_gr
 ## Paramètres
 - `fields`: mesures Odoo (`amount_total:sum`, `id:count`) et champs nécessaires.
 - `groupby`: champs ou granularités date (`date_order:month`).
+- `limit=0` ou absent : ne pose pas de limite artificielle sur les groupes retournés par Odoo.
+- Si `truncated=true`, le tableau de groupes est partiel : annoncer `warning` et relancer avec `limit=0` ou un groupby plus ciblé.
 - `lazy=false` si plusieurs niveaux doivent être réellement retournés.
 
 ## Pièges

@@ -1,5 +1,21 @@
 import asyncio
-from typing import Optional
+from typing import Any, Optional
+
+from .odoo_pagination import search_read_bounded
+
+
+def _merge_xid_truncation(meta: dict[str, Any], xid_meta: dict[str, Any]) -> dict[str, Any]:
+    if not xid_meta.get("truncated"):
+        return meta
+    merged = dict(meta)
+    merged["truncated"] = True
+    merged["total_count"] = max(int(merged.get("total_count") or 0), int(xid_meta.get("total_count") or 0))
+    merged["warning"] = (
+        "Inventaire Studio borné pendant la lecture des identifiants XML : "
+        f"{xid_meta.get('count')} identifiants lus sur {xid_meta.get('total_count')}. "
+        "Affinez le filtre ou augmentez le plafond pour garantir l'exhaustivité."
+    )
+    return merged
 
 
 async def inspect_studio_customizations(odoo, sections: Optional[list[str]] = None, model_filter: str = "") -> dict:
@@ -9,49 +25,55 @@ async def inspect_studio_customizations(odoo, sections: Optional[list[str]] = No
     loop = asyncio.get_event_loop()
     result: dict = {"ok": True}
 
-    async def _xids(model_name: str) -> list:
-        xids = await loop.run_in_executor(None, lambda: odoo.search_read(
+    async def _xids(model_name: str) -> tuple[list[int], dict[str, Any]]:
+        xids, meta = await search_read_bounded(
+            loop,
+            odoo,
             "ir.model.data",
             [["module", "=", "studio_customization"], ["model", "=", model_name]],
             ["res_id"],
-            limit=500,
-        ))
-        return [x["res_id"] for x in xids if x.get("res_id")]
+            label="Inventaire Studio",
+        )
+        return [x["res_id"] for x in xids if x.get("res_id")], meta
 
     if do_all or "models" in sections_req:
         try:
             # state="manual" matches ANY hand-created model (incl. technical UI
             # without Studio). Restrict to studio_customization xmlids so this
             # stays a Studio-specific signal, like views/menus below.
-            model_ids = await _xids("ir.model")
+            model_ids, xid_meta = await _xids("ir.model")
             models = []
+            meta = {**xid_meta, "count": 0, "total_count": 0}
             if model_ids:
                 domain: list = [["id", "in", model_ids]]
                 if model_filter:
                     domain.append(["model", "ilike", model_filter])
-                models = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.model", domain,
+                models, meta = await search_read_bounded(
+                    loop, odoo, "ir.model", domain,
                     ["name", "model", "transient", "info"],
-                    limit=300,
-                ))
-            result["custom_models"] = {"count": len(models), "items": models}
+                    label="Modèles Studio",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
+            result["custom_models"] = {**meta, "items": models}
         except Exception as exc:
             result["custom_models"] = {"count": 0, "error": str(exc)}
 
     if do_all or "fields" in sections_req:
         try:
-            field_ids = await _xids("ir.model.fields")
+            field_ids, xid_meta = await _xids("ir.model.fields")
             fields = []
+            meta = {**xid_meta, "count": 0, "total_count": 0}
             if field_ids:
                 domain_f: list = [["id", "in", field_ids]]
                 if model_filter:
                     domain_f.append(["model", "ilike", model_filter])
-                fields = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.model.fields", domain_f,
+                fields, meta = await search_read_bounded(
+                    loop, odoo, "ir.model.fields", domain_f,
                     ["name", "field_description", "ttype", "model_id", "required",
                      "store", "index", "compute", "related", "selection"],
-                    limit=1000,
-                ))
+                    label="Champs Studio",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
             by_model: dict = {}
             for f in fields:
                 mid = f.get("model_id")
@@ -62,71 +84,80 @@ async def inspect_studio_customizations(odoo, sections: Optional[list[str]] = No
                     "store": f.get("store"), "index": f.get("index"),
                     "compute": f.get("compute") or None, "related": f.get("related") or None,
                 })
-            result["custom_fields"] = {"count": len(fields), "by_model": by_model}
+            result["custom_fields"] = {**meta, "by_model": by_model}
         except Exception as exc:
             result["custom_fields"] = {"count": 0, "error": str(exc)}
 
     if do_all or "views" in sections_req:
         try:
-            view_ids = await _xids("ir.ui.view")
+            view_ids, xid_meta = await _xids("ir.ui.view")
             views = []
+            meta = {**xid_meta, "count": 0, "total_count": 0}
             if view_ids:
                 dom_v: list = [["id", "in", view_ids]]
                 if model_filter:
                     dom_v.append(["model", "ilike", model_filter])
-                views = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.ui.view", dom_v,
+                views, meta = await search_read_bounded(
+                    loop, odoo, "ir.ui.view", dom_v,
                     ["name", "model", "type", "key", "priority", "active"],
-                    limit=500,
-                ))
-            result["studio_views"] = {"count": len(views), "items": views}
+                    label="Vues Studio",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
+            result["studio_views"] = {**meta, "items": views}
         except Exception as exc:
             result["studio_views"] = {"count": 0, "error": str(exc)}
 
     if do_all or "menus" in sections_req:
         try:
-            menu_ids = await _xids("ir.ui.menu")
+            menu_ids, xid_meta = await _xids("ir.ui.menu")
             menus = []
+            meta = {**xid_meta, "count": 0, "total_count": 0}
             if menu_ids:
-                menus = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.ui.menu", [["id", "in", menu_ids]],
+                menus, meta = await search_read_bounded(
+                    loop, odoo, "ir.ui.menu", [["id", "in", menu_ids]],
                     ["name", "complete_name", "active", "sequence"],
-                    limit=200,
-                ))
-            result["studio_menus"] = {"count": len(menus), "items": menus}
+                    label="Menus Studio",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
+            result["studio_menus"] = {**meta, "items": menus}
         except Exception as exc:
             result["studio_menus"] = {"count": 0, "error": str(exc)}
 
     if do_all or "server_actions" in sections_req:
         try:
-            sa_ids = await _xids("ir.actions.server")
+            sa_ids, xid_meta = await _xids("ir.actions.server")
             actions = []
+            meta = {**xid_meta, "count": 0, "total_count": 0}
             if sa_ids:
-                actions = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.actions.server", [["id", "in", sa_ids]],
+                actions, meta = await search_read_bounded(
+                    loop, odoo, "ir.actions.server", [["id", "in", sa_ids]],
                     ["name", "model_id", "state", "binding_model_id", "binding_type"],
-                    limit=200,
-                ))
-            result["studio_server_actions"] = {"count": len(actions), "items": actions}
+                    label="Actions serveur Studio",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
+            result["studio_server_actions"] = {**meta, "items": actions}
         except Exception as exc:
             result["studio_server_actions"] = {"count": 0, "error": str(exc)}
 
     if do_all or "cron" in sections_req:
         try:
-            cron_ids = await _xids("ir.cron")
+            cron_ids, xid_meta = await _xids("ir.cron")
             if cron_ids:
-                crons = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.cron", [["id", "in", cron_ids]],
+                crons, meta = await search_read_bounded(
+                    loop, odoo, "ir.cron", [["id", "in", cron_ids]],
                     ["name", "model_id", "active", "interval_number", "interval_type", "nextcall"],
-                    limit=100,
-                ))
+                    label="Actions planifiées",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
             else:
-                crons = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.cron", [],
+                crons, meta = await search_read_bounded(
+                    loop, odoo, "ir.cron", [],
                     ["name", "model_id", "active", "interval_number", "interval_type", "nextcall"],
-                    limit=100,
-                ))
-            result["cron_actions"] = {"count": len(crons), "items": crons}
+                    label="Actions planifiées",
+                )
+                if xid_meta.get("truncated"):
+                    meta["warning"] = xid_meta.get("warning")
+            result["cron_actions"] = {**meta, "items": crons}
         except Exception as exc:
             result["cron_actions"] = {"count": 0, "error": str(exc)}
 
@@ -135,39 +166,43 @@ async def inspect_studio_customizations(odoo, sections: Optional[list[str]] = No
             dom_a: list = []
             if model_filter:
                 dom_a.append(["model_id.model", "ilike", model_filter])
-            automations = await loop.run_in_executor(None, lambda: odoo.search_read(
-                "base.automation", dom_a,
+            automations, meta = await search_read_bounded(
+                loop, odoo, "base.automation", dom_a,
                 ["name", "model_id", "trigger", "active"],
-                limit=200,
-            ))
-            result["automated_actions"] = {"count": len(automations), "items": automations}
+                label="Automatisations",
+            )
+            result["automated_actions"] = {**meta, "items": automations}
         except Exception:
             result["automated_actions"] = {"count": 0, "note": "Module d'automatisation non disponible sur cette instance"}
 
     if do_all or "rules" in sections_req:
         try:
-            access_ids = await _xids("ir.model.access")
+            access_ids, xid_meta = await _xids("ir.model.access")
             accesses = []
+            meta = {**xid_meta, "count": 0, "total_count": 0}
             if access_ids:
-                accesses = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.model.access", [["id", "in", access_ids]],
+                accesses, meta = await search_read_bounded(
+                    loop, odoo, "ir.model.access", [["id", "in", access_ids]],
                     ["name", "model_id", "group_id", "perm_read", "perm_write", "perm_create", "perm_unlink"],
-                    limit=200,
-                ))
-            result["studio_access_rules"] = {"count": len(accesses), "items": accesses}
+                    label="ACL Studio",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
+            result["studio_access_rules"] = {**meta, "items": accesses}
         except Exception as exc:
             result["studio_access_rules"] = {"count": 0, "error": str(exc)}
 
         try:
-            rule_ids = await _xids("ir.rule")
+            rule_ids, xid_meta = await _xids("ir.rule")
             rules = []
+            meta = {**xid_meta, "count": 0, "total_count": 0}
             if rule_ids:
-                rules = await loop.run_in_executor(None, lambda: odoo.search_read(
-                    "ir.rule", [["id", "in", rule_ids]],
+                rules, meta = await search_read_bounded(
+                    loop, odoo, "ir.rule", [["id", "in", rule_ids]],
                     ["name", "model_id", "global", "groups", "domain_force"],
-                    limit=200,
-                ))
-            result["studio_record_rules"] = {"count": len(rules), "items": rules}
+                    label="Record rules Studio",
+                )
+                meta = _merge_xid_truncation(meta, xid_meta)
+            result["studio_record_rules"] = {**meta, "items": rules}
         except Exception as exc:
             result["studio_record_rules"] = {"count": 0, "error": str(exc)}
 

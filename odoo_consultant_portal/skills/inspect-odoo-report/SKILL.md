@@ -24,7 +24,7 @@ references_auto_load:
 - Les xpath de rapport doivent cibler l'arch réelle, pas un souvenir de template.
 
 ## inspect_odoo_report
-Utilise `inspect_odoo_report` pour lire action de rapport, template QWeb, héritage, `qweb_archs`, format papier et layout société.
+Utilise `inspect_odoo_report` pour lire action de rapport, template QWeb, héritage, `qweb_archs`, `qweb_arch_meta`, `qweb_summaries`, format papier et layout société.
 
 ## Quand l'utiliser
 - Facture PDF, devis PDF, bon de livraison, layout, logo, mentions légales.
@@ -36,6 +36,7 @@ Utilise `inspect_odoo_report` pour lire action de rapport, template QWeb, hérit
 - Pour contenu document, hérite du template document.
 - Pour en-tête/pied de page, hérite du layout actif de la société.
 - En QWeb rapport, utilise `t-field` ou `t-out`, pas `<field name="..."/>`.
+- Si `qweb_arch_meta[template].truncated=true`, lis `qweb_summaries[template]` avant de conclure : le résumé est extrait depuis l'arch complète et inventorie textes visibles, expressions, boucles, appels et tables.
 
 ## Déclencheurs
 - Rapport PDF, QWeb, xpath, layout, logo, mentions légales, paperformat.
@@ -44,7 +45,7 @@ Utilise `inspect_odoo_report` pour lire action de rapport, template QWeb, hérit
 ## Séquence recommandée
 1. Identifie `report_name` ou `model`.
 2. Appelle `inspect_odoo_report`.
-3. Lis les `qweb_archs` retournés avant de proposer un xpath.
+3. Lis les `qweb_archs` et `qweb_summaries` retournés avant de proposer un xpath.
 4. Croise avec `get_odoo_fields` si un champ doit être affiché.
 
 ## Paramètres
@@ -55,6 +56,7 @@ Utilise `inspect_odoo_report` pour lire action de rapport, template QWeb, hérit
 - Le template document et le layout société ne sont pas le même niveau.
 - Un xpath générique sur un souvenir de version est fragile.
 - Certains contenus viennent du layout ou paperformat, pas du rapport lui-même.
+- Une arch brute bornée ne bloque pas l'inventaire : utiliser `qweb_summaries` pour les blocs visibles et champs affichés.
 
 ## Combinaisons
 - `inspect_odoo_view` pour comprendre l'écran source.

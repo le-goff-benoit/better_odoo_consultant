@@ -62,6 +62,8 @@ Utilise `inspect_security` pour diagnostiquer droits d'accès, visibilité parti
 
 ## Paramètres
 - `model`: modèle à analyser.
+- Les sections ACL et record rules retournent leurs métadonnées (`*_meta`) avec `total_count`, `truncated`, `warning`.
+- Si `truncated=true`, ne conclus pas sur l'ensemble des droits avant une lecture plus ciblée.
 
 ## Pièges
 - ACL autorise CRUD globalement ; record rules filtrent les records.
