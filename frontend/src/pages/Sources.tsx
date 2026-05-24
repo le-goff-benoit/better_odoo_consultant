@@ -95,7 +95,8 @@ const sourcesCopy = {
     hide: 'Masquer',
     aiSummary: 'Résumé 30 j',
     latestUpdates: 'Dernières mises à jour',
-    askAi: 'Demander à l\'IA',
+    latestUpdatesShort: 'Mises à jour',
+    askAi: 'Résumé IA',
     closeModal: 'Fermer',
     checking: 'Vérif…',
     check: 'Vérifier',
@@ -153,7 +154,8 @@ const sourcesCopy = {
     hide: 'Hide',
     aiSummary: '30d summary',
     latestUpdates: 'Latest updates',
-    askAi: 'Ask AI',
+    latestUpdatesShort: 'Updates',
+    askAi: 'AI summary',
     closeModal: 'Close',
     checking: 'Checking…',
     check: 'Check',
@@ -732,8 +734,8 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
       <div className="source-installed-actions">
         {(info.recent_commits?.length ?? 0) > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={onToggleCommits} title={labels.latestUpdates}>
-            <RefreshCw size={13} /> {labels.latestUpdates}
-            <span style={{ marginLeft: 4, opacity: .65 }}>({info.recent_commits!.length})</span>
+            <RefreshCw size={13} /> {labels.latestUpdatesShort}
+            <span style={{ marginLeft: 4, opacity: .65 }}>{info.recent_commits!.length}</span>
           </button>
         )}
         <button className="btn btn-outline btn-sm" onClick={buildSummary} disabled={summaryLoading}>

@@ -143,8 +143,7 @@ function MarkdownTable({ headers, aligns, dataRows }: ParsedMarkdownTable) {
             <button
               onClick={() => setEditOpen(true)}
               title="Demander à l'IA une modification de ce tableau"
-              className="markdown-table-export"
-              style={{ marginRight: 6 }}
+              className="markdown-table-action-btn"
             >
               <Pencil size={11} style={{ verticalAlign: '-2px' }} />
             </button>
@@ -152,7 +151,7 @@ function MarkdownTable({ headers, aligns, dataRows }: ParsedMarkdownTable) {
           <button
             onClick={downloadCsv}
             title="Exporter en CSV"
-            className="markdown-table-export"
+            className="markdown-table-action-btn"
           >
             ↓ CSV
           </button>
@@ -268,10 +267,14 @@ export default function Markdown({ text }: { text: string }) {
       continue
     }
 
-    const hMatch = line.match(/^(#{1,3})\s+(.+)/)
+    const hMatch = line.match(/^(#{1,6})\s+(.+)/)
     if (hMatch) {
-      const sizes = [18, 16, 14]
-      result.push(<div key={i} style={{ fontSize: sizes[hMatch[1].length - 1], fontWeight: 700, color: t.text, margin: '12px 0 4px' }}>{hMatch[2]}</div>)
+      const sizes = [18, 16, 14, 13, 12, 12]
+      const margins = ['14px 0 4px', '12px 0 4px', '10px 0 3px', '8px 0 3px', '8px 0 3px', '8px 0 3px']
+      const level = hMatch[1].length
+      result.push(<div key={i} style={{
+        fontSize: sizes[level - 1], fontWeight: 700, color: t.text, margin: margins[level - 1],
+      }}>{hMatch[2]}</div>)
       i++; continue
     }
 

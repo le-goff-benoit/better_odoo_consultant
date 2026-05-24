@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { NavLink, useLocation } from 'react-router-dom'
-import { Bot, ArrowRightLeft, Database, FolderKanban, Info, Settings, Workflow, Wand2, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Bot, ArrowRightLeft, ChevronDown, Database, FolderKanban, Info, Settings, Workflow, Wand2, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react'
 import { getUserProfile } from '../api/client'
 import { normalizeUiLanguage } from '../i18n'
 import { APP_VERSION } from '../version'
@@ -175,23 +175,6 @@ export default function Sidebar({
 
       <TopbarClock />
 
-      <nav className="topbar-secondary" aria-label="Navigation secondaire">
-        {secondaryLinks.map(l => {
-          const Icon = l.icon
-          return (
-            <NavLink
-              key={l.to}
-              to={l.to}
-              className={({ isActive }) => `topbar-icon-link${isActive ? ' active' : ''}`}
-              title={tr[l.labelKey as keyof typeof tr]}
-            >
-              <Icon size={16} aria-hidden />
-              <span>{tr[l.labelKey as keyof typeof tr]}</span>
-            </NavLink>
-          )
-        })}
-      </nav>
-
       {showContextToggle && (
         <button type="button" className="topbar-context-button" onClick={onToggleContext} title={tr.context}>
           <ContextIcon size={16} />
@@ -199,24 +182,91 @@ export default function Sidebar({
         </button>
       )}
 
-      <div className="topbar-user">
+      <UserMenu
+        avatar={up.avatar as string | undefined}
+        avatarIsImg={avatarIsImg ?? false}
+        name={up.name as string | undefined}
+        subtitle={(up.title as string | undefined) || tr.consultant}
+        items={secondaryLinks.map(l => ({
+          to: l.to,
+          label: tr[l.labelKey as keyof typeof tr],
+          Icon: l.icon,
+        }))}
+        activePath={location.pathname}
+      />
+    </header>
+  )
+}
+
+function UserMenu({ avatar, avatarIsImg, name, subtitle, items, activePath }: {
+  avatar?: string
+  avatarIsImg: boolean
+  name?: string
+  subtitle: string
+  items: { to: string; label: string; Icon: typeof Info }[]
+  activePath: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onEsc)
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onEsc) }
+  }, [open])
+
+  return (
+    <div ref={ref} className="topbar-user-menu" style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="topbar-user topbar-user-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
         <div className="topbar-avatar">
-          {avatarIsImg
-            ? <img src={up.avatar as string} alt="avatar" />
-            : up.avatar && up.avatar !== '👤'
-              ? <span>{up.avatar}</span>
+          {avatarIsImg && avatar
+            ? <img src={avatar} alt="avatar" />
+            : avatar && avatar !== '👤'
+              ? <span>{avatar}</span>
               : <span>O</span>
           }
         </div>
         <div className="topbar-user-text">
-          <div>
-            {up.name || 'Better Odoo Assistant'}
-          </div>
-          <span>
-            {up.title || tr.consultant}
-          </span>
+          <div>{name || 'Better Odoo Assistant'}</div>
+          <span>{subtitle}</span>
         </div>
-      </div>
-    </header>
+        <ChevronDown size={14} aria-hidden style={{
+          marginLeft: 4, opacity: 0.7,
+          transform: open ? 'rotate(180deg)' : 'none',
+          transition: 'transform .15s',
+        }} />
+      </button>
+      {open && (
+        <div className="topbar-user-dropdown" role="menu">
+          {items.map(({ to, label, Icon }) => {
+            const isActive = activePath === to
+            return (
+              <button
+                key={to}
+                type="button"
+                role="menuitem"
+                onClick={() => { setOpen(false); navigate(to) }}
+                className={`topbar-user-dropdown-item${isActive ? ' is-active' : ''}`}
+              >
+                <Icon size={15} aria-hidden />
+                <span>{label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }

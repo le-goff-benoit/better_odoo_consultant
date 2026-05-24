@@ -763,16 +763,10 @@ textarea:focus-visible {
 
 .topbar-link-label {
   display: inline;
-  max-width: 0;
+  max-width: 200px;
   overflow: hidden;
-  opacity: 0;
-  transition: max-width .25s ease, opacity .2s ease;
-}
-.topbar-link:hover .topbar-link-label,
-.topbar-link:focus-within .topbar-link-label,
-.topbar-link.active .topbar-link-label {
-  max-width: 160px;
   opacity: 1;
+  white-space: nowrap;
 }
 
 .topbar-link:hover,
@@ -1509,11 +1503,18 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.markdown-table-export {
+.markdown-table-actions {
   position: absolute;
   top: 5px;
   right: 5px;
   z-index: 2;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.markdown-table-action-btn,
+.markdown-table-export {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1528,6 +1529,7 @@ textarea:focus-visible {
   font-weight: 750;
 }
 
+.markdown-table-action-btn:hover,
 .markdown-table-export:hover {
   background: var(--brand-10);
 }
@@ -2016,7 +2018,10 @@ textarea:focus-visible {
   width: 100%;
   min-width: 0;
   justify-content: center;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .source-check-button {
@@ -3799,3 +3804,60 @@ input::placeholder, textarea::placeholder {
    of the answer never slips behind them when it's wider than the card. */
 .assistant-msg-body { padding-right: 96px; }
 .assistant-msg-body > :first-child { min-height: 26px; }
+
+/* Sidebar — user avatar acts as a dropdown trigger for secondary nav
+   (About / How it works / Settings). */
+.topbar-user-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 12px;
+  height: 100%;
+  color: var(--boa-topbar-text);
+  font: inherit;
+  transition: background .14s;
+}
+.topbar-user-trigger:hover {
+  background: var(--boa-topbar-hover);
+}
+.topbar-user-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 6px;
+  margin-top: 4px;
+  min-width: 220px;
+  background: var(--th-bg-card);
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+  z-index: 60;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topbar-user-dropdown-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--th-text);
+  text-align: left;
+  border-radius: 6px;
+  transition: background .14s, color .14s;
+}
+.topbar-user-dropdown-item:hover {
+  background: var(--th-bg-muted);
+}
+.topbar-user-dropdown-item.is-active {
+  background: var(--brand-10);
+  color: var(--brand-fg);
+  font-weight: 600;
+}

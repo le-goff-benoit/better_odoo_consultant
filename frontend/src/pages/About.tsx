@@ -7,10 +7,24 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.53.0',
+    version: '0.54.0',
     date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Sidebar — À propos / Fonctionnement / Paramètres déplacés dans un menu déroulant ouvert depuis l\'avatar utilisateur, libère la barre du haut',
+      'Sidebar — libellés complets des onglets principaux à nouveau visibles en permanence (plus de hover pour les lire)',
+      'Markdown — prise en charge des titres `####` à `######` (h4-h6) qui apparaissaient en texte brut',
+      'Markdown — bouton « stylo » des tableaux désormais aligné à gauche du bouton CSV via un wrapper `markdown-table-actions` (le stylo n\'est plus caché derrière)',
+      'Sources — bouton de la liste des commits raccourci en « Mises à jour <N> » + ajustements pour qu\'il ne déborde plus de la carte',
+      'Sources — bouton du modal renommé « Résumé IA » (plus parlant que « Demander à l\'IA »)',
+    ],
+  },
+  {
+    version: '0.53.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'UI — retrait de la LED rouge décorative en haut à gauche de la barre principale (et nettoyage du CSS associé)',
       'Sources — version SaaS rendue lisible (« Odoo 19.2 » + chip mono `saas-19.2 ` au lieu du triplet `Odoo 19.2 - saas - saas-19.2`)',
