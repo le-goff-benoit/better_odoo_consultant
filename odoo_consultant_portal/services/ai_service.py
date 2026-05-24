@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from typing import AsyncIterator, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
