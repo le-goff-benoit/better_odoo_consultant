@@ -185,8 +185,15 @@ export default function ConversationContextPanel({
     version ? { key: 'version', label: targetVersion ? c.target : c.version, value: targetVersion ? `v${version} -> v${targetVersion}` : `v${version}`, tone: 'accent' as const, icon: null } : null,
     complexity ? { key: 'complexity', label: c.complexity, value: complexity, tone: 'muted' as const, icon: <Layers3 size={10} /> } : null,
   ].filter(Boolean) as SelectionItem[]
+  // Dedup: when the env repo (selectedCodeSource) is also listed in `sources`
+  // (e.g. the project's main repo), we'd otherwise show the same slug twice.
+  const sourcesNorm = sources.map(s => s.replace(/\.git$/, '').toLowerCase())
+  const repoNorm = selectedCodeSource?.toLowerCase()
+  const filteredSources = repoNorm
+    ? sources.filter((_, i) => sourcesNorm[i] !== repoNorm)
+    : sources
   const codeItems = [
-    ...sources.map((source, idx) => ({ key: `source-${idx}`, label: c.codeSources, value: source, tone: 'neutral' as const, icon: null })),
+    ...filteredSources.map((source, idx) => ({ key: `source-${idx}`, label: c.codeSources, value: source, tone: 'neutral' as const, icon: null })),
     selectedCodeSource ? { key: 'repo', label: c.repository, value: selectedCodeSource, tone: 'muted' as const, icon: <GitBranch size={10} /> } : null,
   ].filter(Boolean) as SelectionItem[]
   const hasSelection = projectItems.length > 0 || scopeItems.length > 0 || codeItems.length > 0

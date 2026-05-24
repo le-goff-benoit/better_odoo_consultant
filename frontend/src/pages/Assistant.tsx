@@ -38,7 +38,7 @@ import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
-import Markdown from '../components/Markdown'
+import Markdown, { MarkdownActionsProvider } from '../components/Markdown'
 
 // Module-level buffer: message arrays survive component unmount so streams
 // that finish after navigation are captured and shown on remount.
@@ -46,7 +46,7 @@ const _msgBuffer = new Map<string, Message[]>()
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string; technical_complexity?: string }
+interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string; technical_complexity?: string; project_context?: string }
 interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string; github_repo?: string; repo_branch?: string }
 interface L10nModule { name: string; source?: string; path?: string }
 interface InstalledModule { name?: string; shortdesc?: string; author?: string; installed_version?: string; application?: boolean }
@@ -280,6 +280,35 @@ const MODULE_SUGGESTIONS = [
   },
 ]
 
+// Per-perspective seed prompts that anchor the suggestion list — guarantees
+// switching perspective visibly changes what's offered, even before any module
+// data has loaded.
+const PERSPECTIVE_SEED: Record<Perspective, { fr: string[]; en: string[] }> = {
+  support: {
+    fr: ['Quels enregistrements demandent une action utilisateur aujourd\'hui ?', 'Y a-t-il des erreurs récurrentes dans les logs métier ?'],
+    en: ['Which records need a user action today?', 'Are there recurring business-side errors in the logs?'],
+  },
+  business_analyst: {
+    fr: ['Quels indicateurs clés faut-il suivre sur ce projet ?', 'Quels flux gagneraient à être audités ?'],
+    en: ['Which KPIs should be monitored on this project?', 'Which business flows would benefit from an audit?'],
+  },
+  architect: {
+    fr: ['Cartographie les principales apps Odoo installées sur ce projet', 'Quels sont les flux métier critiques de bout en bout ?'],
+    en: ['Map the main Odoo apps installed on this project', 'What are the critical end-to-end business flows?'],
+  },
+  developer: {
+    fr: ['Montre la structure technique derrière le flux métier actif', 'Quels modèles custom faut-il inspecter en priorité ?'],
+    en: ['Show the technical structure behind the active business flow', 'Which custom models should I inspect first?'],
+  },
+}
+
+const LOCALIZATION_HINTS: Record<string, { fr: string; en: string }> = {
+  CH: { fr: 'Comment la TVA suisse et les ISR/QR sont-ils paramétrés ?', en: 'How are Swiss VAT and QR-bill configured?' },
+  FR: { fr: 'Quels paramétrages fiscaux français (TVA, FEC) sont en place ?', en: 'What French fiscal settings (VAT, FEC) are in place?' },
+  BE: { fr: 'Comment la TVA belge et le plan comptable PCMN sont-ils paramétrés ?', en: 'How are Belgian VAT and the PCMN chart configured?' },
+  LU: { fr: 'Quels paramétrages fiscaux luxembourgeois sont en place ?', en: 'What Luxembourg fiscal settings are in place?' },
+}
+
 function buildPromptSuggestions({
   lang,
   perspective,
@@ -287,6 +316,9 @@ function buildPromptSuggestions({
   modules,
   complexityMode,
   hasRepo,
+  countryCode,
+  hasProjectContext,
+  profileId,
 }: {
   lang: 'fr' | 'en'
   perspective: Perspective
@@ -294,33 +326,64 @@ function buildPromptSuggestions({
   modules: InstalledModule[]
   complexityMode: ComplexityMode | null
   hasRepo: boolean
+  countryCode?: string | null
+  hasProjectContext?: boolean
+  profileId?: number | null
 }): string[] {
   if (isGeneralMode) return lang === 'en' ? SUGGESTIONS_GENERAL_EN.slice(0, 4) : SUGGESTIONS_GENERAL.slice(0, 4)
 
   const names = modules.map(m => `${m.name ?? ''} ${m.shortdesc ?? ''}`.toLowerCase())
   const perspectiveKey = perspective
+  // Keep at most one module entry per matching category to leave room for
+  // perspective/localization/context-driven prompts.
   const moduleDriven = MODULE_SUGGESTIONS
     .filter(entry => entry.keys.some(key => names.some(name => name.includes(key))))
     .map(entry => entry[lang][perspectiveKey])
 
-  const contextual = lang === 'en'
+  const perspectiveSeed = PERSPECTIVE_SEED[perspectiveKey]?.[lang] ?? []
+
+  const complexityPrompts = lang === 'en'
     ? [
       complexityMode === 'studio' || complexityMode === 'studio_dev' ? 'What was likely customized with Studio on this project?' : null,
-      complexityMode === 'dev' || complexityMode === 'studio_dev' || hasRepo ? 'Which custom modules should I inspect first?' : null,
-      perspective === 'developer' ? 'Show the technical structure behind the active business flow' : null,
-      perspective === 'architect' ? 'Map the main Odoo apps installed on this project' : null,
+      (complexityMode === 'dev' || complexityMode === 'studio_dev' || hasRepo) && perspective !== 'developer' ? 'Which custom modules should I inspect first?' : null,
     ]
     : [
       complexityMode === 'studio' || complexityMode === 'studio_dev' ? 'Qu’est-ce qui semble avoir été personnalisé avec Studio sur ce projet ?' : null,
-      complexityMode === 'dev' || complexityMode === 'studio_dev' || hasRepo ? 'Quels modules custom faut-il inspecter en priorité ?' : null,
-      perspective === 'developer' ? 'Montre la structure technique derrière le flux métier actif' : null,
-      perspective === 'architect' ? 'Cartographie les principales apps Odoo installées sur ce projet' : null,
+      (complexityMode === 'dev' || complexityMode === 'studio_dev' || hasRepo) && perspective !== 'developer' ? 'Quels modules custom faut-il inspecter en priorité ?' : null,
     ]
 
+  const localizationPrompt = countryCode ? LOCALIZATION_HINTS[countryCode.toUpperCase()]?.[lang] ?? null : null
+  const contextPrompt = hasProjectContext
+    ? (lang === 'en'
+      ? 'Summarize this project using its written context'
+      : 'Résume ce projet en t’appuyant sur le contexte rédigé')
+    : null
+
   const fallback = lang === 'en' ? SUGGESTIONS_EN : SUGGESTIONS
-  return [...moduleDriven, ...contextual.filter(Boolean), ...fallback]
+
+  // Ordering — perspective-driven first so changing the response profile
+  // visibly changes the surfaced prompts, then project-specific cues, then
+  // module categories, then generic fallback.
+  const ordered = [
+    ...perspectiveSeed,
+    contextPrompt,
+    localizationPrompt,
+    ...complexityPrompts,
+    ...moduleDriven,
+    ...fallback,
+  ]
     .filter((value, idx, arr): value is string => typeof value === 'string' && value.trim().length > 0 && arr.indexOf(value) === idx)
-    .slice(0, 4)
+
+  // Rotate within the unique set so different projects see different starting
+  // points even with similar module footprints. Stable per (profile, perspective).
+  if (ordered.length <= 4) return ordered
+  const seed = (profileId ?? 0) * 7 + perspectiveKey.length
+  const offset = ((seed % ordered.length) + ordered.length) % ordered.length
+  const rotated = [...ordered.slice(offset), ...ordered.slice(0, offset)]
+  // Always keep the perspective seed visible at the top.
+  const head = rotated.filter(s => perspectiveSeed.includes(s))
+  const tail = rotated.filter(s => !perspectiveSeed.includes(s))
+  return [...head, ...tail].slice(0, 4)
 }
 
 const assistantCopy = {
@@ -722,6 +785,7 @@ export default function Assistant() {
     () => ((modulesData?.data?.modules ?? []) as InstalledModule[]),
     [modulesData],
   )
+  const hasProjectContext = !!(selectedProfile?.project_context && selectedProfile.project_context.trim().length > 0)
   const promptSuggestions = useMemo(
     () => messages.length === 0 && profileId !== null && !input.trim()
       ? buildPromptSuggestions({
@@ -731,9 +795,12 @@ export default function Assistant() {
         modules: installedModules,
         complexityMode,
         hasRepo: !!activeEnvRepo || repoIsCloned,
+        countryCode: effectiveCountryCode,
+        hasProjectContext,
+        profileId: typeof profileId === 'number' ? profileId : null,
       })
       : [],
-    [messages.length, profileId, input, lang, perspective, isGeneralMode, installedModules, complexityMode, activeEnvRepo, repoIsCloned],
+    [messages.length, profileId, input, lang, perspective, isGeneralMode, installedModules, complexityMode, activeEnvRepo, repoIsCloned, effectiveCountryCode, hasProjectContext],
   )
 
   // Deduplicate versions: strip -enterprise suffix, keep one entry per base version
@@ -1392,7 +1459,7 @@ export default function Assistant() {
                 ref={el => { assistantRefs.current.set(msg.id, el) }}
                 style={{ scrollMarginTop: 8 }}
               >
-                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} onAskMore={askMoreOnSelection} />
+                <AssistantBubble events={msg.events ?? []} loading={msg.loading} provider={provider} timestamp={msg.timestamp} startTime={msg.startTime} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} projectName={isGeneralMode ? undefined : selectedProfile?.name} onAskMore={askMoreOnSelection} onEditTable={(prompt: string) => { if (!streaming) sendWithText(prompt) }} />
               </div>
             )
         ))}
@@ -1888,11 +1955,12 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, onAskMore }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, onAskMore, onEditTable }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
   onAskMore?: (selectedText: string) => void
+  onEditTable?: (prompt: string) => void
 }) {
   const lang = useUiLanguage()
   const c = assistantCopy[lang]
@@ -1948,17 +2016,12 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
             padding: '12px 16px', fontSize: 14, lineHeight: 1.7, color: t.text,
           }}>
-            <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+            <div className="assistant-msg-actions">
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
                 title={c.expandTitle}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 26, height: 26, border: `1px solid ${t.border}`,
-                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                  color: t.muted, opacity: 0.8, transition: 'opacity .15s, color .15s',
-                }}
+                className="assistant-msg-action"
               >
                 <Maximize2 size={13} />
               </button>
@@ -1966,13 +2029,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
                 type="button"
                 onClick={copyStyled}
                 title={c.copyTitle}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 26, height: 26, border: `1px solid ${t.border}`,
-                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                  color: copied === 'rich' ? t.success : t.muted, opacity: 0.8,
-                  transition: 'opacity .15s, color .15s',
-                }}
+                className={`assistant-msg-action${copied === 'rich' ? ' is-success' : ''}`}
               >
                 {copied === 'rich' ? <CheckCheck size={13} /> : <Copy size={13} />}
               </button>
@@ -1980,18 +2037,16 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
                 type="button"
                 onClick={copyMd}
                 title={c.copyMdTitle}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 26, height: 26, border: `1px solid ${t.border}`,
-                  borderRadius: t.radius, background: t.bg, cursor: 'pointer',
-                  color: copied === 'md' ? t.success : t.muted, opacity: 0.8,
-                  transition: 'opacity .15s, color .15s',
-                }}
+                className={`assistant-msg-action${copied === 'md' ? ' is-success' : ''}`}
               >
                 {copied === 'md' ? <CheckCheck size={13} /> : <Code size={13} />}
               </button>
             </div>
-            <div ref={markdownRef}><Markdown text={textEvt.content} /></div>
+            <div ref={markdownRef} className="assistant-msg-body">
+              <MarkdownActionsProvider onEditTable={onEditTable}>
+                <Markdown text={textEvt.content} />
+              </MarkdownActionsProvider>
+            </div>
           </div>
         )}
 

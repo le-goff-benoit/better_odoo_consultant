@@ -35,8 +35,8 @@ function AppBadges({ apps, max = 5 }: { apps: { name: string; shortdesc: string 
       {rest > 0 && (
         <span style={{
           padding: '3px 8px', borderRadius: 4,
-          background: '#F3F4F6', border: '1px solid #E5E7EB',
-          fontSize: 11, color: '#6B7280',
+          background: t.bgMuted, border: `1px solid ${t.border}`,
+          fontSize: 11, color: t.muted,
         }}>+{rest}</span>
       )}
     </div>
@@ -1746,8 +1746,9 @@ function MaintenanceAction({ icon, label, description, onClick, loading, dotColo
         display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 12px',
         width: '100%', textAlign: 'left',
         border: '1px solid var(--th-border)', borderRadius: 'var(--neo-radius, 8px)',
-        background: 'transparent', cursor: loading ? 'wait' : 'pointer',
-        opacity: loading ? 0.6 : 1, transition: 'background .15s',
+        background: 'transparent', color: 'var(--th-text)',
+        cursor: loading ? 'wait' : 'pointer',
+        opacity: loading ? 0.6 : 1, transition: 'background .15s, border-color .15s',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
         width: 28, height: 28, flexShrink: 0,

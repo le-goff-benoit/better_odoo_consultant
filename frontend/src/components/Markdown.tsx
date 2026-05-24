@@ -1,5 +1,17 @@
-import React, { useState } from 'react'
+import React, { createContext, useContext, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Pencil, Send, X } from 'lucide-react'
 import { t } from '../theme'
+
+// Lets a parent renderer hand the Markdown subtree a callback so the
+// MarkdownTable "edit with AI" button can dispatch a contextualised prompt
+// back to the assistant composer.
+const MarkdownActionsCtx = createContext<{ onEditTable?: (prompt: string) => void }>({})
+export function MarkdownActionsProvider({
+  onEditTable, children,
+}: { onEditTable?: (prompt: string) => void; children: React.ReactNode }) {
+  return <MarkdownActionsCtx.Provider value={{ onEditTable }}>{children}</MarkdownActionsCtx.Provider>
+}
 
 // ── Markdown table with CSV export ────────────────────────────
 
@@ -82,6 +94,9 @@ function isTableContinuation(line: string): boolean {
 
 function MarkdownTable({ headers, aligns, dataRows }: ParsedMarkdownTable) {
   const [hovered, setHovered] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editText, setEditText] = useState('')
+  const { onEditTable } = useContext(MarkdownActionsCtx)
 
   const downloadCsv = () => {
     const escape = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
@@ -98,6 +113,24 @@ function MarkdownTable({ headers, aligns, dataRows }: ParsedMarkdownTable) {
     URL.revokeObjectURL(url)
   }
 
+  const tableMarkdown = () => {
+    const head = '| ' + headers.join(' | ') + ' |'
+    const sep = '| ' + aligns.map(a => a === 'center' ? ':---:' : a === 'right' ? '---:' : '---').join(' | ') + ' |'
+    const body = dataRows.map(row => '| ' + row.join(' | ') + ' |').join('\n')
+    return [head, sep, body].join('\n')
+  }
+
+  const submitEdit = () => {
+    if (!onEditTable || !editText.trim()) return
+    const md = tableMarkdown()
+    const prompt =
+      `Voici le tableau de ta réponse précédente :\n\n${md}\n\nDemande : ${editText.trim()}\n\n` +
+      `Renvoie une version mise à jour de ce tableau en Markdown.`
+    onEditTable(prompt)
+    setEditOpen(false)
+    setEditText('')
+  }
+
   return (
     <div
       className="markdown-table-wrap"
@@ -105,13 +138,70 @@ function MarkdownTable({ headers, aligns, dataRows }: ParsedMarkdownTable) {
       onMouseLeave={() => setHovered(false)}
     >
       {hovered && (
-        <button
-          onClick={downloadCsv}
-          title="Exporter en CSV"
-          className="markdown-table-export"
-        >
-          ↓ CSV
-        </button>
+        <div className="markdown-table-actions">
+          {onEditTable && (
+            <button
+              onClick={() => setEditOpen(true)}
+              title="Demander à l'IA une modification de ce tableau"
+              className="markdown-table-export"
+              style={{ marginRight: 6 }}
+            >
+              <Pencil size={11} style={{ verticalAlign: '-2px' }} />
+            </button>
+          )}
+          <button
+            onClick={downloadCsv}
+            title="Exporter en CSV"
+            className="markdown-table-export"
+          >
+            ↓ CSV
+          </button>
+        </div>
+      )}
+      {editOpen && createPortal(
+        <div className="ui-modal-overlay" onClick={() => setEditOpen(false)}>
+          <div className="ui-modal" role="dialog" aria-modal="true"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: 560, width: '100%' }}>
+            <div className="ui-modal-header">
+              <h2 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 700 }}>
+                <Pencil size={15} /> Modifier ce tableau via l'IA
+              </h2>
+              <button onClick={() => setEditOpen(false)} className="ui-icon-button" aria-label="Fermer" title="Fermer">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="ui-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--th-muted)', lineHeight: 1.5 }}>
+                Décrivez la modification souhaitée — ajouter une colonne, reformater, agréger, filtrer…
+                La demande sera envoyée à l'IA avec le tableau en contexte.
+              </div>
+              <textarea
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                placeholder="Ex : ajoute une colonne « marge en % » calculée à partir des colonnes existantes."
+                autoFocus
+                style={{
+                  width: '100%', minHeight: 110, padding: '10px 12px',
+                  border: `1px solid ${t.border}`, borderRadius: t.radius,
+                  fontSize: 13, color: t.text, background: t.white,
+                  fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical',
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+                onKeyDown={e => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submitEdit()
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button className="btn btn-secondary" onClick={() => setEditOpen(false)}>Annuler</button>
+                <button className="btn btn-primary" onClick={submitEdit} disabled={!editText.trim()}>
+                  <Send size={13} /> Envoyer à l'IA
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
       <table className="markdown-table">
         <thead>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, CheckCircle2, ChevronDown, ChevronUp, Copy, Download, KeyRound, Loader2, Plus, RefreshCw, Square, Trash2, TriangleAlert } from 'lucide-react'
+import { Bot, CheckCircle2, ChevronDown, ChevronUp, Copy, Download, KeyRound, Loader2, Plus, RefreshCw, Square, Trash2, TriangleAlert, X } from 'lucide-react'
 import { listSshKeys, testGithubSsh, generateSshKey, checkAllSources, checkSourceUpdates, checkSingleVersion, getCommitsSince } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -93,6 +94,9 @@ const sourcesCopy = {
     lastUpdated: 'Dernière mise à jour',
     hide: 'Masquer',
     aiSummary: 'Résumé 30 j',
+    latestUpdates: 'Dernières mises à jour',
+    askAi: 'Demander à l\'IA',
+    closeModal: 'Fermer',
     checking: 'Vérif…',
     check: 'Vérifier',
     status: 'Statut',
@@ -148,6 +152,9 @@ const sourcesCopy = {
     lastUpdated: 'Last updated',
     hide: 'Hide',
     aiSummary: '30d summary',
+    latestUpdates: 'Latest updates',
+    askAi: 'Ask AI',
+    closeModal: 'Close',
     checking: 'Checking…',
     check: 'Check',
     status: 'Status',
@@ -182,9 +189,8 @@ export default function Sources() {
   const navigate = useNavigate()
 
   const [cards,          setCards]          = useState<Record<string, VersionState>>({})
-  const [customPaths,    setCustomPaths]    = useState<Record<string, string>>({})
+  const [customPaths]                       = useState<Record<string, string>>({})
   const [enterprise,     setEnterprise]     = useState<Record<string, boolean>>({})
-  const [advanced,       setAdvanced]       = useState<string | null>(null)
   const [showCommits,    setShowCommits]    = useState<Record<string, boolean>>({})
   const [repoOverrides,  setRepoOverrides]  = useState<Record<string, RepoInfo>>({})
   const [updatesLoading, setUpdatesLoading] = useState<Record<string, boolean>>({})
@@ -269,7 +275,7 @@ export default function Sources() {
     const custom: VersionDef[] = customVersions.map(v => ({
       version: v,
       label: `Odoo ${v}`,
-      badge: `saas-${v}`,
+      badge: '',
       badgeColor: '#8B5CF6',
       isMajor: false,
     }))
@@ -330,6 +336,37 @@ export default function Sources() {
       delete next[v]; delete next[`${v}-enterprise`]
       return next
     })
+  }
+
+  // Auto-check updates for installed versions, once per session — saves the
+  // user from manually clicking "Check" on each card after landing on Sources.
+  const autoCheckedRef = useRef(false)
+  useEffect(() => {
+    if (autoCheckedRef.current) return
+    if (!allStatus?.data) return
+    const data: Record<string, RepoInfo> = allStatus.data
+    const installed = Object.entries(data)
+      .filter(([k, v]) => v.installed && !k.endsWith('-enterprise'))
+      .map(([k]) => k)
+    if (installed.length === 0) return
+    autoCheckedRef.current = true
+    installed.forEach(v => { void doCheckUpdatesSilent(v, data) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allStatus])
+
+  const doCheckUpdatesSilent = async (version: string, _data: Record<string, RepoInfo>) => {
+    const path = customPaths[version] || defaultPath(version)
+    setUpdatesLoading(p => ({ ...p, [version]: true, [`${version}-enterprise`]: true }))
+    try {
+      const [commRes, entRes] = await Promise.allSettled([
+        checkSourceUpdates(version, path),
+        checkSourceUpdates(`${version}-enterprise`, path.replace(version, `${version}-enterprise`)),
+      ])
+      if (commRes.status === 'fulfilled') setRepoOverrides(p => ({ ...p, [version]: commRes.value.data }))
+      if (entRes.status === 'fulfilled')  setRepoOverrides(p => ({ ...p, [`${version}-enterprise`]: entRes.value.data }))
+    } finally {
+      setUpdatesLoading(p => ({ ...p, [version]: false, [`${version}-enterprise`]: false }))
+    }
   }
 
   const doCheckUpdates = async (version: string) => {
@@ -460,7 +497,6 @@ export default function Sources() {
             : cards[version]
           const status   = card?.status ?? 'idle'
           const pct      = card?.pct    ?? 0
-          const isOpen   = advanced === version
           const repoInfo = allVersionStatus[version]
           const entInfo  = allVersionStatus[`${version}-enterprise`]
           const checking = updatesLoading[version] ?? false
@@ -510,7 +546,8 @@ export default function Sources() {
                           fontSize: 10, fontWeight: 700, color: '#8B5CF6',
                           background: '#8B5CF615', border: '1px solid #8B5CF640',
                           borderRadius: 3, padding: '1px 6px', letterSpacing: '.02em',
-                        }}>saas</span>
+                          fontFamily: 'monospace',
+                        }}>saas-{version}</span>
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -571,22 +608,6 @@ export default function Sources() {
                       )}
                     </span>
                   </label>
-                )}
-
-                {/* Advanced toggle */}
-                <button onClick={() => setAdvanced(isOpen ? null : version)}
-                  className="btn btn-outline-muted btn-xs" style={{ marginBottom: 6 }}>
-                  {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  {isOpen ? c.hideOptions : c.showOptions}
-                </button>
-
-                {isOpen && (
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ display: 'block', fontSize: 11, color: t.muted, marginBottom: 4 }}>{c.targetFolder}</label>
-                    <input value={customPaths[version] ?? ''} placeholder={defaultPath(version)}
-                      onChange={e => setCustomPaths(p => ({ ...p, [version]: e.target.value }))}
-                      className="ui-input" style={{ fontSize: 12 }} />
-                  </div>
                 )}
 
                 {/* Logs */}
@@ -710,9 +731,9 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
       )}
       <div className="source-installed-actions">
         {(info.recent_commits?.length ?? 0) > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={onToggleCommits}>
-            {showCommits ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            {showCommits ? labels.hide : `${info.recent_commits!.length} commits`}
+          <button className="btn btn-ghost btn-sm" onClick={onToggleCommits} title={labels.latestUpdates}>
+            <RefreshCw size={13} /> {labels.latestUpdates}
+            <span style={{ marginLeft: 4, opacity: .65 }}>({info.recent_commits!.length})</span>
           </button>
         )}
         <button className="btn btn-outline btn-sm" onClick={buildSummary} disabled={summaryLoading}>
@@ -725,20 +746,75 @@ function InstalledStrip({ info, entInfo, version: _version, label, showCommits, 
           {checking ? labels.checking : labels.check}
         </button>
       </div>
-      {showCommits && info.recent_commits && (
-        <div style={{
-          marginTop: 8, background: 'var(--code-bg)', borderRadius: t.radiusSm,
-          padding: '8px 10px', maxHeight: 180, overflowY: 'auto',
-        }}>
-          {info.recent_commits.map(c => (
-            <div key={c.sha} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
-              <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--code-accent)', flexShrink: 0, marginTop: 1 }}>{c.sha}</span>
-              <span style={{ fontSize: 11, color: 'var(--code-fg)', flex: 1, lineHeight: 1.4 }}>{c.message}</span>
-              <span style={{ fontSize: 10, color: '#585b70', flexShrink: 0 }}>{relativeDate(c.date, lang)}</span>
-            </div>
-          ))}
-        </div>
+      {showCommits && info.recent_commits && createPortal(
+        <CommitsModal
+          label={label}
+          commits={info.recent_commits}
+          onClose={onToggleCommits}
+          onAskAi={() => {
+            // Hand a compact, ready-to-send prompt to the assistant.
+            const header = lang === 'en'
+              ? `Here are the last ${info.recent_commits!.length} commits of **${label}** (Community). Tell me what changed and the impact for an Odoo consultant.`
+              : `Voici les ${info.recent_commits!.length} derniers commits de **${label}** (Community). Dis-moi ce qui a changé et l'impact pour un consultant Odoo.`
+            const lines = info.recent_commits!.map(co =>
+              `- \`${co.sha}\` ${co.message} — ${co.author}, ${co.date}`,
+            )
+            onAiSummary(`${header}\n\n${lines.join('\n')}`)
+            onToggleCommits()
+          }}
+          lang={lang}
+          labels={labels}
+        />,
+        document.body,
       )}
+    </div>
+  )
+}
+
+function CommitsModal({ label, commits, onClose, onAskAi, lang, labels }: {
+  label: string
+  commits: RecentCommit[]
+  onClose: () => void
+  onAskAi: () => void
+  lang: UiLanguage
+  labels: typeof sourcesCopy.fr
+}) {
+  return (
+    <div className="ui-modal-overlay" onClick={onClose}>
+      <div className="ui-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}
+        style={{ maxWidth: 720, width: '100%' }}>
+        <div className="ui-modal-header">
+          <h2 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 700 }}>
+            <RefreshCw size={16} /> {labels.latestUpdates} — {label}
+          </h2>
+          <button onClick={onClose} className="ui-icon-button" aria-label={labels.closeModal} title={labels.closeModal}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="ui-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <div style={{
+            background: 'var(--code-bg)', borderRadius: t.radius,
+            padding: '10px 12px', maxHeight: '60vh', overflowY: 'auto',
+            border: `1px solid ${t.border}`,
+          }}>
+            {commits.map(co => (
+              <div key={co.sha} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'flex-start' }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--code-accent)', flexShrink: 0, marginTop: 2 }}>{co.sha}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--code-fg)', lineHeight: 1.45 }}>{co.message}</div>
+                  <div style={{ fontSize: 10.5, color: t.muted, marginTop: 2 }}>{co.author} · {relativeDate(co.date, lang)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+            <button className="btn btn-secondary" onClick={onClose}>{labels.closeModal}</button>
+            <button className="btn btn-primary" onClick={onAskAi}>
+              <Bot size={14} /> {labels.askAi}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

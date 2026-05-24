@@ -7,10 +7,28 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.52.0',
-    date: '2026-05-23',
+    version: '0.53.0',
+    date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'UI — retrait de la LED rouge décorative en haut à gauche de la barre principale (et nettoyage du CSS associé)',
+      'Sources — version SaaS rendue lisible (« Odoo 19.2 » + chip mono `saas-19.2 ` au lieu du triplet `Odoo 19.2 - saas - saas-19.2`)',
+      'Sources — suppression du bloc « Options avancées » (dossier cible) jamais utilisé pour épurer les cartes',
+      'Sources — auto-vérification des mises à jour à l\'arrivée sur la page pour chaque version installée (plus besoin de cliquer « Vérifier »)',
+      'Sources — la liste des commits récents s\'ouvre désormais dans un modal « Dernières mises à jour » avec un bouton IA dédié qui envoie directement le contexte à l\'assistant',
+      'Projets — chip « +N » des apps et boutons d\'action de Maintenance qui suivent enfin le thème actif (couleur de texte forcée, hover lisible)',
+      'Discussion — boutons d\'action (agrandir / copier / copier MD) en haut à droite d\'une réponse : effet hover, padding-right qui empêche le texte de passer derrière, classes CSS partagées',
+      'Discussion — déduplication du repo d\'environnement dans le panneau Contexte (camptocamp/rubixcomm_odoo n\'apparaît plus deux fois)',
+      'Discussion — petit stylo sur chaque tableau Markdown : ouvre un modal de demande de modification (ajouter une colonne, reformater…) et relance l\'IA avec le tableau en contexte',
+      'Discussion — suggestions de prompts plus dynamiques : seed dédié par perspective, localisation fiscale (CH/FR/BE/LU), contexte projet rédigé, rotation stable par (projet, perspective) pour varier d\'un client à l\'autre',
+    ],
+  },
+  {
+    version: '0.52.0',
+    date: '2026-05-23',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Exploration données — playbook Odoo embarqué dans le system prompt : relations projet ↔ compta (via `account.analytic.line`), commande ↔ facture, contournement du JSON non-filtrable `analytic_distribution`',
       'Exploration données — `get_odoo_fields` retourne désormais relations et `relation_field`, priorise les champs custom `x_*` et relations en tête, et accepte `field_names=[...]` pour cibler le détail complet d\'un champ',

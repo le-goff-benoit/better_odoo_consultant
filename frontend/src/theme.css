@@ -3708,105 +3708,6 @@ input::placeholder, textarea::placeholder {
 .neo-kv b { color: var(--th-text); font-weight: 700; }
 
 
-.topbar-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 58px;
-  align-self: stretch;
-  background: var(--boa-topbar-status-bg);
-  border-right: 1px solid var(--boa-topbar-border);
-}
-
-.topbar-led {
-  position: relative;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, #220000 0%, #080000 74%, #000 100%);
-  border: 1px solid color-mix(in srgb, var(--boa-topbar-text) 18%, transparent);
-  box-shadow:
-    inset 0 0 4px rgba(0, 0, 0, .85),
-    inset 0 0 0 3px #220707;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.topbar-led::before {
-  content: "";
-  position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 45, 45, .42) 0%, rgba(255, 45, 45, .16) 38%, transparent 68%);
-  filter: blur(2px);
-  opacity: .45;
-  animation: topbar-led-halo 1.85s ease-in-out infinite;
-}
-
-.topbar-led-core {
-  position: relative;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 45% 38%, #ffdede 0%, #ff4d4d 28%, #bd1d18 62%, #570808 100%);
-  box-shadow:
-    0 0 7px rgba(255, 48, 48, .92),
-    0 0 18px rgba(255, 48, 48, .62);
-  animation: topbar-led-pulse 1.85s ease-in-out infinite;
-}
-
-.topbar-led-glint {
-  position: absolute;
-  top: 6px;
-  left: 7px;
-  width: 5px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .62);
-  filter: blur(.4px);
-  pointer-events: none;
-}
-
-@keyframes topbar-led-pulse {
-  0%, 100% {
-    transform: scale(.9);
-    filter: brightness(.86) saturate(1.05);
-    box-shadow:
-      0 0 5px rgba(255, 44, 44, .75),
-      0 0 11px rgba(255, 44, 44, .38),
-      0 0 18px rgba(255, 20, 20, .18);
-  }
-  50% {
-    transform: scale(1.18);
-    filter: brightness(1.45) saturate(1.22);
-    box-shadow:
-      0 0 10px rgba(255, 110, 110, 1),
-      0 0 26px rgba(255, 45, 45, .95),
-      0 0 44px rgba(255, 28, 28, .62);
-  }
-}
-
-@keyframes topbar-led-halo {
-  0%, 100% {
-    transform: scale(.84);
-    opacity: .28;
-  }
-  50% {
-    transform: scale(1.26);
-    opacity: .82;
-  }
-}
-
-@media (max-width: 900px) {
-  .topbar-status { width: 48px; }
-  .topbar-led { width: 22px; height: 22px; }
-  .topbar-led-core { width: 10px; height: 10px; }
-}
-
 /* Creator — spinner */
 @keyframes spin { to { transform: rotate(360deg); } }
 .creator-spin { animation: spin .8s linear infinite; }
@@ -3859,3 +3760,42 @@ input::placeholder, textarea::placeholder {
   .creator-content-row { flex-direction: column; overflow: visible; }
   .creator-main-column { overflow: visible; }
 }
+
+/* Assistant message action buttons (top-right of an answer card) */
+.assistant-msg-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.assistant-msg-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--th-border);
+  border-radius: var(--neo-radius, 6px);
+  background: var(--th-bg);
+  color: var(--th-muted);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity .15s, color .15s, background .15s, border-color .15s, box-shadow .15s;
+}
+.assistant-msg-action:hover {
+  opacity: 1;
+  color: var(--th-text);
+  background: var(--th-bg-muted);
+  border-color: var(--th-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+}
+.assistant-msg-action.is-success {
+  color: var(--th-success, #16a34a);
+  border-color: var(--th-success, #16a34a);
+}
+/* Reserve room for the absolute-positioned action buttons so the first line
+   of the answer never slips behind them when it's wider than the card. */
+.assistant-msg-body { padding-right: 96px; }
+.assistant-msg-body > :first-child { min-height: 26px; }
