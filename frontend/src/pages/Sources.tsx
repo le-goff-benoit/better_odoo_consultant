@@ -814,6 +814,7 @@ function InstalledStrip({ info, entInfo, version, label, showCommits, onToggleCo
           )}
         </div>
       )}
+      <hr style={{ border: 0, borderTop: `1px solid ${t.border}`, margin: '10px 0 8px' }} />
       <div className="source-installed-actions">
         <button className="btn btn-ghost btn-sm" onClick={onToggleCommits} title={labels.latestUpdates}>
           <RefreshCw size={13} /> {labels.latestUpdatesShort}
