@@ -1,44 +1,42 @@
 # Better Odoo Assistant
 
-**Votre portail local pour travailler avec Odoo au quotidien.**
+**Le portail local du consultant Odoo : sources, projets clients, dépôts custom et assistant IA outillé — sur votre machine.**
 
-Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
+Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sources Odoo Community + Enterprise, connexions XML-RPC aux instances clients, dépôts custom clonés, et surtout un **assistant IA piloté par skills** qui sait lire le code, les données live et les pièces jointes pour répondre avec des faits, pas des suppositions.
 
-> Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.9.0** — runtime de skills durci, observable et testé :
-> - **Skills — descriptions refondues** sur les 28 `SKILL.md` selon les bonnes pratiques OpenAI / Anthropic / Agent Skills : mots-clés front-loadés, limites explicites « Ne pas utiliser pour… » qui neutralisent les overlaps majeurs (source ↔ repo ↔ migration, query ↔ count ↔ aggregate, inspect-view ↔ inspect-report ↔ inspect-navigation), versions FR + EN.
-> - **Dispatcher durci** : seuil minimum (`_MIN_SKILL_SCORE = 25`), 6 nouvelles règles de pruning (`count-focus`, `schema-focus`, `list-modules-focus`, `attachment-focus`, `navigation-focus`, `report-focus` étendu), word-boundary matching pour les tokens ambigus FR/EN (`groupe` ne matche plus `grouped`), `allow_implicit_invocation: false` sur les 6 skills runtime cœur.
-> - **Observabilité** : `SkillRuntimeEvent.execution_done` capture désormais `input_tokens` / `output_tokens` pour Claude / OpenAI / Gemini, permettant de calculer le ratio contexte/output sans re-parser les payloads provider.
-> - **Sécurité** : défense path traversal sur `SkillLoader` testée (`../`, NUL injection, symlinks d\'évasion, extensions exotiques).
-> - **Tests régressifs** : **436 tests** (+64 vs 0.66.0). 10 skills à overlap équipés d\'un `eval_queries.json` (70 cas), invariant cross-provider verrouillé, budget de contexte testé bout-en-bout, références auto-loadées paramétrées sur les 12 entrées du repo. Chaque modification future de description, keyword ou règle de routage est protégée par une suite régressive qui flippe immédiatement en CI.
-> - **Propositions d\'action unifiées** (hérité de 0.66) : les puces d\'action des réponses IA sont extraites et présentées sous la réponse comme chips brandées, visibles aussi en plein écran.
-> - **PDF + images partout** (hérité de 0.65) : skill cœur `attachment_handler` avec fallback `pypdf` → `pdf2image` pour les providers sans support PDF natif (GitHub Models / Copilot).
+> **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
+>
+> **Version actuelle :** `0.9.0` — runtime de skills durci (28 skills self-contained, dispatcher avec seuil et règles de pruning, 436 tests régressifs, observabilité tokens). Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 
 ## Table des matières
 
+- [Ce que l'app fait](#ce-que-lapp-fait)
 - [Installation](#installation)
 - [Démarrage rapide](#démarrage-rapide)
-- [Comprendre le fonctionnement](#comprendre-le-fonctionnement)
-- [Langues et contextes multilingues](#langues-et-contextes-multilingues)
-- [Guide d'utilisation](#guide-dutilisation)
-  - [1. Configurer les sources Odoo](#1-configurer-les-sources-odoo)
-  - [2. Ajouter un projet client](#2-ajouter-un-projet-client)
-  - [3. Gérer les environnements](#3-gérer-les-environnements)
-  - [4. Connecter un dépôt GitHub](#4-connecter-un-dépôt-github)
-  - [5. Configurer l'assistant IA](#5-configurer-lassistant-ia)
-  - [6. Utiliser l'assistant IA](#6-utiliser-lassistant-ia)
-- [Qualité des réponses IA — Sources & contexte](#qualité-des-réponses-ia--sources--contexte)
-  - [Pourquoi les sources comptent](#pourquoi-les-sources-comptent)
-  - [Les trois couches de contexte](#les-trois-couches-de-contexte)
-  - [Sources Odoo standard](#sources-odoo-standard)
-  - [Dépôt custom GitHub](#dépôt-custom-github)
-  - [Contexte projet](#contexte-projet)
-  - [Inspection Studio](#inspection-studio)
-  - [Données live Odoo](#données-live-odoo)
-  - [Checklist — obtenir les meilleures réponses](#checklist--obtenir-les-meilleures-réponses)
+- [Les pages de l'app](#les-pages-de-lapp)
+- [Comment l'assistant IA répond avec précision](#comment-lassistant-ia-répond-avec-précision)
+- [Architecture skills IA](#architecture-skills-ia)
+- [Providers IA supportés](#providers-ia-supportés)
+- [Multilingue (FR + EN)](#multilingue-fr--en)
+- [Données locales et secrets](#données-locales-et-secrets)
 - [Architecture & développement](#architecture--développement)
+- [Licence](#licence)
+
+---
+
+## Ce que l'app fait
+
+Pour un consultant Odoo en mission, Better Odoo Assistant remplit 5 rôles :
+
+1. **Hub sources Odoo** — téléchargement et maintenance des sources Community + Enterprise (v15 → v19), partagées entre tous les projets clients.
+2. **CRM projets clients** — fiche par client, environnements multiples (prod / staging / dev), connexion XML-RPC, dépôt custom cloné par environnement.
+3. **Assistant IA outillé** — chat conversationnel avec accès live à Odoo (lecture seule), aux sources standard, au code custom et aux pièces jointes (PDF / images / Excel / tableaux).
+4. **Migration assistée** — assistant dédié au passage d'une version Odoo à une autre, avec sources source + cible chargées simultanément et release notes injectées.
+5. **Creator Studio** — workflow IA pour proposer, prévisualiser (rendu de vue + PDF) puis appliquer des personnalisations Odoo Studio sur l'instance connectée.
+
+L'app reste **read-only par défaut sur Odoo** : seuls les workflows Creator écrivent, et uniquement après validation explicite.
 
 ---
 
@@ -46,295 +44,165 @@ Better Odoo Assistant est une application web qui tourne sur votre machine. Elle
 
 ### Prérequis
 
-| Outil | Version minimum |
-|---|---|
-| Python | 3.10+ |
-| Node.js | 18+ |
-| Git | toute version récente |
+| Outil | Version minimum | Note |
+|---|---|---|
+| Python | 3.10+ | |
+| Node.js | 18+ | pour builder l'interface |
+| Git | toute version récente | |
+| `poppler-utils` | optionnel | pour les PDF scannés (auto-installé par `scripts/install.sh`) |
 
-**Téléchargement :**
+### Installation (une fois)
+
 ```bash
 git clone https://github.com/le-goff-benoit/better_odoo_consultant.git
 cd better_odoo_consultant
-```
-
-**Installation (une seule fois) :**
-```bash
 bash scripts/install.sh
 ```
 
-Le script installe automatiquement l'environnement Python, les dépendances backend, et compile l'interface web.
+Le script crée `.venv`, installe les dépendances Python, builde le frontend, et tente d'installer `poppler-utils` (apt / brew / dnf) — sans `poppler`, le skill `attachment_handler` bascule sur extraction texte seule (pypdf) avec message explicite si le PDF est scanné.
 
-**Démarrage :**
+### Démarrage
+
 ```bash
 bash scripts/start.sh
 ```
 
-Le portail s'ouvre dans votre navigateur à **http://localhost:8765**.
+L'app s'ouvre sur **http://localhost:8765**.
+
+### CLI
+
+```bash
+source .venv/bin/activate
+odoo-portal --help          # ou: better-odoo-assistant --help
+```
 
 ---
 
 ## Démarrage rapide
 
-Voici le flux typique pour commencer à travailler sur un nouveau projet client :
-
 ```
-1. Sources      →  Téléchargez les sources Odoo de la version du client
-2. Paramètres   →  Ajoutez une clé API pour un modèle IA (Claude, GPT…)
-3. Mes projets  →  Créez un projet avec l'URL et les identifiants du client
-4. Assistant IA →  Posez vos premières questions sur les données du client
+1. Sources       → téléchargez la version Odoo du client (Community + Enterprise si besoin)
+2. Paramètres    → ajoutez une clé API IA (Claude / GPT / Gemini / GitHub Models / Copilot)
+3. Mes projets   → créez le projet client : URL, base, login, clé API Odoo
+4. Assistant IA  → posez vos premières questions sur les données du client
 ```
 
----
-
-## Comprendre le fonctionnement
-
-La page **Fonctionnement** explique le flux complet de l'application sous forme d'un diagramme vertical, du haut vers le bas.
-
-Elle détaille comment le portail combine :
-- la **configuration utilisateur** : nom, poste, équipe, thème, couleur d'accent et préférences d'interface ;
-- la **configuration des providers IA** : clés API, provider actif, modèle choisi et modèles activés/désactivés ;
-- la **perspective de réponse** : 4 rôles consultant (Support, Business Analyst, Architecte, Développeur) avec détection automatique selon la question ;
-- les **fichiers Markdown de contexte** : `skills.md`, `studio.md`, `migration.md`, `meeting-minute.md`, `odoo-*.md` ;
-- le **projet client** : environnement actif, société active, contexte projet et auto-complétion ;
-- les **sources Odoo locales** et le **repo custom client** ;
-- le **routeur de contexte**, qui sélectionne les sections utiles avant d'appeler le modèle IA ;
-- les **outils IA** : données live Odoo, lecture du code source, inspection Studio, comptage de lignes, etc.
-
-Cette page est utile pour comprendre pourquoi une réponse IA est bonne ou mauvaise : si une source manque, si le mauvais provider est choisi, ou si le contexte projet est incomplet, le diagramme montre où corriger.
-
-La version 0.64 **fiabilise le pilotage par skills et les analyses Odoo volumineuses** :
-- **27 playbooks SKILL.md complétés** : chaque skill documente ses cas d'usage, déclencheurs, séquence recommandée, paramètres, pièges, combinaisons et critères de réponse ;
-- **sélecteur de skills plus pertinent** : scoring par familles d'intention et bundles automatiques pour les analyses de record métier, KPI, vues, sécurité, Studio et migrations ;
-- **événement SSE `skills_selected`** : l'interface affiche les skills routés par l'assistant, pas seulement les outils effectivement appelés ;
-- **`query_odoo` exhaustif borné** : `limit=0` récupère tous les records visibles jusqu'à 5000, par pages de 500, avec `total_count`, `pages_fetched`, `truncated` et warning explicite ;
-- **contexte sticky** : le panneau de contexte reste accessible pendant le scroll sur Assistant, Migration et Creator, et la liste des skills utilisés s'affiche entièrement.
-
-La version 0.40 **affine l'aperçu du Creator et la faisabilité Studio** :
-- **rendu des vues redessiné façon Odoo** : feuille blanche, colonnes, statusbar, button box, palette aubergine ;
-- **aperçu en contexte du changeset** : les champs créés par les opérations précédentes sont appliqués avant l'aperçu — plus de faux négatif « le champ x_… n'existe pas » ;
-- **aperçu en plein écran**, encadré récapitulant la modification, et **demande de révision** directement depuis l'aperçu ;
-- **executor tolérant** : un arch d'héritage enveloppé à tort dans `<template>` / `<odoo>` est automatiquement déballé ;
-- **faisabilité Odoo Studio renforcée** : l'IA n'invente plus de classes CSS (faux positifs sans effet visuel), privilégie les styles en ligne et les classes existantes, et émet un verdict de faisabilité explicite.
-
-La version 0.39 **ajoute l'aperçu avant/après au Creator** :
-- **bouton « Aperçu »** sur chaque opération de modification de vue ou de rapport ;
-- **aperçu des vues** : rendu schématique (wireframe) de la vue assemblée par Odoo, avant et après l'héritage, avec les champs et onglets ajoutés surlignés ;
-- **aperçu des rapports** : rendu **PDF réel** avant/après, généré par Odoo sur un enregistrement témoin — en-tête, pied de page et mise en page société inclus ;
-- l'aperçu est **transitoire** (la vue héritée est créée puis annulée, rien n'est persisté) et sert de **garde-fou** : une vue qui ne s'assemble pas ou un rapport qui ne se rend pas est signalé avant l'application.
-
-La version 0.38 **fiabilise le Creator et l'entrée en mode IA** :
-- **Creator — vues héritées propres** : les vues héritées créées par le Creator sont nommées automatiquement et de façon cohérente (« <vue parente> (Creator) »), identifiables côté Studio, sans suffixes qui s'empilent ;
-- **Creator — héritage en-tête/pied de page** : pour modifier l'en-tête ou le pied d'un document, l'IA est guidée vers le bon template de mise en page (`web.external_layout_*`) plutôt que le template du document ;
-- **garde « fournisseur IA requis »** : un modal avertit l'utilisateur et le renvoie vers la configuration des clés API lorsqu'il ouvre l'Assistant, la Migration, le Creator ou l'auto-remplissage de contexte sans aucun fournisseur IA configuré.
-
-La version 0.37 **enrichit les pièces jointes et le clonage de dépôt** :
-- **analyse visuelle des images et PDF** (vision) sur Claude, OpenAI et Gemini — l'IA lit le texte, la mise en page, les tableaux, les captures d'écran et les schémas ; idéal pour reconstruire un rapport QWeb à partir d'une maquette PDF ou repartir d'un écran déjà modélisé par le client ;
-- **classeurs Excel** (`.xlsx`, `.xls`) convertis en tableaux Markdown exploitables par l'IA ;
-- **formats texte élargis** : YAML, HTML, SQL, `.po`/`.pot` de traduction, INI, TOML, TSV, etc. ;
-- **glisser-déposer** des pièces jointes sur l'Assistant IA, la Migration et le Creator ; limite portée à **10 MB par fichier** ;
-- **submodules Git** : le dépôt client est cloné avec `--recurse-submodules` et les submodules sont resynchronisés à chaque mise à jour.
-
-La version 0.22 modernise l'interface :
-- navigation principale dans une **top bar responsive** ;
-- panneau **Contexte workspace** repliable avec profil, providers IA, projets et sources Odoo ;
-- typographie **Geist Sans / Geist Mono** ;
-- personnalisation couleur recentrée sur une **couleur d'accent** sobre ;
-- documents joints disponibles dans l'Assistant IA et les requêtes de Migration.
-
-La version 0.23 nettoie l'expérience de discussion :
-- **bandeau de contexte allégé** sur Assistant IA et Migration (suppression des badges Sources / Repo / Migration path qui doublonnaient le sélecteur de version et le panneau contextuel) ;
-- **collapse-on-scroll** : le titre de page et la barre de configuration se compactent automatiquement dès qu'on scrolle dans la discussion, pour libérer la zone de lecture ;
-- **PerspectiveToggle redessiné** : couleurs theme-aware (variables CSS), libellé du profil actif affiché à côté de l'icône, transitions fluides ;
-- **profils Markdown** (Support, BA, Architecte, Développeur) réécrits avec grilles de priorité, vocabulaire de référence, snippets, checklists ;
-- **notes de version Odoo v15→v19** enrichies avec tags Community/Enterprise, modèles ORM par fonctionnalité, workflows détaillés (Sales Commissions, Dispatch, ESG/CSRD, Loyalty) et commandes d'audit pré-migration ;
-- **auto-perspective** revue avec listes de termes élargies, scoring multi-catégories, fallback BA au lieu de Dev pour les questions fonctionnelles ;
-- **analyse de complexité** corrigée : les modules OCA et communautaires (Camptocamp, Akretion, Tecnativa…) ne sont plus classés comme custom dev ; seuil Studio relevé à 3 signaux ;
-- **drapeaux fiscaux** : émoji du pays affiché à côté des sociétés (sélecteur, onglets projets) et dans le panneau contextuel.
-
-La version 0.23.x **unifie le système de perspective** des 4 rôles end-to-end :
-- backend reconnaît désormais Support / BA / Architecte / Développeur (au lieu de seulement 2 valeurs internes) ;
-- les fichiers `profile-*.md` sont **réellement injectés** dans le contexte (section core, jamais évincée du budget) — avant, ils étaient annoncés mais jamais chargés côté serveur ;
-- **scoring pondéré** avec seuil minimum et marge sur le runner-up : moins de bascules erratiques entre rôles ;
-- nouveau hook `useResolvedPerspective` avec hystérésis 350 ms — le badge ne flicke plus pendant la frappe ;
-- routage de contexte resserré : tokens ambigus (`pos`, `custom`, `mrp`, `of`…) matchés avec word-boundaries pour éviter les faux positifs (« propose » → POS, « customer » → Customizations) ;
-- `load_context_for_prompt` accepte un `target_version` pour charger les notes source ET cible en mode migration ;
-- cache mtime-aware sur les lectures markdown — un tour chat ne re-lit plus 5-6 fichiers depuis le disque.
-
-La version 0.24 **optimise les coûts d'API IA** :
-- le system prompt est **scindé en deux blocs** — stable (identité, sources, instructions, contexte projet) cacheable + variable (langue, perspective, markdown routé) non-cacheable ;
-- en mode Claude, un `cache_control: ephemeral` est posé à la frontière stable/variable, et un autre sur le **dernier `tool_result`** de chaque itération ; les tours conversationnels et les tours outils profitent désormais tous les deux du caching ;
-- l'événement `done` SSE expose `cache_creation_input_tokens` et `cache_read_input_tokens` pour observer l'efficacité du cache ;
-- nouveau helper `_source_instructions()` DRY (les 3 versions de `build_system_*` partagent un texte identique pour stabiliser le préfixe cacheable) ;
-- `search_odoo_source` : option `case_sensitive` (défaut `true` pour les patterns de code), retour distinct `files_count` vs `matches`, suggestions de fallback si 0 hit (insensible casse / sans accents / restreindre `path`) ;
-- `stop_reason` Claude `max_tokens` et `refusal` surfacés comme événement `warning` SSE et affichés en bulle grise — fin des troncatures silencieuses ;
-- inférence perspective côté serveur si un client envoie `perspective="auto"` — utile pour CLI / mobile.
-
-La version 0.28 **consolide l'expérience de conversation** :
-- **panneau "Conversation context" sticky** sur Assistant IA et Migration : le panneau reste visible pendant le scroll, via une contrainte hauteur viewport sur `migration-shell` calquée sur `assistant-shell` ;
-- **auto-scroll pendant le streaming** restauré : la liste de messages suit la rédaction automatiquement, sauf si l'utilisateur remonte pour lire ;
-- **markdown enrichi** : listes numérotées (`1. 2. 3.`) et italique (`*texte*`) rendus correctement dans les deux pages ;
-- **temps de réponse sur Migration** : le chrono avec icône Timer apparaît sous chaque réponse IA, comme sur l'Assistant ;
-- **anti-oscillation du header** : le collapse-on-scroll est gelé pendant le streaming — plus de vibration du bloc de contexte et du header ;
-- **sources Enterprise dans le contexte migration** (FR + EN) : règle critique documentée — toujours chercher dans `enterprise/<module>/` pour comptabilité, rapprochement bancaire, helpdesk, abonnements, planning.
-
-La version 0.27 **ajoute le streaming en arrière-plan et l'historique Migration** :
-- une requête lancée sur Assistant IA ou Migration **continue de s'exécuter** même si on navigue ailleurs — les messages s'accumulent dans un buffer module-level hors du cycle React et sont réinjectés au retour sur la page ;
-- **indicateurs de streaming dans la topbar** : point pulsant sur les liens Assistant et Migration pendant une réponse en cours, point vert quand le résultat est disponible ;
-- **indicateurs par onglet projet** : chaque onglet projet dans l'Assistant affiche son propre dot de streaming/done indépendant ;
-- **historique de la page Migration** : les conversations sont sauvegardées en localStorage par paire de versions (ex: 16.0 C+E → 17.0 C+E), avec titre auto-généré, panneau historique accessible depuis un bouton en haut de page ;
-- **bulles utilisateur et fonds tintés** : les bulles de saisie utilisent `var(--brand)`, les fonds de l'application utilisent `color-mix()` avec la couleur d'accent choisie — l'interface reflète subtilement la personnalisation couleur ;
-- **texte gras en couleur brand légère** : les éléments `<strong>` dans les réponses IA utilisent `color-mix(40% brand + 60% text)` pour un rappel discret sans surcharger la lecture ;
-- **badge C+E en Migration** et recherche étendue aux sources Enterprise dans les sélecteurs source/cible ;
-- **limite de boucle outils portée à 25 itérations** avec garde anti-répétition — les requêtes nécessitant de nombreux appels d'outils n'échouent plus prématurément ;
-- **correction chemin Enterprise** : les modules Enterprise (helpdesk, etc.) sont à la racine `enterprise/<module>/`, pas sous `addons/` — les outils de recherche gèrent désormais les deux structures.
-
-La version 0.25 **refond l'interface en identité Better Odoo Assistant neo-retro** :
-- inspirations HARRY.SYS + Portal Aperture + Arc Raiders, avec une marque propre à l'app ;
-- typographie tri-rôle : **Space Grotesk** (titres / CTAs en uppercase), **Inter** (corps), **JetBrains Mono** (codes / IDs / badges) ;
-- palette : light = blueprint off-white, dark = terminal `#0a0a0a`, accent par défaut vert BOA, rappel cyan / vert / jaune / rouge dans la topbar ;
-- bordures fines, coins légèrement adoucis, états hover/focus uniformes pour garder le style retro sans nuire à l'ergonomie ;
-- topbar redessinée : logo `BOA`, nom **Better Odoo Assistant**, lien actif avec marqueur `▪` et soulignement multicolore ;
-- chaque page affiche désormais un **identifiant section `00000NNN`** au-dessus du titre ;
-- effet **CRT subtil en dark mode** : scanlines + vignette radiale (light reste pur pour la lisibilité en réunion) ;
-- nouvelles classes utilitaires : `.neo-id`, `.neo-tag`, `.neo-section-number`, `.neo-frame`, `.neo-status-bar`, `.neo-bracket`.
+Tout est cumulatif : plus vous configurez de sources, plus l'IA peut répondre avec des faits vérifiés au lieu d'hypothèses.
 
 ---
 
-## Langues et contextes multilingues
+## Les pages de l'app
 
-L'application prépare l'ajout progressif de plusieurs langues. La version actuelle supporte **Français** et **English** sur trois niveaux distincts :
-
-1. **Langue de l'application**
-   Pilotée depuis Paramètres → Profil. Elle sert de préférence globale d'interface et permet aux écrans principaux de s'afficher en français ou en anglais : navigation, Sources, Projets, Assistant, Migration, Fonctionnement, Paramètres, À propos et pages historiques simples.
-
-2. **Langue des réponses IA**
-   Trois modes sont disponibles :
-   - **Automatique** : l'assistant répond dans la langue du dernier message utilisateur ;
-   - **Français** : l'assistant répond toujours en français ;
-   - **English** : l'assistant répond toujours en anglais.
-
-   Les identifiants techniques Odoo ne sont jamais traduits : modèles, champs, XML IDs, chemins de fichiers, domains et méthodes restent exacts.
-
-3. **Langue des fichiers de contexte IA**
-   L'éditeur de contexte permet de choisir la langue du fichier Markdown édité. Les fichiers français historiques restent dans :
-
-   ```text
-   ~/.odoo-consultant/context/
-   ```
-
-   Les fichiers anglais personnalisés sont stockés dans :
-
-   ```text
-   ~/.odoo-consultant/context/en/
-   ```
-
-   Des defaults anglais sont fournis pour `skills.md`, `migration.md`, `studio.md`, `meeting-minute.md` et les notes de version `odoo-15.0.md` à `odoo-19.0.md`. Le français reste le fallback par défaut pour préserver les installations existantes.
+| Page | Rôle |
+|---|---|
+| **Tableau de bord** | Vue d'ensemble : projets, sources installées, dernières conversations |
+| **Sources** | Téléchargement et mise à jour des sources Odoo (`~/.odoo-consultant/sources/`) |
+| **Mes projets** | Liste des projets clients avec environnements, dépôts custom, contexte projet |
+| **Assistant IA** | Chat outillé, mode projet ou général, perspectives consultant (Support / BA / Architecte / Dev) |
+| **Migration** | Chat dédié migration : sources source + cible chargées, release notes filtrées par domaine |
+| **Creator** | Workflow Studio : propositions IA, aperçu vue / PDF, application sur l'instance |
+| **Requêtes** | Console XML-RPC manuelle pour exploration ponctuelle |
+| **Historique** | Conversations archivées par projet |
+| **Fonctionnement** | Diagramme vertical de bout en bout : profil, providers, contexte, outils |
+| **Paramètres** | Profil consultant, clés API, modèles activés, fichiers Markdown de contexte |
+| **À propos** | Changelog complet de toutes les versions |
 
 ---
 
-## Guide d'utilisation
+## Comment l'assistant IA répond avec précision
 
-### 1. Configurer les sources Odoo
+Un modèle IA générique connaît Odoo dans les grandes lignes — mais **pas votre version exacte, pas vos modules custom, pas vos données réelles**. Sans sources locales, il invente des noms de champs, suppose des comportements, ou donne des réponses valables pour une autre version.
 
-La page **Sources** vous permet de télécharger les sources Odoo en local. L'assistant IA les utilise pour répondre avec précision sur les modèles, champs et méthodes — sans halluciner.
-
-<!-- docs/screenshots/sources-page.png : vue de la page Sources avec les cartes de version -->
-
-**Comment télécharger :**
-1. Allez dans **Sources** dans le menu
-2. Choisissez la version (ex: 17.0) et cochez Community et/ou Enterprise
-3. Cliquez **Télécharger** — une barre de progression s'affiche en temps réel
-
-> **Enterprise** nécessite un accès SSH GitHub. Si vous n'avez pas encore de clé SSH, le portail vous guide pour en créer une et l'ajouter à votre compte GitHub.
-
-**Où sont stockées les sources ?**  
-Dans `~/odoo-sources/{version}/` pour Community et `~/odoo-sources/{version}-enterprise/` pour Enterprise.
-
----
-
-### 2. Ajouter un projet client
-
-La page **Mes projets** liste toutes vos connexions Odoo. Chaque projet correspond à un client.
-
-<!-- docs/screenshots/projects-cards.png : vue des cartes projets avec logo, badges, environnements -->
-
-**Créer un projet :**
-
-Cliquez **+ Nouveau projet** et suivez le wizard en 3 étapes :
-
-**Étape 1 — Identification du projet**
-- Donnez un nom au projet (ex : "Acme Corp — Production")
-- Collez l'URL de l'instance Odoo
-
-**Étape 2 — Connexion**
-- Renseignez le nom de base de données, votre login et votre [clé API Odoo](https://www.odoo.com/documentation/17.0/developer/reference/external_api.html#api-keys)
-- Cliquez **▶ Tester** : le portail détecte automatiquement la version Odoo, les modules installés et les informations société
-
-<!-- docs/screenshots/wizard-step2-diagnose.png : étape 2 du wizard avec le test de connexion réussi -->
-
-**Étape 3 — Récapitulatif**
-- Vérifiez et enregistrez
-
-Une fois créé, le projet apparaît sous forme de carte avec le logo de la société, la version Odoo, et les modules installés.
-
----
-
-### 3. Gérer les environnements
-
-Chaque projet peut avoir plusieurs **environnements** : production, staging, développement, migration… Chacun a ses propres identifiants, sa propre version Odoo et son propre dépôt GitHub.
-
-<!-- docs/screenshots/env-modal.png : modal d'ajout d'environnement avec le test de connexion -->
-
-**Ajouter un environnement :**
-1. Sur la carte projet, cliquez **+** à côté de la section Environnements
-2. Renseignez l'identifiant (ex: `staging`), le nom affiché, l'URL, la base, le login et la clé API
-3. Cliquez **▶ Tester** pour valider la connexion et détecter automatiquement la version
-
-**Activer un environnement :**
-Cliquez sur la pilule d'un environnement pour ouvrir sa configuration, puis **✓ Activer**. L'environnement actif est mis en évidence sur la carte.
-
-**Changer d'environnement dans l'assistant :**  
-Dans la barre de contexte de l'assistant, un sélecteur permet de choisir l'environnement pour la conversation en cours — sans modifier l'environnement par défaut du projet.
-
-<!-- docs/screenshots/assistant-env-selector.png : barre de contexte avec le sélecteur d'environnement -->
-
----
-
-### 4. Connecter un dépôt GitHub
-
-Si votre client a des modules custom, connectez son dépôt GitHub à l'environnement concerné. L'IA pourra alors explorer le code custom exactement comme elle explore les sources Odoo standard.
-
-<!-- docs/screenshots/env-modal-repo.png : section "Source complémentaire" dans la modal d'environnement -->
-
-**Prérequis :** une clé SSH GitHub configurée (la même que pour les sources Enterprise).
-
-**Comment connecter :**
-1. Ouvrez la modal d'un environnement (cliquez sur sa pilule)
-2. Dans la section **Source complémentaire**, renseignez :
-   - **Dépôt** : `organisation/nom-du-repo` (ex: `acme/odoo-custom`)
-   - **Branche** : `main`, `16.0`, etc.
-3. Cliquez **⬇ Cloner** — le clone s'effectue en temps réel via SSH
-4. Les mises à jour se font avec **↑ Mettre à jour** (pull)
-
-Une fois cloné, le badge **✓ ⎇ nom-du-repo** apparaît dans la barre de contexte de l'assistant quand cet environnement est actif.
+Better Odoo Assistant lui fournit **trois couches de contexte cumulatives** :
 
 ```
-Barre de contexte avec repo actif :
-┌────────────────────────────────────────────────────────────────────────┐
-│  Copilot · GPT-5.4 ▼  │  Production ▼  │  ✓ Sources v17.0 · C+E  │  ✓ ⎇ acme-custom  │
-└────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          CONTEXTE INJECTÉ DANS L'IA                          │
+├──────────────────────┬───────────────────────────┬─────────────────────────── ┤
+│  Données live        │  Sources Odoo standard    │  Code custom               │
+│  (XML-RPC)           │  (téléchargées localement)│  (dépôt GitHub cloné)      │
+│                      │                           │                            │
+│  • Enregistrements   │  • Code Community         │  • Modules client          │
+│    réels             │    + Enterprise           │  • Overrides / _inherit    │
+│  • Modules installés │  • Modèles, champs,       │  • Vues, wizards custom    │
+│  • Société active    │    méthodes exacts        │  • Logique métier propre   │
+│  • Localisation pays │  • Toutes versions DL     │  • Fichiers de sécurité    │
+├──────────────────────┴───────────────────────────┴────────────────────────────┤
+│  + Profil consultant + perspective de réponse                                │
+│  + Contexte projet (notes libres, auto-complétables)                         │
+│  + Skills routés selon l'intention + références auto-chargées                │
+│  + Pièces jointes uploadées (PDF, images, Excel, texte structuré)            │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+Le **dispatcher de skills** (`backend/services/context_service.py::_select_skill_playbooks`) sélectionne dynamiquement les outils utiles pour chaque prompt, avec scoring multi-niveaux (explicit name = 100, pattern = 75-90, keywords = 60, intent bundle = 40, mode default = 25) et un seuil minimum (`_MIN_SKILL_SCORE = 25`). Les règles de pruning post-scoring (`count-focus`, `schema-focus`, `list-modules-focus`, `attachment-focus`, `navigation-focus`, `view-focus`, `security-focus`, `report-focus`) suppriment les voisins faiblement matchés pour garder le contexte concentré sur l'intention dominante.
+
+L'effet utilisateur : l'IA cite des chemins de fichiers exacts, lit le vrai code custom avant de proposer un override, et signale explicitement quand une source manque (« je n'ai pas accès aux sources Enterprise pour cette version »).
 
 ---
 
-### 5. Configurer l'assistant IA
+## Architecture skills IA
 
-Allez dans **Paramètres** pour configurer vos accès aux modèles IA.
+L'app fonctionne avec **28 skills self-contained** sous `skills/<slug>/`, chacun structuré ainsi :
 
-<!-- docs/screenshots/settings-ai-keys.png : page paramètres avec les clés API configurées -->
+```
+skills/<slug>/
+├── SKILL.md              # frontmatter YAML (name, description FR+EN, keywords,
+│                         #  permissions, references_auto_load) + playbook Markdown
+├── diagram/diagram.yaml  # entrées / logique / sorties (FR + EN)
+├── references/           # documentation longue, chargée à la demande ou auto
+├── templates/            # formats de sortie imposés (revue technique, plan migration…)
+├── examples/             # few-shot good/bad usage, sélectionnés globalement
+├── scripts/handler.py    # logique in-process : async def run(args, ctx)
+└── eval_queries.json     # (optionnel) cas régressifs de routage
+```
 
-**Providers disponibles :**
+### Catégories de skills
+
+| Famille | Skills | Rôle |
+|---|---|---|
+| **Live Odoo** (`live`) | `odoo-query-records`, `odoo-count-records`, `odoo-aggregate-records`, `odoo-inspect-fields`, `odoo-inspect-modules`, `odoo-inspect-navigation`, `odoo-inspect-report`, `odoo-inspect-security`, `odoo-inspect-studio`, `odoo-inspect-view` | Lecture XML-RPC bornée, schema, KPI, vues assemblées, droits |
+| **Source standard** (`src`) | `source-search-odoo`, `source-read-odoo-file`, `source-show-commit` | Grep / read / git show sur Odoo Community + Enterprise local |
+| **Dépôt client** (`repo`) | `repo-search-code`, `repo-read-file`, `repo-list-modules`, `repo-count-source-lines` | Idem mais sur le dépôt custom cloné |
+| **Migration** (`target`) | `migration-search-target-source`, `migration-read-target-file` | Sources de la version cible pour comparaison source → cible |
+| **Output** | `output-report-writer` | Livrables structurés : revue technique, plan de migration, email client, cahier des charges |
+| **Multimodal** | `runtime-attachment-handler` | PDF (pypdf → pdf2image), images, comparaison de documents, routage provider |
+| **Runtime cœur** | `runtime-skill-dispatcher`, `runtime-context-aggregator`, `runtime-perspective-router`, `runtime-complexity-analyzer`, `runtime-localization-detector`, `runtime-release-notes-injector`, `runtime-project-context-refresh` | Orchestration interne — `allow_implicit_invocation: false` (jamais sélectionnés sur simple keyword) |
+
+### Permissions et exécution
+
+Chaque skill déclare ses permissions dans son frontmatter :
+
+```yaml
+permissions:
+  filesystem: read     # read | write | none
+  network: false       # bool
+  scripts: false       # bool — autorise run_skill_script
+  odoo: read           # read | write | none
+```
+
+Le `PolicyEngine` (`backend/services/policy_engine.py`) **enforce vraiment** ces permissions — pas seulement déclaratif. Tout appel `load_reference` ou `run_skill_script` qui viole la policy est refusé avec un event `policy_decision` loggé. Les scripts s'exécutent en subprocess isolé (timeout 30 s, stdout 32 k, stderr 4 k, `unshare -n` si réseau interdit et disponible).
+
+### Tests régressifs
+
+Toute modification de skill (description, keywords, règle de routage) est protégée par 436 tests :
+
+| Suite | Couverture |
+|---|---|
+| `tests/test_skill_registry_integrity.py` | découverte, parsing manifest, aliases legacy |
+| `tests/test_skill_quality.py` | descriptions ≤ 1024 chars, pas de préfixe vague, permissions valides |
+| `tests/test_skill_path_traversal.py` | défense `../`, NUL injection, symlinks d'évasion |
+| `tests/test_trigger_routing.py` | 70 cas paramétrés sur les `eval_queries.json` de 10 skills à overlap |
+| `tests/test_routing_provider_parity.py` | invariant : routing identique Claude / OpenAI / Gemini |
+| `tests/test_context_budget_overflow.py` | budget 32 k chars verrouillé bout-en-bout (hard cap 36 k) |
+| `tests/test_auto_load_references.py` | les 12 références auto-chargées paramétrées |
+| `tests/test_skill_runtime_events.py` | events runtime (policy, reference, script, provider, tokens) |
+| `tests/test_policy_engine.py` | enforcement des 4 axes de permission |
+| `tests/test_toolset_builder.py` | assemblage des toolsets per-provider |
+
+---
+
+## Providers IA supportés
 
 | Provider | Comment obtenir une clé |
 |---|---|
@@ -342,365 +210,166 @@ Allez dans **Paramètres** pour configurer vos accès aux modèles IA.
 | **GPT** (OpenAI) | [platform.openai.com](https://platform.openai.com) |
 | **Gemini** (Google) | [aistudio.google.com](https://aistudio.google.com) |
 | **GitHub Models** | Token GitHub classique |
-| **GitHub Copilot Business** | Connexion OAuth — pas de clé à copier |
+| **GitHub Copilot Business** | Connexion OAuth — aucune clé à copier |
 
-Pour Copilot Business, cliquez **Se connecter via GitHub** et suivez le flux d'autorisation (aucune clé API à gérer).
+L'app utilise des **adapters provider-agnostiques** (`backend/services/provider_adapters.py`) : les tools sont déclarés au format natif de chaque provider (Claude objects, OpenAI function calling, Gemini function_declarations) mais le routage de skills, les permissions et le budget de contexte sont identiques pour tous. Switcher de Claude à Gemini ne change pas quel skill répond.
 
-**Choisir un modèle :**  
-Dans les Paramètres, cochez les modèles que vous voulez voir apparaître dans l'assistant. Les modèles recommandés sont présélectionnés par défaut.
+Le **system prompt est scindé** en bloc stable (cacheable Anthropic) + bloc variable, avec `cache_control: ephemeral` posé à la frontière. L'event SSE `done` expose `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` pour mesurer l'efficacité du cache.
 
----
-
-### 6. Utiliser l'assistant IA
-
-L'assistant IA est la fonctionnalité centrale du portail. Il combine trois sources de connaissance :
-
-```
-┌──────────────────────────────────────────────────────┐
-│                   Assistant IA                        │
-│                                                       │
-│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │  Données    │  │  Sources     │  │  Code       │  │
-│  │  Odoo live  │  │  Odoo std    │  │  custom     │  │
-│  │  (XML-RPC)  │  │  (fichiers)  │  │  (repo git) │  │
-│  └─────────────┘  └──────────────┘  └─────────────┘  │
-└──────────────────────────────────────────────────────┘
-```
-
-**Mode projet** (onglet d'un client) — l'IA a accès aux trois sources :
-- Elle interroge directement Odoo via XML-RPC pour répondre avec de vraies données
-- Elle explore les sources Odoo standard pour vérifier les noms de modèles et champs
-- Elle explore le code custom pour comprendre les overrides et modules spécifiques
-
-**Mode général** (onglet Odoo Général) — l'IA répond à des questions sur Odoo sans connexion client, en s'appuyant uniquement sur les sources locales.
-
-<!-- docs/screenshots/assistant-chat.png : exemple de conversation avec un appel d'outil visible -->
-
-**Perspective fonctionnelle / technique :**  
-Un toggle 💼 / `</>` permet de basculer entre le mode **AM/BA** (réponses orientées métier, tableaux processus, vocabulaire utilisateur) et le mode **ARCHI/DEV** (réponses techniques avec extraits de code, ORM, noms de champs exacts). La préférence est mémorisée par page.
-
-**Exemples de questions utiles :**
-
-En mode projet :
-```
-"Combien de factures clients sont en statut brouillon ?"
-"Quels sont les 10 derniers bons de commande avec leur montant total ?"
-"Est-ce que ce client a le module MRP installé ?"
-"Cherche si le modèle sale.order a été surchargé dans les modules custom"
-"Qu'est-ce qui a été personnalisé via Studio sur cette instance ?"
-"Donne-moi l'inventaire des champs custom créés sur sale.order"
-"Combien de lignes de code Python dans le repo client ?"
-```
-
-En mode général :
-```
-"Comment fonctionne le calcul de prix dans Odoo 17 ?"
-"Quelle est la différence entre stock.move et stock.quant ?"
-"Montre-moi l'implémentation de action_confirm sur sale.order"
-```
-
-**Contexte projet :**  
-Sur chaque carte projet, le bouton **📋 Contexte** ouvre un éditeur de notes libre. Ce texte est injecté dans tous les prompts de ce projet. Utilisez **✨ Auto-compléter** pour générer automatiquement un contexte à partir des données du projet (modules installés, société, dépôts custom).
+Les **PDF natifs** sont gardés pour les providers compatibles (Claude, OpenAI direct, Gemini). GitHub Models / Copilot bénéficient d'un fallback automatique : `pypdf` pour extraction texte, puis `pdf2image` si le PDF est scanné.
 
 ---
 
-## Qualité des réponses IA — Sources & contexte
+## Multilingue (FR + EN)
 
-La qualité des réponses de l'assistant dépend directement des sources que vous avez configurées. Plus le contexte est riche et précis, moins l'IA hallucine, plus ses réponses sont exploitables directement sur le projet.
+Trois niveaux indépendants :
 
-### Pourquoi les sources comptent
-
-Un modèle IA comme Claude ou GPT-4 connaît Odoo de manière générale — mais **pas votre version exacte, pas vos modules custom, pas vos données**. Sans sources locales, il invente des noms de champs, suppose des comportements ou donne des réponses valables pour une autre version.
-
-Avec les bonnes sources configurées, l'IA ne "sait" plus — elle **lit le code réel** avant de répondre, exactement comme vous le feriez vous-même dans un terminal.
-
-```
-Sans sources              Avec sources complètes
-─────────────────         ───────────────────────────────────────────────────
-"Je crois que             "J'ai vérifié dans sale.order (v17.0 enterprise) :
- le champ est             le champ s'appelle amount_untaxed (Float).
- amount_subtotal"         Dans votre module custom, il est surchargé dans
-                          neca_sale/models/sale_order.py ligne 42."
-```
-
-### Les trois couches de contexte
-
-L'assistant combine plusieurs sources indépendantes. Elles sont **cumulatives** : chacune apporte quelque chose que les autres ne peuvent pas fournir.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          CONTEXTE INJECTÉ DANS L'IA                         │
-├──────────────────────┬───────────────────────────┬────────────────────────── ┤
-│  Données live        │  Sources Odoo standard    │  Code custom              │
-│  (XML-RPC)           │  (sources locales)        │  (dépôt GitHub cloné)     │
-│                      │                           │                           │
-│  • Vrais enregistre- │  • Code source Odoo       │  • Modules spécifiques    │
-│    ments de la base  │    Community / Enterprise  │    au client              │
-│  • Modules installés │  • Modèles, champs,       │  • Overrides et héritages │
-│  • Société active    │    méthodes exacts        │  • Vues, wizards custom   │
-│  • Config instance   │  • Toutes les versions    │  • Logique métier propre  │
-│                      │    téléchargées           │    au projet              │
-├──────────────────────┴───────────────────────────┴───────────────────────────┤
-│  + Contexte projet (notes libres injectées dans chaque prompt)               │
-│  + Fichiers Markdown routés selon la question                                │
-│  + Profil consultant et configuration provider / modèle IA                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-Le **routeur de contexte** évite d'envoyer tous les fichiers Markdown à chaque question. Il sélectionne les sections utiles selon le dernier message utilisateur, la perspective active, la version Odoo et le mode migration.
-
-Exemples :
-- une question sur les factures charge les sections comptabilité et diagnostics ;
-- une demande de compte-rendu charge `meeting-minute.md` ;
-- une question Studio charge `studio.md` ;
-- une question de migration charge `migration.md` et les notes de version pertinentes.
-
-### Sources Odoo standard
-
-**Rôle :** fournir le code source exact d'Odoo pour la version du client, y compris Enterprise si applicable.
-
-L'IA dispose d'outils pour **grep et lire des fichiers** dans les sources téléchargées. Quand vous posez une question sur un modèle, elle commence par chercher sa définition dans les sources, puis répond avec les vrais noms de champs et méthodes.
-
-**Règle :** téléchargez **toujours la même version** que celle de l'environnement client. Si le client est en 16.0 Community, téléchargez 16.0 Community. Une réponse basée sur la 17.0 peut être incorrecte.
-
-**Ce que l'IA peut faire avec les sources :**
-- Trouver la définition complète d'un modèle (`sale.order`, `account.move`…)
-- Lister tous les champs d'un modèle avec leur type et leur description
-- Lire l'implémentation d'une méthode Python
-- Comparer la logique entre deux versions (si les deux sont téléchargées)
-- Vérifier si un champ est compute, store, related ou standard
-
-> **Conseil :** pour les clients Enterprise, assurez-vous que votre clé SSH GitHub a accès à `odoo/enterprise`. Sans Enterprise, l'IA répondra à côté sur tout ce qui est comptabilité, abonnements, eLearning, etc.
+1. **Langue de l'app** — Paramètres → Profil. Bascule l'UI complète FR ↔ EN.
+2. **Langue des réponses IA** — Auto (dernier message utilisateur), Français forcé, English forcé. Les identifiants Odoo (modèles, champs, XML IDs, chemins) ne sont jamais traduits.
+3. **Langue des fichiers de contexte** — `~/.odoo-consultant/context/` pour FR (legacy), `~/.odoo-consultant/context/en/` pour EN. Defaults fournis pour `skills.md`, `migration.md`, `studio.md`, `meeting-minute.md`, `odoo-15.0.md` → `odoo-19.0.md`.
 
 ---
 
-### Dépôt custom GitHub
+## Données locales et secrets
 
-**Rôle :** permettre à l'IA d'explorer les modules développés spécifiquement pour le client, qui n'existent nulle part ailleurs.
-
-C'est la source la plus impactante pour les projets en production avec des développements spécifiques. Sans elle, l'IA ignore tout de ce qui a été codé sur mesure : elle ne peut pas voir les héritages, les champs ajoutés, les overrides de méthodes.
-
-**Ce que l'IA peut faire avec le dépôt custom :**
-- Lister tous les modules custom installés (lecture des `__manifest__.py`)
-- Trouver où un modèle Odoo a été étendu (`_inherit`)
-- Lire le code d'une méthode override pour comprendre un comportement spécifique
-- Chercher comment un champ custom a été défini
-- Identifier des dépendances entre modules custom
-
-**Comment le connecter :**  
-Dans la modal de l'environnement → section "Source complémentaire" → `organisation/repo` + branche → **Cloner**.
-
-**Bonne pratique — branche :**  
-Pointez sur la **branche de production** (pas develop). L'IA lit ce qui tourne réellement chez le client, pas ce qui est en cours de développement.
-
-**Maintenir à jour :**  
-Après chaque déploiement de nouveaux modules, revenez dans la modal et cliquez **Mettre à jour** (git pull). Une IA qui lit du code obsolète répond sur une réalité passée.
-
-**Indicateur visuel :**  
-Quand un dépôt est cloné et actif, le badge **✓ ⎇ nom-du-repo** s'affiche dans la barre de contexte de l'assistant.
-
----
-
-### Contexte projet
-
-**Rôle :** transmettre à l'IA des informations métier et structurelles qui ne se déduisent pas du code.
-
-Le **contexte projet** est un champ texte libre sur chaque projet, injecté dans **tous les prompts** de ce projet. C'est l'endroit pour documenter ce que l'IA ne peut pas découvrir seule.
-
-Pour éviter qu'un contexte projet trop long écrase les autres sources, il dispose d'un budget dédié dans le prompt. Gardez-le structuré et centré sur ce qui est vrai pour le client.
-
-**Utiliser l'auto-complétion :**  
-Le bouton **✨ Auto-compléter** génère un contexte de base à partir des données du projet :
-- Version Odoo et modules installés
-- Nom de la société
-- Modules custom détectés dans le dépôt cloné (noms et descriptions des `__manifest__.py`)
-
-Le contexte généré distingue maintenant les **faits observés**, les **hypothèses raisonnables**, les **périmètres à prioriser**, les **customisations / intégrations**, les **risques** et les **questions ouvertes**.
-
-Ce contexte auto-généré est un **point de départ** — enrichissez-le avec ce que vous savez du projet.
-
-**Ce qui vaut la peine d'être ajouté manuellement :**
+Tous les chemins sont sous `~/.odoo-consultant/` :
 
 ```
-Exemple de contexte projet enrichi :
-─────────────────────────────────────
-Client : Acme SA — Distribution industrielle, ~80 utilisateurs
-Secteur : négoce B2B, cycles de vente longs, remises clients complexes
-Version : 16.0 Enterprise
-
-Modules custom actifs :
-- acme_sale : override du calcul de remise (logique en cascade par famille produit)
-- acme_stock : règles de réservation personnalisées (priorité par client Gold/Silver)
-- acme_account : génération automatique de factures proforma
-
-Points d'attention :
-- Le champ x_priorite sur sale.order est utilisé pour le dispatch logistique
-- Les remises ne passent PAS par pricelist, elles sont calculées dans acme_sale
-- L'environnement staging est une copie de prod du 2024-01 — les données récentes n'y sont pas
+~/.odoo-consultant/
+├── portal.db                 # SQLite — projets, environnements, métadonnées
+├── model-config.json         # clés API et modèles activés (chiffrées via keyring)
+├── tool-config.json          # skills désactivés par l'utilisateur
+├── sources/
+│   ├── 17.0/                 # Odoo Community 17.0
+│   └── 17.0-enterprise/      # Odoo Enterprise 17.0
+├── repos/
+│   └── <profile>/<env>/      # dépôts custom clonés par environnement
+├── workspaces/               # workspaces VS Code générés
+└── context/                  # fichiers Markdown éditables (skills.md, studio.md, …)
+    └── en/                   # variantes anglaises
 ```
 
-**Ce que l'IA fait avec ce contexte :**  
-Elle ne cherche pas dans les sources si elle sait déjà. Un contexte bien rédigé évite des appels d'outils inutiles et oriente directement la réponse vers la réalité du projet.
+| Donnée | Où | Garantie |
+|---|---|---|
+| Clés API (Odoo, IA) | **Keyring système** (Keychain macOS / Secret Service Linux) | Jamais en clair dans la DB |
+| Métadonnées projets | SQLite `~/.odoo-consultant/portal.db` | Local uniquement |
+| Sources Odoo | Filesystem `~/.odoo-consultant/sources/` | Local uniquement |
+| Dépôts custom | Filesystem `~/.odoo-consultant/repos/` | Local uniquement |
+| Conversations | localStorage navigateur | Local uniquement |
+| Pièces jointes uploadées | In-memory (ContextVar) pendant le chat, nettoyées en `finally` | Jamais persistées |
+| Messages envoyés à l'IA | **Sortent vers le provider choisi** | Le seul flux externe |
 
----
-
-### Inspection Studio
-
-**Rôle :** inventorier les personnalisations réalisées via Odoo Studio sur l'instance connectée.
-
-L'IA dispose d'un outil dédié `inspect_studio` qui interroge l'instance pour récupérer :
-- **Modèles custom** (`state='manual'` — typiquement préfixés `x_`)
-- **Champs custom** par modèle (type, stocké, compute, related…)
-- **Vues modifiées** via Studio (overlays sur les vues standard)
-- **Menus** créés par Studio
-- **Actions serveur** (boutons custom dans les formulaires)
-- **Actions planifiées** (`ir.cron`)
-- **Automatisations** (`base.automation` — déclencheurs sur écriture, création…)
-- **Règles d'accès et règles d'enregistrement** créées par Studio
-
-L'outil est déclenché automatiquement quand vous posez des questions du type :
-> *« Qu'est-ce qui a été fait via Studio ? »*, *« Donne-moi l'inventaire des champs custom »*, *« Analyse l'impact Studio avant la migration »*
-
-Il est également possible de personnaliser le guide d'interprétation via le fichier **`studio.md`** dans les Paramètres → Fichiers de contexte.
-
----
-
-### Données live Odoo
-
-**Rôle :** interroger directement la base de données du client via XML-RPC pour obtenir de vraies valeurs.
-
-L'IA peut exécuter des recherches sur n'importe quel modèle Odoo, lire des enregistrements, compter des résultats, lire la configuration. Elle ne modifie jamais de données — elle est en lecture seule.
-
-**Ce que l'IA peut faire avec les données live :**
-- Compter des enregistrements avec des filtres (`[('state','=','draft')]`)
-- Lire les champs d'un ou plusieurs enregistrements
-- Vérifier la configuration d'un module (ex: `stock.warehouse`, `account.journal`)
-- Détecter des anomalies dans des volumes de données
-- Inspecter les personnalisations Studio (modèles, champs, vues, automatisations)
-
-**Prérequis :** une [clé API Odoo](https://www.odoo.com/documentation/17.0/developer/reference/external_api.html#api-keys) avec les droits suffisants. Une clé en lecture seule est conseillée en production.
-
-**Ce que l'IA ne peut pas faire :**  
-Écrire, modifier ou supprimer des enregistrements. Elle ne peut pas non plus exécuter du SQL direct ni appeler des méthodes qui modifient l'état.
-
----
-
-### Checklist — obtenir les meilleures réponses
-
-Avant de commencer à travailler sur un projet, vérifiez que chaque source est configurée :
-
-```
-Sources IA — checklist par environnement
-─────────────────────────────────────────────────────────────
-[ ] Sources Odoo téléchargées      → page Sources, même version que le client
-[ ] Enterprise téléchargée         → si le client a Odoo Enterprise
-[ ] Profil consultant complété     → nom, poste, équipe, préférences utiles
-[ ] Providers IA configurés        → clés API, modèles pertinents activés
-[ ] Dépôt custom cloné             → si le client a des modules spécifiques
-[ ] Branche du dépôt = production  → pas develop/staging
-[ ] Dépôt à jour (pull récent)     → après chaque déploiement
-[ ] Contexte projet renseigné      → au moins les modules custom et leurs rôles
-[ ] Clé API Odoo testée            → ✓ vert dans la modal d'environnement
-[ ] studio.md personnalisé         → optionnel, guide l'interprétation Studio
-```
-
-**Indicateurs visuels dans l'assistant :**
-
-```
-Barre de contexte — ce que vous devriez voir sur un projet bien configuré :
-┌───────────────────────────────────────────────────────────────────────┐
-│  Claude · Sonnet ▼  │  Production ▼  │  ✓ Sources v16.0 · C+E  │  ✓ ⎇ acme-custom  │
-└───────────────────────────────────────────────────────────────────────┘
-                                           ↑                       ↑
-                               Sources standard OK         Dépôt custom actif
-```
-
-**Si une source est absente :**  
-L'IA le signale elle-même dans sa réponse ("Je n'ai pas accès aux sources…") et vous pouvez l'ignorer en connaissance de cause ou aller la configurer avant de continuer.
+L'app ne stocke **jamais** de dumps client, de données Odoo répliquées ou de pièces jointes au-delà de la session de chat.
 
 ---
 
 ## Architecture & développement
 
-### Structure du projet
+### Stack technique
+
+| Couche | Technologie |
+|---|---|
+| Backend | Python 3.10+, FastAPI (async), SQLModel + aiosqlite |
+| Frontend | React 18 + TypeScript strict, Vite, TanStack Query |
+| IA SDKs | `anthropic`, `openai`, `google-generativeai` |
+| Multimodal | `pypdf`, `pdf2image` (+ poppler-utils), `openpyxl` |
+| Secrets | `keyring` (Keychain / Secret Service / Windows Credential Manager) |
+| Sources Git | `gitpython`, subprocess `git` |
+| MCP | `mcp>=1.0` — exposition des outils via Model Context Protocol |
+
+### Structure du repo
 
 ```
 better_odoo_consultant/
 ├── backend/
 │   ├── api/
-│   │   └── routes/          # Endpoints FastAPI
-│   │       ├── profiles.py  # Projets, environnements, repos
-│   │       ├── ai.py        # Chat IA (SSE streaming)
-│   │       ├── sources.py   # Sources Odoo (clone/pull)
-│   │       ├── queries.py   # Requêtes Odoo
-│   │       └── settings.py  # Profil utilisateur
+│   │   ├── app.py                 # FastAPI app, CORS, static build serving
+│   │   └── routes/                # ai, context, creator, history, profiles,
+│   │                              # projects, queries, settings, sources, update
 │   ├── core/
-│   │   ├── models.py        # Modèles SQLModel (Profile, Project…)
-│   │   ├── database.py      # SQLite async + migrations
-│   │   └── config.py        # Configuration
-│   └── services/
-│       ├── ai_service.py    # Outils IA, system prompts, providers
-│       │                    # (query_odoo, count_odoo, search/read sources,
-│       │                    #  count_source_lines, inspect_studio)
-│       ├── odoo_client.py   # XML-RPC Odoo
-│       ├── profile_manager.py # Keyring, résolution d'environnement
-│       └── source_manager.py  # Gestion sources git
+│   │   ├── models.py              # SQLModel: Profile, Project, Environment, …
+│   │   ├── database.py            # async SQLite
+│   │   ├── config.py              # ODOO_PORTAL_DATA_DIR, ports, paths
+│   │   └── context_constants.py   # CONTEXT_BUDGET_CHARS (32k), MAX_CONTEXT_CHARS (36k)
+│   ├── services/
+│   │   ├── ai_service.py          # stream_chat, provider routing, system prompt
+│   │   ├── context_service.py     # _select_skill_playbooks, pruning, budget
+│   │   ├── execution_engine.py    # run_tool, ToolContext, handler dispatch
+│   │   ├── policy_engine.py       # enforcement des permissions skills
+│   │   ├── skill_loader.py        # _safe_resolve (path traversal defense)
+│   │   ├── skill_runtime.py       # SkillRuntimeEvent (tokens, durations, denies)
+│   │   ├── provider_adapters.py   # 5 adapters (Claude, OpenAI, GitHub, Copilot, Gemini)
+│   │   ├── toolset_builder.py     # assemblage per-provider
+│   │   ├── attachment_store.py    # ContextVar in-memory pour PDFs / images uploadés
+│   │   ├── odoo_client.py         # XML-RPC bornée
+│   │   └── ...                    # creator_*, profile_manager, source_manager, etc.
+│   ├── skills/
+│   │   ├── registry.py            # découverte + dedup + diagnostics
+│   │   ├── manifest.py            # parsing YAML + validation
+│   │   └── _shared/               # helpers réutilisés par plusieurs handlers
+│   ├── cli/main.py                # entry point `odoo-portal`
+│   └── mcp/server.py              # serveur MCP
 ├── frontend/
 │   └── src/
-│       ├── pages/           # React pages (Assistant, Profiles, Sources…)
-│       ├── api/client.ts    # Appels API axios
-│       └── theme.ts         # Design tokens (couleurs, rayons, ombres)
+│       ├── pages/                 # 12 pages (Assistant, Migration, Creator, …)
+│       ├── components/            # Markdown, ActionProposals, modals, panels
+│       ├── api/client.ts          # wrapper axios (1 endpoint = 1 fonction)
+│       ├── utils/aiContext.ts     # extraction action items
+│       └── theme.css              # design system (CSS variables, neo-retro)
+├── skills/                        # 28 dossiers self-contained (voir section dédiée)
 ├── scripts/
-│   ├── install.sh           # Installation automatique
-│   └── start.sh             # Lancement
-├── skills/                  # Catalogue des skills auto-découverts
-└── backend/skills/          # Loader Python et helpers partagés des skills
+│   ├── install.sh                 # bootstrap complet
+│   └── start.sh                   # lancement local
+├── tests/                         # 436 tests pytest
+└── docs/                          # notes techniques / audits
 ```
 
-### Stack technique
-
-| Couche | Technologie |
-|---|---|
-| Backend | FastAPI, SQLModel, SQLite (async) |
-| Frontend | React, TanStack Query, Vite |
-| Secrets | Keyring système (Keychain macOS / Secret Service Linux) |
-| IA | Anthropic SDK, OpenAI SDK, Google GenerativeAI |
-| Sources | GitPython, subprocess git |
-
-### Lancer en mode développement
+### Lancer en développement
 
 ```bash
-# Terminal 1 — Backend avec rechargement automatique
+# Terminal 1 — backend avec reload
 source .venv/bin/activate
-better-odoo-assistant serve --reload
+odoo-portal serve --reload
 
-# Terminal 2 — Frontend Vite
+# Terminal 2 — frontend Vite
 cd frontend
 npm run dev
 # → http://localhost:5173 (proxy vers :8765)
+```
+
+### Tests
+
+```bash
+# Suite complète (436 tests, ~4 s)
+source .venv/bin/activate
+pytest -q
+
+# Suites ciblées pour le runtime skills
+pytest tests/test_skill_registry_integrity.py tests/test_tool_limits.py -q
+pytest tests/test_trigger_routing.py tests/test_auto_load_references.py \
+       tests/test_context_budget_overflow.py tests/test_routing_provider_parity.py \
+       tests/test_skill_path_traversal.py -q
+
+# Frontend
+cd frontend
+npm test
+npm run build
 ```
 
 ### Variables d'environnement
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-consultant` | Dossier données (DB, exports, repos clonés) |
-| `ODOO_PORTAL_API_PORT` | `8765` | Port de l'API |
+| `ODOO_PORTAL_DATA_DIR` | `~/.odoo-consultant` | Dossier racine des données locales |
+| `ODOO_PORTAL_API_PORT` | `8765` | Port HTTP de l'API + static build |
 
-### Tests
+### Contribuer
 
-```bash
-source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
-```
+Le repo a deux fichiers de guide pour assistants IA (Claude Code, GitHub Copilot, etc.) :
+- **`CLAUDE.md`** — règles produit, architecture skills, conventions backend/frontend, pièges connus, workflow versioning.
+- **`AGENTS.md`** — règles génériques de contribution agent.
 
-### Sécurité & données
-
-- Les **clés API Odoo et IA** sont stockées dans le keyring système — jamais en clair dans la base de données
-- La **base SQLite** ne contient que les métadonnées (noms, URLs, préférences) — pas de données Odoo
-- Les **sources Odoo** et **dépôts custom** sont clonés localement — aucun code ne transite par un serveur tiers
-- Seuls les **messages envoyés à l'IA** transitent par internet, vers le provider que vous avez choisi
+Lire ces deux fichiers avant toute modification non triviale.
 
 ---
 
