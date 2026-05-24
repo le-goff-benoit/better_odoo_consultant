@@ -7,10 +7,28 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.66.0',
-    date: '2026-05-24',
+    version: '0.9.0',
+    date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skills — descriptions refondues sur les 28 SKILL.md selon les bonnes pratiques OpenAI / Anthropic / Agent Skills : mots-clés front-loadés, limites explicites « Ne pas utiliser pour… (skill_X) » pour neutraliser les overlaps majeurs (source ↔ repo ↔ migration, query ↔ count ↔ aggregate, inspect-view ↔ inspect-report ↔ inspect-navigation), versions FR + EN ≤ 1024 chars',
+      'Skills — `allow_implicit_invocation: false` sur les 6 skills runtime cœur (context_aggregator, complexity_analyzer, localization_detector, perspective_router, release_notes_injector, skill_dispatcher) : impossibles à sélectionner via simple match keyword, ils restent des orchestrateurs internes',
+      'Dispatcher — seuil minimum `_MIN_SKILL_SCORE = 25` : un skill dont le score accumulé reste sous le plancher est enregistré comme candidat mais marqué `selected=False` avec raison `below-threshold`, gardant la visibilité sans polluer le contexte',
+      'Dispatcher — 6 nouvelles règles de pruning : `count-focus` (combien/how many → suppress query_records), `schema-focus` (quels champs → suppress query/count/aggregate), `list-modules-focus` (manifest/lister modules → suppress repo_search_code), `attachment-focus` (PDF uploadé → suppress inspect_report/view), `navigation-focus` (où cliquer → suppress view/security/data), `report-focus` étendu (rapport PDF sans archi de vue → suppress inspect_view)',
+      'Dispatcher — `_BOUNDARY_TOKENS` enrichi (`groupe`, `groupes`, `groups`) pour empêcher les faux positifs FR/EN par substring (« groupe » ne matche plus « grouped »)',
+      'Skills — keywords enrichis : `odoo_aggregate_records` couvre l\'EN (grouped by, per month, per status, per salesperson, revenue, marge par) ; `source_search_odoo` couvre l\'idiome FR (nativement, implémente, xml id) + scope explicite (community, enterprise) ; `odoo_inspect_navigation` couvre les formulations naturelles (naviguer, navigate, comment naviguer)',
+      'Tests — +64 tests régressifs (372 → 436) : `test_skill_path_traversal.py` (14 cas — ../, NUL injection, symlinks), `test_trigger_routing.py` (paramétré sur 10 skills avec eval_queries.json, 70 cas couvrant les overlaps), `test_routing_provider_parity.py` (invariant cross-provider Claude/OpenAI/Gemini), `test_context_budget_overflow.py` (CONTEXT_BUDGET_CHARS 32k + MAX_CONTEXT_CHARS 36k verrouillés bout-en-bout), `test_auto_load_references.py` (les 12 références auto-loadables paramétrées), `test_skill_runtime_events.py` étendu (token usage capturé dans `execution_done`)',
+      'Sécurité — défense path traversal sur `SkillLoader.load_reference` et `resolve_script` : `_safe_resolve()` rejette ../, chemins absolus, NUL injection, extensions exotiques et symlinks qui s\'échappent du dossier skill',
+      'Observabilité — `SkillRuntimeEvent` capture `input_tokens` / `output_tokens` dans l\'event `execution_done` (Claude / OpenAI / Gemini), permettant désormais de calculer le ratio contexte/output sans re-parser les payloads provider',
+      'Eval queries — 10 skills à overlap équipés d\'un `eval_queries.json` (source-search-odoo, repo-search-code, migration-search-target-source, odoo-query-records, odoo-aggregate-records, odoo-inspect-view, odoo-inspect-report, odoo-inspect-security, odoo-inspect-navigation, source-show-commit). Chaque modification future de description ou de keyword est protégée par une suite régressive qui flippe immédiatement en CI si un effet de bord apparaît',
+    ],
+  },
+  {
+    version: '0.66.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'UI réponses — refonte des « propositions d\'action » : les puces d\'action d\'une réponse IA sont désormais extraites et affichées sous la réponse comme une strip de chips « Propositions d\'action » (identique aux suggestions du composer). Plus de petit paper-plane perdu à la fin des items',
       'UI réponses — les propositions d\'action sont visibles aussi en plein écran (fullscreen ResponseModal), corrigeant un trou de longue date où le bouton « Lancer » disparaissait',
@@ -103,7 +121,7 @@ const CHANGELOG = [
     items: [
       'Skills — architecture refactorée façon Anthropic/OpenAI : chaque skill vit dans son propre dossier `skills/<slug>/` avec `SKILL.md` (frontmatter YAML + corps Markdown), `diagram/diagram.yaml` (entrées/logique/sorties FR+EN), et `scripts/` (place réservée pour la logique Python). Ajouter un skill = créer un dossier — plus aucune édition de `registry.py`',
       'Skills — `registry.py` devient un simple loader qui scanne `skills/*/SKILL.md` au démarrage. Les 26 skills (7 cœur + 19 outils) ont été migrés sans perte (corps Markdown, diagrammes, métadonnées)',
-      'Skills — `default_contexts.py` lit désormais les corps depuis les SKILL.md ; le dossier plat `skills/context/` a été supprimé. Les personnalisations utilisateur dans `~/.odoo-consultant/context/` restent intactes (compatibilité descendante via `context_file` slug)',
+      'Skills — les playbooks vivent désormais dans les `SKILL.md` de chaque dossier de skill ; le dossier plat `skills/context/` a été supprimé et les contextes généraux utilisateur dans `~/.odoo-consultant/context/` restent intacts',
     ],
   },
   {

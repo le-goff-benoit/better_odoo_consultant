@@ -1,6 +1,6 @@
 import pytest
 
-from odoo_consultant_portal.services.studio_service import inspect_studio_customizations
+from backend.services.studio_service import inspect_studio_customizations
 
 
 class FakeLargeStudioOdoo:
@@ -48,7 +48,7 @@ class FakeLargeStudioOdoo:
 
 
 @pytest.mark.asyncio
-async def test_inspect_studio_views_are_paginated_without_false_truncation():
+async def test_odoo_inspect_studio_views_are_paginated_without_false_truncation():
     fake = FakeLargeStudioOdoo(view_count=1018)
 
     result = await inspect_studio_customizations(fake, sections=["views"])
@@ -68,7 +68,7 @@ async def test_inspect_studio_views_are_paginated_without_false_truncation():
 
 
 @pytest.mark.asyncio
-async def test_inspect_studio_views_warns_when_section_hits_bounded_cap():
+async def test_odoo_inspect_studio_views_warns_when_section_hits_bounded_cap():
     fake = FakeLargeStudioOdoo(view_count=6000)
 
     result = await inspect_studio_customizations(fake, sections=["views"])

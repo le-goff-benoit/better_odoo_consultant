@@ -1,6 +1,6 @@
 import pytest
 
-from odoo_consultant_portal.services.view_service import inspect_odoo_report
+from backend.services.view_service import inspect_odoo_report
 
 
 class FakeLargeReportOdoo:

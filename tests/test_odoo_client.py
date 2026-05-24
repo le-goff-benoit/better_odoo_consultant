@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from odoo_consultant_portal.services.odoo_client import OdooClient
+from backend.services.odoo_client import OdooClient
 
 
 def make_client():

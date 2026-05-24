@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock
-from odoo_consultant_portal.services.source_manager import detect_ssh_keys, test_github_ssh, SUPPORTED_VERSIONS
+from backend.services.source_manager import detect_ssh_keys, test_github_ssh, SUPPORTED_VERSIONS
 
 
 def test_supported_versions():

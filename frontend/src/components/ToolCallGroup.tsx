@@ -34,19 +34,19 @@ function basename(path: string) {
 
 function toolKey(call: ToolEvent) {
   const args = call.args ?? {}
-  if (call.name === 'search_odoo_source' || call.name === 'search_target_source') {
+  if (call.name === 'source_search_odoo' || call.name === 'migration_search_target_source') {
     return `${call.name}:${args.version ?? ''}:${args.pattern ?? ''}`
   }
-  if (call.name === 'search_project_source') return `${call.name}:${args.pattern ?? ''}`
-  if (call.name === 'query_odoo' || call.name === 'count_odoo' || call.name === 'read_group_odoo' || call.name === 'get_odoo_fields' || call.name === 'inspect_security' || call.name === 'inspect_menus_actions') {
+  if (call.name === 'repo_search_code') return `${call.name}:${args.pattern ?? ''}`
+  if (call.name === 'odoo_query_records' || call.name === 'odoo_count_records' || call.name === 'odoo_aggregate_records' || call.name === 'odoo_inspect_fields' || call.name === 'odoo_inspect_security' || call.name === 'odoo_inspect_navigation') {
     return `${call.name}:${args.model ?? ''}`
   }
-  if (call.name === 'read_odoo_file' || call.name === 'read_target_file' || call.name === 'read_project_file') {
+  if (call.name === 'source_read_odoo_file' || call.name === 'migration_read_target_file' || call.name === 'repo_read_file') {
     return `${call.name}:${args.path ?? ''}`
   }
-  if (call.name === 'inspect_odoo_view') return `${call.name}:${args.model ?? ''}:${args.view_type ?? ''}`
-  if (call.name === 'inspect_odoo_report') return `${call.name}:${args.report_name ?? ''}:${args.model ?? ''}`
-  if (call.name === 'list_project_modules') return `${call.name}:${args.path ?? ''}`
+  if (call.name === 'odoo_inspect_view') return `${call.name}:${args.model ?? ''}:${args.view_type ?? ''}`
+  if (call.name === 'odoo_inspect_report') return `${call.name}:${args.report_name ?? ''}:${args.model ?? ''}`
+  if (call.name === 'repo_list_modules') return `${call.name}:${args.path ?? ''}`
   return `${call.name}`
 }
 
@@ -60,41 +60,41 @@ function toolSummary(name: string | undefined, args: Record<string, unknown> | u
   const reportName = String(args?.report_name ?? '')
 
   switch (name) {
-    case 'query_odoo':
+    case 'odoo_query_records':
       return { title: fr ? 'Lit les données' : 'Reads data', detail: model ? humanModel(model, lang) : (fr ? 'Base Odoo' : 'Odoo database') }
-    case 'count_odoo':
+    case 'odoo_count_records':
       return { title: fr ? 'Compte' : 'Counts', detail: model ? humanModel(model, lang) : (fr ? 'Enregistrements Odoo' : 'Odoo records') }
-    case 'read_group_odoo':
+    case 'odoo_aggregate_records':
       return { title: fr ? 'Agrège les données' : 'Aggregates data', detail: model ? humanModel(model, lang) : (fr ? 'KPI Odoo' : 'Odoo KPI') }
-    case 'get_odoo_fields':
+    case 'odoo_inspect_fields':
       return { title: fr ? 'Inspecte les champs' : 'Inspects fields', detail: model ? humanModel(model, lang) : (fr ? 'Structure modèle' : 'Model structure') }
-    case 'inspect_installed_modules':
+    case 'odoo_inspect_modules':
       return { title: fr ? 'Inspecte les modules' : 'Inspects modules', detail: fr ? 'Modules installés' : 'Installed modules' }
-    case 'inspect_security':
+    case 'odoo_inspect_security':
       return { title: fr ? 'Inspecte la sécurité' : 'Inspects security', detail: model ? humanModel(model, lang) : (fr ? 'Droits et règles' : 'Access rules') }
-    case 'inspect_menus_actions':
+    case 'odoo_inspect_navigation':
       return { title: fr ? 'Inspecte les menus' : 'Inspects menus', detail: model ? humanModel(model, lang) : String(args?.query ?? '') || (fr ? 'Actions Odoo' : 'Odoo actions') }
-    case 'search_odoo_source':
+    case 'source_search_odoo':
       return { title: fr ? 'Cherche dans Odoo' : 'Searches Odoo', detail: pattern ? truncate(pattern) : (version ? `v${version}` : (fr ? 'Code standard' : 'Standard code')) }
-    case 'read_odoo_file':
+    case 'source_read_odoo_file':
       return { title: fr ? 'Ouvre un fichier Odoo' : 'Opens Odoo file', detail: basename(path) || (fr ? 'Fichier standard' : 'Standard file') }
-    case 'search_target_source':
+    case 'migration_search_target_source':
       return { title: fr ? 'Cherche en version cible' : 'Searches target version', detail: pattern ? truncate(pattern) : (version ? `v${version}` : (fr ? 'Code cible' : 'Target code')) }
-    case 'read_target_file':
+    case 'migration_read_target_file':
       return { title: fr ? 'Ouvre un fichier cible' : 'Opens target file', detail: basename(path) || (fr ? 'Fichier cible' : 'Target file') }
-    case 'search_project_source':
+    case 'repo_search_code':
       return { title: fr ? 'Cherche dans le custom' : 'Searches custom code', detail: pattern ? truncate(pattern) : (fr ? 'Dépôt client' : 'Client repository') }
-    case 'read_project_file':
+    case 'repo_read_file':
       return { title: fr ? 'Ouvre un fichier custom' : 'Opens custom file', detail: basename(path) || (fr ? 'Dépôt client' : 'Client repository') }
-    case 'list_project_modules':
+    case 'repo_list_modules':
       return { title: fr ? 'Liste les modules projet' : 'Lists project modules', detail: path ? basename(path) : (fr ? 'Manifests' : 'Manifests') }
-    case 'count_source_lines':
+    case 'repo_count_source_lines':
       return { title: fr ? 'Mesure le volume' : 'Measures volume', detail: String(args?.scope ?? '') || (fr ? 'Sources' : 'Sources') }
-    case 'inspect_studio':
+    case 'odoo_inspect_studio':
       return { title: fr ? 'Inspecte Studio' : 'Inspects Studio', detail: String(args?.model_filter ?? '') || (fr ? 'Personnalisations' : 'Customizations') }
-    case 'inspect_odoo_view':
+    case 'odoo_inspect_view':
       return { title: fr ? 'Inspecte une vue' : 'Inspects view', detail: [viewType, model ? humanModel(model, lang) : ''].filter(Boolean).join(' · ') || (fr ? 'Vue Odoo' : 'Odoo view') }
-    case 'inspect_odoo_report':
+    case 'odoo_inspect_report':
       return { title: fr ? 'Inspecte un rapport' : 'Inspects report', detail: reportName || (model ? humanModel(model, lang) : (fr ? 'Rapport PDF' : 'PDF report')) }
     default:
       return { title: fr ? 'Outil' : 'Tool', detail: name ?? (fr ? 'Appel outil' : 'Tool call') }

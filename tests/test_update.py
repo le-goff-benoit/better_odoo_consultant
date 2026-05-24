@@ -1,6 +1,6 @@
 import pytest
 
-from odoo_consultant_portal.api.routes import update
+from backend.api.routes import update
 
 
 @pytest.mark.asyncio

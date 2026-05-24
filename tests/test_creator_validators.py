@@ -3,7 +3,7 @@ the dry-run, computed from schema constraints plus Studio business rules."""
 
 import pytest
 
-from odoo_consultant_portal.services.creator_validators import (
+from backend.services.creator_validators import (
     validate_changeset,
     validate_operation,
 )

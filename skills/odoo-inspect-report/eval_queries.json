@@ -1,0 +1,46 @@
+[
+  {
+    "query": "Mon rapport PDF facture ne s'imprime plus correctement, le logo a sauté",
+    "expected_skill": "odoo_inspect_report",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Analyse le rapport PDF facture et propose un xpath QWeb fiable",
+    "expected_skill": "odoo_inspect_report",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Je veux personnaliser le external_layout pour ajouter un footer sur tous les rapports",
+    "expected_skill": "odoo_inspect_report",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "How do I change the paperformat of the quotation report?",
+    "expected_skill": "odoo_inspect_report",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Pourquoi le champ partner_id est invisible dans la vue formulaire de sale.order ?",
+    "expected_skill": "odoo_inspect_view",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "screen view, not printed report"
+  },
+  {
+    "query": "Voici un PDF que je viens d'uploader, extrais le texte des trois premières pages",
+    "expected_skill": "runtime_attachment_handler",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "user-uploaded PDF, not Odoo-generated report"
+  }
+]

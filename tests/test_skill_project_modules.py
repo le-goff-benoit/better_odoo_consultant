@@ -1,15 +1,14 @@
 from pathlib import Path
 
-from odoo_consultant_portal.services.context_service import read_file
-from odoo_consultant_portal.skills.registry import SKILL_DEFINITIONS
-from odoo_consultant_portal.skills.project_modules import list_project_modules
+from backend.skills.registry import SKILL_DEFINITIONS
+from backend.skills.project_modules import list_project_modules
 
 
-def test_skill_registry_context_files_exist():
+def test_skill_registry_bodies_exist():
     missing = [
-        skill.context_file
+        skill.name
         for skill in SKILL_DEFINITIONS
-        if not read_file(skill.context_file, "fr").strip()
+        if not skill.body.strip()
     ]
 
     assert missing == []

@@ -1,0 +1,46 @@
+[
+  {
+    "query": "Donne-moi le chiffre d'affaires par mois sur 2025",
+    "expected_skill": "odoo_aggregate_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Quel KPI de marge par commercial ce trimestre ?",
+    "expected_skill": "odoo_aggregate_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Nombre de factures par statut et par journal",
+    "expected_skill": "odoo_aggregate_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Revenue grouped by salesperson for Q3",
+    "expected_skill": "odoo_aggregate_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Liste-moi les 10 dernières factures impayées",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "detail listing, not aggregate"
+  },
+  {
+    "query": "Combien de commandes en brouillon ?",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "plain count without grouping"
+  }
+]

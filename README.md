@@ -5,12 +5,14 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.66.0** — assistant piloté par skills, multimodal et actionnable :
-> - **Propositions d'action unifiées** : les puces d'action des réponses IA (« Prochaines actions / Action items ») sont extraites et présentées sous la réponse comme des chips brandées — même esthétique que les suggestions du composer, visibles aussi en plein écran. Clic = lance immédiatement l'action.
-> - **PDF + images, partout** : nouveau skill cœur `attachment_handler` avec fallback automatique pour les providers qui ne supportent pas les PDFs natifs (pypdf → pdf2image). Plus de bug 400 sur GitHub Models / Copilot.
-> - **3 tools dédiés** : `extract_pdf_text`, `pdf_to_images`, `compare_documents` — l'IA peut agir sur un PDF uploadé (extraire, paginer, differ). Use cases : facture → vendor bill draft, devis client signé vs Odoo, diagnostic capture d'écran, contrat multi-page, etc.
-> - **Skills — playbooks complets** : les 28 `SKILL.md` décrivent quand utiliser chaque capacité, les déclencheurs FR/EN, la séquence recommandée, les paramètres, les pièges et les combinaisons utiles.
-> - **Données Odoo — lectures exhaustives bornées** : `query_odoo` récupère tous les records visibles par défaut jusqu'au plafond configuré, avec pagination, compte total et warning explicite en cas de résultat partiel.
+> Version actuelle : **0.9.0** — runtime de skills durci, observable et testé :
+> - **Skills — descriptions refondues** sur les 28 `SKILL.md` selon les bonnes pratiques OpenAI / Anthropic / Agent Skills : mots-clés front-loadés, limites explicites « Ne pas utiliser pour… » qui neutralisent les overlaps majeurs (source ↔ repo ↔ migration, query ↔ count ↔ aggregate, inspect-view ↔ inspect-report ↔ inspect-navigation), versions FR + EN.
+> - **Dispatcher durci** : seuil minimum (`_MIN_SKILL_SCORE = 25`), 6 nouvelles règles de pruning (`count-focus`, `schema-focus`, `list-modules-focus`, `attachment-focus`, `navigation-focus`, `report-focus` étendu), word-boundary matching pour les tokens ambigus FR/EN (`groupe` ne matche plus `grouped`), `allow_implicit_invocation: false` sur les 6 skills runtime cœur.
+> - **Observabilité** : `SkillRuntimeEvent.execution_done` capture désormais `input_tokens` / `output_tokens` pour Claude / OpenAI / Gemini, permettant de calculer le ratio contexte/output sans re-parser les payloads provider.
+> - **Sécurité** : défense path traversal sur `SkillLoader` testée (`../`, NUL injection, symlinks d\'évasion, extensions exotiques).
+> - **Tests régressifs** : **436 tests** (+64 vs 0.66.0). 10 skills à overlap équipés d\'un `eval_queries.json` (70 cas), invariant cross-provider verrouillé, budget de contexte testé bout-en-bout, références auto-loadées paramétrées sur les 12 entrées du repo. Chaque modification future de description, keyword ou règle de routage est protégée par une suite régressive qui flippe immédiatement en CI.
+> - **Propositions d\'action unifiées** (hérité de 0.66) : les puces d\'action des réponses IA sont extraites et présentées sous la réponse comme chips brandées, visibles aussi en plein écran.
+> - **PDF + images partout** (hérité de 0.65) : skill cœur `attachment_handler` avec fallback `pypdf` → `pdf2image` pour les providers sans support PDF natif (GitHub Models / Copilot).
 
 ---
 
@@ -58,14 +60,14 @@ cd better_odoo_consultant
 
 **Installation (une seule fois) :**
 ```bash
-bash install.sh
+bash scripts/install.sh
 ```
 
 Le script installe automatiquement l'environnement Python, les dépendances backend, et compile l'interface web.
 
 **Démarrage :**
 ```bash
-bash start.sh
+bash scripts/start.sh
 ```
 
 Le portail s'ouvre dans votre navigateur à **http://localhost:8765**.
@@ -624,7 +626,7 @@ L'IA le signale elle-même dans sa réponse ("Je n'ai pas accès aux sources…"
 
 ```
 better_odoo_consultant/
-├── odoo_consultant_portal/
+├── backend/
 │   ├── api/
 │   │   └── routes/          # Endpoints FastAPI
 │   │       ├── profiles.py  # Projets, environnements, repos
@@ -648,8 +650,11 @@ better_odoo_consultant/
 │       ├── pages/           # React pages (Assistant, Profiles, Sources…)
 │       ├── api/client.ts    # Appels API axios
 │       └── theme.ts         # Design tokens (couleurs, rayons, ombres)
-├── install.sh               # Installation automatique
-└── start.sh                 # Lancement
+├── scripts/
+│   ├── install.sh           # Installation automatique
+│   └── start.sh             # Lancement
+├── skills/                  # Catalogue des skills auto-découverts
+└── backend/skills/          # Loader Python et helpers partagés des skills
 ```
 
 ### Stack technique
@@ -667,7 +672,7 @@ better_odoo_consultant/
 ```bash
 # Terminal 1 — Backend avec rechargement automatique
 source .venv/bin/activate
-odoo-portal serve --reload
+better-odoo-assistant serve --reload
 
 # Terminal 2 — Frontend Vite
 cd frontend

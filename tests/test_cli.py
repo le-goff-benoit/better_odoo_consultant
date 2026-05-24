@@ -1,12 +1,12 @@
 from click.testing import CliRunner
-from odoo_consultant_portal.cli.main import cli
+from backend.cli.main import cli
 
 
 def test_cli_help():
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert "odoo-portal" in result.output.lower() or "odoo consultant" in result.output.lower()
+    assert "better odoo assistant" in result.output.lower()
 
 
 def test_source_sync_help():

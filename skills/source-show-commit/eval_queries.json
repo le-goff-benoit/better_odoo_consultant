@@ -1,0 +1,45 @@
+[
+  {
+    "query": "Analyse le commit a3f8b2c1 et résume son impact",
+    "expected_skill": "source_show_commit",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Que change le commit deadbeef12345 sur account.move ?",
+    "expected_skill": "source_show_commit",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Show me the diff of commit 7dceaff and write a changelog entry",
+    "expected_skill": "source_show_commit",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Analyse le SHA 91a06b6 et dis-moi si c'est une régression",
+    "expected_skill": "source_show_commit",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Comment Odoo implémente nativement le calcul du total TTC sur sale.order ?",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "source code question without a SHA — search, not commit show"
+  },
+  {
+    "query": "Donne-moi les 10 dernières factures clients",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": false,
+    "category": "negative",
+    "language": "fr"
+  }
+]

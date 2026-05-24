@@ -32,7 +32,7 @@ const copy = {
   },
   en: {
     title: 'Dashboard',
-    welcome: 'Welcome to your Odoo Consultant portal.',
+    welcome: 'Welcome to Better Odoo Assistant.',
     apiStatus: 'API status',
     online: 'Online',
     offline: 'Offline',

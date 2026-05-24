@@ -1,0 +1,54 @@
+[
+  {
+    "query": "Liste-moi les 10 dernières factures clients impayées",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Montre les commandes confirmées du commercial Marc en juin",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Donne-moi la fiche du contact ID 142 avec ses adresses",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Search invoices in draft state and show their lines",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Combien de factures en brouillon ?",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "count-only, no rows needed"
+  },
+  {
+    "query": "Quel est le chiffre d'affaires par mois sur 2025 ?",
+    "expected_skill": "odoo_aggregate_records",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "grouped aggregate / KPI"
+  },
+  {
+    "query": "Quels champs a le modèle sale.order ?",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "schema, not data"
+  }
+]

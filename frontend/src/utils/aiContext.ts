@@ -6,6 +6,42 @@ export interface AiEventLike {
   name?: string
   args?: Record<string, unknown>
   skills?: string[]
+  candidates?: SkillRouteCandidateLike[]
+  run_id?: string
+  context_trace?: ContextTraceEventLike[]
+}
+
+export interface SkillRouteCandidateLike {
+  name?: string
+  score?: number
+  reason?: string
+  selected?: boolean
+}
+
+export interface ContextTraceEventLike {
+  type?: string
+  run_id?: string
+  skill?: string
+  filename?: string
+  heading?: string
+  chars?: number
+  original_chars?: number
+  capped_chars?: number
+}
+
+export interface ContextTraceSummary {
+  runId?: string
+  total: number
+  references: ContextTraceEventLike[]
+  truncations: ContextTraceEventLike[]
+  cacheHits: ContextTraceEventLike[]
+  latest: ContextTraceEventLike[]
+}
+
+export interface SkillRoutingSummary {
+  selected: SkillRouteCandidateLike[]
+  pruned: SkillRouteCandidateLike[]
+  top: SkillRouteCandidateLike[]
 }
 
 export interface ContextItem {
@@ -168,12 +204,12 @@ const DEV_STRONG = [
 ]
 
 const MEETING_TERMS = ['compte-rendu', 'compte rendu', 'meeting minute', 'réunion', 'reunion', 'pv de réunion', 'pv de reunion']
-const STUDIO_TERMS = ['studio', 'x_studio', 'personnalisation', 'customisation', 'champ custom', 'modèle custom', 'modele custom', 'inspect_studio']
+const STUDIO_TERMS = ['studio', 'x_studio', 'personnalisation', 'customisation', 'champ custom', 'modèle custom', 'modele custom', 'odoo_inspect_studio']
 // Mirrors the backend `_DEV_TERMS` in context_service.py — keep in sync.
 const DEV_FILE_TERMS = [
   'module custom', 'custom module', 'dev custom', 'custom dev',
   '_inherit', '_inherits', '@api.depends', '@api.constrains', '@api.onchange',
-  'search_project_source', 'read_project_file', 'code custom',
+  'repo_search_code', 'repo_read_file', 'code custom',
   'depot client', 'dépôt client', 'client repo', 'modules sur mesure',
   'surcharge', 'monkey patch', 'monkey_patch',
 ]
@@ -398,15 +434,15 @@ export function extractToolContextItems(events: AiEventLike[]): ContextItem[] {
     if (evt.type !== 'tool_call') continue
     const name = evt.name ?? ''
     const args = evt.args ?? {}
-    if (name === 'read_odoo_file' || name === 'read_project_file' || name === 'read_target_file') {
+    if (name === 'source_read_odoo_file' || name === 'repo_read_file' || name === 'migration_read_target_file') {
       const path = String(args.path ?? '')
       if (!path) continue
       const key = `${name}:${path}`
       if (seen.has(key)) continue
       seen.add(key)
-      out.push({ type: 'context', label: path, detail: name === 'read_project_file' ? 'Projet' : name === 'read_target_file' ? 'Cible' : 'Odoo' })
-    } else if (name === 'search_odoo_source' || name === 'search_target_source' || name === 'search_project_source') {
-      const scope = name === 'search_project_source' ? 'Code custom' : name === 'search_target_source' ? 'Sources cible' : 'Sources Odoo'
+      out.push({ type: 'context', label: path, detail: name === 'repo_read_file' ? 'Projet' : name === 'migration_read_target_file' ? 'Cible' : 'Odoo' })
+    } else if (name === 'source_search_odoo' || name === 'migration_search_target_source' || name === 'repo_search_code') {
+      const scope = name === 'repo_search_code' ? 'Code custom' : name === 'migration_search_target_source' ? 'Sources cible' : 'Sources Odoo'
       const pattern = String(args.pattern ?? '')
       const version = String(args.version ?? '')
       const label = pattern ? `Recherche: ${pattern}` : 'Recherche'
@@ -416,12 +452,12 @@ export function extractToolContextItems(events: AiEventLike[]): ContextItem[] {
       seen.add(key)
       out.push({ type: 'source', label, detail })
     } else if (
-      name === 'query_odoo' || name === 'count_odoo' || name === 'read_group_odoo' ||
-      name === 'get_odoo_fields' || name === 'inspect_studio' ||
-      name === 'inspect_installed_modules' || name === 'inspect_security' ||
-      name === 'inspect_menus_actions' || name === 'inspect_odoo_view' ||
-      name === 'inspect_odoo_report' || name === 'list_project_modules' ||
-      name === 'count_source_lines'
+      name === 'odoo_query_records' || name === 'odoo_count_records' || name === 'odoo_aggregate_records' ||
+      name === 'odoo_inspect_fields' || name === 'odoo_inspect_studio' ||
+      name === 'odoo_inspect_modules' || name === 'odoo_inspect_security' ||
+      name === 'odoo_inspect_navigation' || name === 'odoo_inspect_view' ||
+      name === 'odoo_inspect_report' || name === 'repo_list_modules' ||
+      name === 'repo_count_source_lines'
     ) {
       const model = String(args.model ?? args.scope ?? '')
       const key = `${name}:${model}`
@@ -451,4 +487,34 @@ export function extractUsedSkillNames(events: AiEventLike[]): string[] {
     names.push(evt.name)
   }
   return names
+}
+
+export function extractLatestContextTrace(events: AiEventLike[]): ContextTraceSummary | null {
+  const carrier = [...events].reverse().find(evt => Array.isArray(evt.context_trace) && evt.context_trace.length > 0)
+  const trace = carrier?.context_trace ?? []
+  if (!trace.length) return null
+  const references = trace.filter(evt => evt.type === 'reference_auto_loaded')
+  const truncations = trace.filter(evt => evt.type === 'priority_block_truncated')
+  const cacheHits = trace.filter(evt => evt.type === 'context_cache_hit')
+  return {
+    runId: carrier?.run_id ?? trace.find(evt => evt.run_id)?.run_id,
+    total: trace.length,
+    references,
+    truncations,
+    cacheHits,
+    latest: trace.slice(-4),
+  }
+}
+
+export function extractLatestSkillRouting(events: AiEventLike[]): SkillRoutingSummary | null {
+  const carrier = [...events].reverse().find(evt => evt.type === 'skills_selected' && Array.isArray(evt.candidates))
+  const candidates = carrier?.candidates ?? []
+  if (!candidates.length) return null
+  const selected = candidates.filter(candidate => candidate.selected === true)
+  const pruned = candidates.filter(candidate => candidate.selected === false && String(candidate.reason ?? '').includes('pruned:'))
+  return {
+    selected: selected.slice(0, 8),
+    pruned: pruned.slice(0, 6),
+    top: candidates.slice(0, 10),
+  }
 }

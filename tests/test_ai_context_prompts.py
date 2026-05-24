@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from odoo_consultant_portal.services.ai_service import _language_block, _perspective_block, _read_odoo_file, _search_odoo_source, _trim_history, _trim_project_context
-from odoo_consultant_portal.services.context_service import load_context_for_prompt, read_file
-from odoo_consultant_portal.services.localization_service import build_localization_context, find_available_l10n_modules
-from odoo_consultant_portal.services.technical_complexity_service import (
+from backend.services.ai_service import _language_block, _perspective_block, _source_read_odoo_file, _source_search_odoo, _trim_history, _trim_project_context
+from backend.services.context_service import load_context_for_prompt, read_file
+from backend.services.localization_service import build_localization_context, find_available_l10n_modules
+from backend.services.technical_complexity_service import (
     analyze_technical_complexity,
     build_technical_complexity_context,
 )
@@ -299,8 +299,8 @@ async def test_source_tools_cover_community_and_enterprise_siblings(tmp_path):
     (community_module / "__manifest__.py").write_text("Swiss accounting chart", encoding="utf-8")
     (enterprise_module / "__manifest__.py").write_text("Swiss enterprise reports", encoding="utf-8")
 
-    search = await _search_odoo_source({"pattern": "Swiss", "file_types": ["*.py"]}, str(source))
-    read = await _read_odoo_file({"path": "enterprise/l10n_ch_reports/__manifest__.py"}, str(source))
+    search = await _source_search_odoo({"pattern": "Swiss", "file_types": ["*.py"]}, str(source))
+    read = await _source_read_odoo_file({"path": "enterprise/l10n_ch_reports/__manifest__.py"}, str(source))
 
     assert search["ok"] is True
     assert "community/addons/l10n_ch/__manifest__.py" in search["files"]
@@ -319,8 +319,8 @@ async def test_source_tools_resolve_base_module_under_odoo_addons(tmp_path):
     base_module.mkdir(parents=True)
     (base_module / "__manifest__.py").write_text("Base module manifest", encoding="utf-8")
 
-    read = await _read_odoo_file({"path": "addons/base/__manifest__.py"}, str(source))
-    search = await _search_odoo_source(
+    read = await _source_read_odoo_file({"path": "addons/base/__manifest__.py"}, str(source))
+    search = await _source_search_odoo(
         {"pattern": "Base module", "path": "addons/base", "file_types": ["*.py"]}, str(source)
     )
 
@@ -583,7 +583,7 @@ async def test_technical_complexity_captures_installed_apps(tmp_path, monkeypatc
 
 def test_technical_complexity_context_is_injected_in_project_variable_prompt():
     from types import SimpleNamespace
-    from odoo_consultant_portal.services.ai_service import build_system
+    from backend.services.ai_service import build_system
 
     raw = json.dumps({
         "mode": "standard",
@@ -611,7 +611,7 @@ def test_technical_complexity_context_is_injected_in_project_variable_prompt():
 def test_trim_history_drops_orphan_tool_result_user_turn():
     # Build a long history where, after trimming to MAX_HISTORY_TURNS, the
     # first kept message would be an orphan Anthropic tool_result user turn.
-    from odoo_consultant_portal.core.context_constants import MAX_HISTORY_TURNS
+    from backend.core.context_constants import MAX_HISTORY_TURNS
 
     msgs = []
     # 30 normal turns (user/assistant pairs) — far more than the cap.
@@ -634,7 +634,7 @@ def test_trim_history_drops_orphan_tool_result_user_turn():
 
 
 def test_trim_history_drops_orphan_openai_tool_message():
-    from odoo_consultant_portal.core.context_constants import MAX_HISTORY_TURNS
+    from backend.core.context_constants import MAX_HISTORY_TURNS
 
     msgs = []
     for i in range(MAX_HISTORY_TURNS + 5):
@@ -648,7 +648,7 @@ def test_trim_history_drops_orphan_openai_tool_message():
 
 
 def test_build_system_general_returns_tuple_with_stable_variable_split():
-    from odoo_consultant_portal.services.ai_service import build_system_general
+    from backend.services.ai_service import build_system_general
 
     stable, variable = build_system_general(
         "18.0",
@@ -662,17 +662,17 @@ def test_build_system_general_returns_tuple_with_stable_variable_split():
     assert "Consultant : Benoit" in stable
     assert "expert Odoo" in stable
     assert "/tmp/sources/18.0" in stable
-    assert "search_odoo_source" in stable
+    assert "source_search_odoo" in stable
     # Variable part: language directive, perspective block, routed context.
     assert "Réponds toujours en français" in variable
     assert "DÉVELOPPEUR" in variable
     assert "Compétences consultant" in variable
     # Sources instructions must NOT leak into the variable half.
-    assert "search_odoo_source" not in variable
+    assert "source_search_odoo" not in variable
 
 
 def test_build_system_migration_returns_tuple_with_target_path_in_stable():
-    from odoo_consultant_portal.services.ai_service import build_system_migration
+    from backend.services.ai_service import build_system_migration
 
     stable, variable = build_system_migration(
         "17.0", "18.0",
@@ -696,7 +696,7 @@ def test_build_system_migration_injects_project_when_profile_set():
     """A project-mode migration must not be blind to the project: the source
     instance, its access rights and the free-text project context flow in."""
     from types import SimpleNamespace
-    from odoo_consultant_portal.services.ai_service import build_system_migration
+    from backend.services.ai_service import build_system_migration
 
     profile = SimpleNamespace(
         db_url="https://acme.odoo.com", db_name="acme", odoo_version="17.0",
@@ -715,11 +715,11 @@ def test_build_system_migration_injects_project_when_profile_set():
     assert "double validation" in stable
     assert "administrateur système" in stable
     # Live-instance method step exposes Studio inspection.
-    assert "inspect_studio" in stable
+    assert "odoo_inspect_studio" in stable
 
 
 def test_format_access_context_variants():
-    from odoo_consultant_portal.services.ai_service import _format_access_context
+    from backend.services.ai_service import _format_access_context
 
     assert _format_access_context(None) == ""
     assert _format_access_context("not json") == ""
@@ -730,7 +730,7 @@ def test_format_access_context_variants():
 
 def test_build_system_injects_access_rights():
     from types import SimpleNamespace
-    from odoo_consultant_portal.services.ai_service import build_system
+    from backend.services.ai_service import build_system
 
     profile = SimpleNamespace(
         db_url="https://x.odoo.com", db_name="x", odoo_version="18.0",
@@ -773,7 +773,7 @@ class FakeViewOdoo:
 
 
 def test_summarize_arch_extracts_field_config():
-    from odoo_consultant_portal.services.view_service import _summarize_arch
+    from backend.services.view_service import _summarize_arch
 
     summary = _summarize_arch(_SAMPLE_FORM_ARCH)
     fields = {f["name"]: f for f in summary["fields"]}
@@ -785,14 +785,14 @@ def test_summarize_arch_extracts_field_config():
 
 
 def test_summarize_arch_handles_bad_xml():
-    from odoo_consultant_portal.services.view_service import _summarize_arch
+    from backend.services.view_service import _summarize_arch
 
     assert "parse_error" in _summarize_arch("<form><unclosed>")
 
 
 @pytest.mark.asyncio
-async def test_inspect_odoo_view_returns_structured_summary():
-    from odoo_consultant_portal.services.view_service import inspect_odoo_view
+async def test_odoo_inspect_view_returns_structured_summary():
+    from backend.services.view_service import inspect_odoo_view
 
     result = await inspect_odoo_view(FakeViewOdoo(), "sale.order", "form")
     assert result["ok"] is True
@@ -804,16 +804,16 @@ async def test_inspect_odoo_view_returns_structured_summary():
 
 
 @pytest.mark.asyncio
-async def test_inspect_odoo_view_normalizes_tree_to_list():
-    from odoo_consultant_portal.services.view_service import inspect_odoo_view
+async def test_odoo_inspect_view_normalizes_tree_to_list():
+    from backend.services.view_service import inspect_odoo_view
 
     result = await inspect_odoo_view(FakeViewOdoo(), "sale.order", "tree")
     assert result["requested_view_type"] == "list"
 
 
 @pytest.mark.asyncio
-async def test_inspect_odoo_view_rejects_unknown_model():
-    from odoo_consultant_portal.services.view_service import inspect_odoo_view
+async def test_odoo_inspect_view_rejects_unknown_model():
+    from backend.services.view_service import inspect_odoo_view
 
     result = await inspect_odoo_view(FakeViewOdoo(), "does.not.exist")
     assert result["ok"] is False
@@ -842,8 +842,8 @@ class FakeReportOdoo:
 
 
 @pytest.mark.asyncio
-async def test_inspect_odoo_report_detail_mode():
-    from odoo_consultant_portal.services.view_service import inspect_odoo_report
+async def test_odoo_inspect_report_detail_mode():
+    from backend.services.view_service import inspect_odoo_report
 
     result = await inspect_odoo_report(FakeReportOdoo(), report_name="account.report_invoice")
     assert result["ok"] is True and result["mode"] == "detail"
@@ -854,7 +854,7 @@ async def test_inspect_odoo_report_detail_mode():
 
 
 def test_infer_perspective_strong_signals():
-    from odoo_consultant_portal.services.ai_service import _infer_perspective, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA, PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT
+    from backend.services.ai_service import _infer_perspective, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA, PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT
 
     # Code block → developer
     assert _infer_perspective("```python\nclass Foo(_inherit='res.partner')") == PERSPECTIVE_DEVELOPER
@@ -918,6 +918,8 @@ def test_context_assembly_priority_blocks_always_lead():
 
 
 def test_skill_playbook_is_routed_for_kpi_question():
+    from backend.services.context_service import last_skill_route_candidates
+
     context = load_context_for_prompt(
         "18.0",
         user_prompt="Donne-moi le CA par mois avec un KPI fiable",
@@ -925,28 +927,36 @@ def test_skill_playbook_is_routed_for_kpi_question():
     )
 
     assert "Mode d'emploi des skills" in context
-    assert "read_group_odoo" in context
-    assert "query_odoo" not in context or context.find("read_group_odoo") < context.find("query_odoo")
+    assert "odoo_aggregate_records" in context
+    assert "odoo_query_records" not in context or context.find("odoo_aggregate_records") < context.find("odoo_query_records")
+    candidates = last_skill_route_candidates()
+    read_group = next(item for item in candidates if item["name"] == "odoo_aggregate_records")
+    assert read_group["selected"] is True
+    assert read_group["score"] > 0
+    assert "kpi" in read_group["reason"] or "intent:kpi" in read_group["reason"]
 
 
-def test_skill_playbook_default_is_loaded_from_markdown_file():
-    from odoo_consultant_portal.services.context_service import read_file
+def test_skill_playbook_body_is_loaded_from_skill_markdown():
+    from backend.skills.registry import skill_body
 
-    content = read_file("skill-query-odoo.md", "fr")
+    content = skill_body("odoo_query_records") or ""
 
-    assert "## query_odoo" in content
+    assert "## odoo_query_records" in content
     assert "Quand l'utiliser" in content
 
 
 def test_disabled_skill_playbook_is_not_routed():
+    from backend.services.context_service import last_skill_route_candidates
+
     context = load_context_for_prompt(
         "18.0",
         user_prompt="Donne-moi le CA par mois avec un KPI fiable",
         perspective="technical",
-        disabled_tools=["read_group_odoo"],
+        disabled_tools=["odoo_aggregate_records"],
     )
 
-    assert "read_group_odoo" not in context
+    assert "odoo_aggregate_records" not in context
+    assert all(item["name"] != "odoo_aggregate_records" for item in last_skill_route_candidates())
 
 
 def test_security_custom_modules_routes_project_and_acl_playbooks():
@@ -957,10 +967,47 @@ def test_security_custom_modules_routes_project_and_acl_playbooks():
     )
 
     assert "Mode d'emploi des skills" in context
-    assert "inspect_security" in context
-    assert "list_project_modules" in context
-    assert "search_project_source" in context
-    assert "read_project_file" in context
+    assert "odoo_inspect_security" in context
+    assert "repo_list_modules" in context
+    assert "repo_search_code" in context
+    assert "repo_read_file" in context
+
+
+def test_pilot_repo_read_file_routes_repo_prompt_with_candidate():
+    from backend.services.context_service import last_skill_route_candidates
+    from backend.skills.registry import skill_by_name
+
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Lis le manifest du dépôt client pour comprendre ce module custom",
+        perspective="technical",
+    )
+
+    assert "repo_read_file" in context
+    skill = skill_by_name("repo_read_file")
+    assert skill is not None
+    assert skill.permissions.scripts is False
+    candidates = last_skill_route_candidates()
+    assert any(item["name"] == "repo_read_file" and item["selected"] for item in candidates)
+
+
+def test_pilot_odoo_inspect_studio_routes_advanced_skill_with_reference_metadata():
+    from backend.services.context_service import last_skill_route_candidates
+    from backend.skills.registry import skill_by_name
+
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Audit Studio : quelles personnalisations x_studio et limites Studio avant migration ?",
+        perspective="technical",
+    )
+    skill = skill_by_name("odoo_inspect_studio")
+
+    assert "odoo_inspect_studio" in context
+    assert skill is not None
+    assert skill.permissions.scripts is True
+    assert "studio_limits.md" in skill.references
+    assert "scan_studio_customizations.py" in skill.scripts
+    assert any(item["name"] == "odoo_inspect_studio" and item["selected"] for item in last_skill_route_candidates())
 
 
 def test_record_analysis_routes_live_data_bundle():
@@ -970,9 +1017,9 @@ def test_record_analysis_routes_live_data_bundle():
         perspective="technical",
     )
 
-    assert "get_odoo_fields" in context
-    assert "query_odoo" in context
-    assert "count_odoo" in context
+    assert "odoo_inspect_fields" in context
+    assert "odoo_query_records" in context
+    assert "odoo_count_records" in context
 
 
 def test_view_question_routes_view_menu_security_bundle():
@@ -982,9 +1029,9 @@ def test_view_question_routes_view_menu_security_bundle():
         perspective="technical",
     )
 
-    assert "inspect_menus_actions" in context
-    assert "inspect_odoo_view" in context
-    assert "inspect_security" in context
+    assert "odoo_inspect_navigation" in context
+    assert "odoo_inspect_view" in context
+    assert "odoo_inspect_security" in context
 
 
 def test_report_question_routes_report_bundle():
@@ -994,22 +1041,22 @@ def test_report_question_routes_report_bundle():
         perspective="technical",
     )
 
-    assert "inspect_odoo_report" in context
-    assert "inspect_odoo_view" in context
+    assert "odoo_inspect_report" in context
+    assert "odoo_inspect_view" in context
 
 
 def test_skill_playbook_selection_is_not_capped_to_six_skills():
     context = load_context_for_prompt(
         "18.0",
         user_prompt=(
-            "query_odoo count_odoo read_group_odoo get_odoo_fields "
-            "inspect_installed_modules inspect_security inspect_menus_actions "
-            "inspect_studio inspect_odoo_view inspect_odoo_report search_odoo_source "
-            "read_odoo_file git_show_commit search_project_source read_project_file "
-            "list_project_modules count_source_lines"
+            "odoo_query_records odoo_count_records odoo_aggregate_records odoo_inspect_fields "
+            "odoo_inspect_modules odoo_inspect_security odoo_inspect_navigation "
+            "odoo_inspect_studio odoo_inspect_view odoo_inspect_report source_search_odoo "
+            "source_read_odoo_file source_show_commit repo_search_code repo_read_file "
+            "repo_list_modules repo_count_source_lines"
         ),
         perspective="technical",
     )
 
-    assert "inspect_menus_actions" in context
-    assert "count_source_lines" in context
+    assert "odoo_inspect_navigation" in context
+    assert "repo_count_source_lines" in context

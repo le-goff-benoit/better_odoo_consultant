@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Check, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileCode2, FileText, FolderOpen, Globe2, HardDrive, KeyRound, Layout, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
-import SkillDiagramModal from '../components/SkillDiagramModal'
-import SkillContentsModal, { type SkillContentKind } from '../components/SkillContentsModal'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
+import { AlertTriangle, ArrowRight, Check, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, HardDrive, KeyRound, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Search, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getSkillDiagram, getSkillMarkdown, getSkillReference, getSkillTemplate, getSkillExample, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
+import Markdown from '../components/Markdown'
 import { applyBrandColor, applyThemeMode } from '../App'
 import { WIDTH_OPTIONS, WIDTH_KEY, getStoredWidth, type ContentWidth } from '../components/Layout'
 import { Tabs } from '../components/ui'
@@ -282,6 +282,32 @@ function StorageSection() {
 // ── Skills section ────────────────────────────────────────────────
 
 type SkillGroup = 'core' | 'live' | 'src' | 'target' | 'repo'
+type SkillScope = 'core' | 'project' | 'user' | 'organization' | 'experimental'
+type SkillStatus = 'active' | 'disabled' | 'error'
+type SkillHealthStatus = 'ok' | 'warning' | 'error' | 'unknown'
+type SkillContentKind = 'reference' | 'template' | 'example'
+
+interface SkillUsageItem {
+  id: string
+  source: string
+  title: string
+  prompt: string
+  updatedAt: number
+  matches: number
+}
+
+interface AiEventLike {
+  type?: string
+  name?: string
+  skills?: string[]
+}
+
+interface StoredMessageLike {
+  role?: string
+  text?: string
+  events?: AiEventLike[]
+  timestamp?: number
+}
 
 interface SkillPermissionsMeta {
   filesystem: 'none' | 'read' | 'write'
@@ -298,16 +324,22 @@ interface SkillMeta {
   descEn: string
   req: string
   reqEn: string
-  contextFile?: string
   kind?: 'core' | 'tool'
   builtin?: boolean
+  locked?: boolean
   hasDiagram?: boolean
   version?: string
+  author?: string
   permissions?: SkillPermissionsMeta
   references?: string[]
   templates?: { name: string; label: string; triggers?: string[] }[]
   examples?: string[]
   scripts?: string[]
+  modes?: string[]
+  keywords?: string[]
+  tags?: string[]
+  readOnly?: boolean
+  riskLevel?: 'low' | 'medium' | 'high'
 }
 
 interface ApiSkill {
@@ -319,170 +351,166 @@ interface ApiSkill {
   description_en: string
   requirement: string
   requirement_en: string
-  context_file: string
   kind?: 'core' | 'tool'
   builtin?: boolean
+  locked?: boolean
   diagram?: unknown
   version?: string
+  author?: string
   permissions?: SkillPermissionsMeta
   references?: string[]
   templates?: { name: string; label: string; triggers?: string[] }[]
   examples?: string[]
   scripts?: string[]
+  modes?: string[]
+  keywords?: string[]
+  tags?: string[]
+  read_only?: boolean
+  risk_level?: 'low' | 'medium' | 'high'
+}
+
+interface SkillRegistryDiagnostic {
+  severity: 'warning' | 'error'
+  skill?: string
+  folder?: string
+  code: string
+  message: string
+  field?: string
 }
 
 const SKILLS_META: Record<string, SkillMeta> = {
-  query_odoo: {
+  odoo_query_records: {
     label: 'Requêter Odoo', labelEn: 'Query Odoo',
     group: 'live',
     desc: 'Rechercher des enregistrements via search_read (commandes, factures, contacts…)',
     descEn: 'Fetch records via search_read (orders, invoices, contacts…)',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-query-odoo.md',
   },
-  count_odoo: {
+  odoo_count_records: {
     label: 'Compter enregistrements', labelEn: 'Count records',
     group: 'live',
     desc: 'Compter les enregistrements correspondant à un domaine de filtrage',
     descEn: 'Count records matching a filter domain',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-count-odoo.md',
   },
-  read_group_odoo: {
+  odoo_aggregate_records: {
     label: 'Agréger des données', labelEn: 'Aggregate data',
     group: 'live',
     desc: 'Calculer des agrégats fiables par période, statut, commercial, journal...',
     descEn: 'Compute reliable aggregates by period, status, salesperson, journal...',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-read-group-odoo.md',
   },
-  get_odoo_fields: {
+  odoo_inspect_fields: {
     label: 'Inspecter les champs', labelEn: 'Inspect fields',
     group: 'live',
     desc: 'Lister les champs d\'un modèle, y compris les champs custom Studio (x_*)',
     descEn: 'List model fields, including Studio custom fields (x_*)',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-get-odoo-fields.md',
   },
-  inspect_installed_modules: {
+  odoo_inspect_modules: {
     label: 'Modules installés', labelEn: 'Installed modules',
     group: 'live',
     desc: 'Lister applications, modules techniques, versions et modules custom probables',
     descEn: 'List apps, technical modules, versions and likely custom modules',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-inspect-installed-modules.md',
   },
-  inspect_security: {
+  odoo_inspect_security: {
     label: 'Inspecter la sécurité', labelEn: 'Inspect security',
     group: 'live',
     desc: 'Lire ACL, record rules et groupes associés à un modèle',
     descEn: 'Read ACLs, record rules and groups attached to a model',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-inspect-security.md',
   },
-  inspect_menus_actions: {
+  odoo_inspect_navigation: {
     label: 'Menus et actions', labelEn: 'Menus and actions',
     group: 'live',
     desc: 'Retrouver les menus et actions qui exposent un modèle ou un écran',
     descEn: 'Find menus and actions exposing a model or screen',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-inspect-menus-actions.md',
   },
-  inspect_studio: {
+  odoo_inspect_studio: {
     label: 'Audit Studio', labelEn: 'Studio audit',
     group: 'live',
     desc: 'Inventorier toutes les personnalisations Odoo Studio : modèles, champs, vues, menus, automations',
     descEn: 'Inventory all Odoo Studio customizations: models, fields, views, menus, automations',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-inspect-studio.md',
   },
-  inspect_odoo_view: {
+  odoo_inspect_view: {
     label: 'Inspecter une vue', labelEn: 'Inspect a view',
     group: 'live',
     desc: 'Lire l\'arch XML assemblé d\'une vue (form, liste, kanban…) après héritage complet',
     descEn: 'Read the assembled XML arch of a view (form, list, kanban…) after full inheritance',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-inspect-odoo-view.md',
   },
-  inspect_odoo_report: {
+  odoo_inspect_report: {
     label: 'Inspecter un rapport', labelEn: 'Inspect a report',
     group: 'live',
     desc: 'Lire le template QWeb et la mise en page d\'un rapport PDF de l\'instance',
     descEn: 'Read the QWeb template and layout of a PDF report from the instance',
     req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
-    contextFile: 'skill-inspect-odoo-report.md',
   },
-  search_odoo_source: {
+  source_search_odoo: {
     label: 'Chercher dans les sources', labelEn: 'Search source code',
     group: 'src',
     desc: 'Grep dans le code source Odoo Community/Enterprise téléchargé localement',
     descEn: 'Grep in locally downloaded Odoo Community/Enterprise source code',
     req: 'Sources Odoo téléchargées', reqEn: 'Downloaded Odoo sources',
-    contextFile: 'skill-search-odoo-source.md',
   },
-  read_odoo_file: {
+  source_read_odoo_file: {
     label: 'Lire un fichier source', labelEn: 'Read a source file',
     group: 'src',
     desc: 'Lire le contenu d\'un fichier des sources Odoo (modèle, vue, controller…)',
     descEn: 'Read the content of an Odoo source file (model, view, controller…)',
     req: 'Sources Odoo téléchargées', reqEn: 'Downloaded Odoo sources',
-    contextFile: 'skill-read-odoo-file.md',
   },
-  git_show_commit: {
+  source_show_commit: {
     label: 'Voir un commit', labelEn: 'Show a commit',
     group: 'src',
     desc: 'Afficher le diff complet d\'un commit Odoo ou projet par son SHA',
     descEn: 'Display the full diff of an Odoo or project commit by its SHA',
     req: 'Sources Odoo téléchargées', reqEn: 'Downloaded Odoo sources',
-    contextFile: 'skill-git-show-commit.md',
   },
-  search_target_source: {
+  migration_search_target_source: {
     label: 'Chercher dans la cible', labelEn: 'Search target source',
     group: 'target',
     desc: 'Rechercher dans les sources Odoo de la version cible en migration',
     descEn: 'Search Odoo source code for the migration target version',
     req: 'Sources cible téléchargées', reqEn: 'Downloaded target sources',
-    contextFile: 'skill-search-target-source.md',
   },
-  read_target_file: {
+  migration_read_target_file: {
     label: 'Lire un fichier cible', labelEn: 'Read target file',
     group: 'target',
     desc: 'Lire un fichier des sources Odoo de la version cible',
     descEn: 'Read a source file from the migration target version',
     req: 'Sources cible téléchargées', reqEn: 'Downloaded target sources',
-    contextFile: 'skill-read-target-file.md',
   },
-  search_project_source: {
+  repo_search_code: {
     label: 'Chercher dans le projet', labelEn: 'Search project code',
     group: 'repo',
     desc: 'Grep dans le dépôt custom du client (modules, overrides, configurations)',
     descEn: 'Grep in the client\'s custom repository (modules, overrides, configurations)',
     req: 'Dépôt GitHub cloné', reqEn: 'Cloned GitHub repository',
-    contextFile: 'skill-search-project-source.md',
   },
-  read_project_file: {
+  repo_read_file: {
     label: 'Lire un fichier projet', labelEn: 'Read a project file',
     group: 'repo',
     desc: 'Lire un fichier du module custom du client',
     descEn: 'Read a file from the client\'s custom module',
     req: 'Dépôt GitHub cloné', reqEn: 'Cloned GitHub repository',
-    contextFile: 'skill-read-project-file.md',
   },
-  list_project_modules: {
+  repo_list_modules: {
     label: 'Modules projet', labelEn: 'Project modules',
     group: 'repo',
     desc: 'Parser les manifests du dépôt client pour lister modules et dépendances',
     descEn: 'Parse client repository manifests to list modules and dependencies',
     req: 'Dépôt GitHub cloné', reqEn: 'Cloned GitHub repository',
-    contextFile: 'skill-list-project-modules.md',
   },
-  count_source_lines: {
+  repo_count_source_lines: {
     label: 'Compter les lignes', labelEn: 'Count lines',
     group: 'repo',
     desc: 'Comptage exhaustif des LOC par module, extension ou dossier',
     descEn: 'Exhaustive LOC count by module, extension or directory',
     req: 'Sources ou dépôt disponible', reqEn: 'Sources or repository available',
-    contextFile: 'skill-count-source-lines.md',
   },
 }
 
@@ -494,18 +522,20 @@ const SKILL_GROUPS: { id: SkillGroup; label: string; labelEn: string; color: str
   { id: 'repo', label: 'Code projet',     labelEn: 'Project code', color: '#D97706' },
 ]
 
-function SkillToggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+function SkillToggle({ enabled, disabled = false, onChange }: { enabled: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
+      disabled={disabled}
       onClick={() => onChange(!enabled)}
       style={{
         position: 'relative', display: 'inline-flex', alignItems: 'center',
-        width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+        width: 40, height: 22, borderRadius: 11, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
         background: enabled ? 'var(--brand, #2563EB)' : 'var(--th-border)',
         transition: 'background 0.2s',
         flexShrink: 0,
+        opacity: disabled ? 0.55 : 1,
       }}
-      title={enabled ? 'Désactiver' : 'Activer'}
+      title={disabled ? 'Verrouillé' : enabled ? 'Désactiver' : 'Activer'}
     >
       <span style={{
         position: 'absolute', left: enabled ? 20 : 2, top: 2,
@@ -522,57 +552,80 @@ function SkillsSection() {
   const [disabledTools, setDisabledTools] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [openGroups, setOpenGroups] = useState<Set<SkillGroup>>(new Set(['core', 'live', 'src', 'target', 'repo']))
-  const [diagramFor, setDiagramFor] = useState<string | null>(null)
-  const [contentsFor, setContentsFor] = useState<{ name: string; kind: SkillContentKind } | null>(null)
-  const [openContextFor, setOpenContextFor] = useState<string | null>(null)
-  const [contextContent, setContextContent] = useState('')
-  const [contextDirty, setContextDirty] = useState(false)
-  const [contextSaving, setContextSaving] = useState(false)
+  const [detailsFor, setDetailsFor] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { data: skillsData } = useQuery({ queryKey: ['ai-skills'], queryFn: getAiSkills })
-  const { data: userData } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
-  const contextLocale: 'fr' | 'en' = ((userData?.data?.contextLanguage ?? userData?.data?.language) === 'en') ? 'en' : 'fr'
+  const { data: providerData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders, staleTime: 60_000 })
 
   const c = lang === 'en' ? {
-    title: 'AI skills',
-    intro: 'Every capability of the assistant — from response perspective to live data tools — is a skill. Core skills (purple) are built in and cannot be uninstalled, but you can still disable them; the assistant immediately stops applying that capability.',
-    enabled: 'Enabled',
+    title: 'AI Skill Registry',
+    intro: 'Readable registry of assistant capabilities. Open Details to inspect SKILL.md, diagram, references, templates, examples, providers and usage history.',
+    enabled: 'Active',
     disabled: 'Disabled',
-    req: 'Requires',
-    context: 'Context',
+    req: 'Dependencies',
+    trigger: 'Trigger',
+    resources: 'Resources',
+    health: 'Health',
     diagram: 'Diagram',
     references: 'References',
     templates: 'Templates',
     examples: 'Examples',
-    saveContext: 'Save context',
-    saved: 'Saved',
-    builtin: 'Built-in',
+    details: 'Details',
+    runs: 'Runs',
+    noRuns: 'No run history yet',
+    providerCompatibility: 'Providers',
+    search: 'Search skills…',
+    allEnabled: 'All active',
+    builtin: 'Locked',
+    skillMd: 'SKILL.md',
+    usageHistory: 'Usage history',
+    noResults: 'No skill matches these filters.',
+    diagnosticsTitle: 'Registry diagnostics',
+    diagnosticsOk: 'Registry healthy: no warning or error reported by the backend.',
+    diagnosticsIntro: (errors: number, warnings: number) => `${errors} error${errors > 1 ? 's' : ''} · ${warnings} warning${warnings > 1 ? 's' : ''}`,
+    metadata: 'Skill metadata',
+    permissions: 'Access rights',
     permFs: 'Filesystem',
     permNet: 'Network',
     permScripts: 'Scripts',
     permOdoo: 'Odoo',
-    allEnabled: 'All skills enabled',
+    summary: (active: number, errors: number, warnings: number) => `${active} active · ${errors} error${errors > 1 ? 's' : ''} · ${warnings} warning${warnings > 1 ? 's' : ''}`,
     someDisabled: (n: number) => `${n} skill${n > 1 ? 's' : ''} disabled`,
     confirmDisableCore: (label: string) => `"${label}" is a core skill of the app. Disabling it removes the corresponding capability from every answer. Continue?`,
   } : {
-    title: 'Skills IA',
-    intro: 'Chaque capacité de l\'assistant — du profil de réponse aux outils de données live — est un skill. Les skills cœur (violet) sont intégrés et ne peuvent pas être désinstallés, mais vous pouvez les désactiver : l\'assistant cesse aussitôt d\'appliquer la capacité correspondante.',
+    title: 'Skill Registry IA',
+    intro: 'Catalogue lisible des capacités de l’assistant. Ouvrez Détails pour consulter SKILL.md, diagramme, références, templates, exemples, providers et historique d’utilisation.',
     enabled: 'Actif',
-    disabled: 'Inactif',
-    req: 'Requiert',
-    context: 'Contexte',
+    disabled: 'Désactivé',
+    req: 'Dépendances',
+    trigger: 'Trigger',
+    resources: 'Ressources',
+    health: 'Santé',
     diagram: 'Diagramme',
     references: 'Références',
     templates: 'Templates',
     examples: 'Exemples',
-    saveContext: 'Sauvegarder le contexte',
-    saved: 'Sauvegardé',
-    builtin: 'Intégré',
+    details: 'Détails',
+    runs: 'Runs',
+    noRuns: 'Pas encore d’historique d’exécution',
+    providerCompatibility: 'Providers',
+    search: 'Rechercher un skill…',
+    allEnabled: 'Tous actifs',
+    builtin: 'Verrouillé',
+    skillMd: 'SKILL.md',
+    usageHistory: 'Historique d’utilisation',
+    noResults: 'Aucun skill ne correspond aux filtres.',
+    diagnosticsTitle: 'Diagnostics du registre',
+    diagnosticsOk: 'Registre sain : aucun warning ni erreur remonté par le backend.',
+    diagnosticsIntro: (errors: number, warnings: number) => `${errors} erreur${errors > 1 ? 's' : ''} · ${warnings} warning${warnings > 1 ? 's' : ''}`,
+    metadata: 'Métadonnées du skill',
+    permissions: 'Droits d’accès',
     permFs: 'Système de fichiers',
     permNet: 'Réseau',
     permScripts: 'Scripts',
     permOdoo: 'Odoo',
-    allEnabled: 'Tous les skills sont actifs',
+    summary: (active: number, errors: number, warnings: number) => `${active} actifs · ${errors} erreur${errors > 1 ? 's' : ''} · ${warnings} warning${warnings > 1 ? 's' : ''}`,
     someDisabled: (n: number) => `${n} skill${n > 1 ? 's' : ''} désactivé${n > 1 ? 's' : ''}`,
     confirmDisableCore: (label: string) => `« ${label} » est un skill cœur de l'application. Le désactiver retire la capacité correspondante de toutes les réponses. Continuer ?`,
   }
@@ -594,6 +647,7 @@ function SkillsSection() {
   }, [])
 
   const toggleSkill = useCallback((name: string, enabled: boolean, meta?: SkillMeta) => {
+    if (!enabled && meta?.locked) return
     if (!enabled && meta?.builtin) {
       const label = lang === 'en' ? meta.labelEn : meta.label
       if (!confirm(c.confirmDisableCore(label))) return
@@ -619,6 +673,9 @@ function SkillsSection() {
   const disabledCount = disabledTools.size
   const skillsLoaded = !!skillsData
   const apiSkills: ApiSkill[] = skillsData?.data?.skills ?? []
+  const registryDiagnostics: SkillRegistryDiagnostic[] = skillsData?.data?.diagnostics ?? []
+  const diagnosticErrors = registryDiagnostics.filter(item => item.severity === 'error').length
+  const diagnosticWarnings = registryDiagnostics.filter(item => item.severity === 'warning').length
   const skillEntries: [string, SkillMeta][] = apiSkills.length
     ? apiSkills.map(s => [s.name, {
       label: s.label,
@@ -628,51 +685,41 @@ function SkillsSection() {
       descEn: s.description_en,
       req: s.requirement,
       reqEn: s.requirement_en,
-      contextFile: s.context_file,
       kind: s.kind,
       builtin: s.builtin,
+      locked: s.locked ?? s.builtin,
       hasDiagram: !!s.diagram,
       version: s.version,
+      author: s.author,
       permissions: s.permissions,
       references: s.references ?? [],
       templates: s.templates ?? [],
       examples: s.examples ?? [],
       scripts: s.scripts ?? [],
+      modes: s.modes ?? [],
+      keywords: s.keywords ?? [],
+      tags: s.tags ?? [],
+      readOnly: s.read_only,
+      riskLevel: s.risk_level,
     }])
     : []
 
-  const toggleContext = async (name: string, file?: string) => {
-    if (!file) return
-    if (openContextFor === name) {
-      setOpenContextFor(null)
-      setContextDirty(false)
-      return
-    }
-    if (contextDirty && !confirm(lang === 'en' ? 'Unsaved context changes. Continue?' : 'Modifications de contexte non sauvegardées. Continuer ?')) return
-    setOpenContextFor(name)
-    setContextDirty(false)
-    setContextContent('')
-    try {
-      const res = await getContextFile(file, contextLocale)
-      setContextContent(res.data.content ?? '')
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setContextContent(lang === 'en'
-        ? `# ${file}\n\nUnable to load this skill context.\n\n${msg}`
-        : `# ${file}\n\nImpossible de charger ce contexte de skill.\n\n${msg}`)
-    }
-  }
-
-  const saveSkillContext = async (file?: string) => {
-    if (!file) return
-    setContextSaving(true)
-    try {
-      await saveContextFile(file, contextContent, contextLocale)
-      setContextDirty(false)
-    } finally {
-      setContextSaving(false)
-    }
-  }
+  const providerLabels = PROVIDERS
+    .filter(p => providerData?.data?.configured?.[p.id])
+    .map(p => p.label.replace(' (Anthropic)', '').replace(' (GPT-4o)', ''))
+  const providersSummary = providerLabels.length ? providerLabels.join(' · ') : 'OpenAI · Claude · Gemini · Generic'
+  const enrichedSkills = skillEntries.map(([name, meta]) => {
+    const enabled = !disabledTools.has(name)
+    const status = getSkillStatus(enabled)
+    const health = getSkillHealth(meta, enabled, lang)
+    const scope = getSkillScope(meta)
+    return { name, meta, enabled, status, health, scope }
+  })
+  const filteredSkills = enrichedSkills.filter(s => {
+    const q = search.trim().toLowerCase()
+    const haystack = [s.name, s.meta.label, s.meta.labelEn, s.meta.desc, s.meta.descEn, ...(s.meta.keywords ?? [])].join(' ').toLowerCase()
+    return !q || haystack.includes(q)
+  })
 
   return (
     <section className="settings-panel">
@@ -681,7 +728,7 @@ function SkillsSection() {
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--th-text)' }}>{c.title}</h3>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--th-muted)', lineHeight: 1.5, maxWidth: 560 }}>{c.intro}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {saving && <Loader2 size={14} style={{ color: 'var(--th-muted)', animation: 'spin 1s linear infinite' }} />}
           <span style={{
             fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 99,
@@ -692,6 +739,21 @@ function SkillsSection() {
             {disabledCount === 0 ? c.allEnabled : c.someDisabled(disabledCount)}
           </span>
         </div>
+      </div>
+
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr)', gap: 8,
+        marginBottom: 14,
+      }}>
+        <label style={filterBoxStyle}>
+          <Search size={14} style={{ color: 'var(--th-muted)' }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={c.search}
+            style={{ border: 'none', outline: 'none', background: 'transparent', color: 'var(--th-text)', width: '100%', fontSize: 12 }}
+          />
+        </label>
       </div>
 
       {skillsLoaded && apiSkills.length === 0 && (
@@ -707,11 +769,20 @@ function SkillsSection() {
             : 'Aucun skill renvoyé par l\'API. Redémarrez le backend (./scripts/start.sh) pour recharger le registre des skills, puis rafraîchissez cette page.'}
         </div>
       )}
+      {skillsLoaded && (
+        <SkillRegistryDiagnosticsPanel
+          diagnostics={registryDiagnostics}
+          labels={{ title: c.diagnosticsTitle, ok: c.diagnosticsOk, intro: c.diagnosticsIntro(diagnosticErrors, diagnosticWarnings) }}
+          lang={lang}
+        />
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {SKILL_GROUPS.map(group => {
-          const skills = skillEntries.filter(([, m]) => m.group === group.id)
+          const skills = filteredSkills.filter(s => s.meta.group === group.id)
+          const totalInGroup = enrichedSkills.filter(s => s.meta.group === group.id).length
           const isOpen = openGroups.has(group.id)
-          const groupDisabled = skills.filter(([name]) => disabledTools.has(name)).length
+          const groupDisabled = skills.filter(s => disabledTools.has(s.name)).length
+          if (totalInGroup === 0) return null
           return (
             <div key={group.id} style={{ border: '1px solid var(--th-border)', borderRadius: 10, overflow: 'hidden' }}>
               <button
@@ -735,7 +806,7 @@ function SkillsSection() {
                 <span style={{ fontSize: 11, color: 'var(--th-muted)', marginRight: 6 }}>
                   {groupDisabled > 0
                     ? (lang === 'en' ? `${groupDisabled} disabled` : `${groupDisabled} désactivé${groupDisabled > 1 ? 's' : ''}`)
-                    : (lang === 'en' ? `${skills.length} active` : `${skills.length} actifs`)
+                    : (lang === 'en' ? `${skills.length}/${totalInGroup} shown` : `${skills.length}/${totalInGroup} affichés`)
                   }
                 </span>
                 {isOpen ? <ChevronDown size={14} style={{ color: 'var(--th-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--th-muted)' }} />}
@@ -743,39 +814,29 @@ function SkillsSection() {
 
               {isOpen && (
                 <div style={{ borderTop: '1px solid var(--th-border)' }}>
-                  {skills.map(([name, meta], idx) => {
-                    const enabled = !disabledTools.has(name)
+                  {skills.length === 0 && (
+                    <div style={{ padding: '18px 14px', color: 'var(--th-muted)', fontSize: 12 }}>{c.noResults}</div>
+                  )}
+                  {skills.map(({ name, meta, enabled, health, scope }, idx) => {
+                    const triggerText = getSkillTrigger(meta, lang)
                     return (
                       <div key={name} style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 14,
-                        padding: '12px 14px',
+                        display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 14,
+                        padding: '14px',
                         borderBottom: idx < skills.length - 1 ? '1px solid var(--th-border)' : 'none',
                         background: enabled ? 'transparent' : 'var(--th-bg-muted)',
                         transition: 'background 0.15s',
                         opacity: enabled ? 1 : 0.65,
                       }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--th-text)' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 5, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--th-text)' }}>
                               {lang === 'en' ? meta.labelEn : meta.label}
                             </span>
-                            <code style={{
-                              fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                              background: `${group.color}15`, color: group.color, fontFamily: 'monospace',
-                            }}>
-                              {name}
-                            </code>
-                            {meta.builtin && (
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 3,
-                                fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase',
-                                padding: '1px 6px', borderRadius: 4,
-                                background: 'rgba(217,119,6,0.12)', color: '#D97706',
-                                border: '1px solid rgba(217,119,6,0.35)',
-                              }}>
-                                <Lock size={9} /> {c.builtin}
-                              </span>
-                            )}
+                            <RegistryBadge color={group.color}>{name}</RegistryBadge>
+                            <RegistryBadge color={scope === 'project' ? '#D97706' : scope === 'experimental' ? '#DC2626' : '#7C3AED'}>{skillScopeLabel(scope)}</RegistryBadge>
+                            {meta.locked && <RegistryBadge color="#D97706"><Lock size={9} /> {c.builtin}</RegistryBadge>}
+                            {!enabled && <RegistryBadge color="#64748B">{c.disabled}</RegistryBadge>}
                             {meta.version && meta.version !== '0.1.0' && (
                               <span style={{ fontSize: 10, color: 'var(--th-muted)' }}>
                                 v{meta.version}
@@ -785,122 +846,22 @@ function SkillsSection() {
                           <p style={{ margin: 0, fontSize: 12, color: 'var(--th-muted)', lineHeight: 1.5 }}>
                             {lang === 'en' ? meta.descEn : meta.desc}
                           </p>
-                          <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 11, color: 'var(--th-muted)' }}>
-                              {c.req} :
-                            </span>
-                            <span style={{
-                              fontSize: 11, fontWeight: 500,
-                              color: group.color,
-                            }}>
-                              {lang === 'en' ? meta.reqEn : meta.req}
-                            </span>
-                            {meta.permissions && <PermissionBadges perms={meta.permissions} labels={c} />}
+                          <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
+                            <SkillLine label={c.trigger} value={triggerText} color="#2563EB" />
+                            <SkillLine label={c.req} value={lang === 'en' ? meta.reqEn : meta.req} color={group.color} />
+                            <SkillLine label={c.health} value={health.message} color={healthColor(health.status)} />
+                            <SkillLine label={c.providerCompatibility} value="OpenAI · Claude · Gemini · GitHub/Copilot · Generic" color="#16A34A" />
+                            {meta.permissions && <PermissionLine label={c.permissions} perms={meta.permissions} labels={c} />}
                           </div>
-                          {openContextFor === name && meta.contextFile && (
-                            <div style={{
-                              marginTop: 10,
-                              border: '1px solid var(--th-border)',
-                              borderRadius: 6,
-                              overflow: 'hidden',
-                              background: 'var(--th-bg-muted)',
-                            }}>
-                              <div style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '7px 9px', borderBottom: '1px solid var(--th-border)',
-                                fontSize: 11, color: 'var(--th-muted)',
-                              }}>
-                                <code>{meta.contextFile}</code>
-                                <button
-                                  onClick={() => saveSkillContext(meta.contextFile)}
-                                  disabled={!contextDirty || contextSaving}
-                                  style={{
-                                    padding: '3px 8px',
-                                    border: `1px solid ${contextDirty ? group.color : 'var(--th-border)'}`,
-                                    borderRadius: 4,
-                                    background: contextDirty ? `${group.color}15` : 'transparent',
-                                    color: contextDirty ? group.color : 'var(--th-muted)',
-                                    fontSize: 11,
-                                    cursor: contextDirty ? 'pointer' : 'default',
-                                  }}
-                                >
-                                  {contextSaving ? '…' : c.saveContext}
-                                </button>
-                              </div>
-                              <textarea
-                                value={contextContent}
-                                onChange={e => { setContextContent(e.target.value); setContextDirty(true) }}
-                                style={{
-                                  width: '100%', minHeight: 180, resize: 'vertical',
-                                  border: 'none', outline: 'none', padding: 10,
-                                  background: 'transparent', color: 'var(--th-text)',
-                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                                  fontSize: 12, lineHeight: 1.5,
-                                }}
-                              />
-                            </div>
-                          )}
                         </div>
                         <div style={{
                           display: 'flex', alignItems: 'stretch', gap: 12,
                           paddingTop: 2, flexShrink: 0,
                         }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignSelf: 'flex-start' }}>
-                            {meta.contextFile && (
-                              <button
-                                onClick={() => toggleContext(name, meta.contextFile)}
-                                title={c.context}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                                  padding: '5px 9px',
-                                  border: '1px solid var(--th-border)',
-                                  borderRadius: 5,
-                                  background: openContextFor === name ? `${group.color}15` : 'transparent',
-                                  color: openContextFor === name ? group.color : 'var(--th-muted)',
-                                  fontSize: 11,
-                                  fontWeight: 650,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                <FileText size={12} /> {c.context}
-                              </button>
-                            )}
-                            {meta.hasDiagram && (
-                              <button
-                                onClick={() => setDiagramFor(name)}
-                                title={c.diagram}
-                                style={contentButtonStyle(false, group.color)}
-                              >
-                                <Workflow size={12} /> {c.diagram}
-                              </button>
-                            )}
-                            {meta.references && meta.references.length > 0 && (
-                              <button
-                                onClick={() => setContentsFor({ name, kind: 'reference' })}
-                                title={c.references}
-                                style={contentButtonStyle(false, '#7C3AED')}
-                              >
-                                <BookOpen size={12} /> {c.references} · {meta.references.length}
-                              </button>
-                            )}
-                            {meta.templates && meta.templates.length > 0 && (
-                              <button
-                                onClick={() => setContentsFor({ name, kind: 'template' })}
-                                title={c.templates}
-                                style={contentButtonStyle(false, '#2563EB')}
-                              >
-                                <Layout size={12} /> {c.templates} · {meta.templates.length}
-                              </button>
-                            )}
-                            {meta.examples && meta.examples.length > 0 && (
-                              <button
-                                onClick={() => setContentsFor({ name, kind: 'example' })}
-                                title={c.examples}
-                                style={contentButtonStyle(false, '#16A34A')}
-                              >
-                                <FileCode2 size={12} /> {c.examples} · {meta.examples.length}
-                              </button>
-                            )}
+                            <button onClick={() => setDetailsFor(name)} title={c.details} style={contentButtonStyle(false, group.color)}>
+                              <LayoutPanelTop size={12} /> {c.details}
+                            </button>
                           </div>
                           <span aria-hidden="true" style={{
                             width: 1,
@@ -909,11 +870,8 @@ function SkillsSection() {
                             background: 'var(--th-border)',
                             opacity: 0.9,
                           }} />
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                            <SkillToggle enabled={enabled} onChange={v => toggleSkill(name, v, meta)} />
-                            <span style={{ fontSize: 10, color: enabled ? 'var(--th-success, #16A34A)' : 'var(--th-muted)', fontWeight: 600 }}>
-                              {enabled ? c.enabled : c.disabled}
-                            </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <SkillToggle enabled={enabled} disabled={!!meta.locked} onChange={v => toggleSkill(name, v, meta)} />
                           </div>
                         </div>
                       </div>
@@ -926,26 +884,21 @@ function SkillsSection() {
         })}
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      <SkillDiagramModal
-        open={!!diagramFor}
-        skillName={diagramFor}
-        onClose={() => setDiagramFor(null)}
-      />
-      {contentsFor && (() => {
-        const meta = skillEntries.find(([n]) => n === contentsFor.name)?.[1]
-        const files = meta
-          ? (contentsFor.kind === 'reference' ? (meta.references ?? [])
-            : contentsFor.kind === 'template' ? (meta.templates ?? []).map(t => `${t.name}.md`)
-            : (meta.examples ?? []))
-          : []
+      {detailsFor && (() => {
+        const item = enrichedSkills.find(s => s.name === detailsFor)
+        if (!item) return null
         return (
-          <SkillContentsModal
+          <SkillDetailModal
             open={true}
-            skillName={contentsFor.name}
-            skillLabel={lang === 'en' ? meta?.labelEn : meta?.label}
-            kind={contentsFor.kind}
-            files={files}
-            onClose={() => setContentsFor(null)}
+            name={item.name}
+            meta={item.meta}
+            enabled={item.enabled}
+            scope={item.scope}
+            health={item.health}
+            providersSummary={providersSummary}
+            labels={c}
+            usageHistory={loadSkillUsageHistory(item.name, lang)}
+            onClose={() => setDetailsFor(null)}
           />
         )
       })()}
@@ -967,37 +920,648 @@ function contentButtonStyle(active: boolean, accent: string): React.CSSPropertie
   }
 }
 
+function SkillRegistryDiagnosticsPanel({ diagnostics, labels, lang }: {
+  diagnostics: SkillRegistryDiagnostic[]
+  labels: { title: string; ok: string; intro: string }
+  lang: UiLanguage
+}) {
+  const hasIssues = diagnostics.length > 0
+  const tone = diagnostics.some(item => item.severity === 'error') ? '#DC2626' : diagnostics.some(item => item.severity === 'warning') ? '#D97706' : '#16A34A'
+  return (
+    <section style={{
+      marginBottom: 16,
+      border: `1px solid ${hasIssues ? `${tone}55` : 'var(--th-border)'}`,
+      background: hasIssues ? `${tone}10` : 'var(--th-bg-card)',
+      borderRadius: 10,
+      padding: '12px 14px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: hasIssues ? 10 : 0 }}>
+        <AlertTriangle size={15} style={{ color: tone }} />
+        <strong style={{ color: 'var(--th-text)', fontSize: 13 }}>{labels.title}</strong>
+        <span style={{ marginLeft: 'auto', color: hasIssues ? tone : 'var(--th-muted)', fontSize: 11, fontWeight: 700 }}>
+          {hasIssues ? labels.intro : (lang === 'en' ? 'OK' : 'OK')}
+        </span>
+      </div>
+      {!hasIssues ? (
+        <p style={{ margin: '6px 0 0 23px', color: 'var(--th-muted)', fontSize: 12, lineHeight: 1.45 }}>{labels.ok}</p>
+      ) : (
+        <div style={{ display: 'grid', gap: 7 }}>
+          {diagnostics.slice(0, 6).map((item, index) => (
+            <div key={`${item.code}-${item.skill ?? item.folder ?? index}`} style={{
+              display: 'grid', gap: 3,
+              padding: '8px 10px', borderRadius: 7,
+              background: 'var(--th-bg-card)', border: '1px solid var(--th-border)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <RegistryBadge color={item.severity === 'error' ? '#DC2626' : '#D97706'}>{item.severity}</RegistryBadge>
+                <code style={{ color: 'var(--th-muted)', fontSize: 11 }}>{item.code}</code>
+                {(item.skill || item.folder) && <span style={{ color: 'var(--th-muted)', fontSize: 11 }}>{item.skill || item.folder}</span>}
+              </div>
+              <span style={{ color: 'var(--th-text)', fontSize: 12, lineHeight: 1.45 }}>{item.message}</span>
+            </div>
+          ))}
+          {diagnostics.length > 6 && (
+            <span style={{ color: 'var(--th-muted)', fontSize: 11, paddingLeft: 2 }}>
+              {lang === 'en' ? `+${diagnostics.length - 6} more issue(s)` : `+${diagnostics.length - 6} autre(s) diagnostic(s)`}
+            </span>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+const filterBoxStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 8,
+  padding: '8px 10px', border: '1px solid var(--th-border)', borderRadius: 8,
+  background: 'var(--th-bg-card)', minWidth: 0,
+}
+
+function getSkillScope(meta: SkillMeta): SkillScope {
+  if (meta.tags?.includes('experimental')) return 'experimental'
+  if (meta.group === 'repo' || meta.group === 'target') return 'project'
+  return 'core'
+}
+
+function skillScopeLabel(scope: SkillScope): string {
+  if (scope === 'organization') return 'ORG'
+  return scope.toUpperCase()
+}
+
+function getSkillStatus(enabled: boolean): SkillStatus {
+  return enabled ? 'active' : 'disabled'
+}
+
+function getSkillResources(meta: SkillMeta) {
+  return {
+    references: meta.references?.length ?? 0,
+    scripts: meta.scripts?.length ?? 0,
+    templates: meta.templates?.length ?? 0,
+    examples: meta.examples?.length ?? 0,
+  }
+}
+
+function getSkillHealth(meta: SkillMeta, enabled: boolean, lang: UiLanguage): { status: SkillHealthStatus; message: string } {
+  const en = lang === 'en'
+  if (!enabled) return { status: 'unknown', message: en ? 'Disabled · not evaluated' : 'Désactivé · non évalué' }
+  if (!meta.desc && !meta.descEn) return { status: 'error', message: en ? 'Error · missing description' : 'Erreur · description manquante' }
+  if (!meta.examples?.length) return { status: 'warning', message: en ? 'Warning · no documented example' : 'Attention · aucun exemple documenté' }
+  return { status: 'ok', message: en ? `OK · ${meta.examples.length} documented example${meta.examples.length > 1 ? 's' : ''}` : `OK · ${meta.examples.length} exemple${meta.examples.length > 1 ? 's' : ''} documenté${meta.examples.length > 1 ? 's' : ''}` }
+}
+
+function healthColor(status: SkillHealthStatus): string {
+  if (status === 'ok') return '#16A34A'
+  if (status === 'warning') return '#D97706'
+  if (status === 'error') return '#DC2626'
+  return '#64748B'
+}
+
+function getSkillTrigger(meta: SkillMeta, lang: UiLanguage): string {
+  const desc = lang === 'en' ? meta.descEn : meta.desc
+  const keywords = meta.keywords?.slice(0, 5).join(', ')
+  if (desc.toLowerCase().startsWith('use this skill when') || desc.toLowerCase().startsWith('utiliser ce skill quand')) {
+    return desc
+  }
+  if (keywords) {
+    return lang === 'en'
+      ? `Keyword or intent match: ${keywords}`
+      : `Match par intention ou mots-clés : ${keywords}`
+  }
+  return lang === 'en' ? 'Implicit routing by the backend skill dispatcher.' : 'Routage implicite par le dispatcher backend.'
+}
+
+function loadSkillUsageHistory(skillName: string, lang: UiLanguage): SkillUsageItem[] {
+  if (typeof localStorage === 'undefined') return []
+  const usage: SkillUsageItem[] = []
+  const addMessages = (source: string, title: string, updatedAt: number, messages: StoredMessageLike[]) => {
+    messages.forEach((message, index) => {
+      if (message.role !== 'assistant') return
+      const events = message.events ?? []
+      const matches = events.filter(event => eventMentionsSkill(event, skillName)).length
+      if (matches === 0) return
+      const previousPrompt = [...messages.slice(0, index)].reverse().find(item => item.role === 'user' && item.text)?.text ?? title
+      usage.push({
+        id: `${source}-${index}-${updatedAt}-${usage.length}`,
+        source,
+        title,
+        prompt: previousPrompt.length > 140 ? `${previousPrompt.slice(0, 137)}…` : previousPrompt,
+        updatedAt: message.timestamp ?? updatedAt,
+        matches,
+      })
+    })
+  }
+  const parse = <T,>(key: string, fallback: T): T => {
+    try { return JSON.parse(localStorage.getItem(key) ?? '') as T } catch { return fallback }
+  }
+  const activeAssistant = parse<Record<string, StoredMessageLike[]>>('odoo-active-convs', {})
+  Object.entries(activeAssistant).forEach(([key, messages]) => {
+    addMessages(lang === 'en' ? 'Active assistant' : 'Assistant actif', key === 'general' ? 'Général' : `Profil ${key}`, Date.now(), messages)
+  })
+  const savedAssistant = parse<Record<string, { title?: string; messages?: StoredMessageLike[]; updatedAt?: number }[]>>('odoo-conv-history', {})
+  Object.entries(savedAssistant).forEach(([key, conversations]) => {
+    conversations.forEach(conversation => addMessages(lang === 'en' ? 'Saved assistant' : 'Assistant sauvegardé', conversation.title ?? (key === 'general' ? 'Général' : `Profil ${key}`), conversation.updatedAt ?? Date.now(), conversation.messages ?? []))
+  })
+  const activeMigration = parse<Record<string, StoredMessageLike[]>>('odoo-migration-active', {})
+  Object.entries(activeMigration).forEach(([key, messages]) => {
+    addMessages(lang === 'en' ? 'Active migration' : 'Migration active', key, Date.now(), messages)
+  })
+  const savedMigration = parse<{ title?: string; messages?: StoredMessageLike[]; updatedAt?: number }[]>('odoo-migration-history', [])
+  savedMigration.forEach(conversation => addMessages(lang === 'en' ? 'Saved migration' : 'Migration sauvegardée', conversation.title ?? 'Migration', conversation.updatedAt ?? Date.now(), conversation.messages ?? []))
+  return usage.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+function eventMentionsSkill(event: AiEventLike, skillName: string): boolean {
+  const wanted = normalizeSkillName(skillName)
+  if (event.type === 'skills_selected' && Array.isArray(event.skills)) {
+    return event.skills.some(name => normalizeSkillName(name) === wanted)
+  }
+  return !!event.name && normalizeSkillName(event.name) === wanted
+}
+
+function normalizeSkillName(name: string): string {
+  return name.replace(/-/g, '_')
+}
+
+function RegistryBadge({ children, color }: { children: React.ReactNode; color: string }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontSize: 10, fontWeight: 750, letterSpacing: 0.25, textTransform: 'uppercase',
+      padding: '2px 6px', borderRadius: 5,
+      background: `${color}15`, color, border: `1px solid ${color}40`,
+    }}>
+      {children}
+    </span>
+  )
+}
+
+function SkillLine({ label, value, color }: {
+  label: string
+  value: string
+  color: string
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5, lineHeight: 1.45 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 88, color: 'var(--th-muted)', fontWeight: 650 }}>
+        {label}:
+      </span>
+      <span style={{ color, fontWeight: 550 }}>{value || '—'}</span>
+    </div>
+  )
+}
+
+function PermissionLine({ label, perms, labels }: {
+  label: string
+  perms: SkillPermissionsMeta
+  labels: { permFs: string; permNet: string; permScripts: string; permOdoo: string }
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5, lineHeight: 1.45 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 88, color: 'var(--th-muted)', fontWeight: 650 }}>
+        {label}:
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+        <PermissionBadges perms={perms} labels={labels} />
+      </span>
+    </div>
+  )
+}
+
+function SkillDetailModal({ open, name, meta, enabled, scope, health, providersSummary, labels, usageHistory, onClose }: {
+  open: boolean
+  name: string
+  meta: SkillMeta
+  enabled: boolean
+  scope: SkillScope
+  health: { status: SkillHealthStatus; message: string }
+  providersSummary: string
+  labels: {
+    details: string; enabled: string; disabled: string; req: string; trigger: string; resources: string; health: string; diagram: string; references: string; templates: string; examples: string; providerCompatibility: string; runs: string; noRuns: string; skillMd: string; usageHistory: string
+  }
+  usageHistory: SkillUsageItem[]
+  onClose: () => void
+}) {
+  const lang = useUiLanguage()
+  const [tab, setTab] = useState<'overview' | 'skill' | 'diagram' | 'reference' | 'template' | 'example' | 'providers' | 'usage'>('overview')
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  const label = lang === 'en' ? meta.labelEn : meta.label
+  const desc = lang === 'en' ? meta.descEn : meta.desc
+  const req = lang === 'en' ? meta.reqEn : meta.req
+  const trigger = getSkillTrigger(meta, lang)
+  const resources = getSkillResources(meta)
+  const tabs: { id: typeof tab; label: string; count?: number }[] = [
+    { id: 'overview', label: lang === 'en' ? 'Overview' : 'Vue d’ensemble' },
+    { id: 'skill', label: labels.skillMd },
+    ...(meta.hasDiagram ? [{ id: 'diagram' as const, label: labels.diagram }] : []),
+    ...((meta.references?.length ?? 0) > 0 ? [{ id: 'reference' as const, label: labels.references, count: meta.references?.length }] : []),
+    ...((meta.templates?.length ?? 0) > 0 ? [{ id: 'template' as const, label: labels.templates, count: meta.templates?.length }] : []),
+    ...((meta.examples?.length ?? 0) > 0 ? [{ id: 'example' as const, label: labels.examples, count: meta.examples?.length }] : []),
+    { id: 'providers', label: labels.providerCompatibility },
+    { id: 'usage', label: labels.usageHistory, count: usageHistory.length },
+  ]
+
+  return createPortal(
+    <div role="presentation" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(8, 10, 14, 0.78)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'flex-end' }}>
+      <div role="dialog" aria-modal="true" onClick={e => e.stopPropagation()} style={{ width: 'min(920px, 100vw)', height: '100%', background: 'var(--th-bg)', color: 'var(--th-text)', borderLeft: '1px solid var(--th-border)', display: 'flex', flexDirection: 'column', boxShadow: '-20px 0 60px rgba(0,0,0,0.35)' }}>
+        <header style={{ padding: '18px 22px', borderBottom: '1px solid var(--th-border)', background: 'var(--th-bg-card)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 10, background: 'var(--brand-bg, rgba(37,99,235,0.12))', color: 'var(--brand, #2563EB)' }}><Zap size={19} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 750 }}>{label}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                <RegistryBadge color="#64748B">{name}</RegistryBadge>
+                <RegistryBadge color={scope === 'project' ? '#D97706' : '#7C3AED'}>{skillScopeLabel(scope)}</RegistryBadge>
+                <RegistryBadge color={enabled ? '#16A34A' : '#64748B'}>{enabled ? labels.enabled : labels.disabled}</RegistryBadge>
+                {meta.locked && <RegistryBadge color="#D97706"><Lock size={9} /> {lang === 'en' ? 'LOCKED' : 'VERROUILLÉ'}</RegistryBadge>}
+              </div>
+            </div>
+            <button type="button" className="ui-icon-button" onClick={onClose} aria-label={lang === 'en' ? 'Close' : 'Fermer'}><X size={18} /></button>
+          </div>
+        </header>
+
+        <nav style={{ display: 'flex', gap: 6, padding: '10px 18px', borderBottom: '1px solid var(--th-border)', background: 'var(--th-bg-card)', overflowX: 'auto' }}>
+          {tabs.map(({ id, label: tabLabel, count }) => (
+            <button key={id} onClick={() => setTab(id)} style={{ padding: '7px 10px', borderRadius: 7, border: '1px solid ' + (tab === id ? 'var(--brand, #2563EB)' : 'var(--th-border)'), background: tab === id ? 'var(--brand-bg, rgba(37,99,235,0.12))' : 'transparent', color: tab === id ? 'var(--brand, #2563EB)' : 'var(--th-muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              {tabLabel}{typeof count === 'number' ? ` · ${count}` : ''}
+            </button>
+          ))}
+        </nav>
+
+        <main style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 22 }}>
+          {tab === 'overview' && (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <section style={detailPanelStyle}>
+                <h3 style={detailTitleStyle}>Description</h3>
+                <p style={{ margin: 0, color: 'var(--th-text-sub)', lineHeight: 1.6, fontSize: 13 }}>{desc}</p>
+              </section>
+              <section style={detailPanelStyle}>
+                <h3 style={detailTitleStyle}>{labels.trigger}</h3>
+                <p style={{ margin: 0, color: 'var(--th-text-sub)', lineHeight: 1.6, fontSize: 13 }}>{trigger}</p>
+              </section>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                <section style={detailPanelStyle}><h3 style={detailTitleStyle}>{labels.req}</h3><p style={detailTextStyle}>{req || '—'}</p></section>
+                <section style={detailPanelStyle}><h3 style={detailTitleStyle}>{labels.health}</h3><p style={{ ...detailTextStyle, color: healthColor(health.status) }}>{health.message}</p></section>
+                <section style={detailPanelStyle}><h3 style={detailTitleStyle}>{labels.resources}</h3><p style={detailTextStyle}>{resources.references} refs · {resources.scripts} scripts · {resources.templates} templates · {resources.examples} examples</p></section>
+                <section style={detailPanelStyle}><h3 style={detailTitleStyle}>Metadata</h3><p style={detailTextStyle}>v{meta.version ?? '—'} · {meta.author ?? '—'}</p></section>
+              </div>
+              <section style={detailPanelStyle}>
+                <h3 style={detailTitleStyle}>{labels.runs}</h3>
+                <SkillUsageList items={usageHistory} emptyLabel={labels.noRuns} />
+              </section>
+            </div>
+          )}
+
+          {tab === 'skill' && <SkillMarkdownViewer skillName={name} />}
+          {tab === 'diagram' && <SkillDiagramInline skillName={name} />}
+          {tab === 'reference' && <SkillFileViewer skillName={name} kind="reference" files={meta.references ?? []} />}
+          {tab === 'template' && <SkillFileViewer skillName={name} kind="template" files={(meta.templates ?? []).map(tpl => `${tpl.name}.md`)} />}
+          {tab === 'example' && <SkillFileViewer skillName={name} kind="example" files={meta.examples ?? []} />}
+          {tab === 'usage' && (
+            <section style={detailPanelStyle}>
+              <h3 style={detailTitleStyle}>{labels.usageHistory}</h3>
+              <SkillUsageList items={usageHistory} emptyLabel={labels.noRuns} />
+            </section>
+          )}
+
+          {tab === 'providers' && (
+            <section style={detailPanelStyle}>
+              <h3 style={detailTitleStyle}>{labels.providerCompatibility}</h3>
+              <ProviderCompatibilityRow provider="OpenAI" status="supported" />
+              <ProviderCompatibilityRow provider="Claude / Anthropic" status="supported" />
+              <ProviderCompatibilityRow provider="Gemini" status="supported" />
+              <ProviderCompatibilityRow provider="GitHub Models / Copilot" status="partial" />
+              <ProviderCompatibilityRow provider="Generic" status="supported" />
+              <p style={{ ...detailTextStyle, marginTop: 12 }}>Configured: {providersSummary}</p>
+            </section>
+          )}
+        </main>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function SkillMarkdownViewer({ skillName }: { skillName: string }) {
+  const lang = useUiLanguage()
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['skill-markdown', skillName],
+    queryFn: () => getSkillMarkdown(skillName).then(r => r.data as { content: string }),
+    staleTime: 60_000,
+  })
+  const parsed = data?.content ? parseSkillMarkdown(data.content) : null
+  return (
+    <section style={detailPanelStyle}>
+      <h3 style={detailTitleStyle}>SKILL.md</h3>
+      {isLoading && <InlineLoading label={lang === 'en' ? 'Loading SKILL.md…' : 'Chargement de SKILL.md…'} />}
+      {isError && <p style={{ ...detailTextStyle, color: 'var(--th-danger, #DC2626)' }}>{lang === 'en' ? 'Unable to load SKILL.md.' : 'Impossible de charger SKILL.md.'}</p>}
+      {parsed && (
+        <>
+          {parsed.metadata.length > 0 && <SkillMetadataPanel entries={parsed.metadata} lang={lang} />}
+          <Markdown text={parsed.body} />
+        </>
+      )}
+    </section>
+  )
+}
+
+interface SkillMarkdownParts {
+  metadata: { key: string; value: string }[]
+  body: string
+}
+
+function parseSkillMarkdown(content: string): SkillMarkdownParts {
+  const match = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)([\s\S]*)$/)
+  if (!match) return { metadata: [], body: content }
+  return {
+    metadata: parseSkillFrontmatter(match[1]),
+    body: match[2].trimStart(),
+  }
+}
+
+function parseSkillFrontmatter(frontmatter: string): { key: string; value: string }[] {
+  const readableKeys = new Set(['name', 'aliases', 'label', 'label_en', 'kind', 'group', 'builtin', 'locked', 'allow_implicit_invocation', 'read_only', 'risk_level', 'description', 'description_en', 'requirement', 'requirement_en', 'version', 'author', 'modes', 'keywords', 'tags'])
+  const entries: { key: string; value: string }[] = []
+  for (const line of frontmatter.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('-')) continue
+    const separatorIndex = trimmed.indexOf(':')
+    if (separatorIndex <= 0) continue
+    const key = trimmed.slice(0, separatorIndex).trim()
+    if (!readableKeys.has(key)) continue
+    const rawValue = trimmed.slice(separatorIndex + 1).trim()
+    if (!rawValue) continue
+    entries.push({ key, value: formatSkillMetadataValue(rawValue) })
+  }
+  return entries
+}
+
+function formatSkillMetadataValue(value: string): string {
+  const unquoted = value.replace(/^['"]|['"]$/g, '')
+  if (unquoted.startsWith('[') && unquoted.endsWith(']')) {
+    return unquoted.slice(1, -1).split(',').map(part => part.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).join(' · ')
+  }
+  if (unquoted === 'true') return 'oui'
+  if (unquoted === 'false') return 'non'
+  return unquoted
+}
+
+function SkillMetadataPanel({ entries, lang }: { entries: { key: string; value: string }[]; lang: UiLanguage }) {
+  const title = lang === 'en' ? 'Skill metadata' : 'Métadonnées du skill'
+  return (
+    <div style={{ ...detailPanelStyle, background: 'var(--th-bg-muted)', marginBottom: 14 }}>
+      <h4 style={{ ...detailTitleStyle, marginBottom: 10 }}>{title}</h4>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+        {entries.map(entry => (
+          <div key={entry.key} style={{ border: '1px solid var(--th-border)', borderRadius: 8, padding: '8px 10px', background: 'var(--th-bg)' }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--th-muted)', fontWeight: 700 }}>{skillMetadataLabel(entry.key, lang)}</div>
+            <div style={{ fontSize: 12, color: 'var(--th-text)', marginTop: 3, lineHeight: 1.4 }}>{entry.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function skillMetadataLabel(key: string, lang: UiLanguage): string {
+  const labels: Record<string, { fr: string; en: string }> = {
+    name: { fr: 'Nom technique', en: 'Technical name' },
+    aliases: { fr: 'Alias', en: 'Aliases' },
+    label: { fr: 'Libellé', en: 'Label' },
+    label_en: { fr: 'Libellé EN', en: 'English label' },
+    kind: { fr: 'Type', en: 'Type' },
+    group: { fr: 'Groupe', en: 'Group' },
+    builtin: { fr: 'Skill cœur', en: 'Core skill' },
+    locked: { fr: 'Verrouillé', en: 'Locked' },
+    allow_implicit_invocation: { fr: 'Invocation implicite', en: 'Implicit invocation' },
+    read_only: { fr: 'Lecture seule', en: 'Read-only' },
+    risk_level: { fr: 'Risque', en: 'Risk' },
+    description: { fr: 'Description', en: 'Description' },
+    description_en: { fr: 'Description EN', en: 'English description' },
+    requirement: { fr: 'Pré-requis', en: 'Requirement' },
+    requirement_en: { fr: 'Pré-requis EN', en: 'English requirement' },
+    version: { fr: 'Version', en: 'Version' },
+    author: { fr: 'Auteur', en: 'Author' },
+    modes: { fr: 'Modes', en: 'Modes' },
+    keywords: { fr: 'Mots-clés', en: 'Keywords' },
+    tags: { fr: 'Tags', en: 'Tags' },
+  }
+  return labels[key]?.[lang] ?? key
+}
+
+interface DiagramPayload {
+  inputs: string[]
+  steps: string[]
+  outputs: string[]
+  inputs_en?: string[]
+  steps_en?: string[]
+  outputs_en?: string[]
+  notes?: string | null
+  notes_en?: string | null
+}
+
+function SkillDiagramInline({ skillName }: { skillName: string }) {
+  const lang = useUiLanguage()
+  const en = lang === 'en'
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['skill-diagram', skillName],
+    queryFn: () => getSkillDiagram(skillName).then(r => r.data as { diagram: DiagramPayload }),
+    staleTime: 5 * 60_000,
+  })
+  const diagram = data?.diagram
+  const inputs = diagram ? (en && diagram.inputs_en?.length ? diagram.inputs_en : diagram.inputs) : []
+  const steps = diagram ? (en && diagram.steps_en?.length ? diagram.steps_en : diagram.steps) : []
+  const outputs = diagram ? (en && diagram.outputs_en?.length ? diagram.outputs_en : diagram.outputs) : []
+  const notes = diagram ? (en && diagram.notes_en ? diagram.notes_en : diagram.notes) : null
+  const labels = en
+    ? { inputs: 'Inputs', logic: 'Logic', outputs: 'Outputs', empty: 'No diagram defined for this skill yet.', error: 'Unable to load the diagram.' }
+    : { inputs: 'Entrées', logic: 'Logique', outputs: 'Sorties', empty: 'Aucun diagramme défini pour ce skill.', error: 'Impossible de charger le diagramme.' }
+  return (
+    <section style={detailPanelStyle}>
+      <h3 style={detailTitleStyle}>{en ? 'Diagram' : 'Diagramme'}</h3>
+      {isLoading && <InlineLoading label={en ? 'Loading diagram…' : 'Chargement du diagramme…'} />}
+      {isError && <p style={{ ...detailTextStyle, color: 'var(--th-danger, #DC2626)' }}>{labels.error}</p>}
+      {!isLoading && !isError && !diagram && <p style={detailTextStyle}>{labels.empty}</p>}
+      {diagram && <InlineDiagramBoard labels={labels} inputs={inputs} steps={steps} outputs={outputs} />}
+      {notes && <p style={{ ...detailTextStyle, marginTop: 12 }}>{notes}</p>}
+    </section>
+  )
+}
+
+function InlineDiagramBoard({ labels, inputs, steps, outputs }: {
+  labels: { inputs: string; logic: string; outputs: string }
+  inputs: string[]
+  steps: string[]
+  outputs: string[]
+}) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 28px minmax(0, 1.25fr) 28px minmax(0, 1fr)', gap: 0, alignItems: 'stretch' }}>
+      <InlineDiagramColumn title={labels.inputs} accent="#16A34A" items={inputs} />
+      <InlineDiagramArrow />
+      <InlineDiagramColumn title={labels.logic} accent="#2563EB" items={steps} numbered />
+      <InlineDiagramArrow />
+      <InlineDiagramColumn title={labels.outputs} accent="#D97706" items={outputs} />
+    </div>
+  )
+}
+
+function InlineDiagramColumn({ title, accent, items, numbered }: { title: string; accent: string; items: string[]; numbered?: boolean }) {
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: `1px solid ${accent}55`, background: `${accent}0c`, borderRadius: 10 }}>
+      <h4 style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: accent }}>{title}</h4>
+      {items.length === 0 && <p style={{ margin: 0, fontSize: 12, color: 'var(--th-muted)', fontStyle: 'italic' }}>—</p>}
+      {items.map((item, idx) => (
+        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 9px', background: 'var(--th-bg-card)', border: '1px solid var(--th-border)', borderRadius: 7, fontSize: 12.5, lineHeight: 1.45, color: 'var(--th-text)' }}>
+          {numbered && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: '50%', background: accent, color: '#fff', fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{idx + 1}</span>}
+          <span>{item}</span>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function InlineDiagramArrow() {
+  return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--th-muted)' }}><ArrowRight size={18} /></div>
+}
+
+const SKILL_CONTENT_FETCHERS: Record<SkillContentKind, (skill: string, file: string) => Promise<{ data: { content: string } }>> = {
+  reference: getSkillReference,
+  template: getSkillTemplate,
+  example: getSkillExample,
+}
+
+function SkillFileViewer({ skillName, kind, files }: { skillName: string; kind: SkillContentKind; files: string[] }) {
+  const lang = useUiLanguage()
+  const [active, setActive] = useState<string | null>(files[0] ?? null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => { setActive(files[0] ?? null) }, [kind, files])
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['skill-detail-content', skillName, kind, active],
+    queryFn: () => SKILL_CONTENT_FETCHERS[kind](skillName, active as string).then(r => r.data),
+    enabled: !!active,
+    staleTime: 60_000,
+  })
+  const onCopy = async () => {
+    if (!data?.content) return
+    try {
+      await navigator.clipboard.writeText(data.content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch { /* ignore */ }
+  }
+  const title = kind === 'reference' ? (lang === 'en' ? 'References' : 'Références') : kind === 'template' ? 'Templates' : (lang === 'en' ? 'Examples' : 'Exemples')
+  const empty = lang === 'en' ? 'No file for this section.' : 'Aucun fichier pour cette section.'
+  return (
+    <section style={{ ...detailPanelStyle, padding: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderBottom: '1px solid var(--th-border)' }}>
+        <h3 style={{ ...detailTitleStyle, margin: 0, flex: 1 }}>{title}</h3>
+        {active && <button type="button" className="ui-button ui-button-outline" style={{ padding: '4px 10px', fontSize: 12 }} onClick={onCopy} disabled={!data?.content}><Copy size={12} /> {copied ? (lang === 'en' ? 'Copied' : 'Copié') : (lang === 'en' ? 'Copy' : 'Copier')}</button>}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: files.length > 1 ? '220px minmax(0, 1fr)' : '1fr', minHeight: 380 }}>
+        {files.length > 1 && (
+          <aside style={{ borderRight: '1px solid var(--th-border)', background: 'var(--th-bg-muted)', padding: 10, overflow: 'auto' }}>
+            {files.map(file => (
+              <button key={file} onClick={() => setActive(file)} style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '7px 8px', marginBottom: 4, border: `1px solid ${file === active ? 'var(--brand, #2563EB)' : 'transparent'}`, borderRadius: 6, background: file === active ? 'var(--brand-bg, rgba(37,99,235,0.12))' : 'transparent', color: file === active ? 'var(--brand, #2563EB)' : 'var(--th-text)', fontSize: 12, textAlign: 'left', cursor: 'pointer' }}>
+                <FileText size={12} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file}</span>
+              </button>
+            ))}
+          </aside>
+        )}
+        <div style={{ padding: 16, overflow: 'auto' }}>
+          {files.length === 0 && <p style={detailTextStyle}>{empty}</p>}
+          {isLoading && <InlineLoading label={lang === 'en' ? 'Loading…' : 'Chargement…'} />}
+          {isError && <p style={{ ...detailTextStyle, color: 'var(--th-danger, #DC2626)' }}>{lang === 'en' ? 'Unable to load this file.' : 'Impossible de charger ce fichier.'}</p>}
+          {data?.content && <Markdown text={data.content} />}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SkillUsageList({ items, emptyLabel }: { items: SkillUsageItem[]; emptyLabel: string }) {
+  if (items.length === 0) return <p style={detailTextStyle}>{emptyLabel}</p>
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      {items.slice(0, 8).map(item => (
+        <div key={item.id} style={{ padding: '10px 11px', border: '1px solid var(--th-border)', borderRadius: 8, background: 'var(--th-bg-muted)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+            <strong style={{ fontSize: 12.5, color: 'var(--th-text)' }}>{item.title}</strong>
+            <span style={{ fontSize: 11, color: 'var(--th-muted)', whiteSpace: 'nowrap' }}>{new Date(item.updatedAt).toLocaleString()}</span>
+          </div>
+          <p style={{ ...detailTextStyle, marginBottom: 4 }}>{item.prompt}</p>
+          <span style={{ fontSize: 11, color: 'var(--th-muted)' }}>{item.source} · {item.matches} match{item.matches > 1 ? 'es' : ''}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function InlineLoading({ label }: { label: string }) {
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--th-muted)', fontSize: 13 }}><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> {label}</div>
+}
+
+const detailPanelStyle: React.CSSProperties = {
+  border: '1px solid var(--th-border)', borderRadius: 10, padding: 14, background: 'var(--th-bg-card)',
+}
+
+const detailTitleStyle: React.CSSProperties = {
+  margin: '0 0 8px', fontSize: 12, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--th-muted)',
+}
+
+const detailTextStyle: React.CSSProperties = {
+  margin: 0, color: 'var(--th-text-sub)', fontSize: 13, lineHeight: 1.55,
+}
+
+function ProviderCompatibilityRow({ provider, status }: { provider: string; status: 'supported' | 'partial' | 'unsupported' }) {
+  const color = status === 'supported' ? '#16A34A' : status === 'partial' ? '#D97706' : '#DC2626'
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) 120px', gap: 12, alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--th-border)' }}>
+      <span style={{ fontSize: 13, color: 'var(--th-text)', fontWeight: 650 }}>{provider}</span>
+      <RegistryBadge color={color}>{status}</RegistryBadge>
+    </div>
+  )
+}
+
 function PermissionBadges({ perms, labels }: {
   perms: SkillPermissionsMeta
   labels: { permFs: string; permNet: string; permScripts: string; permOdoo: string }
 }) {
+  const lang = useUiLanguage()
   const badges: { icon: typeof HardDrive; label: string; value: string; color: string }[] = []
   if (perms.filesystem !== 'none') {
     badges.push({
       icon: HardDrive,
       label: labels.permFs,
-      value: perms.filesystem,
+      value: accessValueLabel(perms.filesystem, lang),
       color: perms.filesystem === 'write' ? '#DC2626' : '#16A34A',
     })
   }
   if (perms.network) {
-    badges.push({ icon: Network, label: labels.permNet, value: 'on', color: '#DC2626' })
+    badges.push({ icon: Network, label: labels.permNet, value: lang === 'en' ? 'on' : 'actif', color: '#DC2626' })
   }
   if (perms.scripts) {
-    badges.push({ icon: Terminal, label: labels.permScripts, value: 'on', color: '#D97706' })
+    badges.push({ icon: Terminal, label: labels.permScripts, value: lang === 'en' ? 'allowed' : 'autorisé', color: '#D97706' })
   }
   if (perms.odoo !== 'none') {
     badges.push({
       icon: Server,
       label: labels.permOdoo,
-      value: perms.odoo,
+      value: accessValueLabel(perms.odoo, lang),
       color: perms.odoo === 'write' ? '#DC2626' : '#16A34A',
     })
   }
   if (badges.length === 0) return null
   return (
     <>
-      <span style={{ fontSize: 11, color: 'var(--th-border)', margin: '0 4px' }}>·</span>
       {badges.map((b, i) => {
         const Icon = b.icon
         return (
@@ -1012,12 +1576,17 @@ function PermissionBadges({ perms, labels }: {
               border: `1px solid ${b.color}40`,
             }}
           >
-            <Icon size={9} /> {b.value}
+            <Icon size={9} /> {b.label}: {b.value}
           </span>
         )
       })}
     </>
   )
+}
+
+function accessValueLabel(value: 'read' | 'write', lang: UiLanguage): string {
+  if (lang === 'en') return value === 'write' ? 'write' : 'read'
+  return value === 'write' ? 'écriture' : 'lecture'
 }
 
 // ── Interface settings ────────────────────────────────────────────
@@ -1515,10 +2084,6 @@ type ContextFileGroup =
   | 'profiles'
   | 'localization'
   | 'versions'
-  | 'skills-live'
-  | 'skills-source'
-  | 'skills-target'
-  | 'skills-project'
 
 interface ContextFileMeta {
   name: string
@@ -1529,26 +2094,6 @@ interface ContextFileMeta {
   descEn: string
   contextGroup: ContextFileGroup
 }
-
-const SKILL_CONTEXT_GROUP_BY_SKILL_GROUP: Record<SkillGroup, ContextFileGroup> = {
-  core: 'skills-live',
-  live: 'skills-live',
-  src: 'skills-source',
-  target: 'skills-target',
-  repo: 'skills-project',
-}
-
-const SKILL_CONTEXT_FILES = Object.entries(SKILLS_META)
-  .filter(([, meta]) => meta.contextFile)
-  .map(([name, meta]): ContextFileMeta => ({
-    name: meta.contextFile as string,
-    label: `Skill · ${meta.label}`,
-    labelEn: `Skill · ${meta.labelEn}`,
-    icon: 'skill',
-    desc: `Bonnes pratiques d'utilisation de ${name}`,
-    descEn: `Best practices for using ${name}`,
-    contextGroup: SKILL_CONTEXT_GROUP_BY_SKILL_GROUP[meta.group],
-  }))
 
 const KNOWN_FILES: ContextFileMeta[] = [
   { name: 'skills.md',          label: 'Compétences consultant', labelEn: 'Consultant skills', icon: 'skills', desc: 'Connaissances métier, patterns courants, approche de diagnostic', descEn: 'Business knowledge, common patterns, diagnostic approach', contextGroup: 'core' },
@@ -1576,10 +2121,6 @@ const CONTEXT_FILE_GROUPS: { id: ContextFileGroup; label: string; labelEn: strin
   { id: 'profiles', label: 'Profils de réponse', labelEn: 'Response profiles', icon: 'profile' },
   { id: 'localization', label: 'Localisations', labelEn: 'Localizations', icon: 'localization' },
   { id: 'versions', label: 'Notes Odoo', labelEn: 'Odoo notes', icon: 'document' },
-  { id: 'skills-live', label: 'Skills · Données live', labelEn: 'Skills · Live data', icon: 'skill' },
-  { id: 'skills-source', label: 'Skills · Code source', labelEn: 'Skills · Source code', icon: 'workflow' },
-  { id: 'skills-target', label: 'Skills · Migration cible', labelEn: 'Skills · Migration target', icon: 'workflow' },
-  { id: 'skills-project', label: 'Skills · Code projet', labelEn: 'Skills · Project code', icon: 'studio' },
 ]
 
 function ContextFileIcon({ type, active }: { type?: string; active: boolean }) {
@@ -1666,7 +2207,6 @@ function ContextEditor() {
   const customVersions: string[] = (() => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })()
   const allFiles: ContextFileMeta[] = [
     ...KNOWN_FILES,
-    ...SKILL_CONTEXT_FILES.filter(f => !KNOWN_FILES.some(k => k.name === f.name)),
     ...customVersions
       .filter(v => !KNOWN_FILES.some(f => f.name === `odoo-${v}.md`))
       .sort((a, b) => {

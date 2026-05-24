@@ -2,7 +2,7 @@
 
 Guide d'orientation pour Claude Code, GitHub Copilot et tout autre assistant IA qui intervient sur ce repository.
 
-Dernière mise à jour contextuelle : 2026-05-24, alignée sur l'app `0.66.0` et les derniers commits `main`.
+Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.9.0` et les derniers commits `main`.
 
 ## Mission du produit
 
@@ -17,6 +17,7 @@ Principes produit à préserver :
 ## État récent à connaître
 
 Les derniers commits ont surtout transformé l'IA en architecture pilotée par skills :
+- `0.9.0` : refonte des descriptions des 28 SKILL.md (front-load keywords, limites explicites, FR+EN), durcissement du dispatcher (`_MIN_SKILL_SCORE=25`, 6 nouvelles règles `pruned:*-focus`, word-boundary FR/EN), `allow_implicit_invocation: false` sur les 6 runtime cœur, token counting dans `execution_done`, +64 tests régressifs (path traversal, trigger routing sur 10 skills via `eval_queries.json`, cross-provider parity, budget overflow, auto-load references). 436 tests passent.
 - `0.66.0` : propositions d'action extraites des réponses Markdown et affichées comme chips cliquables dans Assistant/Migration et le plein écran.
 - `0.65.0` : nouveau skill cœur `attachment-handler` pour PDF/images, fallback GitHub Models/Copilot via `pypdf` puis `pdf2image`, tools `extract_pdf_text`, `pdf_to_images`, `compare_documents`.
 - `0.64.0` : 28 `SKILL.md` opérationnels, routage par familles d'intention, bundles automatiques, événement SSE `skills_selected`, `query_odoo` exhaustif borné.
@@ -28,12 +29,12 @@ Avant de modifier une zone IA, vérifier la page À propos (`frontend/src/pages/
 ## Architecture du repository
 
 ```text
-odoo_consultant_portal/          Backend Python 3.10+ / FastAPI / SQLModel async / SQLite
+backend/          Backend Python 3.10+ / FastAPI / SQLModel async / SQLite
   api/app.py                     App FastAPI, CORS, routes /api/*, static frontend build
   api/routes/                    sources, profiles, projects, queries, history, ai, context, creator, update, settings
   core/                          config, database, models, constantes de budget contexte
   services/                      logique métier : AI, Odoo, sources, projets, Studio, Creator, attachments, preview
-  skills/                        28 skills auto-découverts, cœur de l'architecture IA
+  skills/                        loader Python et helpers partagés des skills
   cli/main.py                    commande `odoo-portal`
   mcp/server.py                  serveur MCP
 
@@ -48,7 +49,7 @@ frontend/                        React 18 / TypeScript strict / Vite / TanStack 
 
 tests/                           pytest backend/services/skills/routes
 docs/                            notes produit/contexte
-install.sh / start.sh            bootstrap local et lancement
+scripts/install.sh / scripts/start.sh            bootstrap local et lancement
 ```
 
 ## Données locales et chemins
@@ -76,7 +77,7 @@ Ne jamais stocker de secrets, dumps client ou pièces jointes volumineuses dans 
 
 ## Architecture skills IA
 
-Toute capacité IA est un skill sous `odoo_consultant_portal/skills/<slug>/`.
+Toute capacité IA est un skill sous `skills/<slug>/`.
 
 Structure canonique :
 ```text
@@ -96,6 +97,11 @@ Règles importantes :
 - `load_skill_reference` et `run_skill_script` sont les deux meta-tools ; les permissions viennent du frontmatter (`filesystem`, `network`, `scripts`, `odoo`).
 - Les références auto-loadables sont déclarées dans `references_auto_load` ; rester parcimonieux pour éviter le context rot.
 - Les examples sont sélectionnés globalement (top 3, budget 4000 chars), pas injectés systématiquement.
+- **Descriptions** (depuis 0.9.0) : front-load des mots-clés (pas `Utiliser ce skill quand…` en préfixe), limites explicites `Ne pas utiliser pour … (skill_X)` pour neutraliser les overlaps, FR + EN, 100–1024 chars. Test `test_skill_quality.test_all_skills_have_trigger_oriented_descriptions_and_permissions` verrouille la règle.
+- **Skills runtime cœur** (context_aggregator, complexity_analyzer, localization_detector, perspective_router, release_notes_injector, skill_dispatcher) ont `allow_implicit_invocation: false` — ne jamais les sélectionner via simple keyword.
+- **Dispatcher** (`backend/services/context_service.py::_select_skill_playbooks`) : scoring 5 niveaux (explicit 100, keywords 60, intent bundle 40, mode-default 25, pattern 75–90) + seuil minimum `_MIN_SKILL_SCORE = 25` + pruning post-scoring (`pruned:*-focus`). Toute nouvelle règle doit être couverte par un cas dans `tests/test_trigger_routing.py` via un `eval_queries.json`.
+- **Eval queries** : 10 skills ont un `eval_queries.json` (source-search-odoo, repo-search-code, migration-search-target-source, odoo-query-records, odoo-aggregate-records, odoo-inspect-view, odoo-inspect-report, odoo-inspect-security, odoo-inspect-navigation, source-show-commit). Convention : `expected_skill` informationnel, le test asserte sur le **owner** (dossier → underscore).
+- **Substring matching** : `_BOUNDARY_TOKENS` (mots courts ambigus en FR/EN, ex. `group`, `groupe`, `view`, `custom`) utilise `(?<!\w)…(?!\w)` ; le reste utilise du substring rapide. Ajouter à `_BOUNDARY_TOKENS` tout token qui risque de matcher un mot plus long (FR↔EN).
 
 Skills présents au moment de cette mise à jour : `attachment-handler`, `complexity-analyzer`, `context-aggregator`, `count-odoo`, `count-source-lines`, `get-odoo-fields`, `git-show-commit`, `inspect-installed-modules`, `inspect-menus-actions`, `inspect-odoo-report`, `inspect-odoo-view`, `inspect-security`, `inspect-studio`, `list-project-modules`, `localization-detector`, `perspective-router`, `project-context-refresh`, `query-odoo`, `read-group-odoo`, `read-odoo-file`, `read-project-file`, `read-target-file`, `release-notes-injector`, `report-writer`, `search-odoo-source`, `search-project-source`, `search-target-source`, `skill-dispatcher`.
 
@@ -139,12 +145,12 @@ Skills présents au moment de cette mise à jour : `attachment-handler`, `comple
 
 Installation complète :
 ```bash
-bash install.sh
+bash scripts/install.sh
 ```
 
 Démarrage local :
 ```bash
-bash start.sh
+bash scripts/start.sh
 ```
 
 Backend/tests :
@@ -152,6 +158,7 @@ Backend/tests :
 source .venv/bin/activate
 pytest -q
 pytest tests/test_skill_registry_integrity.py tests/test_tool_limits.py -q
+pytest tests/test_trigger_routing.py tests/test_auto_load_references.py tests/test_context_budget_overflow.py tests/test_routing_provider_parity.py tests/test_skill_path_traversal.py -q
 ```
 
 Frontend :

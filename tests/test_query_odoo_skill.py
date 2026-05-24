@@ -1,4 +1,4 @@
-from odoo_consultant_portal.services.ai_service import (
+from backend.services.ai_service import (
     TOOLS_CLAUDE,
     TOOLS_GEMINI,
     TOOLS_OPENAI,
@@ -20,10 +20,10 @@ class FakeOdoo:
         return [{"id": idx} for idx in range(offset, end)]
 
 
-async def test_query_odoo_fetches_1018_records_without_silent_truncation():
+async def test_odoo_query_records_fetches_1018_records_without_silent_truncation():
     fake = FakeOdoo(total=1018)
 
-    result = await _run_tool("query_odoo", {
+    result = await _run_tool("odoo_query_records", {
         "model": "sale.order.line",
         "fields": ["id"],
     }, fake)
@@ -41,10 +41,10 @@ async def test_query_odoo_fetches_1018_records_without_silent_truncation():
     ]
 
 
-async def test_query_odoo_caps_default_exhaustive_fetch_with_warning():
+async def test_odoo_query_records_caps_default_exhaustive_fetch_with_warning():
     fake = FakeOdoo(total=6000)
 
-    result = await _run_tool("query_odoo", {
+    result = await _run_tool("odoo_query_records", {
         "model": "sale.order.line",
         "fields": ["id"],
     }, fake)
@@ -56,10 +56,10 @@ async def test_query_odoo_caps_default_exhaustive_fetch_with_warning():
     assert "borné" in result["warning"]
 
 
-async def test_query_odoo_respects_explicit_limit_and_warns():
+async def test_odoo_query_records_respects_explicit_limit_and_warns():
     fake = FakeOdoo(total=1018)
 
-    result = await _run_tool("query_odoo", {
+    result = await _run_tool("odoo_query_records", {
         "model": "sale.order.line",
         "fields": ["id"],
         "limit": 100,
@@ -72,14 +72,14 @@ async def test_query_odoo_respects_explicit_limit_and_warns():
     assert fake.calls == [{"limit": 100, "offset": 0}]
 
 
-def test_query_odoo_schemas_describe_exhaustive_bounded_defaults():
-    claude = next(t for t in TOOLS_CLAUDE if t["name"] == "query_odoo")
+def test_odoo_query_records_schemas_describe_exhaustive_bounded_defaults():
+    claude = next(t for t in TOOLS_CLAUDE if t["name"] == "odoo_query_records")
     c_props = claude["input_schema"]["properties"]
     assert c_props["limit"]["default"] == 0
     assert c_props["page_size"]["default"] == 500
     assert c_props["max_records"]["default"] == 5000
 
-    openai = next(t for t in TOOLS_OPENAI if t["function"]["name"] == "query_odoo")
+    openai = next(t for t in TOOLS_OPENAI if t["function"]["name"] == "odoo_query_records")
     o_props = openai["function"]["parameters"]["properties"]
     assert o_props["limit"]["default"] == 0
     assert o_props["page_size"]["default"] == 500
@@ -88,7 +88,7 @@ def test_query_odoo_schemas_describe_exhaustive_bounded_defaults():
     gemini = next(
         fd
         for fd in TOOLS_GEMINI[0]["function_declarations"]
-        if fd["name"] == "query_odoo"
+        if fd["name"] == "odoo_query_records"
     )
     g_props = gemini["parameters"]["properties"]
     assert "page_size" in g_props

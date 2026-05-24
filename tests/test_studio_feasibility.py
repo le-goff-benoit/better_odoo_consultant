@@ -1,7 +1,7 @@
 """Studio feasibility service — the rules the UI shows the user about
 whether each Creator operation could be reproduced in Odoo Studio."""
 
-from odoo_consultant_portal.services.studio_feasibility_service import (
+from backend.services.studio_feasibility_service import (
     evaluate_changeset,
     evaluate_operation,
 )
@@ -98,7 +98,7 @@ def test_empty_changeset_is_feasible():
 
 def test_extract_xpath_specs_from_arch():
     """The xpath spec is inside <arch>, not in a flat op.xpath field."""
-    from odoo_consultant_portal.services.studio_feasibility_service import extract_xpath_specs
+    from backend.services.studio_feasibility_service import extract_xpath_specs
     arch = (
         '<data><xpath expr="//page[@name=\'other_information\']" position="inside">'
         '<field name="x_anniversaire"/></xpath></data>'
@@ -107,7 +107,7 @@ def test_extract_xpath_specs_from_arch():
 
 
 def test_extract_xpath_specs_empty_on_bad_xml():
-    from odoo_consultant_portal.services.studio_feasibility_service import extract_xpath_specs
+    from backend.services.studio_feasibility_service import extract_xpath_specs
     assert extract_xpath_specs("<broken") == []
     assert extract_xpath_specs("") == []
 

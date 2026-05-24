@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from odoo_consultant_portal.services.context_service import (
+from backend.services.context_service import (
     _DEV_TERMS,
     _STUDIO_TERMS,
 )

@@ -16,7 +16,7 @@ def anyio_backend():
 
 @pytest_asyncio.fixture
 async def db_session():
-    import odoo_consultant_portal.core.models  # noqa: F401
+    import backend.core.models  # noqa: F401
 
     engine = create_async_engine(TEST_DB_URL, echo=False)
     async with engine.begin() as conn:
@@ -29,8 +29,8 @@ async def db_session():
 
 @pytest_asyncio.fixture
 async def client(db_session):
-    from odoo_consultant_portal.api.app import app
-    from odoo_consultant_portal.core.database import get_session
+    from backend.api.app import app
+    from backend.core.database import get_session
 
     async def override_session():
         yield db_session

@@ -11,9 +11,13 @@ node_modules/
 odoo-sources/
 
 # Portal runtime
-start.sh
+/start.sh
 *.db
 *.sqlite3
+
+# Local working / prep documents (not part of the repo)
+/AUDIT.MD
+/BETTER_SKILLS.MD
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

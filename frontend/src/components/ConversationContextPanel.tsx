@@ -7,7 +7,7 @@ import { useUiLanguage } from '../i18n'
 import type { Perspective, PerspectiveMode } from './PerspectiveToggle'
 import { PERSPECTIVE_COLORS } from './PerspectiveToggle'
 import PerspectiveSelect from './PerspectiveSelect'
-import { perspectiveLabel } from '../utils/aiContext'
+import { perspectiveLabel, type ContextTraceEventLike, type ContextTraceSummary, type SkillRouteCandidateLike, type SkillRoutingSummary } from '../utils/aiContext'
 import { listContextFiles } from '../api/client'
 
 interface ContextFileMeta { name: string; size: number; modified: number }
@@ -52,6 +52,8 @@ interface ConversationContextPanelProps {
   sources: string[]
   attachments: string[]
   skillsUsed?: string[]
+  skillRouting?: SkillRoutingSummary | null
+  contextTrace?: ContextTraceSummary | null
   /** When set, the profile section displays this label with a lock icon and
    * hides the perspective toggle — used by the Creator where the profile is
    * fixed. Backend perspective is still computed normally. */
@@ -86,6 +88,8 @@ export default function ConversationContextPanel({
   sources,
   attachments,
   skillsUsed = [],
+  skillRouting,
+  contextTrace,
   lockedProfileLabel,
   lockedProfileHint,
   onRefresh,
@@ -139,6 +143,14 @@ export default function ConversationContextPanel({
       ai: 'AI',
 	      context: 'Markdown files',
 	      skills: 'Skills used',
+        routing: 'Routing reasons',
+        routingSelected: 'selected',
+        routingPruned: 'pruned',
+        trace: 'Runtime trace',
+        traceRefs: 'refs',
+        traceTruncations: 'trims',
+        traceCache: 'cache',
+        runId: 'Run',
       sources: 'Sources used',
       attachments: 'Attachments',
       none: 'None yet',
@@ -165,6 +177,14 @@ export default function ConversationContextPanel({
       ai: 'IA',
 	      context: 'Fichiers Markdown',
 	      skills: 'Skills utilisés',
+        routing: 'Raisons de routing',
+        routingSelected: 'sélectionnés',
+        routingPruned: 'prunés',
+        trace: 'Trace runtime',
+        traceRefs: 'réfs',
+        traceTruncations: 'coupes',
+        traceCache: 'cache',
+        runId: 'Run',
       sources: 'Sources utilisées',
       attachments: 'Pièces jointes',
       none: 'Aucun pour le moment',
@@ -307,6 +327,18 @@ export default function ConversationContextPanel({
       {skillsUsed.length > 0 && (
         <ContextBlock icon={<Zap size={15} />} label={c.skills}>
           <SkillPillList items={skillsUsed} lang={lang} />
+        </ContextBlock>
+      )}
+
+      {skillRouting && (skillRouting.selected.length > 0 || skillRouting.pruned.length > 0) && (
+        <ContextBlock icon={<Workflow size={15} />} label={c.routing}>
+          <SkillRoutingPreview routing={skillRouting} labels={{ selected: c.routingSelected, pruned: c.routingPruned }} lang={lang} />
+        </ContextBlock>
+      )}
+
+      {contextTrace && contextTrace.total > 0 && (
+        <ContextBlock icon={<Workflow size={15} />} label={c.trace}>
+          <ContextTracePreview trace={contextTrace} labels={{ refs: c.traceRefs, truncations: c.traceTruncations, cache: c.traceCache, run: c.runId }} lang={lang} />
         </ContextBlock>
       )}
 
@@ -460,25 +492,25 @@ function FreshnessPillList({
 }
 
 const SKILL_LABELS: Record<string, { fr: string; en: string }> = {
-  query_odoo: { fr: 'Données Odoo', en: 'Odoo data' },
-  count_odoo: { fr: 'Comptage', en: 'Count' },
-  read_group_odoo: { fr: 'Agrégats', en: 'Aggregates' },
-  get_odoo_fields: { fr: 'Champs', en: 'Fields' },
-  inspect_installed_modules: { fr: 'Modules', en: 'Modules' },
-  inspect_security: { fr: 'Sécurité', en: 'Security' },
-  inspect_menus_actions: { fr: 'Menus', en: 'Menus' },
-  inspect_studio: { fr: 'Studio', en: 'Studio' },
-  inspect_odoo_view: { fr: 'Vues', en: 'Views' },
-  inspect_odoo_report: { fr: 'Rapports', en: 'Reports' },
-  search_odoo_source: { fr: 'Recherche source', en: 'Source search' },
-  read_odoo_file: { fr: 'Lecture source', en: 'Source read' },
-  git_show_commit: { fr: 'Commit Git', en: 'Git commit' },
-  search_target_source: { fr: 'Recherche cible', en: 'Target search' },
-  read_target_file: { fr: 'Lecture cible', en: 'Target read' },
-  search_project_source: { fr: 'Recherche projet', en: 'Project search' },
-  read_project_file: { fr: 'Lecture projet', en: 'Project read' },
-  list_project_modules: { fr: 'Modules projet', en: 'Project modules' },
-  count_source_lines: { fr: 'Volumétrie', en: 'Line count' },
+  odoo_query_records: { fr: 'Données Odoo', en: 'Odoo data' },
+  odoo_count_records: { fr: 'Comptage', en: 'Count' },
+  odoo_aggregate_records: { fr: 'Agrégats', en: 'Aggregates' },
+  odoo_inspect_fields: { fr: 'Champs', en: 'Fields' },
+  odoo_inspect_modules: { fr: 'Modules', en: 'Modules' },
+  odoo_inspect_security: { fr: 'Sécurité', en: 'Security' },
+  odoo_inspect_navigation: { fr: 'Menus', en: 'Menus' },
+  odoo_inspect_studio: { fr: 'Studio', en: 'Studio' },
+  odoo_inspect_view: { fr: 'Vues', en: 'Views' },
+  odoo_inspect_report: { fr: 'Rapports', en: 'Reports' },
+  source_search_odoo: { fr: 'Recherche source', en: 'Source search' },
+  source_read_odoo_file: { fr: 'Lecture source', en: 'Source read' },
+  source_show_commit: { fr: 'Commit Git', en: 'Git commit' },
+  migration_search_target_source: { fr: 'Recherche cible', en: 'Target search' },
+  migration_read_target_file: { fr: 'Lecture cible', en: 'Target read' },
+  repo_search_code: { fr: 'Recherche projet', en: 'Project search' },
+  repo_read_file: { fr: 'Lecture projet', en: 'Project read' },
+  repo_list_modules: { fr: 'Modules projet', en: 'Project modules' },
+  repo_count_source_lines: { fr: 'Volumétrie', en: 'Line count' },
 }
 
 function SkillPillList({ items, lang }: { items: string[]; lang: 'fr' | 'en' }) {
@@ -495,6 +527,91 @@ function SkillPillList({ items, lang }: { items: string[]; lang: 'fr' | 'en' }) 
       })}
     </div>
   )
+}
+
+function SkillRoutingPreview({ routing, labels, lang }: {
+  routing: SkillRoutingSummary
+  labels: { selected: string; pruned: string }
+  lang: 'fr' | 'en'
+}) {
+  const rows: Array<{ candidate: SkillRouteCandidateLike; tone: 'selected' | 'pruned' }> = [
+    ...routing.selected.slice(0, 4).map(candidate => ({ candidate, tone: 'selected' as const })),
+    ...routing.pruned.slice(0, 4).map(candidate => ({ candidate, tone: 'pruned' as const })),
+  ]
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      <div className="context-file-list">
+        <span className="context-file-pill"><span className="context-file-name">{routing.selected.length} {labels.selected}</span></span>
+        {routing.pruned.length > 0 && <span className="context-file-pill"><span className="context-file-name">{routing.pruned.length} {labels.pruned}</span></span>}
+      </div>
+      <div style={{ display: 'grid', gap: 4 }}>
+        {rows.map(({ candidate, tone }, index) => (
+          <span key={`${candidate.name ?? 'route'}-${tone}-${index}`} style={{ fontSize: 10.5, color: 'var(--th-muted)', lineHeight: 1.35 }}>
+            {formatRouteCandidate(candidate, tone, lang)}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function formatRouteCandidate(candidate: SkillRouteCandidateLike, tone: 'selected' | 'pruned', lang: 'fr' | 'en'): string {
+  const name = candidate.name ?? 'skill'
+  const score = typeof candidate.score === 'number' ? ` · ${candidate.score}` : ''
+  const reason = candidate.reason ? ` · ${candidate.reason}` : ''
+  const status = tone === 'pruned'
+    ? (lang === 'en' ? 'Pruned' : 'Pruné')
+    : (lang === 'en' ? 'Selected' : 'Sélectionné')
+  return `${status}: ${name}${score}${reason}`
+}
+
+function ContextTracePreview({ trace, labels, lang }: {
+  trace: ContextTraceSummary
+  labels: { refs: string; truncations: string; cache: string; run: string }
+  lang: 'fr' | 'en'
+}) {
+  const chips = [
+    trace.references.length ? `${trace.references.length} ${labels.refs}` : null,
+    trace.truncations.length ? `${trace.truncations.length} ${labels.truncations}` : null,
+    trace.cacheHits.length ? `${trace.cacheHits.length} ${labels.cache}` : null,
+  ].filter(Boolean) as string[]
+  return (
+    <div style={{ display: 'grid', gap: 7 }}>
+      <div className="context-file-list">
+        {trace.runId && (
+          <span className="context-file-pill" title={trace.runId}>
+            <span className="context-file-name">{labels.run}</span>
+            <span className="context-file-meta">{trace.runId}</span>
+          </span>
+        )}
+        {chips.map(chip => <span key={chip} className="context-file-pill"><span className="context-file-name">{chip}</span></span>)}
+      </div>
+      <div style={{ display: 'grid', gap: 4 }}>
+        {trace.latest.map((event, index) => (
+          <span key={`${event.type ?? 'trace'}-${index}`} style={{ fontSize: 10.5, color: 'var(--th-muted)', lineHeight: 1.35 }}>
+            {formatTraceEvent(event, lang)}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function formatTraceEvent(event: ContextTraceEventLike, lang: 'fr' | 'en'): string {
+  if (event.type === 'reference_auto_loaded') {
+    const target = [event.skill, event.filename].filter(Boolean).join(' / ')
+    const size = typeof event.chars === 'number' ? ` · ${event.chars} chars` : ''
+    return lang === 'en' ? `Reference loaded: ${target}${size}` : `Référence chargée : ${target}${size}`
+  }
+  if (event.type === 'priority_block_truncated') {
+    const original = typeof event.original_chars === 'number' ? event.original_chars : '—'
+    const capped = typeof event.capped_chars === 'number' ? event.capped_chars : '—'
+    return lang === 'en' ? `Priority block trimmed: ${original} → ${capped} chars` : `Bloc prioritaire coupé : ${original} → ${capped} chars`
+  }
+  if (event.type === 'context_cache_hit') {
+    return lang === 'en' ? 'Context cache reused' : 'Cache contexte réutilisé'
+  }
+  return event.type ?? (lang === 'en' ? 'Trace event' : 'Événement trace')
 }
 
 function PillList({ items, empty, tone }: { items: string[]; empty: string; tone: 'brand' | 'success' | 'neutral' }) {

@@ -1,4 +1,4 @@
-from odoo_consultant_portal.api.routes.queries import SearchRequest, _fetch_records_paginated
+from backend.api.routes.queries import SearchRequest, _fetch_records_paginated
 
 
 class FakeQueryOdoo:

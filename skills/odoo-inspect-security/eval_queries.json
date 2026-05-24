@@ -1,0 +1,46 @@
+[
+  {
+    "query": "Pourquoi le commercial Marc ne voit pas les commandes des autres équipes ?",
+    "expected_skill": "odoo_inspect_security",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Analyse les ACL et record rules sur res.partner",
+    "expected_skill": "odoo_inspect_security",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Audit my ir.model.access and ir.rule for the new sales group",
+    "expected_skill": "odoo_inspect_security",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "L'utilisateur a une erreur 'accès refusé' sur stock.picking, pourquoi ?",
+    "expected_skill": "odoo_inspect_security",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Pourquoi le champ partner_id est invisible dans la vue formulaire ?",
+    "expected_skill": "odoo_inspect_view",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "UI visibility via attrs/invisible, not security"
+  },
+  {
+    "query": "Où cliquer pour accéder aux paramètres de groupes utilisateurs ?",
+    "expected_skill": "odoo_inspect_navigation",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "navigation question, not security audit"
+  }
+]

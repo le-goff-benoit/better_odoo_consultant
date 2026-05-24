@@ -1,0 +1,54 @@
+[
+  {
+    "query": "Cherche dans le dépôt projet client les modules qui surchargent sale.order",
+    "expected_skill": "repo_search_code",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Trouve l'override _inherit account.move dans notre code custom",
+    "expected_skill": "repo_search_code",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Search the project repo for custom security CSV files",
+    "expected_skill": "repo_search_code",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Quels modules custom du dépôt client ajoutent une vue sur res.partner ?",
+    "expected_skill": "repo_search_code",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Cherche la méthode standard _compute_amount dans Odoo Community",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "standard Odoo sources, not client custom"
+  },
+  {
+    "query": "Liste les modules installés sur la base Odoo de production",
+    "expected_skill": "odoo_inspect_modules",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "live installed modules, not repo scan"
+  },
+  {
+    "query": "Parse les __manifest__.py du dépôt projet pour lister les modules",
+    "expected_skill": "repo_list_modules",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "manifest parsing, not code search"
+  }
+]

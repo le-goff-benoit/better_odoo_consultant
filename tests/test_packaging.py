@@ -65,20 +65,20 @@ def test_python_version_requirement():
 
 def test_package_importable():
     """Le package doit s'importer sans erreur."""
-    import odoo_consultant_portal
-    assert odoo_consultant_portal.__version__ == "0.10.0"
+    import backend
+    assert backend.__version__ == "0.10.0"
 
 
 def test_cli_entry_point_importable():
     """Le point d'entrée CLI doit être importable."""
-    from odoo_consultant_portal.cli.main import cli
+    from backend.cli.main import cli
     assert cli is not None
 
 
 def test_core_modules_importable():
     """Les modules core doivent être importables sans démarrer de serveur."""
-    from odoo_consultant_portal.core import config, models
-    from odoo_consultant_portal.services import keyring_service, odoo_client
+    from backend.core import config, models
+    from backend.services import keyring_service, odoo_client
     assert True
 
 

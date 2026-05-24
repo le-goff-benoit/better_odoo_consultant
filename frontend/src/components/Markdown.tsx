@@ -246,7 +246,7 @@ export function inlineMarkdown(text: string): React.ReactNode {
   })
 }
 
-const ACTION_HEADING_RE = /\b(prochaines?\s+actions?|points?\s+d['’]actions?|actions?\s+à\s+faire|next\s+actions?|action\s+items?|todo)\b/i
+const ACTION_HEADING_RE = /\b(prochaines?\s+(?:actions?|[eé]tapes?)|[eé]tapes?\s+suivantes?|points?\s+d['’]actions?|actions?\s+(?:à\s+faire|recommand[ée]es?)|next\s+(?:actions?|steps?)|recommended\s+actions?|action\s+items?|todo)\b/i
 
 function stripMarkdownInline(text: string): string {
   return text
@@ -285,7 +285,7 @@ export function actionPromptFor(actionText: string): string {
 }
 
 /** Walk a Markdown string and return the list items found under any
- *  « Actions à faire / Next actions / Todo » heading. Used to surface the
+ *  « Actions à faire / Prochaines étapes / Next actions / Todo » heading. Used to surface the
  *  action items as a chip strip beneath the response (unified with the
  *  initial composer suggestions). Stops collecting at the next heading. */
 export function extractActionItems(text: string): string[] {

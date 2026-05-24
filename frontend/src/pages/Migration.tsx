@@ -35,7 +35,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { extractUsedSkillNames, routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
+import { extractLatestContextTrace, extractLatestSkillRouting, extractUsedSkillNames, routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode, type ContextTraceEventLike, type SkillRouteCandidateLike } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
 import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
@@ -106,10 +106,14 @@ function technicalComplexityLabel(raw?: string | null) {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'text' | 'error' | 'warning' | 'done' | 'end'
+  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'text' | 'error' | 'warning' | 'done' | 'end'
   name?: string
   args?: Record<string, unknown>
   skills?: string[]
+  candidates?: SkillRouteCandidateLike[]
+  run_id?: string
+  context_trace?: ContextTraceEventLike[]
+  event?: Record<string, unknown>
   count?: number
   records?: Record<string, unknown>[]
   content?: string
@@ -1178,6 +1182,8 @@ export default function Migration() {
   const contextFiles = contextFilesWithSource.map(f => f.name)
   const contextFileSources = new Map(contextFilesWithSource.map(f => [f.name, f.source]))
   const skillsUsed = extractUsedSkillNames(messages.flatMap(m => m.events ?? []))
+  const skillRouting = extractLatestSkillRouting(messages.flatMap(m => m.events ?? []))
+  const contextTrace = extractLatestContextTrace(messages.flatMap(m => m.events ?? []))
   const srcComm   = sourceVersion ? (srcStatus[sourceVersion]?.installed === true) : false
   const srcEnt    = sourceVersion ? (srcStatus[`${sourceVersion}-enterprise`]?.installed === true) : false
   const tgtComm   = targetVersion ? (srcStatus[targetVersion]?.installed === true) : false
@@ -1594,6 +1600,8 @@ export default function Migration() {
 	      contextFiles={contextFiles}
 	      contextFileSources={contextFileSources}
 	      skillsUsed={skillsUsed}
+        skillRouting={skillRouting}
+        contextTrace={contextTrace}
 	      sources={conversationSources}
       attachments={readyAttachments.map(a => a.name)}
       onRefresh={handleRefreshContext}

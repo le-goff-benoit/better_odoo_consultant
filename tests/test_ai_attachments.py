@@ -4,7 +4,7 @@ import io
 import pytest
 from fastapi import HTTPException
 
-from odoo_consultant_portal.services.attachment_service import (
+from backend.services.attachment_service import (
     ChatAttachment, apply_provider_attachments, inject_attachments,
 )
 

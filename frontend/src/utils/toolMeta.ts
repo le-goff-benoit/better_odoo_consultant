@@ -96,7 +96,7 @@ export function getToolMeta(
 ): ToolMeta {
   const fr = lang === 'fr'
 
-  if (name === 'query_odoo') {
+  if (name === 'odoo_query_records') {
     const model = (args?.model as string) ?? ''
     const prefix = model.split('.')[0]
     const app = ODOO_APPS[prefix]
@@ -110,7 +110,7 @@ export function getToolMeta(
       doneLabel: label || 'Odoo', liveDb: true,
     }
   }
-  if (name === 'count_odoo') {
+  if (name === 'odoo_count_records') {
     const model = (args?.model as string) ?? ''
     const label = humanModel(model, lang)
     return {
@@ -122,7 +122,7 @@ export function getToolMeta(
       liveDb: true,
     }
   }
-  if (name === 'get_odoo_fields') {
+  if (name === 'odoo_inspect_fields') {
     const model = (args?.model as string) ?? ''
     const label = humanModel(model, lang)
     return {
@@ -133,7 +133,7 @@ export function getToolMeta(
       doneLabel: model ? (fr ? `Champs · ${label}` : `Fields · ${label}`) : (fr ? 'Champs' : 'Fields'),
     }
   }
-  if (name === 'read_group_odoo') {
+  if (name === 'odoo_aggregate_records') {
     const model = (args?.model as string) ?? ''
     const label = humanModel(model, lang)
     return {
@@ -145,7 +145,7 @@ export function getToolMeta(
       liveDb: true,
     }
   }
-  if (name === 'inspect_installed_modules') {
+  if (name === 'odoo_inspect_modules') {
     return {
       icon: '▦', appName: null, color: '#2563eb',
       loadingLabel: fr ? 'Lecture des modules installés…' : 'Reading installed modules…',
@@ -153,7 +153,7 @@ export function getToolMeta(
       liveDb: true,
     }
   }
-  if (name === 'inspect_security') {
+  if (name === 'odoo_inspect_security') {
     const model = (args?.model as string) ?? ''
     const label = humanModel(model, lang)
     return {
@@ -163,7 +163,7 @@ export function getToolMeta(
       liveDb: true,
     }
   }
-  if (name === 'inspect_menus_actions') {
+  if (name === 'odoo_inspect_navigation') {
     const model = (args?.model as string) ?? ''
     const query = (args?.query as string) ?? ''
     const scope = model ? humanModel(model, lang) : query
@@ -174,7 +174,7 @@ export function getToolMeta(
       liveDb: true,
     }
   }
-  if (name === 'search_odoo_source') {
+  if (name === 'source_search_odoo') {
     const ver = args?.version as string
     const pat = shorten((args?.pattern as string) ?? '')
     const verSuffix = ver ? ` v${ver}` : ''
@@ -186,14 +186,14 @@ export function getToolMeta(
         : (fr ? `Sources Odoo${verSuffix}` : `Odoo sources${verSuffix}`),
     }
   }
-  if (name === 'read_odoo_file') {
+  if (name === 'source_read_odoo_file') {
     const file = ((args?.path as string) ?? '').split('/').pop() || (fr ? 'fichier' : 'file')
     return {
       icon: '📄', appName: null, color: '#2563EB',
       loadingLabel: fr ? `Lecture — ${file}…` : `Reading — ${file}…`, doneLabel: file,
     }
   }
-  if (name === 'search_target_source') {
+  if (name === 'migration_search_target_source') {
     const ver = args?.version as string
     const pat = shorten((args?.pattern as string) ?? '')
     const verSuffix = ver ? ` v${ver}` : ''
@@ -205,7 +205,7 @@ export function getToolMeta(
         : (fr ? `Sources cible${verSuffix}` : `Target sources${verSuffix}`),
     }
   }
-  if (name === 'read_target_file') {
+  if (name === 'migration_read_target_file') {
     const file = ((args?.path as string) ?? '').split('/').pop() || (fr ? 'fichier' : 'file')
     return {
       icon: '📄', appName: null, color: '#9333ea',
@@ -213,7 +213,7 @@ export function getToolMeta(
       doneLabel: file,
     }
   }
-  if (name === 'search_project_source') {
+  if (name === 'repo_search_code') {
     const pat = shorten((args?.pattern as string) ?? '')
     return {
       icon: '⎇', appName: null, color: '#0891b2',
@@ -223,7 +223,7 @@ export function getToolMeta(
         : (fr ? 'Code custom' : 'Custom code'),
     }
   }
-  if (name === 'read_project_file') {
+  if (name === 'repo_read_file') {
     const file = ((args?.path as string) ?? '').split('/').pop() || (fr ? 'fichier' : 'file')
     return {
       icon: '📁', appName: null, color: '#0891b2',
@@ -231,14 +231,14 @@ export function getToolMeta(
       doneLabel: file,
     }
   }
-  if (name === 'list_project_modules') {
+  if (name === 'repo_list_modules') {
     return {
       icon: '▦', appName: null, color: '#D97706',
       loadingLabel: fr ? 'Inventaire des modules projet…' : 'Inventorying project modules…',
       doneLabel: fr ? 'Modules projet' : 'Project modules',
     }
   }
-  if (name === 'count_source_lines') {
+  if (name === 'repo_count_source_lines') {
     const scope = (args?.scope as string) ?? ''
     const path = (args?.path as string) ?? ''
     const groupBy = (args?.group_by as string) ?? 'extension'
@@ -264,7 +264,7 @@ export function getToolMeta(
         : `Line count · ${scopeLbl}${pathSuffix} (${grpLbl})`,
     }
   }
-  if (name === 'inspect_studio') {
+  if (name === 'odoo_inspect_studio') {
     const sections = (args?.sections as string[]) ?? ['all']
     const sectLabel = sections.includes('all') ? (fr ? 'tout' : 'all') : sections.join(', ')
     const modelFilter = (args?.model_filter as string) ?? ''
@@ -278,7 +278,7 @@ export function getToolMeta(
       liveDb: true,
     }
   }
-  if (name === 'inspect_odoo_view') {
+  if (name === 'odoo_inspect_view') {
     const model = (args?.model as string) ?? ''
     const label = humanModel(model, lang)
     const vt = (args?.view_type as string) ?? ''
@@ -293,7 +293,7 @@ export function getToolMeta(
       liveDb: true,
     }
   }
-  if (name === 'inspect_odoo_report') {
+  if (name === 'odoo_inspect_report') {
     const reportName = (args?.report_name as string) ?? ''
     const model = (args?.model as string) ?? ''
     const scope = reportName || (model ? humanModel(model, lang) : '')

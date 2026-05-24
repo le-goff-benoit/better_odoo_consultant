@@ -4,8 +4,8 @@ user prompt warrants."""
 
 import pytest
 
-from odoo_consultant_portal.services.context_service import load_context_for_prompt
-from odoo_consultant_portal.services.creator_intents import (
+from backend.services.context_service import load_context_for_prompt
+from backend.services.creator_intents import (
     build_creator_intent_block,
     detect_creator_intents,
 )
@@ -226,7 +226,7 @@ def test_is_topic_of_requires_two_hits_or_early_position():
     """A single late incidental mention should NOT load studio.md.
     Production callers always pass `_normalize_text`-ed input (lower-cased,
     accent-folded) — tests mirror that contract."""
-    from odoo_consultant_portal.services.context_service import _is_topic_of, _STUDIO_TERMS
+    from backend.services.context_service import _is_topic_of, _STUDIO_TERMS
     # Single hit far in the prompt — not a topic.
     long_prompt = ("a" * 200) + " studio"
     assert _is_topic_of(long_prompt, _STUDIO_TERMS) is False
@@ -266,7 +266,7 @@ def test_version_notes_filter_trims_irrelevant_sections():
 
 def test_complexity_profile_block_added_to_priority_blocks():
     """The complexity-tuning snippet must reach the LLM for Studio/dev projects."""
-    from odoo_consultant_portal.services.context_service import complexity_profile_block
+    from backend.services.context_service import complexity_profile_block
     assert "Studio" in complexity_profile_block("studio")
     assert "custom" in complexity_profile_block("dev")
     assert complexity_profile_block("standard") == ""
@@ -292,7 +292,7 @@ def test_priority_block_overflow_is_truncated_with_warning(caplog):
 def test_load_context_for_prompt_is_memoized():
     """Same args = same call cached. Edit a file and we still get the cached
     result until the cache is explicitly cleared."""
-    from odoo_consultant_portal.services.context_service import clear_context_cache
+    from backend.services.context_service import clear_context_cache
     clear_context_cache()
     a = load_context_for_prompt(
         "18.0", user_prompt="Quelle est la version 18 ?",

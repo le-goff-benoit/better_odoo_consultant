@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import Markdown, { MarkdownActionsProvider, parseMarkdownTable, splitMarkdownTableRow } from './Markdown'
+import ActionProposals from './ActionProposals'
+import Markdown, { extractActionItems, parseMarkdownTable, splitMarkdownTableRow } from './Markdown'
 
 describe('Markdown table parsing', () => {
   it('keeps empty cells and escaped pipes', () => {
@@ -40,36 +41,53 @@ describe('Markdown table parsing', () => {
     expect(container.querySelector('code')?.textContent).toBe('sale.order')
   })
 
-  it('turns action list items into AI prompt buttons', () => {
+  it('extracts action items from next-action and next-step headings', () => {
+    expect(extractActionItems([
+      '3 prochaines actions maximum',
+      '1. Je vérifie le **bouton d’impression** côté Projet.',
+      '2. Je liste les champs `x_studio` visibles.',
+    ].join('\n'))).toEqual([
+      'Je vérifie le bouton d’impression côté Projet.',
+      'Je liste les champs x_studio visibles.',
+    ])
+
+    expect(extractActionItems([
+      '## Prochaines étapes',
+      '- Vérifier la configuration du profil.',
+      '- Relancer le diagnostic.',
+    ].join('\n'))).toEqual([
+      'Vérifier la configuration du profil.',
+      'Relancer le diagnostic.',
+    ])
+
+    expect(extractActionItems([
+      '**Next steps**',
+      '- Inspect the Odoo log.',
+    ].join('\n'))).toEqual(['Inspect the Odoo log.'])
+  })
+
+  it('runs extracted action proposals as follow-up prompts', () => {
     const onPromptAction = vi.fn()
     render(
-      <MarkdownActionsProvider onPromptAction={onPromptAction}>
-        <Markdown text={[
-          '3 prochaines actions maximum',
-          '1. Je vérifie le **bouton d’impression** côté Projet.',
-          '2. Je liste les champs `x_studio` visibles.',
-        ].join('\n')} />
-      </MarkdownActionsProvider>,
+      <ActionProposals
+        items={['Je vérifie le **bouton d’impression** côté Projet.', 'Je liste les champs x_studio visibles.']}
+        onPromptAction={onPromptAction}
+      />,
     )
 
-    const buttons = screen.getAllByLabelText("Demander à l'IA de réaliser cette action")
+    const buttons = screen.getAllByLabelText('Lancer cette action')
     expect(buttons).toHaveLength(2)
 
     fireEvent.click(buttons[0])
     expect(onPromptAction).toHaveBeenCalledWith(expect.stringContaining("Je vérifie le bouton d’impression côté Projet."))
+    expect(onPromptAction).toHaveBeenCalledWith(expect.stringContaining("Utilise les outils nécessaires"))
   })
 
-  it('does not add prompt buttons to ordinary numbered lists', () => {
-    render(
-      <MarkdownActionsProvider onPromptAction={() => undefined}>
-        <Markdown text={[
-          'Étapes réalisées',
-          '1. Lecture du rapport.',
-          '2. Synthèse.',
-        ].join('\n')} />
-      </MarkdownActionsProvider>,
-    )
-
-    expect(screen.queryByLabelText("Demander à l'IA de réaliser cette action")).toBeNull()
+  it('does not extract ordinary numbered lists as actions', () => {
+    expect(extractActionItems([
+      'Étapes réalisées',
+      '1. Lecture du rapport.',
+      '2. Synthèse.',
+    ].join('\n'))).toEqual([])
   })
 })

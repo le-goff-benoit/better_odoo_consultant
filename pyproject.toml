@@ -3,9 +3,9 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "odoo-consultant-portal"
+name = "better-odoo-assistant"
 version = "0.1.0"
-description = "Local web portal for Odoo consultants"
+description = "Local AI assistant for Odoo consultants"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -42,14 +42,12 @@ dev = [
 ]
 
 [project.scripts]
-odoo-portal = "odoo_consultant_portal.cli.main:cli"
+better-odoo-assistant = "backend.cli.main:cli"
+odoo-portal = "backend.cli.main:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["odoo_consultant_portal*"]
-
-[tool.setuptools.package-data]
-"odoo_consultant_portal.skills" = ["context/*.md"]
+include = ["backend*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

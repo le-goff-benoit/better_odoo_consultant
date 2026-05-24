@@ -1,6 +1,6 @@
 """Tool-result compression: record-bearing results keep a larger budget."""
 
-from odoo_consultant_portal.services.ai_service import _compress_tool_result
+from backend.services.ai_service import _compress_tool_result
 
 
 def test_large_record_result_is_kept_whole():
@@ -38,6 +38,6 @@ def test_large_studio_inventory_is_kept_for_model_reasoning():
             ],
         },
     }
-    out = _compress_tool_result(result, "inspect_studio")
+    out = _compress_tool_result(result, "odoo_inspect_studio")
     assert "Studio PDF report 219" in out
     assert "tronqué" not in out

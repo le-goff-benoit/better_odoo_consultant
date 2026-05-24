@@ -1,0 +1,62 @@
+[
+  {
+    "query": "Comment Odoo implémente nativement le calcul du total TTC sur sale.order ?",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "notes": "intent: search standard Odoo source for a method"
+  },
+  {
+    "query": "Cherche la méthode _compute_amount dans les sources Odoo Community",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Where is account.move.line._reconcile defined in standard Odoo?",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Trouve la classe ResPartner dans le code Odoo standard",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Cherche le XML id de la vue form de stock.picking dans Enterprise",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Trouve l'override de _post sur account.move dans le module custom client",
+    "expected_skill": "repo_search_code",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "mentions code search but scope is the client repo, not standard sources"
+  },
+  {
+    "query": "Cherche ce que devient _compute_amount dans Odoo 18 par rapport à la 16",
+    "expected_skill": "migration_search_target_source",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "migration intent — target version search, not current sources"
+  },
+  {
+    "query": "Combien de commandes de vente confirmées ce mois ?",
+    "expected_skill": null,
+    "should_trigger": false,
+    "category": "negative",
+    "language": "fr",
+    "notes": "live data query, not source search"
+  }
+]

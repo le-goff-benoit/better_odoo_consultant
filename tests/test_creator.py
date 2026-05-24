@@ -4,13 +4,13 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from odoo_consultant_portal.services.creator_service import (
+from backend.services.creator_service import (
     parse_analysis, build_analysis_message,
 )
-from odoo_consultant_portal.services.creator_executor import (
+from backend.services.creator_executor import (
     apply_changeset, _inherited_view_name, _normalize_inherit_arch,
 )
-from odoo_consultant_portal.services.preview_service import (
+from backend.services.preview_service import (
     _field_names_from_arch,
     _http_error_detail,
     _sample_record_for_view,

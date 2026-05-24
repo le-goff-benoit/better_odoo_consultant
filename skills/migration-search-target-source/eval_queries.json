@@ -1,0 +1,50 @@
+[
+  {
+    "query": "Que devient _compute_amount sur sale.order en Odoo 18 par rapport à la 16 ?",
+    "expected_skill": "migration_search_target_source",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "modes": ["migration"]
+  },
+  {
+    "query": "Vérifie si account.invoice existe encore dans la version cible 17",
+    "expected_skill": "migration_search_target_source",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "modes": ["migration"]
+  },
+  {
+    "query": "Y a-t-il un breaking change sur stock.move dans Odoo 18 ?",
+    "expected_skill": "migration_search_target_source",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "modes": ["migration"]
+  },
+  {
+    "query": "Cherche l'API attendue de _post dans les sources de la version cible",
+    "expected_skill": "migration_search_target_source",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "modes": ["migration"]
+  },
+  {
+    "query": "Comment Odoo Community implémente nativement _compute_amount aujourd'hui ?",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "current-version question, not target"
+  },
+  {
+    "query": "Cherche un override de sale.order dans notre code custom",
+    "expected_skill": "repo_search_code",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "client custom code, not migration target"
+  }
+]

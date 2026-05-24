@@ -1,0 +1,46 @@
+[
+  {
+    "query": "Où cliquer pour ouvrir l'écran des devis ?",
+    "expected_skill": "odoo_inspect_navigation",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Quel menu accède aux paramètres de paie ?",
+    "expected_skill": "odoo_inspect_navigation",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Where do I click to open the inventory adjustment screen?",
+    "expected_skill": "odoo_inspect_navigation",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Comment naviguer jusqu'aux campagnes marketing dans Odoo ?",
+    "expected_skill": "odoo_inspect_navigation",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Analyse les ACL et record rules sur res.partner",
+    "expected_skill": "odoo_inspect_security",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "security, not navigation"
+  },
+  {
+    "query": "Pourquoi mon rapport PDF facture est cassé ?",
+    "expected_skill": "odoo_inspect_report",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "report diagnostics, not navigation"
+  }
+]

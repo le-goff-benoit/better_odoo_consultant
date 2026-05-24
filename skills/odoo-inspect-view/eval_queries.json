@@ -1,0 +1,53 @@
+[
+  {
+    "query": "Pourquoi le champ partner_id est invisible dans la vue formulaire de sale.order ?",
+    "expected_skill": "odoo_inspect_view",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Explique les attrs states readonly invisible dans la vue formulaire sale.order",
+    "expected_skill": "odoo_inspect_view",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Show me the assembled XML arch of the account.move form view",
+    "expected_skill": "odoo_inspect_view",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Quel xpath utiliser pour insérer un bouton après le statut dans la vue ?",
+    "expected_skill": "odoo_inspect_view",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Diagnostique mon rapport PDF facture, le logo ne s'affiche pas",
+    "expected_skill": "odoo_inspect_report",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "PDF report, not screen view"
+  },
+  {
+    "query": "Où cliquer pour ouvrir l'écran des devis ?",
+    "expected_skill": "odoo_inspect_navigation",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "navigation question, not view architecture"
+  },
+  {
+    "query": "Quel temps fait-il aujourd'hui ?",
+    "expected_skill": null,
+    "should_trigger": false,
+    "category": "negative",
+    "language": "fr"
+  }
+]

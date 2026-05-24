@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from odoo_consultant_portal.skills._shared.project_modules import list_project_modules
-from odoo_consultant_portal.skills._shared.source_search import read_file
-from odoo_consultant_portal.services.ai_service import _run_tool
+from backend.skills._shared.project_modules import list_project_modules
+from backend.skills._shared.source_search import read_file
+from backend.services.ai_service import _run_tool
 
 
 class FakeInstalledModulesOdoo:
@@ -33,7 +33,7 @@ class FakeInstalledModulesOdoo:
 async def test_installed_modules_uses_bounded_pagination_without_silent_limit():
     fake = FakeInstalledModulesOdoo(total=1200)
 
-    result = await _run_tool("inspect_installed_modules", {}, fake)
+    result = await _run_tool("odoo_inspect_modules", {}, fake)
 
     assert result["ok"] is True
     assert result["count"] == 1200
@@ -48,7 +48,7 @@ async def test_read_group_default_is_not_artificially_limited():
         def read_group(self, model, domain=None, fields=None, groupby=None, limit=80, offset=0, orderby="", lazy=True):
             return [{"state": f"s{i}", "__count": 1} for i in range(120)]
 
-    result = await _run_tool("read_group_odoo", {
+    result = await _run_tool("odoo_aggregate_records", {
         "model": "sale.order",
         "fields": ["state"],
         "groupby": ["state"],
