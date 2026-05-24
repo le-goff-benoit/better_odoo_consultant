@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { ArrowUp, Bot, Building2, Check, CheckCheck, ChevronDown, Code, Copy, FileText, Globe2, History, Image as ImageIcon, Loader2, Lock, Maximize2, Paperclip, Settings, Square, Timer, TriangleAlert, X } from 'lucide-react'
-import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getModules } from '../api/client'
+import { listProfiles, getAiProviders, checkAllSources, getModelConfig, getModules, getToolConfig } from '../api/client'
 import { t } from '../theme'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
 import PageHeader from '../components/PageHeader'
@@ -31,7 +31,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
+import { extractUsedSkillNames, routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
 import { countryFlag } from '../utils/countryFlag'
 import { streamingSignals } from '../utils/streamingSignals'
 import { useRefreshProjectContext } from '../utils/refreshProjectContext'
@@ -616,6 +616,8 @@ export default function Assistant() {
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
   const [draggingFiles, setDraggingFiles] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [disabledTools, setDisabledTools] = useState<string[]>([])
+  useEffect(() => { getToolConfig().then(r => setDisabledTools(r.data?.disabled_tools ?? [])).catch(() => {}) }, [])
   const bottomRef = useRef<HTMLDivElement>(null)
   const messageListRef = useRef<HTMLDivElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
@@ -784,6 +786,7 @@ export default function Assistant() {
   })
   const contextFiles = contextFilesWithSource.map(f => f.name)
   const contextFileSources = new Map(contextFilesWithSource.map(f => [f.name, f.source]))
+  const skillsUsed = extractUsedSkillNames(messages.flatMap(m => m.events ?? []))
   const conversationSources = [
     activeVersion && sourcesInstalled ? `Sources Odoo ${activeVersion}${communityInstalled && enterpriseInstalled ? ' C+E' : communityInstalled ? ' Community' : ' Enterprise'}` : null,
     activeEnvRepo && repoIsCloned ? activeEnvRepo.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
@@ -936,8 +939,8 @@ export default function Assistant() {
     abortRef.current = ctrl
     try {
       const body = isGeneralMode
-        ? { provider, profile_id: null, version: generalVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective }
-        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective }
+        ? { provider, profile_id: null, version: generalVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective, disabled_tools: disabledTools }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective, disabled_tools: disabledTools }
       const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal })
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
@@ -1010,8 +1013,8 @@ export default function Assistant() {
     try {
       const cleanAttachments = attached.map(attachmentPayload)
       const body = useGeneral
-        ? { provider, profile_id: null, version: useVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective }
-        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective }
+        ? { provider, profile_id: null, version: useVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective, disabled_tools: disabledTools }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective, disabled_tools: disabledTools }
       if (cleanAttachments.length > 0) {
         Object.assign(body, { attachments: cleanAttachments })
       }
@@ -1425,9 +1428,10 @@ export default function Assistant() {
       complexity={activeComplexity}
       version={activeVersion}
       repo={activeEnvRepo}
-      contextFiles={contextFiles}
-      contextFileSources={contextFileSources}
-      sources={conversationSources}
+	      contextFiles={contextFiles}
+	      contextFileSources={contextFileSources}
+	      skillsUsed={skillsUsed}
+	      sources={conversationSources}
       attachments={readyAttachments.map(a => a.name)}
       onRefresh={handleRefreshContext}
     />

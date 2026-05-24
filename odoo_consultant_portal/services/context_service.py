@@ -22,6 +22,8 @@ from .context_defaults import (
     _VERSION_NOTES, _VERSION_NOTES_EN,
     _L10N_NOTES, _L10N_NOTES_EN,
 )
+from ..skills.default_contexts import SKILL_CONTEXT_DEFAULTS, SKILL_CONTEXT_DEFAULTS_EN
+from ..skills.registry import SKILL_DEFINITIONS
 
 _CONTEXT_DIR = Path.home() / ".odoo-consultant" / "context"
 _SUPPORTED_LOCALES = {"fr", "en"}
@@ -99,6 +101,7 @@ _SECTION_TITLES = {
         "creator_profile": "Conventions Studio",
         "localization": "Localisation fiscale {country}",
         "creator_intent": "Spécificité de l'opération demandée",
+        "skill_playbooks": "Mode d'emploi des skills",
     },
     "en": {
         "skills": "Consultant skills",
@@ -112,6 +115,7 @@ _SECTION_TITLES = {
         "creator_profile": "Studio conventions",
         "localization": "Fiscal localization {country}",
         "creator_intent": "Operation-specific guidance",
+        "skill_playbooks": "Skill playbooks",
     },
 }
 
@@ -502,6 +506,84 @@ def _select_skills_context(prompt: str, perspective: Optional[str], locale: Opti
     return "\n\n".join(dict.fromkeys(selected)).strip()
 
 
+def _select_skill_playbooks(
+    prompt: str,
+    *,
+    migration: bool = False,
+    creation: bool = False,
+    disabled_tools: Optional[list[str]] = None,
+    locale: Optional[str] = None,
+) -> str:
+    """Select short per-tool playbooks relevant to the current turn.
+
+    Tool schemas explain the API shape; these playbooks explain operational
+    sequencing and common pitfalls. Do not cap the number of selected skills:
+    a single diagnostic question can legitimately need a chain of live, source
+    and project tools.
+    """
+    lang = normalize_locale(locale)
+    disabled = set(disabled_tools or [])
+    mode = "creator" if creation else ("migration" if migration else "assistant")
+    prompt_norm = _normalize_text(prompt)
+    selected_files: list[str] = []
+
+    def add(name: str) -> None:
+        for skill in SKILL_DEFINITIONS:
+            if skill.name == name and skill.name not in disabled and mode in skill.modes:
+                if skill.context_file not in selected_files:
+                    selected_files.append(skill.context_file)
+                return
+
+    # Mode-level defaults: tiny, high-value reminders for workflows where the
+    # same mistakes are costly.
+    if creation:
+        for name in ("inspect_studio", "get_odoo_fields", "inspect_odoo_view", "inspect_odoo_report"):
+            add(name)
+    elif migration:
+        for name in ("inspect_installed_modules", "inspect_studio", "search_target_source"):
+            add(name)
+
+    for skill in SKILL_DEFINITIONS:
+        if skill.name in disabled or mode not in skill.modes:
+            continue
+        if skill.name in prompt_norm:
+            add(skill.name)
+            continue
+        if skill.keywords and _has_any(prompt_norm, tuple(k.casefold() for k in skill.keywords)):
+            add(skill.name)
+
+    # Explicit trigger patterns that are stronger than generic domain keywords.
+    if re.search(r"\b[0-9a-f]{7,40}\b", prompt_norm):
+        add("git_show_commit")
+    if _has_any(prompt_norm, ("où cliquer", "ou cliquer", "where click", "menu", "navigation")):
+        add("inspect_menus_actions")
+    if _has_any(prompt_norm, ("kpi", "par mois", "par statut", "read_group", "chiffre d'affaires", "ca par")):
+        add("read_group_odoo")
+    if _has_any(prompt_norm, (
+        "règle de sécurité", "règles de sécurité", "regle de securite", "regles de securite",
+        "security rule", "security rules", "record rule", "ir.rule", "acl", "access right",
+        "access rights", "droit d'accès", "droits d'accès", "ir.model.access",
+    )):
+        add("inspect_security")
+        if _has_any(prompt_norm, (
+            "module custom", "modules custom", "custom module", "custom modules",
+            "dépôt client", "depot client", "repo client", "project repo", "code projet",
+            "code custom", "spécifique client", "specifique client",
+        )):
+            for name in ("list_project_modules", "search_project_source", "read_project_file"):
+                add(name)
+
+    chunks: list[str] = []
+    for filename in selected_files:
+        try:
+            content = read_file(filename, lang).strip()
+        except FileNotFoundError:
+            continue
+        if content:
+            chunks.append(content)
+    return "\n\n".join(dict.fromkeys(chunks)).strip()
+
+
 def _maybe_section(title: str, content: str, sections: list[tuple[str, str]]) -> None:
     cleaned = content.strip()
     if cleaned:
@@ -582,6 +664,7 @@ def load_context_for_prompt(
     country_code: Optional[str] = None,
     force_localization: bool = False,
     complexity_mode: Optional[str] = None,
+    disabled_tools: Optional[list[str]] = None,
 ) -> str:
     """Return routed markdown context to inject into the AI system prompt.
 
@@ -600,6 +683,7 @@ def load_context_for_prompt(
         odoo_version, migration, (user_prompt or "")[:512],
         perspective, locale, target_version,
         blocks_key, creation, country_code, force_localization, complexity_mode,
+        tuple(sorted(disabled_tools or [])),
     )
     cached = _CONTEXT_CACHE.get(cache_key)
     if cached is not None:
@@ -610,7 +694,7 @@ def load_context_for_prompt(
         perspective=perspective, locale=locale, target_version=target_version,
         priority_blocks=priority_blocks, creation=creation,
         country_code=country_code, force_localization=force_localization,
-        complexity_mode=complexity_mode,
+        complexity_mode=complexity_mode, disabled_tools=disabled_tools,
     )
     _CONTEXT_CACHE[cache_key] = result
     if len(_CONTEXT_CACHE) > _CONTEXT_CACHE_MAX:
@@ -635,6 +719,7 @@ def _load_context_for_prompt_impl(
     country_code: Optional[str] = None,
     force_localization: bool = False,
     complexity_mode: Optional[str] = None,
+    disabled_tools: Optional[list[str]] = None,
 ) -> str:
     lang = normalize_locale(locale)
     titles = _SECTION_TITLES[lang]
@@ -649,6 +734,18 @@ def _load_context_for_prompt_impl(
         _maybe_section(_skills_title, _select_skills_context(prompt, perspective, lang), sections)
     except FileNotFoundError:
         _skills_title = None  # type: ignore[assignment]
+
+    _skill_playbooks_title = None
+    _skill_playbooks = _select_skill_playbooks(
+        prompt,
+        migration=migration,
+        creation=creation,
+        disabled_tools=disabled_tools,
+        locale=lang,
+    )
+    if _skill_playbooks:
+        _skill_playbooks_title = titles["skill_playbooks"]
+        sections.append((_skill_playbooks_title, _skill_playbooks))
 
     # Role-specific profile file (support / BA / architect / developer).
     # Treated as a core section so the role guidance is never crowded out.
@@ -760,6 +857,8 @@ def _load_context_for_prompt_impl(
         core.add(_skills_title)
     if _profile_title:
         core.add(_profile_title)
+    if _skill_playbooks_title:
+        core.add(_skill_playbooks_title)
     if _migration_title:
         core.add(_migration_title)
     if _creation_title:
@@ -792,6 +891,8 @@ def _load_context_for_prompt_impl(
 def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
     lang = normalize_locale(locale)
     if lang == "en":
+        if name in SKILL_CONTEXT_DEFAULTS_EN:
+            return SKILL_CONTEXT_DEFAULTS_EN[name]
         if name == "skills.md":
             return _SKILLS_MD_EN
         if name == "meeting-minute.md":
@@ -814,6 +915,8 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
         m_l10n_en = _L10N_FILE_RE.match(name)
         if m_l10n_en:
             return _L10N_NOTES_EN.get(m_l10n_en.group(1))
+    if name in SKILL_CONTEXT_DEFAULTS:
+        return SKILL_CONTEXT_DEFAULTS[name]
     if name == "skills.md":
         return _SKILLS_MD
     if name == "meeting-minute.md":

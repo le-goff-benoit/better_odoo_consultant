@@ -397,13 +397,13 @@ export function extractToolContextItems(events: AiEventLike[]): ContextItem[] {
     if (evt.type !== 'tool_call') continue
     const name = evt.name ?? ''
     const args = evt.args ?? {}
-    if (name === 'read_odoo_file' || name === 'read_project_file') {
+    if (name === 'read_odoo_file' || name === 'read_project_file' || name === 'read_target_file') {
       const path = String(args.path ?? '')
       if (!path) continue
       const key = `${name}:${path}`
       if (seen.has(key)) continue
       seen.add(key)
-      out.push({ type: 'context', label: path, detail: name === 'read_odoo_file' ? 'Odoo' : 'Projet' })
+      out.push({ type: 'context', label: path, detail: name === 'read_project_file' ? 'Projet' : name === 'read_target_file' ? 'Cible' : 'Odoo' })
     } else if (name === 'search_odoo_source' || name === 'search_target_source' || name === 'search_project_source') {
       const scope = name === 'search_project_source' ? 'Code custom' : name === 'search_target_source' ? 'Sources cible' : 'Sources Odoo'
       const pattern = String(args.pattern ?? '')
@@ -414,7 +414,14 @@ export function extractToolContextItems(events: AiEventLike[]): ContextItem[] {
       if (seen.has(key)) continue
       seen.add(key)
       out.push({ type: 'source', label, detail })
-    } else if (name === 'query_odoo' || name === 'count_odoo' || name === 'get_odoo_fields' || name === 'inspect_studio' || name === 'count_source_lines') {
+    } else if (
+      name === 'query_odoo' || name === 'count_odoo' || name === 'read_group_odoo' ||
+      name === 'get_odoo_fields' || name === 'inspect_studio' ||
+      name === 'inspect_installed_modules' || name === 'inspect_security' ||
+      name === 'inspect_menus_actions' || name === 'inspect_odoo_view' ||
+      name === 'inspect_odoo_report' || name === 'list_project_modules' ||
+      name === 'count_source_lines'
+    ) {
       const model = String(args.model ?? args.scope ?? '')
       const key = `${name}:${model}`
       if (seen.has(key)) continue
@@ -423,4 +430,16 @@ export function extractToolContextItems(events: AiEventLike[]): ContextItem[] {
     }
   }
   return out.slice(-12)
+}
+
+export function extractUsedSkillNames(events: AiEventLike[]): string[] {
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const evt of events) {
+    if (evt.type !== 'tool_call' || !evt.name) continue
+    if (seen.has(evt.name)) continue
+    seen.add(evt.name)
+    names.push(evt.name)
+  }
+  return names.slice(-12)
 }

@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.57.0',
+    version: '0.58.0',
     date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Paramètres — nouvel onglet « Skills » : liste exhaustive des 12 outils IA (requête Odoo, audit Studio, lecture de source, git show commit, comptage LOC…) regroupés en 3 familles (Données live / Code source / Code projet), avec toggle individuel, description et prérequis',
+      'Skills — les outils désactivés sont filtrés côté serveur avant d\'être exposés au modèle ; si un skill désactivé aurait amélioré la réponse, l\'IA le signale et invite à le réactiver dans Paramètres → Skills',
+      'Skills — config persistée dans `~/.odoo-consultant/tool-config.json`, propagée à chaque requête chat (Assistant et Migration)',
+    ],
+  },
+  {
+    version: '0.57.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Sources — bouton « Vérifier » retiré des cartes : la pastille de statut dynamique + l\'auto-check au chargement de la page rendent l\'action manuelle inutile',
       'Sources — bouton « Mises à jour » renommé en « Commits » (plus parlant pour ouvrir le modal de l\'historique git)',

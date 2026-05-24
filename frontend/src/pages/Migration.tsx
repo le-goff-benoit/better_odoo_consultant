@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { ArrowRightLeft, ArrowUp, Check, CheckCheck, Code, Copy, FileText, Image as ImageIcon, Loader2, Maximize2, Paperclip, Square, Timer, TriangleAlert, X } from 'lucide-react'
-import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getModules } from '../api/client'
+import { listProfiles, checkAllSources, getAiProviders, getModelConfig, getModules, getToolConfig } from '../api/client'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
@@ -34,7 +34,7 @@ import {
   type AttachmentDraft,
   type AttachmentMeta,
 } from '../utils/attachments'
-import { routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
+import { extractUsedSkillNames, routedContextFilesWithSource, useResolvedPerspective, type ComplexityMode } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
 import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import { copyRichText, copyMarkdown } from '../utils/clipboard'
@@ -1017,6 +1017,8 @@ export default function Migration() {
   const [streaming, setStreaming] = useState(false)
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
   const [draggingFiles, setDraggingFiles] = useState(false)
+  const [disabledTools, setDisabledTools] = useState<string[]>([])
+  useEffect(() => { getToolConfig().then(r => setDisabledTools(r.data?.disabled_tools ?? [])).catch(() => {}) }, [])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -1146,6 +1148,7 @@ export default function Migration() {
   })
   const contextFiles = contextFilesWithSource.map(f => f.name)
   const contextFileSources = new Map(contextFilesWithSource.map(f => [f.name, f.source]))
+  const skillsUsed = extractUsedSkillNames(messages.flatMap(m => m.events ?? []))
   const srcComm   = sourceVersion ? (srcStatus[sourceVersion]?.installed === true) : false
   const srcEnt    = sourceVersion ? (srcStatus[`${sourceVersion}-enterprise`]?.installed === true) : false
   const tgtComm   = targetVersion ? (srcStatus[targetVersion]?.installed === true) : false
@@ -1323,6 +1326,7 @@ export default function Migration() {
       migration_mode: true,
       version: sourceVersion || undefined,
       perspective,
+      disabled_tools: disabledTools,
     }
 
     if (source.mode === 'environment' && source.profileId) {
@@ -1558,9 +1562,10 @@ export default function Migration() {
       version={sourceVersion}
       targetVersion={targetVersion}
       repo={sourceRepoName}
-      contextFiles={contextFiles}
-      contextFileSources={contextFileSources}
-      sources={conversationSources}
+	      contextFiles={contextFiles}
+	      contextFileSources={contextFileSources}
+	      skillsUsed={skillsUsed}
+	      sources={conversationSources}
       attachments={readyAttachments.map(a => a.name)}
       onRefresh={handleRefreshContext}
     />

@@ -38,7 +38,7 @@ function toolKey(call: ToolEvent) {
     return `${call.name}:${args.version ?? ''}:${args.pattern ?? ''}`
   }
   if (call.name === 'search_project_source') return `${call.name}:${args.pattern ?? ''}`
-  if (call.name === 'query_odoo' || call.name === 'count_odoo' || call.name === 'get_odoo_fields') {
+  if (call.name === 'query_odoo' || call.name === 'count_odoo' || call.name === 'read_group_odoo' || call.name === 'get_odoo_fields' || call.name === 'inspect_security' || call.name === 'inspect_menus_actions') {
     return `${call.name}:${args.model ?? ''}`
   }
   if (call.name === 'read_odoo_file' || call.name === 'read_target_file' || call.name === 'read_project_file') {
@@ -46,6 +46,7 @@ function toolKey(call: ToolEvent) {
   }
   if (call.name === 'inspect_odoo_view') return `${call.name}:${args.model ?? ''}:${args.view_type ?? ''}`
   if (call.name === 'inspect_odoo_report') return `${call.name}:${args.report_name ?? ''}:${args.model ?? ''}`
+  if (call.name === 'list_project_modules') return `${call.name}:${args.path ?? ''}`
   return `${call.name}`
 }
 
@@ -63,8 +64,16 @@ function toolSummary(name: string | undefined, args: Record<string, unknown> | u
       return { title: fr ? 'Lit les données' : 'Reads data', detail: model ? humanModel(model, lang) : (fr ? 'Base Odoo' : 'Odoo database') }
     case 'count_odoo':
       return { title: fr ? 'Compte' : 'Counts', detail: model ? humanModel(model, lang) : (fr ? 'Enregistrements Odoo' : 'Odoo records') }
+    case 'read_group_odoo':
+      return { title: fr ? 'Agrège les données' : 'Aggregates data', detail: model ? humanModel(model, lang) : (fr ? 'KPI Odoo' : 'Odoo KPI') }
     case 'get_odoo_fields':
       return { title: fr ? 'Inspecte les champs' : 'Inspects fields', detail: model ? humanModel(model, lang) : (fr ? 'Structure modèle' : 'Model structure') }
+    case 'inspect_installed_modules':
+      return { title: fr ? 'Inspecte les modules' : 'Inspects modules', detail: fr ? 'Modules installés' : 'Installed modules' }
+    case 'inspect_security':
+      return { title: fr ? 'Inspecte la sécurité' : 'Inspects security', detail: model ? humanModel(model, lang) : (fr ? 'Droits et règles' : 'Access rules') }
+    case 'inspect_menus_actions':
+      return { title: fr ? 'Inspecte les menus' : 'Inspects menus', detail: model ? humanModel(model, lang) : String(args?.query ?? '') || (fr ? 'Actions Odoo' : 'Odoo actions') }
     case 'search_odoo_source':
       return { title: fr ? 'Cherche dans Odoo' : 'Searches Odoo', detail: pattern ? truncate(pattern) : (version ? `v${version}` : (fr ? 'Code standard' : 'Standard code')) }
     case 'read_odoo_file':
@@ -77,6 +86,8 @@ function toolSummary(name: string | undefined, args: Record<string, unknown> | u
       return { title: fr ? 'Cherche dans le custom' : 'Searches custom code', detail: pattern ? truncate(pattern) : (fr ? 'Dépôt client' : 'Client repository') }
     case 'read_project_file':
       return { title: fr ? 'Ouvre un fichier custom' : 'Opens custom file', detail: basename(path) || (fr ? 'Dépôt client' : 'Client repository') }
+    case 'list_project_modules':
+      return { title: fr ? 'Liste les modules projet' : 'Lists project modules', detail: path ? basename(path) : (fr ? 'Manifests' : 'Manifests') }
     case 'count_source_lines':
       return { title: fr ? 'Mesure le volume' : 'Measures volume', detail: String(args?.scope ?? '') || (fr ? 'Sources' : 'Sources') }
     case 'inspect_studio':
@@ -129,7 +140,7 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
   const doneCount = dedupedCalls.filter(({ call }) => results.some(r => r.name === call.name)).length
   const runningCount = Math.max(0, dedupedCalls.length - doneCount)
   const activityPreview = dedupedCalls
-    .map(({ call }) => toolSummary(call.name, call.args, lang).title)
+    .map(({ call }) => call.name || toolSummary(call.name, call.args, lang).title)
     .filter((label, idx, arr) => arr.indexOf(label) === idx)
     .slice(0, 3)
     .join(' · ')
@@ -175,8 +186,11 @@ export default function ToolCallGroup({ events, projectName }: ToolCallGroupProp
                 <span className="tool-step-index" aria-hidden>{String(idx + 1).padStart(2, '0')}</span>
                 <span className={`tool-step-status${done ? ' is-done' : ' is-running'}`} aria-hidden />
                 <span className="tool-step-main">
-                  <span className="tool-step-title">{summary.title}</span>
-                  <span className="tool-step-detail">{summary.detail}</span>
+	                  <span className="tool-step-title">{summary.title}</span>
+	                  <span className="tool-step-detail">
+	                    {call.name && <code className="tool-step-code">{call.name}</code>}
+	                    {summary.detail}
+	                  </span>
                 </span>
                 <span className="tool-step-meta">
                   {meta.liveDb && projectName && <span>{c.db}</span>}

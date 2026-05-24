@@ -3032,11 +3032,33 @@ textarea:focus-visible {
 .tool-step-detail {
   min-width: 0;
   overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--th-muted);
   font-size: 10.5px;
   font-weight: 560;
   line-height: 1.2;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-step-code {
+  display: inline-flex;
+  align-items: center;
+  max-width: 140px;
+  overflow: hidden;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--tool-color, var(--brand)) 36%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--tool-color, var(--brand)) 10%, transparent);
+  color: var(--tool-color, var(--brand));
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-transform: none;
   white-space: nowrap;
 }
 

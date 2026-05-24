@@ -20,6 +20,7 @@ from ...services.context_service import load_context_for_prompt, complexity_prof
 from ...services.localization_service import active_company_from_cache, build_localization_context
 from ...services.technical_complexity_service import build_technical_complexity_context, complexity_mode_from_raw
 from ...services.attachment_service import ChatAttachment, inject_attachments
+from ...skills.registry import skill_catalog, skill_names
 
 router = APIRouter()
 
@@ -61,6 +62,7 @@ async def _exchange_copilot_token(oauth_token: str) -> str:
 # ── Settings ─────────────────────────────────────────────────────
 
 _MODEL_CONFIG_PATH = Path.home() / ".odoo-consultant" / "model-config.json"
+_TOOL_CONFIG_PATH  = Path.home() / ".odoo-consultant" / "tool-config.json"
 
 
 def _read_model_config() -> dict:
@@ -85,6 +87,41 @@ async def get_model_config():
 @router.post("/model-config")
 async def save_model_config(config: dict):
     _write_model_config(config)
+    return {"ok": True}
+
+
+def _read_tool_config() -> dict:
+    if _TOOL_CONFIG_PATH.exists():
+        try:
+            return json.loads(_TOOL_CONFIG_PATH.read_text())
+        except Exception:
+            pass
+    return {"disabled_tools": []}
+
+
+def _write_tool_config(config: dict) -> None:
+    _TOOL_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _TOOL_CONFIG_PATH.write_text(json.dumps(config, indent=2))
+
+
+@router.get("/tool-config")
+async def get_tool_config():
+    return _read_tool_config()
+
+
+@router.get("/skills")
+async def get_skills():
+    return {"skills": skill_catalog()}
+
+
+@router.post("/tool-config")
+async def save_tool_config(config: dict):
+    disabled = config.get("disabled_tools", [])
+    if not isinstance(disabled, list):
+        raise HTTPException(400, "disabled_tools doit être une liste")
+    known = skill_names()
+    cleaned = [name for name in dict.fromkeys(disabled) if isinstance(name, str) and name in known]
+    _write_tool_config({"disabled_tools": cleaned})
     return {"ok": True}
 
 
@@ -256,6 +293,8 @@ class ChatRequest(BaseModel):
     # Legacy values "technical" / "functional" are still accepted and mapped
     # downstream to "developer" / "business_analyst".
     perspective: Optional[str] = "developer"
+    # Skills (tools) explicitement désactivés par l'utilisateur
+    disabled_tools: list[str] = Field(default_factory=list)
 
 
 @router.post("/chat")
@@ -313,6 +352,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             locale=_context_locale,
             country_code=req.country_code,
             force_localization=bool(req.country_code),
+            disabled_tools=req.disabled_tools,
         )
 
         # Migration target resolution
@@ -327,7 +367,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
         async def generate_general():
             try:
-                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, req.perspective or "developer", _response_language):
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, req.perspective or "developer", _response_language, disabled_tools=req.disabled_tools):
                     yield _sse(evt)
             except Exception as exc:
                 yield _sse({"type": "error", "msg": str(exc)})
@@ -461,12 +501,13 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         locale=_context_locale,
         country_code=_active_company.get("country_code") if _active_company else None,
         complexity_mode=_complexity_mode,
+        disabled_tools=req.disabled_tools,
         priority_blocks=[b for b in (_source_warning, localization_md, complexity_md, profile_tuning) if b],
     )
 
     async def generate():
         try:
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, req.perspective or "developer", _response_language):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, req.perspective or "developer", _response_language, disabled_tools=req.disabled_tools):
                 yield _sse(evt)
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})

@@ -171,7 +171,7 @@ def _company_name(profile: Profile, company_id: Optional[int]) -> Optional[str]:
     return None
 
 
-def _build_context_md(profile: Profile, version, user_prompt, company_id):
+def _build_context_md(profile: Profile, version, user_prompt, company_id, disabled_tools: Optional[list[str]] = None):
     active_company = active_company_from_cache(profile.company_ids, company_id)
     localization_md = build_localization_context(
         profile.company_ids, company_id, version, user_prompt, "developer")
@@ -189,6 +189,7 @@ def _build_context_md(profile: Profile, version, user_prompt, company_id):
         creation=True,
         country_code=active_company.get("country_code") if active_company else None,
         complexity_mode=complexity_mode,
+        disabled_tools=disabled_tools,
         priority_blocks=[b for b in (localization_md, complexity_md, profile_tuning, intent_md) if b])
 
 
@@ -203,6 +204,7 @@ class AnalyzeBody(BaseModel):
     request: str
     instructions: list[str] = Field(default_factory=list)
     attachments: list[ChatAttachment] = Field(default_factory=list)
+    disabled_tools: list[str] = Field(default_factory=list)
 
 
 @router.post("/analyze")
@@ -223,7 +225,7 @@ async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session
 
     odoo, source_path, repo_path, version, env, company_id = _build_runtime(
         profile, body.env_id, body.company_id)
-    context_md = _build_context_md(profile, version, body.request, company_id)
+    context_md = _build_context_md(profile, version, body.request, company_id, body.disabled_tools)
     user_message = build_analysis_message(body.request, body.instructions)
     messages = inject_attachments(
         [{"role": "user", "content": user_message}], body.attachments)
@@ -238,6 +240,7 @@ async def analyze(body: AnalyzeBody, session: AsyncSession = Depends(get_session
                 body.provider, api_key, body.model, odoo, profile, messages,
                 source_path, context_md, version, None, company_name,
                 repo_path, None, False, None, "developer", "fr",
+                disabled_tools=body.disabled_tools,
             ):
                 etype = evt.get("type")
                 if etype == "text":

@@ -79,6 +79,9 @@ export const copilotLogin = () => api.post('/ai/copilot/login')
 export const copilotPoll = (device_code: string) => api.post('/ai/copilot/poll', { device_code })
 export const getModelConfig = () => api.get('/ai/model-config')
 export const saveModelConfig = (config: Record<string, string[]>) => api.post('/ai/model-config', config)
+export const getToolConfig = () => api.get('/ai/tool-config')
+export const saveToolConfig = (config: { disabled_tools: string[] }) => api.post('/ai/tool-config', config)
+export const getAiSkills = () => api.get('/ai/skills')
 
 // Context files
 export const listContextFiles = (locale = 'fr') => api.get(`/context/?locale=${encodeURIComponent(locale)}`)

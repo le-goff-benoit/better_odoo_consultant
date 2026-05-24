@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import { Bot, FileText, FolderCode, GitBranch, Globe2, Layers3, Lock, PanelRight, RefreshCw, Sparkles, Workflow } from 'lucide-react'
+import { Bot, FileText, FolderCode, GitBranch, Globe2, Layers3, Lock, PanelRight, RefreshCw, Sparkles, Workflow, Zap } from 'lucide-react'
 import { countryFlag } from '../utils/countryFlag'
 import { useQuery } from '@tanstack/react-query'
 import { useUiLanguage } from '../i18n'
@@ -51,6 +51,7 @@ interface ConversationContextPanelProps {
   contextFileSources?: Map<string, unknown>
   sources: string[]
   attachments: string[]
+  skillsUsed?: string[]
   /** When set, the profile section displays this label with a lock icon and
    * hides the perspective toggle — used by the Creator where the profile is
    * fixed. Backend perspective is still computed normally. */
@@ -84,6 +85,7 @@ export default function ConversationContextPanel({
   contextFiles,
   sources,
   attachments,
+  skillsUsed = [],
   lockedProfileLabel,
   lockedProfileHint,
   onRefresh,
@@ -135,7 +137,8 @@ export default function ConversationContextPanel({
       codeSources: 'Code sources',
       localization: 'Fiscal localization',
       ai: 'AI',
-      context: 'Markdown files',
+	      context: 'Markdown files',
+	      skills: 'Skills used',
       sources: 'Sources used',
       attachments: 'Attachments',
       none: 'None yet',
@@ -160,7 +163,8 @@ export default function ConversationContextPanel({
       codeSources: 'Sources code',
       localization: 'Localisation fiscale',
       ai: 'IA',
-      context: 'Fichiers Markdown',
+	      context: 'Fichiers Markdown',
+	      skills: 'Skills utilisés',
       sources: 'Sources utilisées',
       attachments: 'Pièces jointes',
       none: 'Aucun pour le moment',
@@ -299,6 +303,12 @@ export default function ConversationContextPanel({
         <FreshnessPillList items={contextFiles} empty={c.none} ageByName={ageByName}
           lang={lang} />
       </ContextBlock>
+
+      {skillsUsed.length > 0 && (
+        <ContextBlock icon={<Zap size={15} />} label={c.skills}>
+          <SkillPillList items={skillsUsed} lang={lang} />
+        </ContextBlock>
+      )}
 
       {attachments.length > 0 && (
         <ContextBlock icon={<FolderCode size={15} />} label={c.attachments}>
@@ -442,6 +452,44 @@ function FreshnessPillList({
                 {ageLabel}
               </span>
             )}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+const SKILL_LABELS: Record<string, { fr: string; en: string }> = {
+  query_odoo: { fr: 'Données Odoo', en: 'Odoo data' },
+  count_odoo: { fr: 'Comptage', en: 'Count' },
+  read_group_odoo: { fr: 'Agrégats', en: 'Aggregates' },
+  get_odoo_fields: { fr: 'Champs', en: 'Fields' },
+  inspect_installed_modules: { fr: 'Modules', en: 'Modules' },
+  inspect_security: { fr: 'Sécurité', en: 'Security' },
+  inspect_menus_actions: { fr: 'Menus', en: 'Menus' },
+  inspect_studio: { fr: 'Studio', en: 'Studio' },
+  inspect_odoo_view: { fr: 'Vues', en: 'Views' },
+  inspect_odoo_report: { fr: 'Rapports', en: 'Reports' },
+  search_odoo_source: { fr: 'Recherche source', en: 'Source search' },
+  read_odoo_file: { fr: 'Lecture source', en: 'Source read' },
+  git_show_commit: { fr: 'Commit Git', en: 'Git commit' },
+  search_target_source: { fr: 'Recherche cible', en: 'Target search' },
+  read_target_file: { fr: 'Lecture cible', en: 'Target read' },
+  search_project_source: { fr: 'Recherche projet', en: 'Project search' },
+  read_project_file: { fr: 'Lecture projet', en: 'Project read' },
+  list_project_modules: { fr: 'Modules projet', en: 'Project modules' },
+  count_source_lines: { fr: 'Volumétrie', en: 'Line count' },
+}
+
+function SkillPillList({ items, lang }: { items: string[]; lang: 'fr' | 'en' }) {
+  return (
+    <div className="context-file-list">
+      {items.map(name => {
+        const label = SKILL_LABELS[name]?.[lang] ?? name
+        return (
+          <span key={name} className="context-file-pill" title={name}>
+            <span className="context-file-name">{label}</span>
+            <span className="context-file-meta">{name}</span>
           </span>
         )
       })}

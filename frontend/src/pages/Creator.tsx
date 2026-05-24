@@ -9,7 +9,7 @@ import {
 import {
   getCreatorProjects, getAiProviders, getModelConfig, checkAllSources, getCreatorHistory,
   getCreatorHistoryEntry, dryRunCreatorChangeset, applyCreatorChangeset, rejectCreatorRequest, documentCreatorChange,
-  previewCreatorOperation,
+  previewCreatorOperation, getToolConfig,
 } from '../api/client'
 import { useUiLanguage } from '../i18n'
 import { PROVIDERS } from '../constants/providers'
@@ -24,7 +24,7 @@ import AiSelector from '../components/AiSelector'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import WorkspaceShell from '../components/WorkspaceShell'
 import { useWorkspaceContext } from '../components/Layout'
-import { routedContextFiles, routedContextFilesWithSource, type ComplexityMode } from '../utils/aiContext'
+import { extractUsedSkillNames, routedContextFiles, routedContextFilesWithSource, type ComplexityMode } from '../utils/aiContext'
 import { streamingSignals } from '../utils/streamingSignals'
 import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import {
@@ -324,6 +324,8 @@ export default function Creator() {
 
   const { data: providersData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
   const { data: modelCfg } = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
+  const { data: toolCfg } = useQuery({ queryKey: ['tool-config'], queryFn: getToolConfig })
+  const disabledTools: string[] = toolCfg?.data?.disabled_tools ?? []
   const { data: sourcesData } = useQuery({ queryKey: ['sources-all'], queryFn: checkAllSources, staleTime: 30_000 })
   const { data: historyData, refetch: refetchHistory } = useQuery({
     queryKey: ['creator-history'],
@@ -417,6 +419,7 @@ export default function Creator() {
   })
   const contextFiles = contextFilesWithSource.map(f => f.name)
   const contextFileSources = new Map(contextFilesWithSource.map(f => [f.name, f.source]))
+  const skillsUsed = extractUsedSkillNames(toolEvents)
   const conversationSources = [
     activeVersion && (sourceCommunity || sourceEnterprise) ? `Sources Odoo ${activeVersion}${sourceEdition ? ` ${sourceEdition}` : ''}` : null,
     activeEnvRepo && sourceRepoIsCloned ? activeEnvRepo.split('/').slice(-2).join('/').replace(/\.git$/, '') : null,
@@ -555,6 +558,7 @@ export default function Creator() {
           request,
           instructions: allInstructions,
           attachments: readyAttachments.map(attachmentPayload),
+          disabled_tools: disabledTools,
         }),
       })
       if (!res.ok || !res.body) {
@@ -924,9 +928,10 @@ export default function Creator() {
       complexity={activeComplexity}
       version={activeVersion}
       repo={activeEnvRepo}
-      contextFiles={contextFiles}
-      contextFileSources={contextFileSources}
-      sources={conversationSources}
+	      contextFiles={contextFiles}
+	      contextFileSources={contextFileSources}
+	      skillsUsed={skillsUsed}
+	      sources={conversationSources}
       attachments={[]}
       onRefresh={handleRefreshContext}
     />

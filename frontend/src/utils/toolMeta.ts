@@ -133,6 +133,47 @@ export function getToolMeta(
       doneLabel: model ? (fr ? `Champs · ${label}` : `Fields · ${label}`) : (fr ? 'Champs' : 'Fields'),
     }
   }
+  if (name === 'read_group_odoo') {
+    const model = (args?.model as string) ?? ''
+    const label = humanModel(model, lang)
+    return {
+      icon: '∑', appName: null, color: '#0f766e',
+      loadingLabel: model
+        ? (fr ? `Agrégation — ${label}…` : `Aggregating — ${label}…`)
+        : (fr ? 'Agrégation des données…' : 'Aggregating data…'),
+      doneLabel: model ? (fr ? `Agrégats · ${label}` : `Aggregates · ${label}`) : (fr ? 'Agrégats' : 'Aggregates'),
+      liveDb: true,
+    }
+  }
+  if (name === 'inspect_installed_modules') {
+    return {
+      icon: '▦', appName: null, color: '#2563eb',
+      loadingLabel: fr ? 'Lecture des modules installés…' : 'Reading installed modules…',
+      doneLabel: fr ? 'Modules installés' : 'Installed modules',
+      liveDb: true,
+    }
+  }
+  if (name === 'inspect_security') {
+    const model = (args?.model as string) ?? ''
+    const label = humanModel(model, lang)
+    return {
+      icon: '🔐', appName: null, color: '#be123c',
+      loadingLabel: fr ? `Sécurité — ${label || model}…` : `Security — ${label || model}…`,
+      doneLabel: fr ? `Sécurité · ${label || model}` : `Security · ${label || model}`,
+      liveDb: true,
+    }
+  }
+  if (name === 'inspect_menus_actions') {
+    const model = (args?.model as string) ?? ''
+    const query = (args?.query as string) ?? ''
+    const scope = model ? humanModel(model, lang) : query
+    return {
+      icon: '🧭', appName: null, color: '#0891b2',
+      loadingLabel: fr ? `Menus et actions${scope ? ` — ${scope}` : ''}…` : `Menus and actions${scope ? ` — ${scope}` : ''}…`,
+      doneLabel: fr ? `Menus${scope ? ` · ${scope}` : ''}` : `Menus${scope ? ` · ${scope}` : ''}`,
+      liveDb: true,
+    }
+  }
   if (name === 'search_odoo_source') {
     const ver = args?.version as string
     const pat = shorten((args?.pattern as string) ?? '')
@@ -188,6 +229,13 @@ export function getToolMeta(
       icon: '📁', appName: null, color: '#0891b2',
       loadingLabel: fr ? `Lecture code custom — ${file}…` : `Reading custom code — ${file}…`,
       doneLabel: file,
+    }
+  }
+  if (name === 'list_project_modules') {
+    return {
+      icon: '▦', appName: null, color: '#D97706',
+      loadingLabel: fr ? 'Inventaire des modules projet…' : 'Inventorying project modules…',
+      doneLabel: fr ? 'Modules projet' : 'Project modules',
     }
   }
   if (name === 'count_source_lines') {

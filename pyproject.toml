@@ -47,6 +47,9 @@ odoo-portal = "odoo_consultant_portal.cli.main:cli"
 where = ["."]
 include = ["odoo_consultant_portal*"]
 
+[tool.setuptools.package-data]
+"odoo_consultant_portal.skills" = ["context/*.md"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

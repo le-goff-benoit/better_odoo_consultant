@@ -915,3 +915,66 @@ def test_context_assembly_priority_blocks_always_lead():
 
     assert context.find("URGENT") >= 0
     assert context.find("URGENT") < context.find("Compétences consultant")
+
+
+def test_skill_playbook_is_routed_for_kpi_question():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Donne-moi le CA par mois avec un KPI fiable",
+        perspective="technical",
+    )
+
+    assert "Mode d'emploi des skills" in context
+    assert "read_group_odoo" in context
+    assert "query_odoo" not in context or context.find("read_group_odoo") < context.find("query_odoo")
+
+
+def test_skill_playbook_default_is_loaded_from_markdown_file():
+    from odoo_consultant_portal.services.context_service import read_file
+
+    content = read_file("skill-query-odoo.md", "fr")
+
+    assert "## query_odoo" in content
+    assert "Quand l'utiliser" in content
+
+
+def test_disabled_skill_playbook_is_not_routed():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Donne-moi le CA par mois avec un KPI fiable",
+        perspective="technical",
+        disabled_tools=["read_group_odoo"],
+    )
+
+    assert "read_group_odoo" not in context
+
+
+def test_security_custom_modules_routes_project_and_acl_playbooks():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt="Est-ce qu'il y a des règles de sécurité particulières dans les modules custom de NECA ?",
+        perspective="technical",
+    )
+
+    assert "Mode d'emploi des skills" in context
+    assert "inspect_security" in context
+    assert "list_project_modules" in context
+    assert "search_project_source" in context
+    assert "read_project_file" in context
+
+
+def test_skill_playbook_selection_is_not_capped_to_six_skills():
+    context = load_context_for_prompt(
+        "18.0",
+        user_prompt=(
+            "query_odoo count_odoo read_group_odoo get_odoo_fields "
+            "inspect_installed_modules inspect_security inspect_menus_actions "
+            "inspect_studio inspect_odoo_view inspect_odoo_report search_odoo_source "
+            "read_odoo_file git_show_commit search_project_source read_project_file "
+            "list_project_modules count_source_lines"
+        ),
+        perspective="technical",
+    )
+
+    assert "inspect_menus_actions" in context
+    assert "count_source_lines" in context

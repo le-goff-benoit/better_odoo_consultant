@@ -71,6 +71,32 @@ class OdooClient:
             self.db, self.uid, self.api_key, model, "search_count", [domain or []], {"context": self._ctx()}
         )
 
+    def read_group(
+        self,
+        model: str,
+        domain: list = None,
+        fields: list[str] = None,
+        groupby: list[str] = None,
+        limit: Optional[int] = 80,
+        offset: int = 0,
+        orderby: str = "",
+        lazy: bool = True,
+    ) -> list[dict]:
+        kwargs: dict[str, Any] = {"offset": offset, "lazy": lazy, "context": self._ctx()}
+        if limit and limit > 0:
+            kwargs["limit"] = limit
+        if orderby:
+            kwargs["orderby"] = orderby
+        return self._models.execute_kw(
+            self.db,
+            self.uid,
+            self.api_key,
+            model,
+            "read_group",
+            [domain or [], fields or [], groupby or []],
+            kwargs,
+        )
+
     def call(self, model: str, method: str, args: list = None, kwargs: dict = None) -> Any:
         """Generic ORM method call — for public methods such as get_view /
         fields_view_get. XML-RPC rejects private (underscore-prefixed) methods."""

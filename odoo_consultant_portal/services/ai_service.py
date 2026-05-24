@@ -32,6 +32,16 @@ _TOOL_COUNT = {
     "name": "count_odoo",
     "description": "Compter les enregistrements Odoo correspondant à un domaine.",
 }
+_TOOL_READ_GROUP = {
+    "name": "read_group_odoo",
+    "description": (
+        "Calculer des agrégats Odoo avec read_group : sommes, moyennes et comptages "
+        "groupés par statut, date, commercial, journal, projet, etc. Utilise cet outil "
+        "pour les KPI fiables au lieu d'additionner un échantillon search_read.\n"
+        "Paramètres : model, domain, fields (ex: ['amount_total:sum','state']), "
+        "groupby (ex: ['state'] ou ['date_order:month']), limit, orderby, lazy."
+    ),
+}
 _TOOL_FIELDS = {
     "name": "get_odoo_fields",
     "description": (
@@ -44,6 +54,33 @@ _TOOL_FIELDS = {
         "Avec `field_names` : retourne le détail complet (relation, relation_field, "
         "store, required, help) UNIQUEMENT pour ces champs — utilise-le pour confirmer "
         "le nom exact d'un champ deviné ou pour comprendre une relation inverse."
+    ),
+}
+_TOOL_INSTALLED_MODULES = {
+    "name": "inspect_installed_modules",
+    "description": (
+        "Lister les modules installés sur l'instance connectée : applications, modules "
+        "techniques, version installée, auteur et modules custom probables. Utilise-le "
+        "pour cadrer le périmètre réel d'une instance, surtout en migration."
+    ),
+}
+_TOOL_INSPECT_SECURITY = {
+    "name": "inspect_security",
+    "description": (
+        "Inspecter la sécurité d'un modèle Odoo : entrée ir.model, ACL (ir.model.access), "
+        "record rules (ir.rule) et groupes associés. Utilise cet outil pour diagnostiquer "
+        "droits d'accès, visibilité partielle, multi-société ou boutons/actions absents. "
+        "Si la question porte sur la sécurité de modules custom sans modèle exact, découvre "
+        "d'abord les modules/fichiers avec list_project_modules et search_project_source, "
+        "puis appelle inspect_security pour chaque modèle métier identifié."
+    ),
+}
+_TOOL_INSPECT_MENUS = {
+    "name": "inspect_menus_actions",
+    "description": (
+        "Retrouver les menus et actions fenêtre qui exposent un modèle ou un écran. "
+        "Utilise cet outil pour répondre à 'où cliquer', valider une navigation ou "
+        "identifier les vues rattachées à une action."
     ),
 }
 _TOOL_SEARCH_SRC = {
@@ -88,6 +125,15 @@ _TOOL_READ_REPO = {
         "Lire le contenu d'un fichier du code source du projet client (module custom). "
         "Utilise après search_project_source pour voir l'implémentation complète d'un override ou d'un module custom. "
         "Le chemin est relatif depuis la racine du dépôt cloné."
+    ),
+}
+_TOOL_LIST_PROJECT_MODULES = {
+    "name": "list_project_modules",
+    "description": (
+        "Parser les fichiers __manifest__.py / __openerp__.py du dépôt client pour "
+        "lister les modules custom, dépendances, fichiers data/demo, assets, licence "
+        "et statut installable. Préfère cet outil à un grep quand tu dois inventorier "
+        "le dépôt projet."
     ),
 }
 
@@ -204,11 +250,34 @@ TOOLS_CLAUDE = [
         "model":  {"type": "string"},
         "domain": {"type": "array", "default": []},
     }}},
+    {**_TOOL_READ_GROUP, "input_schema": {"type": "object", "required": ["model", "fields", "groupby"], "properties": {
+        "model":  {"type": "string"},
+        "domain": {"type": "array", "default": []},
+        "fields": {"type": "array", "items": {"type": "string"}, "description": "Mesures et champs, ex ['amount_total:sum','state']"},
+        "groupby": {"type": "array", "items": {"type": "string"}, "description": "Groupements, ex ['state'] ou ['date_order:month']"},
+        "limit": {"type": "integer", "default": 80},
+        "offset": {"type": "integer", "default": 0},
+        "orderby": {"type": "string", "default": ""},
+        "lazy": {"type": "boolean", "default": True},
+    }}},
     {**_TOOL_FIELDS, "input_schema": {"type": "object", "required": ["model"], "properties": {
         "model": {"type": "string"},
         "field_names": {"type": "array", "items": {"type": "string"},
             "description": "Si fourni : détail complet uniquement de ces champs. Sinon : index condensé du modèle.",
             "default": []},
+    }}},
+    {**_TOOL_INSTALLED_MODULES, "input_schema": {"type": "object", "properties": {
+        "filter": {"type": "string", "description": "Filtre optionnel sur le nom technique, libellé ou auteur", "default": ""},
+        "apps_only": {"type": "boolean", "description": "Limiter aux applications Odoo", "default": False},
+        "limit": {"type": "integer", "default": 300},
+    }}},
+    {**_TOOL_INSPECT_SECURITY, "input_schema": {"type": "object", "required": ["model"], "properties": {
+        "model": {"type": "string", "description": "Modèle Odoo, ex 'sale.order'"},
+    }}},
+    {**_TOOL_INSPECT_MENUS, "input_schema": {"type": "object", "properties": {
+        "model": {"type": "string", "description": "Modèle Odoo ciblé, ex 'sale.order'", "default": ""},
+        "query": {"type": "string", "description": "Texte optionnel à chercher dans les noms de menus/actions", "default": ""},
+        "limit": {"type": "integer", "default": 80},
     }}},
     {**_TOOL_SEARCH_SRC, "input_schema": {"type": "object", "required": ["pattern"], "properties": {
         "pattern":    {"type": "string", "description": "Texte ou regex à chercher (ex: 'sale_line_id', 'class AccountMove', '_name = ')"},
@@ -244,9 +313,32 @@ TOOLS_OPENAI = [
         "model":  {"type": "string"},
         "domain": {"type": "array", "items": {}, "default": []},
     }}}},
+    {"type": "function", "function": {**_TOOL_READ_GROUP, "parameters": {"type": "object", "required": ["model", "fields", "groupby"], "properties": {
+        "model":  {"type": "string"},
+        "domain": {"type": "array", "items": {}, "default": []},
+        "fields": {"type": "array", "items": {"type": "string"}},
+        "groupby": {"type": "array", "items": {"type": "string"}},
+        "limit": {"type": "integer", "default": 80},
+        "offset": {"type": "integer", "default": 0},
+        "orderby": {"type": "string", "default": ""},
+        "lazy": {"type": "boolean", "default": True},
+    }}}},
     {"type": "function", "function": {**_TOOL_FIELDS, "parameters": {"type": "object", "required": ["model"], "properties": {
         "model": {"type": "string"},
         "field_names": {"type": "array", "items": {"type": "string"}, "default": []},
+    }}}},
+    {"type": "function", "function": {**_TOOL_INSTALLED_MODULES, "parameters": {"type": "object", "properties": {
+        "filter": {"type": "string", "default": ""},
+        "apps_only": {"type": "boolean", "default": False},
+        "limit": {"type": "integer", "default": 300},
+    }}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_SECURITY, "parameters": {"type": "object", "required": ["model"], "properties": {
+        "model": {"type": "string"},
+    }}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_MENUS, "parameters": {"type": "object", "properties": {
+        "model": {"type": "string", "default": ""},
+        "query": {"type": "string", "default": ""},
+        "limit": {"type": "integer", "default": 80},
     }}}},
     {"type": "function", "function": {**_TOOL_SEARCH_SRC, "parameters": {"type": "object", "required": ["pattern"], "properties": {
         "pattern":    {"type": "string"},
@@ -281,10 +373,29 @@ TOOLS_GEMINI = [
              "parameters": {"type": "object", "required": ["model"], "properties": {
                  "model":  {"type": "string"}, "domain": {"type": "array"},
              }}},
+            {"name": "read_group_odoo", "description": _TOOL_READ_GROUP["description"],
+             "parameters": {"type": "object", "required": ["model", "fields", "groupby"], "properties": {
+                 "model": {"type": "string"}, "domain": {"type": "array"},
+                 "fields": {"type": "array"}, "groupby": {"type": "array"},
+                 "limit": {"type": "integer"}, "offset": {"type": "integer"},
+                 "orderby": {"type": "string"}, "lazy": {"type": "boolean"},
+             }}},
             {"name": "get_odoo_fields", "description": _TOOL_FIELDS["description"],
              "parameters": {"type": "object", "required": ["model"], "properties": {
                  "model": {"type": "string"},
                  "field_names": {"type": "array"},
+             }}},
+            {"name": "inspect_installed_modules", "description": _TOOL_INSTALLED_MODULES["description"],
+             "parameters": {"type": "object", "properties": {
+                 "filter": {"type": "string"}, "apps_only": {"type": "boolean"}, "limit": {"type": "integer"},
+             }}},
+            {"name": "inspect_security", "description": _TOOL_INSPECT_SECURITY["description"],
+             "parameters": {"type": "object", "required": ["model"], "properties": {
+                 "model": {"type": "string"},
+             }}},
+            {"name": "inspect_menus_actions", "description": _TOOL_INSPECT_MENUS["description"],
+             "parameters": {"type": "object", "properties": {
+                 "model": {"type": "string"}, "query": {"type": "string"}, "limit": {"type": "integer"},
              }}},
             {"name": "search_odoo_source", "description": _TOOL_SEARCH_SRC["description"],
              "parameters": {"type": "object", "required": ["pattern"], "properties": {
@@ -387,10 +498,16 @@ _REPO_INPUT_SCHEMA_READ = {"type": "object", "required": ["path"], "properties":
     "start_line": {"type": "integer", "description": "Première ligne à lire", "default": 1},
     "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + 150)", "default": 0},
 }}
+_REPO_INPUT_SCHEMA_MODULES = {"type": "object", "properties": {
+    "path": {"type": "string", "description": "Sous-dossier optionnel à scanner", "default": ""},
+    "include_invalid": {"type": "boolean", "description": "Inclure les manifests invalides dans le résultat", "default": True},
+    "limit": {"type": "integer", "description": "Nombre max de modules retournés", "default": 300},
+}}
 
 REPO_TOOLS_CLAUDE = [
     {**_TOOL_SEARCH_REPO, "input_schema": _REPO_INPUT_SCHEMA_SEARCH},
     {**_TOOL_READ_REPO,   "input_schema": _REPO_INPUT_SCHEMA_READ},
+    {**_TOOL_LIST_PROJECT_MODULES, "input_schema": _REPO_INPUT_SCHEMA_MODULES},
 ]
 REPO_TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_SEARCH_REPO, "parameters": {"type": "object", "required": ["pattern"], "properties": {
@@ -400,6 +517,11 @@ REPO_TOOLS_OPENAI = [
     }}}},
     {"type": "function", "function": {**_TOOL_READ_REPO, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0},
+    }}}},
+    {"type": "function", "function": {**_TOOL_LIST_PROJECT_MODULES, "parameters": {"type": "object", "properties": {
+        "path": {"type": "string", "default": ""},
+        "include_invalid": {"type": "boolean", "default": True},
+        "limit": {"type": "integer", "default": 300},
     }}}},
 ]
 REPO_FUNCTION_DECLARATIONS = [
@@ -411,6 +533,10 @@ REPO_FUNCTION_DECLARATIONS = [
     {"name": "read_project_file", "description": _TOOL_READ_REPO["description"],
      "parameters": {"type": "object", "required": ["path"], "properties": {
          "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"},
+     }}},
+    {"name": "list_project_modules", "description": _TOOL_LIST_PROJECT_MODULES["description"],
+     "parameters": {"type": "object", "properties": {
+         "path": {"type": "string"}, "include_invalid": {"type": "boolean"}, "limit": {"type": "integer"},
      }}},
 ]
 
@@ -1063,10 +1189,15 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
         parts.append(
             f"### Code source du projet client\n"
             f"Disponible : `{repo_path}`. Modules custom et configurations spécifiques au client.\n"
-            "→ Pour découvrir les modules custom, commence TOUJOURS par :\n"
-            "  `search_project_source(pattern=\"name\", file_types=[\"__manifest__.py\"])`\n"
-            "Puis `read_project_file` pour lire les fichiers pertinents. "
-            "Ne cherche PAS `__manifest__.py` comme pattern — c'est un nom de fichier, pas du contenu.\n"
+            "→ Pour découvrir les modules custom, commence par `list_project_modules` "
+            "(manifests parsés proprement), puis `read_project_file` pour lire les fichiers pertinents. "
+            "Si tu utilises la recherche brute, ne cherche PAS `__manifest__.py` comme pattern — "
+            "c'est un nom de fichier, pas du contenu.\n"
+            "SÉCURITÉ — si la question mentionne droits, ACL, record rules, groupes ou sécurité "
+            "dans les modules custom, utilise `list_project_modules`, puis cherche `ir.model.access`, "
+            "`ir.rule`, `groups_id`, `security/` ou les CSV/XML de sécurité avec "
+            "`search_project_source`, lis les fichiers avec `read_project_file`, et complète avec "
+            "`inspect_security` sur les modèles concernés lorsque l'instance live est connectée.\n"
             "Pour inspecter un commit précis du dépôt projet : `git_show_commit(sha=..., scope='project')`."
         )
 
@@ -1101,6 +1232,7 @@ _DATA_PLAYBOOK = """## Exploration des données — méthode
 
 ### Boucle d'exploration
 - Pour une question d'exploration de données, enchaîne plusieurs appels d'outils (introspecter → essayer → corriger → conclure) AVANT de rendre la main. Ne demande pas la permission de continuer entre deux requêtes en lecture seule — explore, puis réponds avec le récap final.
+- Pour un KPI ou une synthèse par période/statut/responsable, utilise `read_group_odoo` plutôt que de télécharger un échantillon avec `query_odoo` et additionner toi-même.
 - Si après ~6 tentatives la piste reste bloquée, alors signale honnêtement ce qui a été tenté et ce qui manque, plutôt que d'inventer.
 """
 
@@ -1865,6 +1997,118 @@ async def _inspect_studio(args: dict, odoo: "OdooClient") -> dict:
     )
 
 
+async def _inspect_installed_modules(args: dict, odoo: "OdooClient") -> dict:
+    loop = asyncio.get_event_loop()
+    filter_text = (args.get("filter") or "").casefold().strip()
+    apps_only = bool(args.get("apps_only") or False)
+    try:
+        limit = max(1, min(int(args.get("limit") or 300), 1000))
+    except (TypeError, ValueError):
+        limit = 300
+    domain = [["state", "=", "installed"]]
+    if apps_only:
+        domain.append(["application", "=", True])
+    modules = await loop.run_in_executor(None, lambda: odoo.search_read(
+        "ir.module.module",
+        domain,
+        ["name", "shortdesc", "author", "installed_version", "application", "category_id"],
+        limit=limit,
+        order="application desc, name asc",
+    ))
+    if filter_text:
+        modules = [
+            m for m in modules
+            if filter_text in " ".join(str(m.get(k) or "") for k in ("name", "shortdesc", "author", "category_id")).casefold()
+        ]
+    custom_markers = ("custom", "odoo sh", "odoo.sh", "studio", "client")
+    for module in modules:
+        author = str(module.get("author") or "").casefold()
+        name = str(module.get("name") or "")
+        module["likely_custom"] = bool(name.startswith("x_") or any(marker in author for marker in custom_markers))
+    apps = [m for m in modules if m.get("application")]
+    return {
+        "ok": True,
+        "count": len(modules),
+        "applications_count": len(apps),
+        "likely_custom_count": sum(1 for m in modules if m.get("likely_custom")),
+        "modules": modules,
+    }
+
+
+async def _inspect_security(args: dict, odoo: "OdooClient") -> dict:
+    loop = asyncio.get_event_loop()
+    model = (args.get("model") or "").strip()
+    if not model:
+        return {"ok": False, "error": "Paramètre model obligatoire"}
+    models = await loop.run_in_executor(None, lambda: odoo.search_read(
+        "ir.model", [["model", "=", model]], ["name", "model", "transient"], limit=1
+    ))
+    if not models:
+        return {"ok": False, "error": f"Modèle introuvable dans ir.model : {model}"}
+    model_id = models[0]["id"]
+    acl = await loop.run_in_executor(None, lambda: odoo.search_read(
+        "ir.model.access",
+        [["model_id", "=", model_id]],
+        ["name", "group_id", "perm_read", "perm_write", "perm_create", "perm_unlink", "active"],
+        limit=200,
+        order="name asc",
+    ))
+    rules = await loop.run_in_executor(None, lambda: odoo.search_read(
+        "ir.rule",
+        [["model_id", "=", model_id]],
+        ["name", "domain_force", "groups", "perm_read", "perm_write", "perm_create", "perm_unlink", "active", "global"],
+        limit=200,
+        order="name asc",
+    ))
+    return {"ok": True, "model": models[0], "access_controls": acl, "record_rules": rules}
+
+
+async def _inspect_menus_actions(args: dict, odoo: "OdooClient") -> dict:
+    loop = asyncio.get_event_loop()
+    model = (args.get("model") or "").strip()
+    query = (args.get("query") or "").strip()
+    try:
+        limit = max(1, min(int(args.get("limit") or 80), 300))
+    except (TypeError, ValueError):
+        limit = 80
+
+    action_domain = []
+    if model:
+        action_domain.append(["res_model", "=", model])
+    if query:
+        action_domain.append(["name", "ilike", query])
+    actions = await loop.run_in_executor(None, lambda: odoo.search_read(
+        "ir.actions.act_window",
+        action_domain,
+        ["name", "res_model", "view_mode", "views", "domain", "context", "target"],
+        limit=limit,
+        order="name asc",
+    ))
+    action_refs = [f"ir.actions.act_window,{a['id']}" for a in actions if a.get("id")]
+    menu_domain = []
+    if action_refs:
+        menu_domain = [["action", "in", action_refs]]
+    elif query:
+        menu_domain = [["name", "ilike", query]]
+    menus = []
+    if menu_domain:
+        menus = await loop.run_in_executor(None, lambda: odoo.search_read(
+            "ir.ui.menu",
+            menu_domain,
+            ["name", "complete_name", "parent_id", "action", "groups_id", "active"],
+            limit=limit,
+            order="complete_name asc",
+        ))
+    return {
+        "ok": True,
+        "model": model or None,
+        "query": query or None,
+        "actions": actions,
+        "menus": menus,
+        "note": None if actions or menus else "Aucun menu/action trouvé avec ces critères.",
+    }
+
+
 # ── Tool executor ────────────────────────────────────────────────
 
 async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None, repo_path: Optional[str] = None, target_path: Optional[str] = None) -> dict:
@@ -1888,6 +2132,19 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
                 args["model"], args.get("domain", [])
             ))
             return {"ok": True, "count": count}
+
+        elif name == "read_group_odoo":
+            rows = await loop.run_in_executor(None, lambda: odoo.read_group(
+                args["model"],
+                args.get("domain", []),
+                args.get("fields", []),
+                args.get("groupby", []),
+                min(int(args.get("limit", 80)), 500),
+                max(int(args.get("offset", 0)), 0),
+                args.get("orderby", ""),
+                bool(args.get("lazy", True)),
+            ))
+            return {"ok": True, "count": len(rows), "groups": rows}
 
         elif name == "get_odoo_fields":
             attrs = ["string", "type", "relation", "relation_field",
@@ -1936,6 +2193,21 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
                              "Rappelle get_odoo_fields avec field_names=[...] pour le détail complet.")
                             if len(raw) > 150 else None}
 
+        elif name == "inspect_installed_modules":
+            if odoo is None:
+                return {"ok": False, "error": "Connexion Odoo requise pour inspecter les modules installés"}
+            return await _inspect_installed_modules(args, odoo)
+
+        elif name == "inspect_security":
+            if odoo is None:
+                return {"ok": False, "error": "Connexion Odoo requise pour inspecter la sécurité"}
+            return await _inspect_security(args, odoo)
+
+        elif name == "inspect_menus_actions":
+            if odoo is None:
+                return {"ok": False, "error": "Connexion Odoo requise pour inspecter menus et actions"}
+            return await _inspect_menus_actions(args, odoo)
+
         elif name == "search_odoo_source":
             if not source_path:
                 return {"ok": False, "error": "Code source non disponible — installez les sources depuis la page Sources"}
@@ -1955,6 +2227,17 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
             if not repo_path:
                 return {"ok": False, "error": "Code source du projet non disponible"}
             return await _read_odoo_file(args, repo_path, include_enterprise=False)
+
+        elif name == "list_project_modules":
+            if not repo_path:
+                return {"ok": False, "error": "Code source du projet non disponible — clonez le dépôt depuis la fiche projet"}
+            from ..skills.project_modules import list_project_modules
+            return list_project_modules(
+                repo_path,
+                path=args.get("path") or "",
+                include_invalid=bool(args.get("include_invalid", True)),
+                limit=max(1, min(int(args.get("limit") or 300), 1000)),
+            )
 
         elif name == "search_target_source":
             if not target_path:
@@ -2286,6 +2569,7 @@ async def stream_chat(
     target_version: Optional[str] = None,
     perspective: str = PERSPECTIVE_TECHNICAL,
     response_language: str = "auto",
+    disabled_tools: Optional[list] = None,
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
     # If client sent "auto", infer server-side from the last user message
@@ -2382,6 +2666,33 @@ async def stream_chat(
             tools_g[0]["function_declarations"]
             + STUDIO_FUNCTION_DECLARATIONS + VIEW_FUNCTION_DECLARATIONS
         )}]
+
+    # ── Filtrage des skills désactivés par l'utilisateur ─────────────
+    _disabled = set(disabled_tools or [])
+    if _disabled:
+        tools_c = [t for t in tools_c if t.get("name") not in _disabled]
+        tools_o = [t for t in tools_o if t.get("function", {}).get("name") not in _disabled]
+        if tools_g and tools_g[0].get("function_declarations"):
+            tools_g = [{"function_declarations": [
+                fd for fd in tools_g[0]["function_declarations"]
+                if fd.get("name") not in _disabled
+            ]}]
+
+        # Ajouter un rappel dans le prompt système pour que l'IA suggère
+        # de réactiver les skills désactivés quand cela améliorerait la réponse.
+        _disabled_labels = ", ".join(sorted(_disabled))
+        _hint = (
+            f"\n\n## Skills désactivés par l'utilisateur\n"
+            f"Les outils suivants ont été désactivés : {_disabled_labels}. "
+            "Si la question de l'utilisateur bénéficierait d'un de ces outils, "
+            "mentionne-le brièvement et invite-le à les réactiver dans "
+            "Paramètres → Skills."
+        )
+        if isinstance(system, tuple):
+            # Claude : (stable, variable) — on ajoute au bloc variable (ephémère)
+            system = (system[0], system[1] + _hint)
+        else:
+            system = system + _hint
 
     if provider == "claude":
         async for evt in _chat_claude(api_key, model, system, messages, odoo, source_path, tools_c, repo_path, target_path):

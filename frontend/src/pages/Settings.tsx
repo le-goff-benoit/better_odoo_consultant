@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, Database, Eye, EyeOff, FileText, FolderOpen, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, UserRound, X } from 'lucide-react'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
+import { Check, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, Sparkles, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -91,7 +91,7 @@ interface CopilotFlowState {
   error?: string
 }
 
-type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage'
+type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage' | 'skills'
 
 export default function Settings() {
   const lang = useUiLanguage()
@@ -99,13 +99,13 @@ export default function Settings() {
   const c = {
     fr: {
       title: 'Paramètres',
-      tabs: { profile: 'Profil', api: 'Clés API', context: 'Contexte IA', interface: 'Interface', storage: 'Stockage' },
+      tabs: { profile: 'Profil', api: 'Clés API', context: 'Contexte IA', interface: 'Interface', storage: 'Stockage', skills: 'Skills' },
       profileIntro: "Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.",
       contextIntro: "Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier.",
     },
     en: {
       title: 'Settings',
-      tabs: { profile: 'Profile', api: 'API keys', context: 'AI context', interface: 'Interface', storage: 'Storage' },
+      tabs: { profile: 'Profile', api: 'API keys', context: 'AI context', interface: 'Interface', storage: 'Storage', skills: 'Skills' },
       profileIntro: 'Customize your identity and interface appearance. Your name and role are injected into the AI assistant context.',
       contextIntro: 'These Markdown files are injected into the assistant system prompt. Edit them to adapt the business context.',
     },
@@ -115,6 +115,7 @@ export default function Settings() {
     { id: 'profile' as const,   label: c.tabs.profile, icon: <UserRound size={15} /> },
     { id: 'api' as const,       label: c.tabs.api, icon: <KeyRound size={15} /> },
     { id: 'context' as const,   label: c.tabs.context, icon: <FileText size={15} /> },
+    { id: 'skills' as const,    label: c.tabs.skills, icon: <Zap size={15} /> },
     { id: 'interface' as const, label: c.tabs.interface, icon: <LayoutPanelTop size={15} /> },
     { id: 'storage' as const,   label: c.tabs.storage, icon: <Database size={15} /> },
   ]
@@ -148,6 +149,8 @@ export default function Settings() {
       {tab === 'interface' && <InterfaceSection />}
 
       {tab === 'storage' && <StorageSection />}
+
+      {tab === 'skills' && <SkillsSection />}
 
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
     </div>
@@ -270,6 +273,526 @@ function StorageSection() {
       }}>
         <strong style={{ color: t.text }}>{c.securityTitle}</strong> {c.security}
       </div>
+    </section>
+  )
+}
+
+// ── Skills section ────────────────────────────────────────────────
+
+type SkillGroup = 'live' | 'src' | 'target' | 'repo'
+
+interface SkillMeta {
+  label: string
+  labelEn: string
+  group: SkillGroup
+  desc: string
+  descEn: string
+  req: string
+  reqEn: string
+  contextFile?: string
+}
+
+interface ApiSkill {
+  name: string
+  label: string
+  label_en: string
+  group: SkillGroup
+  description: string
+  description_en: string
+  requirement: string
+  requirement_en: string
+  context_file: string
+}
+
+const SKILLS_META: Record<string, SkillMeta> = {
+  query_odoo: {
+    label: 'Requêter Odoo', labelEn: 'Query Odoo',
+    group: 'live',
+    desc: 'Rechercher des enregistrements via search_read (commandes, factures, contacts…)',
+    descEn: 'Fetch records via search_read (orders, invoices, contacts…)',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-query-odoo.md',
+  },
+  count_odoo: {
+    label: 'Compter enregistrements', labelEn: 'Count records',
+    group: 'live',
+    desc: 'Compter les enregistrements correspondant à un domaine de filtrage',
+    descEn: 'Count records matching a filter domain',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-count-odoo.md',
+  },
+  read_group_odoo: {
+    label: 'Agréger des données', labelEn: 'Aggregate data',
+    group: 'live',
+    desc: 'Calculer des agrégats fiables par période, statut, commercial, journal...',
+    descEn: 'Compute reliable aggregates by period, status, salesperson, journal...',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-read-group-odoo.md',
+  },
+  get_odoo_fields: {
+    label: 'Inspecter les champs', labelEn: 'Inspect fields',
+    group: 'live',
+    desc: 'Lister les champs d\'un modèle, y compris les champs custom Studio (x_*)',
+    descEn: 'List model fields, including Studio custom fields (x_*)',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-get-odoo-fields.md',
+  },
+  inspect_installed_modules: {
+    label: 'Modules installés', labelEn: 'Installed modules',
+    group: 'live',
+    desc: 'Lister applications, modules techniques, versions et modules custom probables',
+    descEn: 'List apps, technical modules, versions and likely custom modules',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-inspect-installed-modules.md',
+  },
+  inspect_security: {
+    label: 'Inspecter la sécurité', labelEn: 'Inspect security',
+    group: 'live',
+    desc: 'Lire ACL, record rules et groupes associés à un modèle',
+    descEn: 'Read ACLs, record rules and groups attached to a model',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-inspect-security.md',
+  },
+  inspect_menus_actions: {
+    label: 'Menus et actions', labelEn: 'Menus and actions',
+    group: 'live',
+    desc: 'Retrouver les menus et actions qui exposent un modèle ou un écran',
+    descEn: 'Find menus and actions exposing a model or screen',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-inspect-menus-actions.md',
+  },
+  inspect_studio: {
+    label: 'Audit Studio', labelEn: 'Studio audit',
+    group: 'live',
+    desc: 'Inventorier toutes les personnalisations Odoo Studio : modèles, champs, vues, menus, automations',
+    descEn: 'Inventory all Odoo Studio customizations: models, fields, views, menus, automations',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-inspect-studio.md',
+  },
+  inspect_odoo_view: {
+    label: 'Inspecter une vue', labelEn: 'Inspect a view',
+    group: 'live',
+    desc: 'Lire l\'arch XML assemblé d\'une vue (form, liste, kanban…) après héritage complet',
+    descEn: 'Read the assembled XML arch of a view (form, list, kanban…) after full inheritance',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-inspect-odoo-view.md',
+  },
+  inspect_odoo_report: {
+    label: 'Inspecter un rapport', labelEn: 'Inspect a report',
+    group: 'live',
+    desc: 'Lire le template QWeb et la mise en page d\'un rapport PDF de l\'instance',
+    descEn: 'Read the QWeb template and layout of a PDF report from the instance',
+    req: 'Connexion Odoo active', reqEn: 'Active Odoo connection',
+    contextFile: 'skill-inspect-odoo-report.md',
+  },
+  search_odoo_source: {
+    label: 'Chercher dans les sources', labelEn: 'Search source code',
+    group: 'src',
+    desc: 'Grep dans le code source Odoo Community/Enterprise téléchargé localement',
+    descEn: 'Grep in locally downloaded Odoo Community/Enterprise source code',
+    req: 'Sources Odoo téléchargées', reqEn: 'Downloaded Odoo sources',
+    contextFile: 'skill-search-odoo-source.md',
+  },
+  read_odoo_file: {
+    label: 'Lire un fichier source', labelEn: 'Read a source file',
+    group: 'src',
+    desc: 'Lire le contenu d\'un fichier des sources Odoo (modèle, vue, controller…)',
+    descEn: 'Read the content of an Odoo source file (model, view, controller…)',
+    req: 'Sources Odoo téléchargées', reqEn: 'Downloaded Odoo sources',
+    contextFile: 'skill-read-odoo-file.md',
+  },
+  git_show_commit: {
+    label: 'Voir un commit', labelEn: 'Show a commit',
+    group: 'src',
+    desc: 'Afficher le diff complet d\'un commit Odoo ou projet par son SHA',
+    descEn: 'Display the full diff of an Odoo or project commit by its SHA',
+    req: 'Sources Odoo téléchargées', reqEn: 'Downloaded Odoo sources',
+    contextFile: 'skill-git-show-commit.md',
+  },
+  search_target_source: {
+    label: 'Chercher dans la cible', labelEn: 'Search target source',
+    group: 'target',
+    desc: 'Rechercher dans les sources Odoo de la version cible en migration',
+    descEn: 'Search Odoo source code for the migration target version',
+    req: 'Sources cible téléchargées', reqEn: 'Downloaded target sources',
+    contextFile: 'skill-search-target-source.md',
+  },
+  read_target_file: {
+    label: 'Lire un fichier cible', labelEn: 'Read target file',
+    group: 'target',
+    desc: 'Lire un fichier des sources Odoo de la version cible',
+    descEn: 'Read a source file from the migration target version',
+    req: 'Sources cible téléchargées', reqEn: 'Downloaded target sources',
+    contextFile: 'skill-read-target-file.md',
+  },
+  search_project_source: {
+    label: 'Chercher dans le projet', labelEn: 'Search project code',
+    group: 'repo',
+    desc: 'Grep dans le dépôt custom du client (modules, overrides, configurations)',
+    descEn: 'Grep in the client\'s custom repository (modules, overrides, configurations)',
+    req: 'Dépôt GitHub cloné', reqEn: 'Cloned GitHub repository',
+    contextFile: 'skill-search-project-source.md',
+  },
+  read_project_file: {
+    label: 'Lire un fichier projet', labelEn: 'Read a project file',
+    group: 'repo',
+    desc: 'Lire un fichier du module custom du client',
+    descEn: 'Read a file from the client\'s custom module',
+    req: 'Dépôt GitHub cloné', reqEn: 'Cloned GitHub repository',
+    contextFile: 'skill-read-project-file.md',
+  },
+  list_project_modules: {
+    label: 'Modules projet', labelEn: 'Project modules',
+    group: 'repo',
+    desc: 'Parser les manifests du dépôt client pour lister modules et dépendances',
+    descEn: 'Parse client repository manifests to list modules and dependencies',
+    req: 'Dépôt GitHub cloné', reqEn: 'Cloned GitHub repository',
+    contextFile: 'skill-list-project-modules.md',
+  },
+  count_source_lines: {
+    label: 'Compter les lignes', labelEn: 'Count lines',
+    group: 'repo',
+    desc: 'Comptage exhaustif des LOC par module, extension ou dossier',
+    descEn: 'Exhaustive LOC count by module, extension or directory',
+    req: 'Sources ou dépôt disponible', reqEn: 'Sources or repository available',
+    contextFile: 'skill-count-source-lines.md',
+  },
+}
+
+const SKILL_GROUPS: { id: SkillGroup; label: string; labelEn: string; color: string }[] = [
+  { id: 'live', label: 'Données live',    labelEn: 'Live data',    color: '#2563EB' },
+  { id: 'src',  label: 'Code source',     labelEn: 'Source code',  color: '#7C3AED' },
+  { id: 'target', label: 'Migration cible', labelEn: 'Migration target', color: '#9333EA' },
+  { id: 'repo', label: 'Code projet',     labelEn: 'Project code', color: '#D97706' },
+]
+
+function SkillToggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!enabled)}
+      style={{
+        position: 'relative', display: 'inline-flex', alignItems: 'center',
+        width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+        background: enabled ? 'var(--brand, #2563EB)' : 'var(--th-border)',
+        transition: 'background 0.2s',
+        flexShrink: 0,
+      }}
+      title={enabled ? 'Désactiver' : 'Activer'}
+    >
+      <span style={{
+        position: 'absolute', left: enabled ? 20 : 2, top: 2,
+        width: 18, height: 18, borderRadius: '50%', background: '#fff',
+        transition: 'left 0.2s',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+      }} />
+    </button>
+  )
+}
+
+function SkillsSection() {
+  const lang = useUiLanguage()
+  const [disabledTools, setDisabledTools] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+  const [openGroups, setOpenGroups] = useState<Set<SkillGroup>>(new Set(['live', 'src', 'target', 'repo']))
+  const [openContextFor, setOpenContextFor] = useState<string | null>(null)
+  const [contextContent, setContextContent] = useState('')
+  const [contextDirty, setContextDirty] = useState(false)
+  const [contextSaving, setContextSaving] = useState(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { data: skillsData } = useQuery({ queryKey: ['ai-skills'], queryFn: getAiSkills })
+  const { data: userData } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
+  const contextLocale: 'fr' | 'en' = ((userData?.data?.contextLanguage ?? userData?.data?.language) === 'en') ? 'en' : 'fr'
+
+  const c = lang === 'en' ? {
+    title: 'AI skills',
+    intro: 'These are the tools the AI can use to answer your questions. Disable any skill to prevent the AI from using it. When a disabled skill would improve the answer, the AI will suggest re-enabling it.',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    req: 'Requires',
+    context: 'Context',
+    saveContext: 'Save context',
+    saved: 'Saved',
+    allEnabled: 'All skills enabled',
+    someDisabled: (n: number) => `${n} skill${n > 1 ? 's' : ''} disabled`,
+  } : {
+    title: 'Skills IA',
+    intro: 'Ce sont les outils que l\'IA peut utiliser pour répondre à vos questions. Désactivez un skill pour que l\'IA ne l\'utilise plus. Quand un skill désactivé améliorerait la réponse, l\'IA vous suggérera de le réactiver.',
+    enabled: 'Actif',
+    disabled: 'Inactif',
+    req: 'Requiert',
+    context: 'Contexte',
+    saveContext: 'Sauvegarder le contexte',
+    saved: 'Sauvegardé',
+    allEnabled: 'Tous les skills sont actifs',
+    someDisabled: (n: number) => `${n} skill${n > 1 ? 's' : ''} désactivé${n > 1 ? 's' : ''}`,
+  }
+
+  useEffect(() => {
+    getToolConfig().then(r => {
+      const disabled: string[] = r.data?.disabled_tools ?? []
+      setDisabledTools(new Set(disabled))
+    }).catch(() => {})
+  }, [])
+
+  const persistDebounced = useCallback((next: Set<string>) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      setSaving(true)
+      saveToolConfig({ disabled_tools: Array.from(next) })
+        .finally(() => setSaving(false))
+    }, 500)
+  }, [])
+
+  const toggleSkill = useCallback((name: string, enabled: boolean) => {
+    setDisabledTools(prev => {
+      const next = new Set(prev)
+      if (enabled) next.delete(name)
+      else next.add(name)
+      persistDebounced(next)
+      return next
+    })
+  }, [persistDebounced])
+
+  const toggleGroup = (id: SkillGroup) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const disabledCount = disabledTools.size
+  const apiSkills: ApiSkill[] = skillsData?.data?.skills ?? []
+  const skillEntries: [string, SkillMeta][] = apiSkills.length
+    ? apiSkills.map(s => [s.name, {
+      label: s.label,
+      labelEn: s.label_en,
+      group: s.group,
+      desc: s.description,
+      descEn: s.description_en,
+      req: s.requirement,
+      reqEn: s.requirement_en,
+      contextFile: s.context_file,
+    }])
+    : Object.entries(SKILLS_META)
+
+  const toggleContext = async (name: string, file?: string) => {
+    if (!file) return
+    if (openContextFor === name) {
+      setOpenContextFor(null)
+      setContextDirty(false)
+      return
+    }
+    if (contextDirty && !confirm(lang === 'en' ? 'Unsaved context changes. Continue?' : 'Modifications de contexte non sauvegardées. Continuer ?')) return
+    setOpenContextFor(name)
+    setContextDirty(false)
+    setContextContent('')
+    try {
+      const res = await getContextFile(file, contextLocale)
+      setContextContent(res.data.content ?? '')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setContextContent(lang === 'en'
+        ? `# ${file}\n\nUnable to load this skill context.\n\n${msg}`
+        : `# ${file}\n\nImpossible de charger ce contexte de skill.\n\n${msg}`)
+    }
+  }
+
+  const saveSkillContext = async (file?: string) => {
+    if (!file) return
+    setContextSaving(true)
+    try {
+      await saveContextFile(file, contextContent, contextLocale)
+      setContextDirty(false)
+    } finally {
+      setContextSaving(false)
+    }
+  }
+
+  return (
+    <section className="settings-panel">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--th-text)' }}>{c.title}</h3>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--th-muted)', lineHeight: 1.5, maxWidth: 560 }}>{c.intro}</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {saving && <Loader2 size={14} style={{ color: 'var(--th-muted)', animation: 'spin 1s linear infinite' }} />}
+          <span style={{
+            fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 99,
+            background: disabledCount === 0 ? 'var(--th-success, #16A34A)20' : 'var(--th-warning, #D97706)20',
+            color: disabledCount === 0 ? 'var(--th-success, #16A34A)' : 'var(--th-warning, #D97706)',
+            border: `1px solid ${disabledCount === 0 ? 'var(--th-success, #16A34A)40' : 'var(--th-warning, #D97706)40'}`,
+          }}>
+            {disabledCount === 0 ? c.allEnabled : c.someDisabled(disabledCount)}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {SKILL_GROUPS.map(group => {
+          const skills = skillEntries.filter(([, m]) => m.group === group.id)
+          const isOpen = openGroups.has(group.id)
+          const groupDisabled = skills.filter(([name]) => disabledTools.has(name)).length
+          return (
+            <div key={group.id} style={{ border: '1px solid var(--th-border)', borderRadius: 10, overflow: 'hidden' }}>
+              <button
+                onClick={() => toggleGroup(group.id)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 14px', background: 'var(--th-bg-muted)', border: 'none',
+                  cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 24, height: 24, borderRadius: 6, background: `${group.color}18`,
+                  color: group.color, flexShrink: 0,
+                }}>
+                  <Wrench size={13} />
+                </span>
+                <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--th-text)', flex: 1 }}>
+                  {lang === 'en' ? group.labelEn : group.label}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--th-muted)', marginRight: 6 }}>
+                  {groupDisabled > 0
+                    ? (lang === 'en' ? `${groupDisabled} disabled` : `${groupDisabled} désactivé${groupDisabled > 1 ? 's' : ''}`)
+                    : (lang === 'en' ? `${skills.length} active` : `${skills.length} actifs`)
+                  }
+                </span>
+                {isOpen ? <ChevronDown size={14} style={{ color: 'var(--th-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--th-muted)' }} />}
+              </button>
+
+              {isOpen && (
+                <div style={{ borderTop: '1px solid var(--th-border)' }}>
+                  {skills.map(([name, meta], idx) => {
+                    const enabled = !disabledTools.has(name)
+                    return (
+                      <div key={name} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 14,
+                        padding: '12px 14px',
+                        borderBottom: idx < skills.length - 1 ? '1px solid var(--th-border)' : 'none',
+                        background: enabled ? 'transparent' : 'var(--th-bg-muted)',
+                        transition: 'background 0.15s',
+                        opacity: enabled ? 1 : 0.65,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--th-text)' }}>
+                              {lang === 'en' ? meta.labelEn : meta.label}
+                            </span>
+                            <code style={{
+                              fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                              background: `${group.color}15`, color: group.color, fontFamily: 'monospace',
+                            }}>
+                              {name}
+                            </code>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 12, color: 'var(--th-muted)', lineHeight: 1.5 }}>
+                            {lang === 'en' ? meta.descEn : meta.desc}
+                          </p>
+                          <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 11, color: 'var(--th-muted)' }}>
+                              {c.req} :
+                            </span>
+                            <span style={{
+                              fontSize: 11, fontWeight: 500,
+                              color: group.color,
+                            }}>
+                              {lang === 'en' ? meta.reqEn : meta.req}
+                            </span>
+                          </div>
+                          {openContextFor === name && meta.contextFile && (
+                            <div style={{
+                              marginTop: 10,
+                              border: '1px solid var(--th-border)',
+                              borderRadius: 6,
+                              overflow: 'hidden',
+                              background: 'var(--th-bg-muted)',
+                            }}>
+                              <div style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '7px 9px', borderBottom: '1px solid var(--th-border)',
+                                fontSize: 11, color: 'var(--th-muted)',
+                              }}>
+                                <code>{meta.contextFile}</code>
+                                <button
+                                  onClick={() => saveSkillContext(meta.contextFile)}
+                                  disabled={!contextDirty || contextSaving}
+                                  style={{
+                                    padding: '3px 8px',
+                                    border: `1px solid ${contextDirty ? group.color : 'var(--th-border)'}`,
+                                    borderRadius: 4,
+                                    background: contextDirty ? `${group.color}15` : 'transparent',
+                                    color: contextDirty ? group.color : 'var(--th-muted)',
+                                    fontSize: 11,
+                                    cursor: contextDirty ? 'pointer' : 'default',
+                                  }}
+                                >
+                                  {contextSaving ? '…' : c.saveContext}
+                                </button>
+                              </div>
+                              <textarea
+                                value={contextContent}
+                                onChange={e => { setContextContent(e.target.value); setContextDirty(true) }}
+                                style={{
+                                  width: '100%', minHeight: 180, resize: 'vertical',
+                                  border: 'none', outline: 'none', padding: 10,
+                                  background: 'transparent', color: 'var(--th-text)',
+                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                  fontSize: 12, lineHeight: 1.5,
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div style={{
+                          display: 'flex', alignItems: 'stretch', gap: 12,
+                          paddingTop: 2, flexShrink: 0,
+                        }}>
+                          {meta.contextFile && (
+                            <button
+                              onClick={() => toggleContext(name, meta.contextFile)}
+                              style={{
+                                alignSelf: 'flex-start',
+                                padding: '5px 9px',
+                                border: '1px solid var(--th-border)',
+                                borderRadius: 5,
+                                background: openContextFor === name ? `${group.color}15` : 'transparent',
+                                color: openContextFor === name ? group.color : 'var(--th-muted)',
+                                fontSize: 11,
+                                fontWeight: 650,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {c.context}
+                            </button>
+                          )}
+                          <span aria-hidden="true" style={{
+                            width: 1,
+                            alignSelf: 'stretch',
+                            minHeight: 38,
+                            background: 'var(--th-border)',
+                            opacity: 0.9,
+                          }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                            <SkillToggle enabled={enabled} onChange={v => toggleSkill(name, v)} />
+                            <span style={{ fontSize: 10, color: enabled ? 'var(--th-success, #16A34A)' : 'var(--th-muted)', fontWeight: 600 }}>
+                              {enabled ? c.enabled : c.disabled}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </section>
   )
 }
@@ -764,26 +1287,104 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
 
 // ── Context files editor ─────────────────────────────────────────
 
-const KNOWN_FILES = [
-  { name: 'skills.md',          label: 'Compétences consultant', labelEn: 'Consultant skills', icon: '🧠', desc: 'Connaissances métier, patterns courants, approche de diagnostic', descEn: 'Business knowledge, common patterns, diagnostic approach' },
-  { name: 'meeting-minute.md',  label: 'Modèle compte-rendu', labelEn: 'Meeting minutes template', icon: '📝', desc: 'Template utilisé par le bouton "Meeting Minute" dans le chat', descEn: 'Template used by the "Meeting Minute" button in chat' },
-  { name: 'migration.md',       label: 'Méthodologie migration', labelEn: 'Migration methodology', icon: '⇄',  desc: 'Checklist et breaking changes injectés dans l\'assistant Migration', descEn: 'Checklist and breaking changes injected into the Migration assistant' },
-  { name: 'studio.md',          label: 'Inspection Studio', labelEn: 'Studio inspection', icon: '🎨', desc: 'Guide d\'interprétation des personnalisations Studio (modèles, champs, vues, automatisations)', descEn: 'Interpretation guide for Studio customizations (models, fields, views, automations)' },
-  { name: 'creation.md',        label: 'Méthodologie création', labelEn: 'Creation methodology', icon: '🪄', desc: 'Conventions et méthodologie injectées dans l\'outil Création (changeset Studio, dry-run, versions)', descEn: 'Conventions and methodology injected into the Creator tool (Studio changeset, dry-run, versions)' },
-  { name: 'profile-support.md', label: 'Profil Support', labelEn: 'Support profile', icon: '🛠️', desc: 'Guidelines de réponse orientées support incident et run.', descEn: 'Response guidelines focused on incident support and operations.' },
-  { name: 'profile-business-analyst.md', label: 'Profil Business Analyst', labelEn: 'Business Analyst profile', icon: '💼', desc: 'Guidelines orientées processus, projet et conseil.', descEn: 'Guidelines focused on process, project and consulting.' },
-  { name: 'profile-architect.md', label: 'Profil Architecte', labelEn: 'Architect profile', icon: '🏗️', desc: 'Guidelines architecture, sécurité, performance et migration.', descEn: 'Architecture, security, performance and migration guidance.' },
-  { name: 'profile-developer.md', label: 'Profil Développeur', labelEn: 'Developer profile', icon: '💻', desc: 'Guidelines techniques code, modèles, vues et tests.', descEn: 'Technical guidance for code, models, views and tests.' },
-  { name: 'l10n_ch.md',          label: 'Localisation CH', labelEn: 'CH localization', icon: '▣', desc: 'Mémo fiscal Suisse injecté quand le pays CH est sélectionné.', descEn: 'Swiss fiscal memo injected when country CH is selected.' },
-  { name: 'l10n_fr.md',          label: 'Localisation FR', labelEn: 'FR localization', icon: '▣', desc: 'Mémo fiscal France injecté quand le pays FR est sélectionné.', descEn: 'French fiscal memo injected when country FR is selected.' },
-  { name: 'l10n_be.md',          label: 'Localisation BE', labelEn: 'BE localization', icon: '▣', desc: 'Mémo fiscal Belgique injecté quand le pays BE est sélectionné.', descEn: 'Belgian fiscal memo injected when country BE is selected.' },
-  { name: 'l10n_lu.md',          label: 'Localisation LU', labelEn: 'LU localization', icon: '▣', desc: 'Mémo fiscal Luxembourg injecté quand le pays LU est sélectionné.', descEn: 'Luxembourg fiscal memo injected when country LU is selected.' },
-  { name: 'odoo-19.0.md',       label: 'Odoo 19.0', labelEn: 'Odoo 19.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
-  { name: 'odoo-18.0.md',       label: 'Odoo 18.0', labelEn: 'Odoo 18.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
-  { name: 'odoo-17.0.md',       label: 'Odoo 17.0', labelEn: 'Odoo 17.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
-  { name: 'odoo-16.0.md',       label: 'Odoo 16.0', labelEn: 'Odoo 16.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
-  { name: 'odoo-15.0.md',       label: 'Odoo 15.0', labelEn: 'Odoo 15.0', icon: '📋', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models' },
+type ContextFileGroup =
+  | 'core'
+  | 'profiles'
+  | 'localization'
+  | 'versions'
+  | 'skills-live'
+  | 'skills-source'
+  | 'skills-target'
+  | 'skills-project'
+
+interface ContextFileMeta {
+  name: string
+  label: string
+  labelEn: string
+  icon: string
+  desc: string
+  descEn: string
+  contextGroup: ContextFileGroup
+}
+
+const SKILL_CONTEXT_GROUP_BY_SKILL_GROUP: Record<SkillGroup, ContextFileGroup> = {
+  live: 'skills-live',
+  src: 'skills-source',
+  target: 'skills-target',
+  repo: 'skills-project',
+}
+
+const SKILL_CONTEXT_FILES = Object.entries(SKILLS_META)
+  .filter(([, meta]) => meta.contextFile)
+  .map(([name, meta]): ContextFileMeta => ({
+    name: meta.contextFile as string,
+    label: `Skill · ${meta.label}`,
+    labelEn: `Skill · ${meta.labelEn}`,
+    icon: 'skill',
+    desc: `Bonnes pratiques d'utilisation de ${name}`,
+    descEn: `Best practices for using ${name}`,
+    contextGroup: SKILL_CONTEXT_GROUP_BY_SKILL_GROUP[meta.group],
+  }))
+
+const KNOWN_FILES: ContextFileMeta[] = [
+  { name: 'skills.md',          label: 'Compétences consultant', labelEn: 'Consultant skills', icon: 'skills', desc: 'Connaissances métier, patterns courants, approche de diagnostic', descEn: 'Business knowledge, common patterns, diagnostic approach', contextGroup: 'core' },
+  { name: 'meeting-minute.md',  label: 'Modèle compte-rendu', labelEn: 'Meeting minutes template', icon: 'document', desc: 'Template utilisé par le bouton "Meeting Minute" dans le chat', descEn: 'Template used by the "Meeting Minute" button in chat', contextGroup: 'core' },
+  { name: 'migration.md',       label: 'Méthodologie migration', labelEn: 'Migration methodology', icon: 'workflow',  desc: 'Checklist et breaking changes injectés dans l\'assistant Migration', descEn: 'Checklist and breaking changes injected into the Migration assistant', contextGroup: 'core' },
+  { name: 'studio.md',          label: 'Inspection Studio', labelEn: 'Studio inspection', icon: 'studio', desc: 'Guide d\'interprétation des personnalisations Studio (modèles, champs, vues, automatisations)', descEn: 'Interpretation guide for Studio customizations (models, fields, views, automations)', contextGroup: 'core' },
+  { name: 'creation.md',        label: 'Méthodologie création', labelEn: 'Creation methodology', icon: 'skill', desc: 'Conventions et méthodologie injectées dans l\'outil Création (changeset Studio, dry-run, versions)', descEn: 'Conventions and methodology injected into the Creator tool (Studio changeset, dry-run, versions)', contextGroup: 'core' },
+  { name: 'profile-support.md', label: 'Profil Support', labelEn: 'Support profile', icon: 'profile', desc: 'Guidelines de réponse orientées support incident et run.', descEn: 'Response guidelines focused on incident support and operations.', contextGroup: 'profiles' },
+  { name: 'profile-business-analyst.md', label: 'Profil Business Analyst', labelEn: 'Business Analyst profile', icon: 'profile', desc: 'Guidelines orientées processus, projet et conseil.', descEn: 'Guidelines focused on process, project and consulting.', contextGroup: 'profiles' },
+  { name: 'profile-architect.md', label: 'Profil Architecte', labelEn: 'Architect profile', icon: 'profile', desc: 'Guidelines architecture, sécurité, performance et migration.', descEn: 'Architecture, security, performance and migration guidance.', contextGroup: 'profiles' },
+  { name: 'profile-developer.md', label: 'Profil Développeur', labelEn: 'Developer profile', icon: 'profile', desc: 'Guidelines techniques code, modèles, vues et tests.', descEn: 'Technical guidance for code, models, views and tests.', contextGroup: 'profiles' },
+  { name: 'l10n_ch.md',          label: 'Localisation CH', labelEn: 'CH localization', icon: 'localization', desc: 'Mémo fiscal Suisse injecté quand le pays CH est sélectionné.', descEn: 'Swiss fiscal memo injected when country CH is selected.', contextGroup: 'localization' },
+  { name: 'l10n_fr.md',          label: 'Localisation FR', labelEn: 'FR localization', icon: 'localization', desc: 'Mémo fiscal France injecté quand le pays FR est sélectionné.', descEn: 'French fiscal memo injected when country FR is selected.', contextGroup: 'localization' },
+  { name: 'l10n_be.md',          label: 'Localisation BE', labelEn: 'BE localization', icon: 'localization', desc: 'Mémo fiscal Belgique injecté quand le pays BE est sélectionné.', descEn: 'Belgian fiscal memo injected when country BE is selected.', contextGroup: 'localization' },
+  { name: 'l10n_lu.md',          label: 'Localisation LU', labelEn: 'LU localization', icon: 'localization', desc: 'Mémo fiscal Luxembourg injecté quand le pays LU est sélectionné.', descEn: 'Luxembourg fiscal memo injected when country LU is selected.', contextGroup: 'localization' },
+  { name: 'odoo-19.0.md',       label: 'Odoo 19.0', labelEn: 'Odoo 19.0', icon: 'document', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models', contextGroup: 'versions' },
+  { name: 'odoo-18.0.md',       label: 'Odoo 18.0', labelEn: 'Odoo 18.0', icon: 'document', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models', contextGroup: 'versions' },
+  { name: 'odoo-17.0.md',       label: 'Odoo 17.0', labelEn: 'Odoo 17.0', icon: 'document', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models', contextGroup: 'versions' },
+  { name: 'odoo-16.0.md',       label: 'Odoo 16.0', labelEn: 'Odoo 16.0', icon: 'document', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models', contextGroup: 'versions' },
+  { name: 'odoo-15.0.md',       label: 'Odoo 15.0', labelEn: 'Odoo 15.0', icon: 'document', desc: 'Notes de version, nouveautés, modèles renommés', descEn: 'Release notes, new features, renamed models', contextGroup: 'versions' },
 ]
+
+const CONTEXT_FILE_GROUPS: { id: ContextFileGroup; label: string; labelEn: string; icon: string }[] = [
+  { id: 'core', label: 'Socle IA', labelEn: 'AI foundation', icon: 'skills' },
+  { id: 'profiles', label: 'Profils de réponse', labelEn: 'Response profiles', icon: 'profile' },
+  { id: 'localization', label: 'Localisations', labelEn: 'Localizations', icon: 'localization' },
+  { id: 'versions', label: 'Notes Odoo', labelEn: 'Odoo notes', icon: 'document' },
+  { id: 'skills-live', label: 'Skills · Données live', labelEn: 'Skills · Live data', icon: 'skill' },
+  { id: 'skills-source', label: 'Skills · Code source', labelEn: 'Skills · Source code', icon: 'workflow' },
+  { id: 'skills-target', label: 'Skills · Migration cible', labelEn: 'Skills · Migration target', icon: 'workflow' },
+  { id: 'skills-project', label: 'Skills · Code projet', labelEn: 'Skills · Project code', icon: 'studio' },
+]
+
+function ContextFileIcon({ type, active }: { type?: string; active: boolean }) {
+  const color = active ? t.brand : t.muted
+  const props = { size: 15, strokeWidth: 1.8, color }
+  const icon = (() => {
+    switch (type) {
+      case 'skills': return <Sparkles {...props} />
+      case 'workflow': return <Workflow {...props} />
+      case 'studio': return <Wrench {...props} />
+      case 'profile': return <UserRound {...props} />
+      case 'localization': return <Globe2 {...props} />
+      case 'skill': return <Zap {...props} />
+      case 'document':
+      default: return <FileText {...props} />
+    }
+  })()
+  return (
+    <span style={{
+      width: 22, height: 22, flexShrink: 0, display: 'inline-flex',
+      alignItems: 'center', justifyContent: 'center',
+      border: `1px solid ${active ? t.brand40 : t.border}`,
+      background: active ? t.brand10 : t.bgMuted,
+      borderRadius: 5,
+    }}>
+      {icon}
+    </span>
+  )
+}
 
 function ContextEditor() {
   const lang = useUiLanguage()
@@ -829,6 +1430,7 @@ function ContextEditor() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [openContextGroups, setOpenContextGroups] = useState<Set<ContextFileGroup>>(new Set())
   const { data: userData } = useQuery({ queryKey: ['user-profile'], queryFn: getUserProfile })
 
   useEffect(() => {
@@ -838,8 +1440,9 @@ function ContextEditor() {
 
   // Include intermediate/custom versions from Sources page
   const customVersions: string[] = (() => { try { return JSON.parse(localStorage.getItem('odoo-custom-versions') ?? '[]') } catch { return [] } })()
-  const allFiles = [
+  const allFiles: ContextFileMeta[] = [
     ...KNOWN_FILES,
+    ...SKILL_CONTEXT_FILES.filter(f => !KNOWN_FILES.some(k => k.name === f.name)),
     ...customVersions
       .filter(v => !KNOWN_FILES.some(f => f.name === `odoo-${v}.md`))
       .sort((a, b) => {
@@ -847,8 +1450,22 @@ function ContextEditor() {
         const [bMaj, bMin = 0] = b.split('.').map(Number)
         return bMaj !== aMaj ? bMaj - aMaj : bMin - aMin
       })
-      .map(v => ({ name: `odoo-${v}.md`, label: `Odoo ${v}`, labelEn: `Odoo ${v}`, icon: '📋', desc: c.intermediateNotes, descEn: c.intermediateNotes })),
+      .map((v): ContextFileMeta => ({
+        name: `odoo-${v}.md`,
+        label: `Odoo ${v}`,
+        labelEn: `Odoo ${v}`,
+        icon: 'document',
+        desc: c.intermediateNotes,
+        descEn: c.intermediateNotes,
+        contextGroup: 'versions',
+      })),
   ]
+  const groupedFiles = CONTEXT_FILE_GROUPS
+    .map(group => ({
+      group,
+      files: allFiles.filter(file => file.contextGroup === group.id),
+    }))
+    .filter(({ files }) => files.length > 0)
 
   const { data: filesData } = useQuery({ queryKey: ['context-files', locale], queryFn: () => listContextFiles(locale) })
   const existingNames: string[] = (filesData?.data ?? []).map((f: { name: string }) => f.name)
@@ -885,33 +1502,88 @@ function ContextEditor() {
 
   const isCustomized = existingNames.includes(selected)
   const currentFile = allFiles.find(f => f.name === selected)
+  const currentLabel = lang === 'en' ? (currentFile?.labelEn ?? selected) : (currentFile?.label ?? selected)
+  const currentDescription = lang === 'en' ? currentFile?.descEn : currentFile?.desc
+  const selectFile = (name: string) => {
+    if (dirty && !confirm(c.unsavedContinue)) return
+    setSelected(name)
+  }
+  const toggleContextGroup = (id: ContextFileGroup) => {
+    setOpenContextGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
       {/* File list */}
-      <div style={{ width: 200, flexShrink: 0 }}>
-        {allFiles.map(f => {
-          const exists = existingNames.includes(f.name)
-          const isActive = f.name === selected
+      <div style={{ width: 240, flexShrink: 0 }}>
+        {groupedFiles.map(({ group, files }) => {
+          const isOpen = openContextGroups.has(group.id)
+          const hasActiveFile = files.some(f => f.name === selected)
+          const customizedCount = files.filter(f => existingNames.includes(f.name)).length
           return (
-            <button key={f.name} onClick={() => { if (dirty && !confirm(c.unsavedContinue)) return; setSelected(f.name) }} style={{
-              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 12px', marginBottom: 4,
-              background: isActive ? t.brand10 : 'transparent',
-              border: `1px solid ${isActive ? t.brand40 : t.border}`,
-              borderRadius: t.radius, cursor: 'pointer',
-              transition: 'all .15s',
-            }}>
-              <span style={{ fontSize: 14 }}>{f.icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? t.brand : t.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {lang === 'en' ? f.labelEn : f.label}
+            <div key={group.id} style={{ marginBottom: 6 }}>
+              <button
+                type="button"
+                onClick={() => toggleContextGroup(group.id)}
+                style={{
+                  width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '9px 10px',
+                  background: hasActiveFile ? t.brand10 : t.bgCard,
+                  border: `1px solid ${hasActiveFile ? t.brand40 : t.border}`,
+                  borderRadius: t.radius, cursor: 'pointer',
+                  transition: 'all .15s',
+                }}
+              >
+                {isOpen ? <ChevronDown size={14} color={hasActiveFile ? t.brand : t.muted} /> : <ChevronRight size={14} color={hasActiveFile ? t.brand : t.muted} />}
+                <ContextFileIcon type={group.icon} active={hasActiveFile} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: hasActiveFile ? t.brand : t.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {lang === 'en' ? group.labelEn : group.label}
+                  </div>
+                  <div style={{ fontSize: 10, color: t.muted }}>
+                    {files.length} {lang === 'en' ? (files.length > 1 ? 'files' : 'file') : (files.length > 1 ? 'fichiers' : 'fichier')}{customizedCount ? ` · ${customizedCount} ${lang === 'en' ? 'custom' : 'modifié'}` : ''}
+                  </div>
                 </div>
-                <div style={{ fontSize: 10, color: t.muted }}>
-                  {exists ? c.customized : c.default}
+              </button>
+              {isOpen && (
+                <div style={{ marginTop: 4, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {files.map(f => {
+                    const exists = existingNames.includes(f.name)
+                    const isActive = f.name === selected
+                    return (
+                      <button
+                        key={f.name}
+                        type="button"
+                        onClick={() => selectFile(f.name)}
+                        style={{
+                          width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '8px 10px',
+                          background: isActive ? t.brand10 : 'transparent',
+                          border: `1px solid ${isActive ? t.brand40 : t.border}`,
+                          borderRadius: t.radius, cursor: 'pointer',
+                          transition: 'all .15s',
+                        }}
+                      >
+                        <ContextFileIcon type={f.icon} active={isActive} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? t.brand : t.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {lang === 'en' ? f.labelEn : f.label}
+                          </div>
+                          <div style={{ fontSize: 10, color: t.muted }}>
+                            {exists ? c.customized : c.default}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
-              </div>
-            </button>
+              )}
+            </div>
           )
         })}
       </div>
@@ -920,8 +1592,8 @@ function ContextEditor() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{lang === 'en' ? currentFile?.labelEn : currentFile?.label ?? selected}</div>
-            <div style={{ fontSize: 12, color: t.muted }}>{lang === 'en' ? currentFile?.descEn : currentFile?.desc}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{currentLabel}</div>
+            <div style={{ fontSize: 12, color: t.muted }}>{currentDescription}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: t.muted }}>
