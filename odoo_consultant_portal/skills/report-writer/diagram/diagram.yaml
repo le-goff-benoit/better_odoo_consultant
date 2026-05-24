@@ -1,0 +1,28 @@
+inputs:
+  - Prompt utilisateur (avec demande de livrable)
+  - Skills sélectionnés sur la conversation
+  - Template forcé via UI (optionnel)
+inputs_en:
+  - User prompt (asking for a deliverable)
+  - Skills selected on the conversation
+  - Template forced via UI (optional)
+steps:
+  - "Détecter le type de livrable via triggers (mot-clé revue/migration/email/spec)"
+  - "Charger le template correspondant depuis templates/"
+  - "Injecter le template en fin de system prompt comme 'FORMAT DE SORTIE'"
+  - "Charger les writing_guidelines à la demande si tonalité incertaine"
+  - "Remplir le template à la lettre — pas de section ajoutée/retirée"
+steps_en:
+  - "Detect deliverable type via triggers (review/migration/email/spec keyword)"
+  - "Load the matching template from templates/"
+  - "Inject the template at the end of the system prompt as 'OUTPUT FORMAT'"
+  - "Load writing_guidelines on demand when tone is uncertain"
+  - "Fill the template strictly — no section added or removed"
+outputs:
+  - Livrable structuré (revue, plan, email ou spec)
+  - Structure prévisible d'un rapport à l'autre
+outputs_en:
+  - Structured deliverable (review, plan, email or spec)
+  - Predictable structure across reports
+notes: "Désactivé → chaque rapport invente sa propre structure ; la comparaison de livrables devient pénible."
+notes_en: "Disabled → each report invents its own structure; comparing deliverables becomes painful."

@@ -1,0 +1,16 @@
+inputs:
+  - Chemin relatif
+  - Version Odoo
+  - Range de lignes optionnel
+inputs_en:
+  - Relative path
+  - Odoo version
+  - Optional line range
+steps:
+  - "Lire le fichier sous ~/.odoo-consultant/sources/<version>"
+steps_en:
+  - "Read the file under ~/.odoo-consultant/sources/<version>"
+outputs:
+  - Contenu (full ou range)
+outputs_en:
+  - Content (full or ranged)

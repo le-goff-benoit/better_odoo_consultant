@@ -1,0 +1,24 @@
+inputs:
+  - Prompt normalisé
+  - Mode (assistant/migration/creator)
+  - Skills désactivés
+inputs_en:
+  - Normalized prompt
+  - Mode (assistant/migration/creator)
+  - Disabled skills
+steps:
+  - "Pour chaque skill tool actif : matcher name et keywords"
+  - "Appliquer les triggers explicites (regex SHA, 'où cliquer'…)"
+  - "Ajouter les defaults selon le mode (creator → vues, studio…)"
+  - Concaténer les playbooks Markdown correspondants
+steps_en:
+  - "For each enabled tool skill: match name and keywords"
+  - "Apply explicit triggers (SHA regex, 'where to click'…)"
+  - "Add mode defaults (creator → views, studio…)"
+  - Concatenate the matching Markdown playbooks
+outputs:
+  - "Bloc 'Skill playbooks' injecté dans le contexte"
+outputs_en:
+  - "'Skill playbooks' block injected into the context"
+notes: "Désactivé → l'IA ne reçoit plus aucune walkthrough d'outil ; elle improvise."
+notes_en: Disabled → the AI no longer receives tool walkthroughs; it improvises.

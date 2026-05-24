@@ -1,0 +1,18 @@
+inputs:
+  - Modèle Odoo
+  - Domaine de filtrage
+  - Champs
+inputs_en:
+  - Odoo model
+  - Filter domain
+  - Fields
+steps:
+  - "Appeler search_read via XML-RPC"
+  - Limiter à la company active
+steps_en:
+  - "Call search_read via XML-RPC"
+  - Restrict to the active company
+outputs:
+  - "Liste d'enregistrements"
+outputs_en:
+  - List of records

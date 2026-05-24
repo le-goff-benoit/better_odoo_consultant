@@ -1,0 +1,16 @@
+inputs:
+  - Nom ou xml_id du rapport
+inputs_en:
+  - Report name or xml_id
+steps:
+  - Lire ir.actions.report
+  - Charger le template QWeb principal
+  - Résoudre les héritages QWeb
+steps_en:
+  - Read ir.actions.report
+  - Load the main QWeb template
+  - Resolve QWeb inheritance
+outputs:
+  - Template assemblé + métadonnées de mise en page
+outputs_en:
+  - Assembled template + layout metadata

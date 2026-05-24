@@ -1,0 +1,16 @@
+inputs:
+  - Connexion Odoo
+inputs_en:
+  - Odoo connection
+steps:
+  - "Filtrer ir.model.data module='studio_customization'"
+  - "Regrouper par type d'objet"
+  - Compter et catégoriser
+steps_en:
+  - "Filter ir.model.data module='studio_customization'"
+  - Group by object type
+  - Count and categorize
+outputs:
+  - Inventaire complet des persos Studio
+outputs_en:
+  - Full inventory of Studio customizations

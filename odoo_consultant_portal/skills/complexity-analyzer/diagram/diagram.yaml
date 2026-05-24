@@ -1,0 +1,22 @@
+inputs:
+  - profile.technical_complexity
+  - Locale UI
+inputs_en:
+  - profile.technical_complexity
+  - UI locale
+steps:
+  - Normaliser le raw en mode (vanilla / studio / dev / studio_dev)
+  - "Construire le bloc Markdown 'Complexité technique'"
+  - "Construire le bloc 'profile tuning' (ton selon le mode)"
+  - Passer les deux en blocs prioritaires (non tronqués)
+steps_en:
+  - Normalize the raw value to a mode (vanilla / studio / dev / studio_dev)
+  - "Build the 'Technical complexity' Markdown block"
+  - "Build the 'profile tuning' block (tone matching the mode)"
+  - Pass both as priority blocks (never trimmed)
+outputs:
+  - 2 blocs prioritaires dans le system prompt
+outputs_en:
+  - 2 priority blocks in the system prompt
+notes: "Désactivé → ton générique, l'IA ne sait pas si le projet est Studio ou full dev."
+notes_en: "Disabled → generic tone, the AI does not know if the project is Studio or full dev."

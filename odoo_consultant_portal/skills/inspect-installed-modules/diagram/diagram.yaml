@@ -1,0 +1,14 @@
+inputs:
+  - Connexion Odoo
+inputs_en:
+  - Odoo connection
+steps:
+  - "search_read ir.module.module state='installed'"
+  - Distinguer apps / techniques / custom
+steps_en:
+  - "search_read ir.module.module state='installed'"
+  - Distinguish apps / technical / custom
+outputs:
+  - Stack technique annotée
+outputs_en:
+  - Annotated tech stack

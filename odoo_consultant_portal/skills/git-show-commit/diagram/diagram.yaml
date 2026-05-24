@@ -1,0 +1,16 @@
+inputs:
+  - SHA (long ou court)
+  - Repo (sources ou projet)
+inputs_en:
+  - SHA (long or short)
+  - Repo (sources or project)
+steps:
+  - Deepen le shallow clone si nécessaire
+  - "git show <sha>"
+steps_en:
+  - Deepen the shallow clone if needed
+  - "git show <sha>"
+outputs:
+  - Diff complet + métadonnées commit
+outputs_en:
+  - Full diff + commit metadata

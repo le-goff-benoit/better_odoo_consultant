@@ -1,0 +1,24 @@
+inputs:
+  - Prompt
+  - Version source
+  - Version cible (migration)
+inputs_en:
+  - Prompt
+  - Source version
+  - Target version (migration)
+steps:
+  - "Détecter une question sensible à la version (migration, 'nouveau')"
+  - "Charger odoo-<X.Y>.md depuis ~/.odoo-consultant/context/"
+  - "Filtrer les sections par domaine (compta, ventes, RH…)"
+  - "Injecter comme section routée dans l'agrégateur"
+steps_en:
+  - "Detect a version-sensitive question (migration, 'new')"
+  - "Load odoo-<X.Y>.md from ~/.odoo-consultant/context/"
+  - "Filter sections by domain (accounting, sales, HR…)"
+  - Inject as a routed section in the aggregator
+outputs:
+  - "Section 'Notes Odoo X.Y' dans le system prompt"
+outputs_en:
+  - "'Odoo X.Y notes' section in the system prompt"
+notes: "Désactivé → l'IA répond sans connaître les ruptures de version."
+notes_en: Disabled → the AI answers without knowing version breaks.

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, KeyRound, LayoutPanelTop, Loader2, RefreshCw, Settings2, Sparkles, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
+import { BookOpen, Check, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileCode2, FileText, FolderOpen, Globe2, HardDrive, KeyRound, Layout, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
+import SkillDiagramModal from '../components/SkillDiagramModal'
+import SkillContentsModal, { type SkillContentKind } from '../components/SkillContentsModal'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import { t } from '../theme'
@@ -279,7 +281,14 @@ function StorageSection() {
 
 // ── Skills section ────────────────────────────────────────────────
 
-type SkillGroup = 'live' | 'src' | 'target' | 'repo'
+type SkillGroup = 'core' | 'live' | 'src' | 'target' | 'repo'
+
+interface SkillPermissionsMeta {
+  filesystem: 'none' | 'read' | 'write'
+  network: boolean
+  scripts: boolean
+  odoo: 'none' | 'read' | 'write'
+}
 
 interface SkillMeta {
   label: string
@@ -290,6 +299,15 @@ interface SkillMeta {
   req: string
   reqEn: string
   contextFile?: string
+  kind?: 'core' | 'tool'
+  builtin?: boolean
+  hasDiagram?: boolean
+  version?: string
+  permissions?: SkillPermissionsMeta
+  references?: string[]
+  templates?: { name: string; label: string; triggers?: string[] }[]
+  examples?: string[]
+  scripts?: string[]
 }
 
 interface ApiSkill {
@@ -302,6 +320,15 @@ interface ApiSkill {
   requirement: string
   requirement_en: string
   context_file: string
+  kind?: 'core' | 'tool'
+  builtin?: boolean
+  diagram?: unknown
+  version?: string
+  permissions?: SkillPermissionsMeta
+  references?: string[]
+  templates?: { name: string; label: string; triggers?: string[] }[]
+  examples?: string[]
+  scripts?: string[]
 }
 
 const SKILLS_META: Record<string, SkillMeta> = {
@@ -460,6 +487,7 @@ const SKILLS_META: Record<string, SkillMeta> = {
 }
 
 const SKILL_GROUPS: { id: SkillGroup; label: string; labelEn: string; color: string }[] = [
+  { id: 'core', label: 'Cœur de l\'app',   labelEn: 'App core',     color: '#7C3AED' },
   { id: 'live', label: 'Données live',    labelEn: 'Live data',    color: '#2563EB' },
   { id: 'src',  label: 'Code source',     labelEn: 'Source code',  color: '#7C3AED' },
   { id: 'target', label: 'Migration cible', labelEn: 'Migration target', color: '#9333EA' },
@@ -493,7 +521,9 @@ function SkillsSection() {
   const lang = useUiLanguage()
   const [disabledTools, setDisabledTools] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
-  const [openGroups, setOpenGroups] = useState<Set<SkillGroup>>(new Set(['live', 'src', 'target', 'repo']))
+  const [openGroups, setOpenGroups] = useState<Set<SkillGroup>>(new Set(['core', 'live', 'src', 'target', 'repo']))
+  const [diagramFor, setDiagramFor] = useState<string | null>(null)
+  const [contentsFor, setContentsFor] = useState<{ name: string; kind: SkillContentKind } | null>(null)
   const [openContextFor, setOpenContextFor] = useState<string | null>(null)
   const [contextContent, setContextContent] = useState('')
   const [contextDirty, setContextDirty] = useState(false)
@@ -505,26 +535,46 @@ function SkillsSection() {
 
   const c = lang === 'en' ? {
     title: 'AI skills',
-    intro: 'These are the tools the AI can use to answer your questions. Disable any skill to prevent the AI from using it. When a disabled skill would improve the answer, the AI will suggest re-enabling it.',
+    intro: 'Every capability of the assistant — from response perspective to live data tools — is a skill. Core skills (purple) are built in and cannot be uninstalled, but you can still disable them; the assistant immediately stops applying that capability.',
     enabled: 'Enabled',
     disabled: 'Disabled',
     req: 'Requires',
     context: 'Context',
+    diagram: 'Diagram',
+    references: 'References',
+    templates: 'Templates',
+    examples: 'Examples',
     saveContext: 'Save context',
     saved: 'Saved',
+    builtin: 'Built-in',
+    permFs: 'Filesystem',
+    permNet: 'Network',
+    permScripts: 'Scripts',
+    permOdoo: 'Odoo',
     allEnabled: 'All skills enabled',
     someDisabled: (n: number) => `${n} skill${n > 1 ? 's' : ''} disabled`,
+    confirmDisableCore: (label: string) => `"${label}" is a core skill of the app. Disabling it removes the corresponding capability from every answer. Continue?`,
   } : {
     title: 'Skills IA',
-    intro: 'Ce sont les outils que l\'IA peut utiliser pour répondre à vos questions. Désactivez un skill pour que l\'IA ne l\'utilise plus. Quand un skill désactivé améliorerait la réponse, l\'IA vous suggérera de le réactiver.',
+    intro: 'Chaque capacité de l\'assistant — du profil de réponse aux outils de données live — est un skill. Les skills cœur (violet) sont intégrés et ne peuvent pas être désinstallés, mais vous pouvez les désactiver : l\'assistant cesse aussitôt d\'appliquer la capacité correspondante.',
     enabled: 'Actif',
     disabled: 'Inactif',
     req: 'Requiert',
     context: 'Contexte',
+    diagram: 'Diagramme',
+    references: 'Références',
+    templates: 'Templates',
+    examples: 'Exemples',
     saveContext: 'Sauvegarder le contexte',
     saved: 'Sauvegardé',
+    builtin: 'Intégré',
+    permFs: 'Système de fichiers',
+    permNet: 'Réseau',
+    permScripts: 'Scripts',
+    permOdoo: 'Odoo',
     allEnabled: 'Tous les skills sont actifs',
     someDisabled: (n: number) => `${n} skill${n > 1 ? 's' : ''} désactivé${n > 1 ? 's' : ''}`,
+    confirmDisableCore: (label: string) => `« ${label} » est un skill cœur de l'application. Le désactiver retire la capacité correspondante de toutes les réponses. Continuer ?`,
   }
 
   useEffect(() => {
@@ -543,7 +593,11 @@ function SkillsSection() {
     }, 500)
   }, [])
 
-  const toggleSkill = useCallback((name: string, enabled: boolean) => {
+  const toggleSkill = useCallback((name: string, enabled: boolean, meta?: SkillMeta) => {
+    if (!enabled && meta?.builtin) {
+      const label = lang === 'en' ? meta.labelEn : meta.label
+      if (!confirm(c.confirmDisableCore(label))) return
+    }
     setDisabledTools(prev => {
       const next = new Set(prev)
       if (enabled) next.delete(name)
@@ -551,7 +605,7 @@ function SkillsSection() {
       persistDebounced(next)
       return next
     })
-  }, [persistDebounced])
+  }, [persistDebounced, lang, c])
 
   const toggleGroup = (id: SkillGroup) => {
     setOpenGroups(prev => {
@@ -563,6 +617,7 @@ function SkillsSection() {
   }
 
   const disabledCount = disabledTools.size
+  const skillsLoaded = !!skillsData
   const apiSkills: ApiSkill[] = skillsData?.data?.skills ?? []
   const skillEntries: [string, SkillMeta][] = apiSkills.length
     ? apiSkills.map(s => [s.name, {
@@ -574,8 +629,17 @@ function SkillsSection() {
       req: s.requirement,
       reqEn: s.requirement_en,
       contextFile: s.context_file,
+      kind: s.kind,
+      builtin: s.builtin,
+      hasDiagram: !!s.diagram,
+      version: s.version,
+      permissions: s.permissions,
+      references: s.references ?? [],
+      templates: s.templates ?? [],
+      examples: s.examples ?? [],
+      scripts: s.scripts ?? [],
     }])
-    : Object.entries(SKILLS_META)
+    : []
 
   const toggleContext = async (name: string, file?: string) => {
     if (!file) return
@@ -630,6 +694,19 @@ function SkillsSection() {
         </div>
       </div>
 
+      {skillsLoaded && apiSkills.length === 0 && (
+        <div style={{
+          padding: '14px 18px', marginBottom: 16,
+          background: 'var(--th-warning-bg, rgba(217,119,6,0.1))',
+          border: '1px solid var(--th-warning-fg, #D97706)',
+          borderRadius: 8, color: 'var(--th-warning-fg, #D97706)',
+          fontSize: 13, lineHeight: 1.5,
+        }}>
+          {lang === 'en'
+            ? 'No skill returned by the API. Restart the backend (./scripts/start.sh) to reload the skill registry, then refresh this page.'
+            : 'Aucun skill renvoyé par l\'API. Redémarrez le backend (./scripts/start.sh) pour recharger le registre des skills, puis rafraîchissez cette page.'}
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {SKILL_GROUPS.map(group => {
           const skills = skillEntries.filter(([, m]) => m.group === group.id)
@@ -678,7 +755,7 @@ function SkillsSection() {
                         opacity: enabled ? 1 : 0.65,
                       }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--th-text)' }}>
                               {lang === 'en' ? meta.labelEn : meta.label}
                             </span>
@@ -688,11 +765,27 @@ function SkillsSection() {
                             }}>
                               {name}
                             </code>
+                            {meta.builtin && (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                                fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase',
+                                padding: '1px 6px', borderRadius: 4,
+                                background: 'rgba(217,119,6,0.12)', color: '#D97706',
+                                border: '1px solid rgba(217,119,6,0.35)',
+                              }}>
+                                <Lock size={9} /> {c.builtin}
+                              </span>
+                            )}
+                            {meta.version && meta.version !== '0.1.0' && (
+                              <span style={{ fontSize: 10, color: 'var(--th-muted)' }}>
+                                v{meta.version}
+                              </span>
+                            )}
                           </div>
                           <p style={{ margin: 0, fontSize: 12, color: 'var(--th-muted)', lineHeight: 1.5 }}>
                             {lang === 'en' ? meta.descEn : meta.desc}
                           </p>
-                          <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 11, color: 'var(--th-muted)' }}>
                               {c.req} :
                             </span>
@@ -702,6 +795,7 @@ function SkillsSection() {
                             }}>
                               {lang === 'en' ? meta.reqEn : meta.req}
                             </span>
+                            {meta.permissions && <PermissionBadges perms={meta.permissions} labels={c} />}
                           </div>
                           {openContextFor === name && meta.contextFile && (
                             <div style={{
@@ -751,24 +845,63 @@ function SkillsSection() {
                           display: 'flex', alignItems: 'stretch', gap: 12,
                           paddingTop: 2, flexShrink: 0,
                         }}>
-                          {meta.contextFile && (
-                            <button
-                              onClick={() => toggleContext(name, meta.contextFile)}
-                              style={{
-                                alignSelf: 'flex-start',
-                                padding: '5px 9px',
-                                border: '1px solid var(--th-border)',
-                                borderRadius: 5,
-                                background: openContextFor === name ? `${group.color}15` : 'transparent',
-                                color: openContextFor === name ? group.color : 'var(--th-muted)',
-                                fontSize: 11,
-                                fontWeight: 650,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {c.context}
-                            </button>
-                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignSelf: 'flex-start' }}>
+                            {meta.contextFile && (
+                              <button
+                                onClick={() => toggleContext(name, meta.contextFile)}
+                                title={c.context}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                                  padding: '5px 9px',
+                                  border: '1px solid var(--th-border)',
+                                  borderRadius: 5,
+                                  background: openContextFor === name ? `${group.color}15` : 'transparent',
+                                  color: openContextFor === name ? group.color : 'var(--th-muted)',
+                                  fontSize: 11,
+                                  fontWeight: 650,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <FileText size={12} /> {c.context}
+                              </button>
+                            )}
+                            {meta.hasDiagram && (
+                              <button
+                                onClick={() => setDiagramFor(name)}
+                                title={c.diagram}
+                                style={contentButtonStyle(false, group.color)}
+                              >
+                                <Workflow size={12} /> {c.diagram}
+                              </button>
+                            )}
+                            {meta.references && meta.references.length > 0 && (
+                              <button
+                                onClick={() => setContentsFor({ name, kind: 'reference' })}
+                                title={c.references}
+                                style={contentButtonStyle(false, '#7C3AED')}
+                              >
+                                <BookOpen size={12} /> {c.references} · {meta.references.length}
+                              </button>
+                            )}
+                            {meta.templates && meta.templates.length > 0 && (
+                              <button
+                                onClick={() => setContentsFor({ name, kind: 'template' })}
+                                title={c.templates}
+                                style={contentButtonStyle(false, '#2563EB')}
+                              >
+                                <Layout size={12} /> {c.templates} · {meta.templates.length}
+                              </button>
+                            )}
+                            {meta.examples && meta.examples.length > 0 && (
+                              <button
+                                onClick={() => setContentsFor({ name, kind: 'example' })}
+                                title={c.examples}
+                                style={contentButtonStyle(false, '#16A34A')}
+                              >
+                                <FileCode2 size={12} /> {c.examples} · {meta.examples.length}
+                              </button>
+                            )}
+                          </div>
                           <span aria-hidden="true" style={{
                             width: 1,
                             alignSelf: 'stretch',
@@ -777,7 +910,7 @@ function SkillsSection() {
                             opacity: 0.9,
                           }} />
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                            <SkillToggle enabled={enabled} onChange={v => toggleSkill(name, v)} />
+                            <SkillToggle enabled={enabled} onChange={v => toggleSkill(name, v, meta)} />
                             <span style={{ fontSize: 10, color: enabled ? 'var(--th-success, #16A34A)' : 'var(--th-muted)', fontWeight: 600 }}>
                               {enabled ? c.enabled : c.disabled}
                             </span>
@@ -793,7 +926,97 @@ function SkillsSection() {
         })}
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <SkillDiagramModal
+        open={!!diagramFor}
+        skillName={diagramFor}
+        onClose={() => setDiagramFor(null)}
+      />
+      {contentsFor && (() => {
+        const meta = skillEntries.find(([n]) => n === contentsFor.name)?.[1]
+        const files = meta
+          ? (contentsFor.kind === 'reference' ? (meta.references ?? [])
+            : contentsFor.kind === 'template' ? (meta.templates ?? []).map(t => `${t.name}.md`)
+            : (meta.examples ?? []))
+          : []
+        return (
+          <SkillContentsModal
+            open={true}
+            skillName={contentsFor.name}
+            skillLabel={lang === 'en' ? meta?.labelEn : meta?.label}
+            kind={contentsFor.kind}
+            files={files}
+            onClose={() => setContentsFor(null)}
+          />
+        )
+      })()}
     </section>
+  )
+}
+
+function contentButtonStyle(active: boolean, accent: string): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '5px 9px',
+    border: `1px solid ${active ? accent : 'var(--th-border)'}`,
+    borderRadius: 5,
+    background: active ? `${accent}15` : 'transparent',
+    color: active ? accent : 'var(--th-muted)',
+    fontSize: 11, fontWeight: 650,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  }
+}
+
+function PermissionBadges({ perms, labels }: {
+  perms: SkillPermissionsMeta
+  labels: { permFs: string; permNet: string; permScripts: string; permOdoo: string }
+}) {
+  const badges: { icon: typeof HardDrive; label: string; value: string; color: string }[] = []
+  if (perms.filesystem !== 'none') {
+    badges.push({
+      icon: HardDrive,
+      label: labels.permFs,
+      value: perms.filesystem,
+      color: perms.filesystem === 'write' ? '#DC2626' : '#16A34A',
+    })
+  }
+  if (perms.network) {
+    badges.push({ icon: Network, label: labels.permNet, value: 'on', color: '#DC2626' })
+  }
+  if (perms.scripts) {
+    badges.push({ icon: Terminal, label: labels.permScripts, value: 'on', color: '#D97706' })
+  }
+  if (perms.odoo !== 'none') {
+    badges.push({
+      icon: Server,
+      label: labels.permOdoo,
+      value: perms.odoo,
+      color: perms.odoo === 'write' ? '#DC2626' : '#16A34A',
+    })
+  }
+  if (badges.length === 0) return null
+  return (
+    <>
+      <span style={{ fontSize: 11, color: 'var(--th-border)', margin: '0 4px' }}>·</span>
+      {badges.map((b, i) => {
+        const Icon = b.icon
+        return (
+          <span
+            key={i}
+            title={`${b.label}: ${b.value}`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              fontSize: 10, fontWeight: 600,
+              padding: '1px 5px', borderRadius: 4,
+              background: `${b.color}15`, color: b.color,
+              border: `1px solid ${b.color}40`,
+            }}
+          >
+            <Icon size={9} /> {b.value}
+          </span>
+        )
+      })}
+    </>
   )
 }
 
@@ -1308,6 +1531,7 @@ interface ContextFileMeta {
 }
 
 const SKILL_CONTEXT_GROUP_BY_SKILL_GROUP: Record<SkillGroup, ContextFileGroup> = {
+  core: 'skills-live',
   live: 'skills-live',
   src: 'skills-source',
   target: 'skills-target',

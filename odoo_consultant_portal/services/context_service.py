@@ -102,6 +102,7 @@ _SECTION_TITLES = {
         "localization": "Localisation fiscale {country}",
         "creator_intent": "Spécificité de l'opération demandée",
         "skill_playbooks": "Mode d'emploi des skills",
+        "examples": "Exemples de tools en situation",
     },
     "en": {
         "skills": "Consultant skills",
@@ -116,6 +117,7 @@ _SECTION_TITLES = {
         "localization": "Fiscal localization {country}",
         "creator_intent": "Operation-specific guidance",
         "skill_playbooks": "Skill playbooks",
+        "examples": "Tool usage examples",
     },
 }
 
@@ -573,15 +575,195 @@ def _select_skill_playbooks(
             for name in ("list_project_modules", "search_project_source", "read_project_file"):
                 add(name)
 
+    # Map filename → skill so we can enrich each chunk with its references
+    # list. The catalog is small, the lookup is O(N).
+    file_to_skill = {s.context_file: s for s in SKILL_DEFINITIONS}
+
     chunks: list[str] = []
+    matched_skill_names: list[str] = []
     for filename in selected_files:
         try:
             content = read_file(filename, lang).strip()
         except FileNotFoundError:
             continue
-        if content:
-            chunks.append(content)
+        if not content:
+            continue
+        skill = file_to_skill.get(filename)
+        enriched = content
+        if skill is not None:
+            enriched = _enrich_skill_chunk(skill, content)
+            if skill.name not in matched_skill_names:
+                matched_skill_names.append(skill.name)
+        chunks.append(enriched)
+    # Expose matched names on the function via a module-level side channel
+    # consumed by ``_load_context_for_prompt_impl``. Keeping the return type
+    # backward-compatible (still a string) avoids touching every caller.
+    _select_skill_playbooks._last_matched = matched_skill_names  # type: ignore[attr-defined]
     return "\n\n".join(dict.fromkeys(chunks)).strip()
+
+
+def _enrich_skill_chunk(skill, body: str) -> str:
+    """Append per-skill metadata (references list + script list) after the body.
+
+    Examples are NOT injected here — they go through ``select_examples_block``
+    which applies a global budget (top-3, max 4k chars) across all matching
+    skills. Auto-loadable references are handled by ``select_auto_load_refs``
+    and injected as a separate priority block."""
+    parts = [body]
+    if skill.references:
+        items = "\n".join(
+            f'- `load_skill_reference(skill="{skill.name}", filename="{ref}")` — référence disponible'
+            for ref in skill.references
+        )
+        parts.append(f"### Références disponibles\n{items}")
+    if skill.scripts and skill.permissions.scripts:
+        items = "\n".join(
+            f'- `run_skill_script(skill="{skill.name}", filename="{sc}")` — script exécutable'
+            for sc in skill.scripts
+        )
+        parts.append(f"### Scripts exécutables\n{items}")
+    return "\n\n".join(parts)
+
+
+# Budget constants — kept generous so the assembled context stays under the
+# 36k-char ceiling even when multiple skills match a single prompt.
+_EXAMPLE_MAX_TOTAL_CHARS = 4_000
+_EXAMPLE_MAX_COUNT = 3
+_EXAMPLE_MAX_PER_FILE = 1_500
+_AUTO_LOAD_REF_MAX_COUNT = 2
+_AUTO_LOAD_REF_MAX_PER_FILE = 4_500
+# The auto-loaded references block lands in a priority slot whose hard cap is
+# ``_MAX_PRIORITY_BLOCK_CHARS``. Keep the count × per-file product under it.
+
+
+def select_examples_block(
+    prompt: str,
+    matching_skill_names: list[str],
+    *,
+    disabled_tools: Optional[list[str]] = None,
+    locale: Optional[str] = None,
+) -> Optional[str]:
+    """Pick the most relevant examples across all matched skills, under a
+    global budget. Returns a single Markdown block ready to inject, or None.
+
+    Ranking heuristic: an example is more relevant when its first 200 chars
+    contain more words from the user prompt. Stable tie-break on the skill
+    name (deterministic ordering)."""
+    from ..skills.registry import skill_by_name, read_skill_example
+
+    disabled = set(disabled_tools or [])
+    prompt_norm = _normalize_text(prompt)
+    prompt_words = {w for w in re.split(r"[^a-z0-9_]+", prompt_norm) if len(w) >= 4}
+
+    candidates: list[tuple[int, str, str, str]] = []
+    for name in matching_skill_names:
+        if name in disabled:
+            continue
+        skill = skill_by_name(name)
+        if not skill:
+            continue
+        for ex in skill.examples:
+            if ex.startswith("bad_"):
+                continue
+            content = read_skill_example(name, ex)
+            if not content:
+                continue
+            score = sum(1 for w in prompt_words if w in content[:200].casefold())
+            candidates.append((score, name, ex, content))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda t: (-t[0], t[1]))
+    selected: list[str] = []
+    total = 0
+    for score, name, fname, content in candidates[: _EXAMPLE_MAX_COUNT * 2]:
+        body = content.strip()
+        if len(body) > _EXAMPLE_MAX_PER_FILE:
+            body = body[:_EXAMPLE_MAX_PER_FILE].rstrip() + "\n\n[…]"
+        block = f"#### `{name}` — exemple\n\n{body}"
+        if total + len(block) > _EXAMPLE_MAX_TOTAL_CHARS:
+            continue
+        selected.append(block)
+        total += len(block)
+        if len(selected) >= _EXAMPLE_MAX_COUNT:
+            break
+
+    if not selected:
+        return None
+    return "## Exemples de tools en situation\n\n" + "\n\n---\n\n".join(selected)
+
+
+def select_auto_load_refs(
+    prompt: str,
+    disabled_tools: Optional[list[str]] = None,
+) -> Optional[str]:
+    """Eager-load references whose triggers match the prompt. Capped at
+    ``_AUTO_LOAD_REF_MAX_COUNT`` to keep the priority block bounded.
+
+    Returns a Markdown block ready to inject as a priority block (so it
+    survives budget pressure on routed sections)."""
+    from ..skills.registry import SKILL_DEFINITIONS, read_skill_reference
+
+    disabled = set(disabled_tools or [])
+    prompt_norm = _normalize_text(prompt)
+    matches: list[tuple[str, str]] = []  # (skill_name, ref_file)
+    seen: set[tuple[str, str]] = set()
+
+    for skill in SKILL_DEFINITIONS:
+        if skill.name in disabled:
+            continue
+        for ref in skill.references_meta:
+            if not ref.triggers:
+                continue
+            for trig in ref.triggers:
+                if trig and trig.casefold() in prompt_norm:
+                    key = (skill.name, ref.file)
+                    if key not in seen:
+                        seen.add(key)
+                        matches.append(key)
+                    break
+        if len(matches) >= _AUTO_LOAD_REF_MAX_COUNT:
+            break
+
+    if not matches:
+        return None
+
+    parts: list[str] = []
+    for skill_name, fname in matches[:_AUTO_LOAD_REF_MAX_COUNT]:
+        content = read_skill_reference(skill_name, fname)
+        if not content:
+            continue
+        body = content.strip()
+        if len(body) > _AUTO_LOAD_REF_MAX_PER_FILE:
+            body = body[:_AUTO_LOAD_REF_MAX_PER_FILE].rstrip() + "\n\n[…]"
+        parts.append(f"### Référence : `{skill_name}/{fname}`\n\n{body}")
+
+    if not parts:
+        return None
+    return ("## Références chargées (pertinentes pour ce prompt)\n\n"
+            + "\n\n---\n\n".join(parts))
+
+
+def select_output_template(prompt: str, disabled_tools: Optional[list[str]] = None) -> Optional[tuple[str, str]]:
+    """Pick the best output template across all enabled skills based on
+    prompt triggers. Returns ``(skill_name, template_body)`` or None.
+
+    Priority: explicit triggers > skill name appearing in prompt. The first
+    match wins — templates are mutually exclusive (the assistant can only
+    produce one deliverable per turn)."""
+    from ..skills.registry import read_skill_template
+    disabled = set(disabled_tools or [])
+    prompt_norm = _normalize_text(prompt)
+    for skill in SKILL_DEFINITIONS:
+        if skill.name in disabled or not skill.templates:
+            continue
+        for tpl in skill.templates:
+            if tpl.triggers and _has_any(prompt_norm, tuple(t.casefold() for t in tpl.triggers)):
+                body = read_skill_template(skill.name, tpl.name)
+                if body:
+                    return skill.name, body
+    return None
 
 
 def _maybe_section(title: str, content: str, sections: list[tuple[str, str]]) -> None:
@@ -636,7 +818,7 @@ _CONTEXT_CACHE_MAX = 64
 # Plafond per priority_block. Priority blocks bypass the routed-context
 # packer; without an individual cap a runaway block (huge technical complexity
 # JSON, a misformatted localization snippet) could starve the routed sections.
-_MAX_PRIORITY_BLOCK_CHARS = 4000
+_MAX_PRIORITY_BLOCK_CHARS = 10_000
 
 
 def _truncate_priority_block(block: str) -> str:
@@ -728,6 +910,14 @@ def _load_context_for_prompt_impl(
         _truncate_priority_block(b.strip())
         for b in (priority_blocks or []) if b and b.strip()
     ]
+    # Core-skill gating: the disabled list mixes tool and core skill names.
+    # Sub-contributors of the aggregator (release notes, skill dispatcher,
+    # perspective profile) honour their own flag and short-circuit cleanly.
+    _disabled_set = set(disabled_tools or [])
+    _perspective_active = "perspective_router" not in _disabled_set
+    _dispatcher_active = "skill_dispatcher" not in _disabled_set
+    _release_notes_active = "release_notes_injector" not in _disabled_set
+
     sections = []
     _skills_title = titles["skills"]
     try:
@@ -742,10 +932,28 @@ def _load_context_for_prompt_impl(
         creation=creation,
         disabled_tools=disabled_tools,
         locale=lang,
-    )
+    ) if _dispatcher_active else ""
+    _matched_skills: list[str] = getattr(_select_skill_playbooks, "_last_matched", []) if _dispatcher_active else []
     if _skill_playbooks:
         _skill_playbooks_title = titles["skill_playbooks"]
         sections.append((_skill_playbooks_title, _skill_playbooks))
+
+    # Auto-loaded references — eager-loaded into a priority block (never trimmed)
+    # when the prompt matches an explicit trigger declared in the skill SKILL.md
+    # under ``references_auto_load:``. Cap is enforced inside the selector.
+    _auto_refs_block = select_auto_load_refs(prompt, disabled_tools) if _dispatcher_active else None
+    if _auto_refs_block:
+        blocks.append(_truncate_priority_block(_auto_refs_block))
+
+    # Tool examples — top-3 across all matched skills, ranked by relevance
+    # to the prompt, capped at 4 000 chars total. Routed (can be trimmed if
+    # budget is tight) rather than priority — examples are nice-to-have.
+    _examples_block = (
+        select_examples_block(prompt, _matched_skills, disabled_tools=disabled_tools, locale=lang)
+        if _dispatcher_active and _matched_skills else None
+    )
+    if _examples_block:
+        sections.append((titles.get("examples", "Exemples de tools en situation"), _examples_block))
 
     # Role-specific profile file (support / BA / architect / developer).
     # Treated as a core section so the role guidance is never crowded out.
@@ -753,7 +961,7 @@ def _load_context_for_prompt_impl(
     # below) is the locked authority — adding a second role profile underneath
     # is both redundant and conceptually inconsistent with the locked badge.
     _profile_title = None
-    if not creation:
+    if not creation and _perspective_active:
         profile_filename = _PROFILE_FILES.get(perspective or "")
         if profile_filename:
             try:
@@ -793,14 +1001,14 @@ def _load_context_for_prompt_impl(
     # _VERSION_TERMS so a routine functional question keeps its budget. When
     # included, route by domain to trim 40-70% of irrelevant sections.
     _version_sensitive = migration or _has_any(prompt, _VERSION_TERMS)
-    if odoo_version and _version_sensitive:
+    if odoo_version and _version_sensitive and _release_notes_active:
         try:
             content = _filter_version_note_by_domain(
                 read_file(f"odoo-{odoo_version}.md", lang), prompt)
             sections.append((titles["version"].format(version=odoo_version), content))
         except FileNotFoundError:
             pass
-    if target_version and target_version != odoo_version and _version_sensitive:
+    if target_version and target_version != odoo_version and _version_sensitive and _release_notes_active:
         try:
             content = _filter_version_note_by_domain(
                 read_file(f"odoo-{target_version}.md", lang), prompt)
@@ -847,6 +1055,21 @@ def _load_context_for_prompt_impl(
             sections.append((_creator_profile_title, _creator_profile_content))
         except FileNotFoundError:
             pass
+    # Output template selection — picks one template (deliverable format) if a
+    # trigger matches the prompt. Stored as a priority block so it's NEVER
+    # trimmed by budget logic and lands at the very end of the system prompt.
+    _template_block = None
+    template_choice = select_output_template(prompt, disabled_tools)
+    if template_choice is not None:
+        sk, tpl_body = template_choice
+        _template_block = (
+            "## FORMAT DE SORTIE — utilise ce template à la lettre\n\n"
+            f"(Template fourni par le skill `{sk}`. Ne change pas l'ordre ou "
+            "l'intitulé des sections. Remplis les `{{ placeholders }}`.)\n\n"
+            f"{tpl_body.strip()}"
+        )
+        blocks.append(_truncate_priority_block(_template_block))
+
     if not sections and not blocks:
         return ""
     # Skills, role profile and (in migration mode) the migration methodology are

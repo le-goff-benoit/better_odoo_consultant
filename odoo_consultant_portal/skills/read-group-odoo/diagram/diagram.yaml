@@ -1,0 +1,20 @@
+inputs:
+  - Modèle
+  - Domaine
+  - Groupements
+  - Champs à agréger
+inputs_en:
+  - Model
+  - Domain
+  - Groupings
+  - Fields to aggregate
+steps:
+  - "Appeler read_group via XML-RPC"
+  - Optionnellement orderby + limit
+steps_en:
+  - "Call read_group via XML-RPC"
+  - Optionally orderby + limit
+outputs:
+  - Liste de buckets agrégés
+outputs_en:
+  - List of aggregated buckets

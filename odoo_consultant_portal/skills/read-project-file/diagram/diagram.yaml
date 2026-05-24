@@ -1,0 +1,14 @@
+inputs:
+  - Chemin relatif
+  - Profil client
+inputs_en:
+  - Relative path
+  - Client profile
+steps:
+  - Lire le fichier sous le repo cloné
+steps_en:
+  - Read the file under the cloned repo
+outputs:
+  - Contenu
+outputs_en:
+  - Content

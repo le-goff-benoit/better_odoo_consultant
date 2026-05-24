@@ -1,0 +1,14 @@
+inputs:
+  - Requête
+  - Version cible
+inputs_en:
+  - Query
+  - Target version
+steps:
+  - "ripgrep sur ~/.odoo-consultant/sources/<version cible>"
+steps_en:
+  - "ripgrep on ~/.odoo-consultant/sources/<target version>"
+outputs:
+  - Matches version cible
+outputs_en:
+  - Matches in target version

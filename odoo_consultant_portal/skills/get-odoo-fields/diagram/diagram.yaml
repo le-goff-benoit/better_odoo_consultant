@@ -1,0 +1,14 @@
+inputs:
+  - Modèle
+inputs_en:
+  - Model
+steps:
+  - "fields_get via XML-RPC"
+  - "Marquer les champs x_* (Studio)"
+steps_en:
+  - "fields_get via XML-RPC"
+  - "Flag x_* fields (Studio)"
+outputs:
+  - Liste annotée de champs
+outputs_en:
+  - Annotated field list

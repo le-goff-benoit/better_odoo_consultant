@@ -1,0 +1,26 @@
+inputs:
+  - companies
+  - active_company_id
+  - Prompt
+  - Perspective
+inputs_en:
+  - companies
+  - active_company_id
+  - Prompt
+  - Perspective
+steps:
+  - Identifier la société active et son country_code
+  - "Détecter un prompt fiscalement pertinent (TVA, facture, déclaration)"
+  - "Charger l10n_<cc>.md si présent"
+  - "Injecter comme section dédiée 'Localisation <CC>'"
+steps_en:
+  - Identify the active company and its country_code
+  - "Detect a fiscally relevant prompt (VAT, invoice, return)"
+  - "Load l10n_<cc>.md if present"
+  - "Inject as a dedicated 'Localization <CC>' section"
+outputs:
+  - "Section 'Localisation' dans le system prompt"
+outputs_en:
+  - "'Localization' section in the system prompt"
+notes: "Désactivé → l'IA répond en TVA générique, sans tenir compte du pays."
+notes_en: "Disabled → the AI answers with generic VAT, ignoring the country."

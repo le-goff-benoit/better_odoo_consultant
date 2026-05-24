@@ -1,0 +1,16 @@
+inputs:
+  - Requête (motif)
+  - Version Odoo
+  - Filtre fichier optionnel
+inputs_en:
+  - Query (pattern)
+  - Odoo version
+  - Optional file filter
+steps:
+  - "Lancer ripgrep sur ~/.odoo-consultant/sources/<version>"
+steps_en:
+  - "Run ripgrep on ~/.odoo-consultant/sources/<version>"
+outputs:
+  - "Liste de matches (file:line + extrait)"
+outputs_en:
+  - "List of matches (file:line + snippet)"

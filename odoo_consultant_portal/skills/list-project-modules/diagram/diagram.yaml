@@ -1,0 +1,16 @@
+inputs:
+  - Profil client
+inputs_en:
+  - Client profile
+steps:
+  - Trouver chaque __manifest__.py
+  - Parser AST → dict
+  - "Extraire name, depends, data"
+steps_en:
+  - Find every __manifest__.py
+  - Parse AST → dict
+  - "Extract name, depends, data"
+outputs:
+  - Catalogue des modules custom
+outputs_en:
+  - Catalog of custom modules

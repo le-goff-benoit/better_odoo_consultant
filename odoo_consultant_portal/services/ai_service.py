@@ -217,6 +217,31 @@ _TOOL_INSPECT_VIEW = {
     ),
 }
 
+_TOOL_LOAD_REFERENCE = {
+    "name": "load_skill_reference",
+    "description": (
+        "Charger une référence longue d'un skill (fichier markdown sous "
+        "skills/<skill>/references/<filename>). N'utiliser que si le contexte initial "
+        "mentionne explicitement une référence disponible — la liste apparaît avec "
+        "chaque skill sélectionné. Évite de charger plusieurs références par tour : "
+        "préfère cibler celle qui répond à la question. "
+        "Paramètres : skill (nom technique du skill, ex 'inspect_studio'), filename "
+        "(nom de fichier, ex 'studio_limits.md')."
+    ),
+}
+
+_TOOL_RUN_SCRIPT = {
+    "name": "run_skill_script",
+    "description": (
+        "Exécuter un script Python d'un skill (fichier sous skills/<skill>/scripts/<filename>). "
+        "Le script est lancé en subprocess, sans shell, avec un timeout dur de 30s ; "
+        "stdout (JSON ou Markdown), stderr et exit code sont retournés. Utiliser quand "
+        "un script déterministe peut remplacer plusieurs tours de raisonnement (ex. "
+        "scan_studio_customizations, explain_domain, check_manifest). "
+        "Paramètres : skill, filename, args (liste d'arguments CLI, optionnelle)."
+    ),
+}
+
 _TOOL_INSPECT_REPORT = {
     "name": "inspect_odoo_report",
     "description": (
@@ -296,6 +321,15 @@ TOOLS_CLAUDE = [
                        "description": "Repo cible : 'odoo' = Community courant, 'enterprise' = Enterprise courant, 'target' = version cible, 'project' = dépôt client."},
         "max_lines": {"type": "integer", "description": "Nombre max de lignes du diff (défaut 400, max 2000).", "default": 400},
     }}},
+    {**_TOOL_LOAD_REFERENCE, "input_schema": {"type": "object", "required": ["skill", "filename"], "properties": {
+        "skill":    {"type": "string", "description": "Nom technique du skill (ex 'inspect_studio')"},
+        "filename": {"type": "string", "description": "Nom de fichier de référence (ex 'studio_limits.md')"},
+    }}},
+    {**_TOOL_RUN_SCRIPT, "input_schema": {"type": "object", "required": ["skill", "filename"], "properties": {
+        "skill":    {"type": "string", "description": "Nom technique du skill"},
+        "filename": {"type": "string", "description": "Nom du script (ex 'scan_studio_customizations.py')"},
+        "args":     {"type": "array",  "items": {"type": "string"}, "description": "Arguments CLI", "default": []},
+    }}},
 ]
 
 # ── OpenAI tool schemas ───────────────────────────────────────────
@@ -356,6 +390,15 @@ TOOLS_OPENAI = [
         "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
         "max_lines": {"type": "integer", "default": 400},
     }}}},
+    {"type": "function", "function": {**_TOOL_LOAD_REFERENCE, "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
+        "skill":    {"type": "string"},
+        "filename": {"type": "string"},
+    }}}},
+    {"type": "function", "function": {**_TOOL_RUN_SCRIPT, "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
+        "skill":    {"type": "string"},
+        "filename": {"type": "string"},
+        "args":     {"type": "array",  "items": {"type": "string"}, "default": []},
+    }}}},
 ]
 
 # ── Gemini tool schemas ───────────────────────────────────────────
@@ -415,6 +458,17 @@ TOOLS_GEMINI = [
                  "sha":       {"type": "string"},
                  "scope":     {"type": "string"},
                  "max_lines": {"type": "integer"},
+             }}},
+            {"name": "load_skill_reference", "description": _TOOL_LOAD_REFERENCE["description"],
+             "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
+                 "skill":    {"type": "string"},
+                 "filename": {"type": "string"},
+             }}},
+            {"name": "run_skill_script", "description": _TOOL_RUN_SCRIPT["description"],
+             "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
+                 "skill":    {"type": "string"},
+                 "filename": {"type": "string"},
+                 "args":     {"type": "array"},
              }}},
         ]
     }
@@ -1486,803 +1540,177 @@ def build_system_general(
     return stable, variable
 
 
-# ── Source code tools ────────────────────────────────────────────
 
-def _source_roots(source_path: str) -> list[tuple[str, str]]:
-    """Return labeled Community/Enterprise roots for an Odoo source version."""
-    base = os.path.realpath(source_path)
-    parent = os.path.dirname(base)
-    name = os.path.basename(base.rstrip(os.sep))
-    if name.endswith("-enterprise"):
-        community_name = name.removesuffix("-enterprise")
-        roots = [("enterprise", base)]
-        community = os.path.join(parent, community_name)
-        if os.path.isdir(community):
-            roots.append(("community", os.path.realpath(community)))
-        return roots
+# ── Skill script runner ──────────────────────────────────────────
 
-    roots = [("community", base)]
-    enterprise = os.path.join(parent, f"{name}-enterprise")
-    if os.path.isdir(enterprise):
-        roots.append(("enterprise", os.path.realpath(enterprise)))
-    return roots
+_SCRIPT_TIMEOUT_SECONDS = 30
+_SCRIPT_MAX_STDOUT_CHARS = 32_000
+_SCRIPT_MAX_STDERR_CHARS = 4_000
 
 
-def _safe_join(root: str, sub_path: str) -> Optional[str]:
-    root_real = os.path.realpath(root)
-    full = os.path.realpath(os.path.join(root_real, sub_path)) if sub_path else root_real
-    try:
-        return full if os.path.commonpath([root_real, full]) == root_real else None
-    except ValueError:
-        return None
+async def _run_skill_script_subprocess(script_path, script_args, skill) -> dict:
+    """Run a skill script in an isolated subprocess.
 
-
-def _split_source_prefix(sub_path: str) -> tuple[Optional[str], str]:
-    clean = (sub_path or "").strip().strip("/")
-    if not clean:
-        return None, ""
-    first, _, rest = clean.partition("/")
-    if first in {"community", "enterprise"}:
-        return first, rest
-    return None, clean
-
-
-def _safe_source_path(source_path: str, sub_path: str, include_enterprise: bool = True) -> Optional[str]:
-    """Return an absolute path only if it stays within a known source root."""
-    if not include_enterprise:
-        return _safe_join(source_path, sub_path)
-    prefix, clean_path = _split_source_prefix(sub_path)
-    for label, root in _source_roots(source_path):
-        if prefix and label != prefix:
-            continue
-        full = _safe_join(root, clean_path)
-        if full and os.path.exists(full):
-            return full
-        if full and label == "enterprise" and clean_path.startswith("addons/"):
-            alt = _safe_join(root, clean_path[len("addons/"):])
-            if alt and os.path.exists(alt):
-                return alt
-        if full and label == "community" and clean_path.startswith("addons/"):
-            # `base` (and a few core modules) live under odoo/addons/, not the
-            # top-level addons/ — e.g. "addons/base" → "odoo/addons/base".
-            alt = _safe_join(root, "odoo/" + clean_path)
-            if alt and os.path.exists(alt):
-                return alt
-    return None
-
-
-def _source_search_dirs(source_path: str, sub_path: str, include_enterprise: bool = True) -> list[str]:
-    if not include_enterprise:
-        full = _safe_join(source_path, sub_path)
-        return [full] if full and os.path.isdir(full) else []
-
-    prefix, clean_path = _split_source_prefix(sub_path)
-    dirs: list[str] = []
-    for label, root in _source_roots(source_path):
-        if prefix and label != prefix:
-            continue
-        full = _safe_join(root, clean_path)
-        if full and os.path.isdir(full):
-            dirs.append(full)
-        elif label == "enterprise" and clean_path.startswith("addons/"):
-            # Enterprise modules live at root level, not under addons/
-            # e.g. "addons/helpdesk" → try "helpdesk" directly in enterprise root
-            alt = _safe_join(root, clean_path[len("addons/"):])
-            if alt and os.path.isdir(alt):
-                dirs.append(alt)
-        elif label == "community" and clean_path.startswith("addons/"):
-            # `base` (and a few core modules) live under odoo/addons/, not the
-            # top-level addons/ — e.g. "addons/base" → "odoo/addons/base".
-            alt = _safe_join(root, "odoo/" + clean_path)
-            if alt and os.path.isdir(alt):
-                dirs.append(alt)
-    return dirs
-
-
-def _source_display_path(source_path: str, file_abs: str, include_enterprise: bool = True) -> str:
-    file_real = os.path.realpath(file_abs)
-    if not include_enterprise:
-        base = os.path.realpath(source_path)
-        try:
-            if os.path.commonpath([base, file_real]) == base:
-                return os.path.relpath(file_real, base)
-        except ValueError:
-            pass
-        return file_abs
-
-    roots = sorted(_source_roots(source_path), key=lambda item: len(item[1]), reverse=True)
-    for label, root in roots:
-        root_real = os.path.realpath(root)
-        try:
-            if os.path.commonpath([root_real, file_real]) == root_real:
-                return f"{label}/{os.path.relpath(file_real, root_real)}"
-        except ValueError:
-            continue
-    return file_abs
-
-
-async def _search_odoo_source(args: dict, source_path: str, include_enterprise: bool = True) -> dict:
-    pattern    = args.get("pattern", "")
-    sub_path   = args.get("path", "") or ""
-    file_types = args.get("file_types") or ["*.py"]
-    # Default: case-sensitive (code patterns like _name, _inherit are
-    # case-sensitive in Python). Callers can opt into -i if they really mean
-    # a free-text natural-language search.
-    case_sensitive = args.get("case_sensitive", True)
-
-    if not pattern or not pattern.strip():
-        return {"ok": False, "error": "pattern manquant"}
-
-    search_dirs = _source_search_dirs(source_path, sub_path, include_enterprise=include_enterprise)
-    if not search_dirs:
-        return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
-
-    includes = []
-    for ft in file_types[:4]:  # max 4 types
-        includes += ["--include", ft]
-
-    grep_args = ["grep", "-r", "-n"]
-    if not case_sensitive:
-        grep_args.append("-i")
-    grep_args += ["-m", "200", *includes, pattern, *search_dirs]
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *grep_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-    except asyncio.TimeoutError:
-        return {"ok": False, "error": "Timeout — pattern trop large, affinez la recherche"}
-
-    raw_lines = stdout.decode("utf-8", errors="replace").splitlines()
-    total_lines = len(raw_lines)
-
-    by_file: dict = {}
-    for line in raw_lines[:200]:
-        parts = line.split(":", 2)
-        if len(parts) < 3:
-            continue
-        file_abs, linenum, content = parts[0], parts[1], parts[2]
-        rel = _source_display_path(source_path, file_abs, include_enterprise=include_enterprise)
-        if rel not in by_file:
-            by_file[rel] = []
-        by_file[rel].append({"line": int(linenum), "content": content.strip()})
-
-    if not by_file:
-        # Helpful fallback suggestions for the model so it doesn't waste tool
-        # calls retrying the same pattern.
-        suggestions: list[str] = []
-        if case_sensitive:
-            suggestions.append("Retentez avec `case_sensitive=false` (recherche insensible à la casse).")
-        if "'" not in pattern and '"' not in pattern and " = " in pattern:
-            suggestions.append("Essayez avec des guillemets différents (simples vs doubles).")
-        if "é" in pattern or "è" in pattern or "à" in pattern:
-            suggestions.append("Essayez sans les accents.")
-        if not sub_path:
-            suggestions.append("Restreignez la recherche avec `path=\"addons/<module>\"` si vous savez où chercher.")
-        return {
-            "ok": True,
-            "matches": 0,
-            "files": {},
-            "files_count": 0,
-            "note": "Aucune correspondance.",
-            "suggestions": suggestions or None,
-        }
-
-    truncated = total_lines > 200
-    return {
-        "ok": True,
-        "matches": total_lines,            # total grep output lines (capped at 200/file)
-        "files_count": len(by_file),       # distinct files matched
-        "files": by_file,
-        "truncated": truncated,
-        "note": "Résultats tronqués à 200 lignes — affinez le pattern ou utilisez path=." if truncated else None,
-    }
-
-
-async def _read_odoo_file(args: dict, source_path: str, include_enterprise: bool = True) -> dict:
-    rel_path   = args.get("path", "")
-    start_line = max(1, int(args.get("start_line") or 1))
-    end_line   = int(args.get("end_line") or 0)
-
-    file_abs = _safe_source_path(source_path, rel_path, include_enterprise=include_enterprise)
-    if not file_abs:
-        return {"ok": False, "error": "Chemin invalide"}
-    if not os.path.isfile(file_abs):
-        return {"ok": False, "error": f"Fichier introuvable : {rel_path}"}
-
-    try:
-        with open(file_abs, "r", encoding="utf-8", errors="replace") as f:
-            all_lines = f.readlines()
-    except OSError as exc:
-        return {"ok": False, "error": str(exc)}
-
-    total = len(all_lines)
-    s = start_line - 1
-    e = end_line if end_line > 0 else s + 150
-    e = min(e, s + 200, total)   # hard cap: 200 lines
-
-    content = "".join(all_lines[s:e])
-    return {
-        "ok":         True,
-        "path":       rel_path,
-        "start_line": s + 1,
-        "end_line":   e,
-        "total_lines": total,
-        "content":    content,
-    }
-
-
-# ── Line-counting tool ───────────────────────────────────────────
-
-_COUNT_MAX_FILES = 50_000
-_COUNT_TIMEOUT_SECS = 45
-_EXCLUDE_DIRS = ("/.git/", "/node_modules/", "/__pycache__/", "/.venv/", "/venv/", "/.tox/", "/dist/", "/build/")
-
-
-def _count_group_key(rel: str, group_by: str) -> str:
-    if group_by == "module":
-        parts = rel.split(os.sep)
-        # Detect "addons/<module>/..." (any depth before "addons")
-        if "addons" in parts:
-            idx = parts.index("addons")
-            return parts[idx + 1] if idx + 1 < len(parts) else "(root)"
-        # Else: top-level dir is treated as the module (typical client repos)
-        return parts[0] if parts and parts[0] else "(root)"
-    if group_by == "directory":
-        return os.path.dirname(rel) or "(root)"
-    if group_by == "extension":
-        return os.path.splitext(rel)[1].lower() or "(no ext)"
-    return "all"
-
-
-async def _count_lines(args: dict, base_dir: str) -> dict:
-    """Exhaustively count files and lines under base_dir/<sub_path>, grouped."""
-    sub_path   = args.get("path", "") or ""
-    file_types = args.get("file_types") or ["*.py"]
-    group_by   = args.get("group_by") or "extension"
-    if group_by not in ("extension", "module", "directory", "none"):
-        group_by = "extension"
-
-    target_dir = _safe_source_path(base_dir, sub_path)
-    if not target_dir:
-        return {"ok": False, "error": "Chemin invalide (traversal détecté)"}
-    if not os.path.isdir(target_dir):
-        return {"ok": False, "error": f"Dossier introuvable : {sub_path or base_dir}"}
-
-    # Build find command
-    find_cmd = ["find", target_dir, "-type", "f"]
-    types = file_types[:10]
-    if types:
-        find_cmd.append("(")
-        for i, ft in enumerate(types):
-            if i > 0:
-                find_cmd.append("-o")
-            find_cmd += ["-name", ft]
-        find_cmd.append(")")
-    find_cmd += ["-print0"]
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *find_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        files_blob, _ = await asyncio.wait_for(proc.communicate(), timeout=_COUNT_TIMEOUT_SECS)
-    except asyncio.TimeoutError:
-        return {"ok": False, "error": f"Timeout (>{_COUNT_TIMEOUT_SECS}s) — restreignez via path ou file_types"}
-
-    raw_files = [f.decode("utf-8", errors="replace") for f in files_blob.split(b"\x00") if f]
-    # Filter excluded directories
-    files = [f for f in raw_files if not any(ex in f for ex in _EXCLUDE_DIRS)]
-
-    if not files:
-        return {
-            "ok": True, "scope_path": base_dir, "sub_path": sub_path or ".",
-            "file_types": types, "group_by": group_by,
-            "total_files": 0, "total_lines": 0, "by_group": {},
-            "note": "Aucun fichier trouvé",
-        }
-    if len(files) > _COUNT_MAX_FILES:
-        return {"ok": False, "error": f"Trop de fichiers ({len(files)} > {_COUNT_MAX_FILES}). Restreins via path ou file_types."}
-
-    base_real = os.path.realpath(base_dir) + os.sep
-
-    def _do_count() -> tuple[int, dict]:
-        total = 0
-        groups: dict = {}
-        for fp in files:
-            try:
-                with open(fp, "rb") as fh:
-                    buf = fh.read()
-                n = buf.count(b"\n")
-                if buf and not buf.endswith(b"\n"):
-                    n += 1
-            except OSError:
-                n = 0
-            total += n
-            rel = fp.replace(base_real, "")
-            key = _count_group_key(rel, group_by)
-            g = groups.get(key)
-            if g is None:
-                groups[key] = {"files": 1, "lines": n}
-            else:
-                g["files"] += 1
-                g["lines"] += n
-        return total, groups
-
-    loop = asyncio.get_event_loop()
-    total_lines, by_group = await loop.run_in_executor(None, _do_count)
-
-    # Sort by lines desc, cap at 50 groups
-    sorted_groups = sorted(by_group.items(), key=lambda kv: -kv[1]["lines"])
-    truncated = len(sorted_groups) > 50
-    capped = dict(sorted_groups[:50])
-
-    return {
-        "ok":              True,
-        "scope_path":      base_dir,
-        "sub_path":        sub_path or ".",
-        "file_types":      types,
-        "group_by":        group_by,
-        "total_files":     len(files),
-        "total_lines":     total_lines,
-        "by_group":        capped,
-        "groups_truncated": truncated,
-    }
-
-
-# ── Git show tool ─────────────────────────────────────────────────
-
-_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
-_NUMSTAT_RE = re.compile(r"^(\d+|-)\t(\d+|-)\t(.+)$")
-
-
-async def _git_show_commit(args: dict, source_path: Optional[str], repo_path: Optional[str], target_path: Optional[str]) -> dict:
-    """Show one commit (metadata + numstat + unified diff) from a local git repo.
-
-    Tolerates shallow clones by deepening on demand (up to 3 × --deepen 500) when
-    the SHA is unknown. Returns structured stats plus the textual diff capped to
-    ``max_lines``.
+    Safety choices:
+    - No shell (``shell=False``), arg list passed verbatim.
+    - cwd locked to the skill folder so the script sees its own assets only.
+    - Env minimal (PATH + PYTHONIOENCODING + LC_ALL) — no inherited secrets.
+    - Hard 30s timeout; stdout/stderr truncated for the LLM.
+    - Network blocked via ``unshare -n`` when ``permissions.network`` is False
+      and we are on Linux with unshare available.
     """
-    sha = (args.get("sha") or "").strip()
-    scope = (args.get("scope") or "").strip().lower()
-    max_lines_raw = args.get("max_lines")
+    import asyncio as _asyncio
+    import shutil as _shutil
+    import os as _os
+    from pathlib import Path as _Path
+
+    cmd = ["python3", str(script_path), *script_args]
+    # Best-effort network isolation: prepend `unshare -n` when permitted.
+    if not skill.permissions.network and _shutil.which("unshare"):
+        cmd = ["unshare", "-r", "-n", *cmd]
+
+    env = {
+        "PATH": _os.environ.get("PATH", "/usr/bin:/bin"),
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUNBUFFERED": "1",
+        "LC_ALL": _os.environ.get("LC_ALL", "C.UTF-8"),
+        "LANG": _os.environ.get("LANG", "C.UTF-8"),
+    }
+    cwd = str(_Path(script_path).parent.parent)  # skill folder root
+
     try:
-        max_lines = int(max_lines_raw) if max_lines_raw is not None else 400
-    except (TypeError, ValueError):
-        max_lines = 400
-    max_lines = max(50, min(max_lines, 2000))
-
-    if not sha or not _SHA_RE.match(sha):
-        return {"ok": False, "error": "SHA invalide (7 à 40 caractères hexadécimaux attendus)."}
-
-    # Map scope → repo path
-    if scope == "odoo":
-        repo = source_path
-    elif scope == "enterprise":
-        repo = (source_path + "-enterprise") if source_path else None
-    elif scope == "target":
-        repo = target_path
-    elif scope == "project":
-        repo = repo_path
-    else:
-        return {"ok": False, "error": "scope doit être 'odoo', 'enterprise', 'target' ou 'project'."}
-
-    if not repo or not os.path.isdir(os.path.join(repo, ".git")):
-        labels = {"odoo": "Sources Odoo Community", "enterprise": "Sources Odoo Enterprise",
-                  "target": "Sources de la version cible", "project": "Repo projet client"}
-        return {"ok": False, "error": f"{labels.get(scope, scope)} non disponible — clonez-les depuis l'app."}
-
-    async def _git(*git_args: str, timeout: int = 30) -> tuple[int, str, str]:
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", repo, *git_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        proc = await _asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=_asyncio.subprocess.PIPE,
+            stderr=_asyncio.subprocess.PIPE,
+            cwd=cwd,
+            env=env,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
+            stdout_b, stderr_b = await _asyncio.wait_for(
+                proc.communicate(), timeout=_SCRIPT_TIMEOUT_SECONDS)
+        except _asyncio.TimeoutError:
             proc.kill()
-            return 124, "", "timeout"
-        return proc.returncode or 0, stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace")
-
-    # Try to find the commit; deepen the shallow clone if missing.
-    deepened = 0
-    rc, out, _ = await _git("cat-file", "-e", sha, timeout=10)
-    if rc != 0:
-        branch_rc, branch_out, _ = await _git("rev-parse", "--abbrev-ref", "HEAD", timeout=10)
-        branch = branch_out.strip() if branch_rc == 0 else ""
-        for _ in range(3):
-            if not branch or branch == "HEAD":
-                break
-            frc, _, _ = await _git("fetch", "--quiet", "--deepen=500", "origin", branch, timeout=90)
-            deepened += 1
-            if frc != 0:
-                break
-            rc, _, _ = await _git("cat-file", "-e", sha, timeout=10)
-            if rc == 0:
-                break
-        if rc != 0:
-            return {
-                "ok": False,
-                "error": f"Commit {sha} introuvable dans le clone local (même après {deepened} deepen).",
-                "suggestion": (
-                    "Vérifie le SHA, ou mets à jour la source depuis l'app (bouton « Vérifier »). "
-                    "Si le commit est très ancien, il peut ne plus être atteignable depuis la branche actuelle."
-                ),
-            }
-
-    # Header (metadata + commit message)
-    rc, header_out, header_err = await _git(
-        "show", "--no-patch",
-        "--pretty=format:%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b",
-        sha, timeout=20,
-    )
-    if rc != 0:
-        return {"ok": False, "error": f"git show (header) a échoué : {header_err.strip()[:200]}"}
-
-    parts = header_out.split("\x1f")
-    if len(parts) < 5:
-        return {"ok": False, "error": "Sortie git show inattendue."}
-    full_sha, author, email, iso_date, subject = parts[0], parts[1], parts[2], parts[3], parts[4]
-    body = parts[5].strip() if len(parts) > 5 else ""
-
-    # Per-file numstat
-    rc, num_out, _ = await _git("show", "--numstat", "--format=", sha, timeout=30)
-    files: list[dict] = []
-    total_add = total_del = 0
-    if rc == 0:
-        for line in num_out.splitlines():
-            m = _NUMSTAT_RE.match(line.strip())
-            if not m:
-                continue
-            add_s, del_s, fpath = m.group(1), m.group(2), m.group(3)
-            adds = 0 if add_s == "-" else int(add_s)
-            dels = 0 if del_s == "-" else int(del_s)
-            files.append({"path": fpath, "additions": adds, "deletions": dels})
-            total_add += adds
-            total_del += dels
-
-    # Unified diff
-    rc, diff_out, diff_err = await _git("show", "--patch", "--format=", sha, timeout=45)
-    if rc != 0:
-        return {"ok": False, "error": f"git show (diff) a échoué : {diff_err.strip()[:200]}"}
-
-    diff_lines = diff_out.splitlines()
-    truncated = len(diff_lines) > max_lines
-    diff_text = "\n".join(diff_lines[:max_lines])
-
-    return {
-        "ok": True,
-        "scope": scope,
-        "sha": full_sha,
-        "short_sha": full_sha[:8],
-        "author": author,
-        "email": email,
-        "date": iso_date,
-        "subject": subject,
-        "message": body,
-        "stats": {
-            "files": len(files),
-            "insertions": total_add,
-            "deletions": total_del,
-        },
-        "files": files,
-        "diff": diff_text,
-        "diff_lines": len(diff_lines),
-        "truncated": truncated,
-        "deepened": deepened or None,
-        "note": (f"Diff tronqué à {max_lines} lignes — augmentez max_lines (max 2000) ou demandez un fichier précis."
-                 if truncated else None),
-    }
-
-
-# ── Studio inspection tool ────────────────────────────────────────
-
-async def _inspect_studio(args: dict, odoo: "OdooClient") -> dict:
-    """Query the connected Odoo instance for all Studio customizations.
-
-    Thin wrapper over studio_service.inspect_studio_customizations so the live
-    tool and the technical-complexity analyzer share one implementation — they
-    previously diverged and the live tool kept a stale state=manual heuristic.
-    """
-    from .studio_service import inspect_studio_customizations
-    return await inspect_studio_customizations(
-        odoo,
-        sections=args.get("sections") or ["all"],
-        model_filter=(args.get("model_filter") or "").strip(),
-    )
-
-
-async def _inspect_installed_modules(args: dict, odoo: "OdooClient") -> dict:
-    loop = asyncio.get_event_loop()
-    filter_text = (args.get("filter") or "").casefold().strip()
-    apps_only = bool(args.get("apps_only") or False)
-    try:
-        limit = max(1, min(int(args.get("limit") or 300), 1000))
-    except (TypeError, ValueError):
-        limit = 300
-    domain = [["state", "=", "installed"]]
-    if apps_only:
-        domain.append(["application", "=", True])
-    modules = await loop.run_in_executor(None, lambda: odoo.search_read(
-        "ir.module.module",
-        domain,
-        ["name", "shortdesc", "author", "installed_version", "application", "category_id"],
-        limit=limit,
-        order="application desc, name asc",
-    ))
-    if filter_text:
-        modules = [
-            m for m in modules
-            if filter_text in " ".join(str(m.get(k) or "") for k in ("name", "shortdesc", "author", "category_id")).casefold()
-        ]
-    custom_markers = ("custom", "odoo sh", "odoo.sh", "studio", "client")
-    for module in modules:
-        author = str(module.get("author") or "").casefold()
-        name = str(module.get("name") or "")
-        module["likely_custom"] = bool(name.startswith("x_") or any(marker in author for marker in custom_markers))
-    apps = [m for m in modules if m.get("application")]
-    return {
-        "ok": True,
-        "count": len(modules),
-        "applications_count": len(apps),
-        "likely_custom_count": sum(1 for m in modules if m.get("likely_custom")),
-        "modules": modules,
-    }
-
-
-async def _inspect_security(args: dict, odoo: "OdooClient") -> dict:
-    loop = asyncio.get_event_loop()
-    model = (args.get("model") or "").strip()
-    if not model:
-        return {"ok": False, "error": "Paramètre model obligatoire"}
-    models = await loop.run_in_executor(None, lambda: odoo.search_read(
-        "ir.model", [["model", "=", model]], ["name", "model", "transient"], limit=1
-    ))
-    if not models:
-        return {"ok": False, "error": f"Modèle introuvable dans ir.model : {model}"}
-    model_id = models[0]["id"]
-    acl = await loop.run_in_executor(None, lambda: odoo.search_read(
-        "ir.model.access",
-        [["model_id", "=", model_id]],
-        ["name", "group_id", "perm_read", "perm_write", "perm_create", "perm_unlink", "active"],
-        limit=200,
-        order="name asc",
-    ))
-    rules = await loop.run_in_executor(None, lambda: odoo.search_read(
-        "ir.rule",
-        [["model_id", "=", model_id]],
-        ["name", "domain_force", "groups", "perm_read", "perm_write", "perm_create", "perm_unlink", "active", "global"],
-        limit=200,
-        order="name asc",
-    ))
-    return {"ok": True, "model": models[0], "access_controls": acl, "record_rules": rules}
-
-
-async def _inspect_menus_actions(args: dict, odoo: "OdooClient") -> dict:
-    loop = asyncio.get_event_loop()
-    model = (args.get("model") or "").strip()
-    query = (args.get("query") or "").strip()
-    try:
-        limit = max(1, min(int(args.get("limit") or 80), 300))
-    except (TypeError, ValueError):
-        limit = 80
-
-    action_domain = []
-    if model:
-        action_domain.append(["res_model", "=", model])
-    if query:
-        action_domain.append(["name", "ilike", query])
-    actions = await loop.run_in_executor(None, lambda: odoo.search_read(
-        "ir.actions.act_window",
-        action_domain,
-        ["name", "res_model", "view_mode", "views", "domain", "context", "target"],
-        limit=limit,
-        order="name asc",
-    ))
-    action_refs = [f"ir.actions.act_window,{a['id']}" for a in actions if a.get("id")]
-    menu_domain = []
-    if action_refs:
-        menu_domain = [["action", "in", action_refs]]
-    elif query:
-        menu_domain = [["name", "ilike", query]]
-    menus = []
-    if menu_domain:
-        menus = await loop.run_in_executor(None, lambda: odoo.search_read(
-            "ir.ui.menu",
-            menu_domain,
-            ["name", "complete_name", "parent_id", "action", "groups_id", "active"],
-            limit=limit,
-            order="complete_name asc",
-        ))
-    return {
-        "ok": True,
-        "model": model or None,
-        "query": query or None,
-        "actions": actions,
-        "menus": menus,
-        "note": None if actions or menus else "Aucun menu/action trouvé avec ces critères.",
-    }
+            await proc.wait()
+            return {"ok": False, "error": f"Timeout — script tué après {_SCRIPT_TIMEOUT_SECONDS}s"}
+        stdout = stdout_b.decode("utf-8", errors="replace")[:_SCRIPT_MAX_STDOUT_CHARS]
+        stderr = stderr_b.decode("utf-8", errors="replace")[:_SCRIPT_MAX_STDERR_CHARS]
+        return {
+            "ok": proc.returncode == 0,
+            "exit_code": proc.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "script": str(script_path.name) if hasattr(script_path, "name") else str(script_path),
+        }
+    except Exception as exc:
+        return {"ok": False, "error": f"Échec lancement subprocess : {exc}"}
 
 
 # ── Tool executor ────────────────────────────────────────────────
+#
+# Generic dispatch: each skill ships a ``scripts/handler.py`` with an
+# ``async def run(args, ctx)``. The dispatcher resolves the handler module
+# via ``importlib.util.spec_from_file_location`` (folder names contain
+# hyphens, which Python's normal import system can't handle) and caches the
+# module. The 2 meta-tools that touch the registry itself (load_skill_reference,
+# run_skill_script) are kept inline because they live above the skills.
+
+import importlib.util as _importlib_util
+from pathlib import Path
+from .tool_context import ToolContext as _ToolContext
+
+_HANDLER_CACHE: dict = {}
+_HANDLER_MISS: set = set()
+
+
+def _resolve_handler(tool_name: str):
+    if tool_name in _HANDLER_CACHE:
+        return _HANDLER_CACHE[tool_name]
+    if tool_name in _HANDLER_MISS:
+        return None
+    from ..skills.registry import skill_by_name
+    skill = skill_by_name(tool_name)
+    if skill is None or not skill.folder:
+        _HANDLER_MISS.add(tool_name)
+        return None
+    handler_path = Path(skill.folder) / "scripts" / "handler.py"
+    if not handler_path.is_file():
+        _HANDLER_MISS.add(tool_name)
+        return None
+    # Load the module from its absolute path so the folder's hyphen-containing
+    # slug doesn't break Python's import system. The module name is synthetic
+    # but unique per tool — sys.modules pickup is harmless.
+    mod_name = f"_skill_handler_{tool_name}"
+    spec = _importlib_util.spec_from_file_location(mod_name, str(handler_path))
+    if spec is None or spec.loader is None:
+        _HANDLER_MISS.add(tool_name)
+        return None
+    module = _importlib_util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        logging.getLogger(__name__).error("Skill handler import failed for %s: %s", tool_name, exc)
+        _HANDLER_MISS.add(tool_name)
+        return None
+    _HANDLER_CACHE[tool_name] = module
+    return module
+
+
+_RESOURCE_CHECKS = (
+    ("REQUIRES_ODOO", "odoo", "Connexion Odoo requise pour ce skill — ouvre un projet depuis la page Projets"),
+    ("REQUIRES_SOURCE", "source_path", "Sources Odoo non disponibles — installe-les depuis la page Sources"),
+    ("REQUIRES_REPO", "repo_path", "Dépôt projet non disponible — clone-le depuis la fiche projet"),
+    ("REQUIRES_TARGET", "target_path", "Sources de la version cible non disponibles"),
+)
+
 
 async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Optional[str] = None, repo_path: Optional[str] = None, target_path: Optional[str] = None) -> dict:
     loop = asyncio.get_event_loop()
     try:
-        if name == "query_odoo":
-            offset = max(int(args.get("offset", 0)), 0)
-            records = await loop.run_in_executor(None, lambda: odoo.search_read(
-                args["model"],
-                args.get("domain", []),
-                args.get("fields", []),
-                min(int(args.get("limit", 20)), 500),
-                offset,
-                args.get("order", ""),
-            ))
-            return {"ok": True, "count": len(records), "offset": offset,
-                    "records": records}
+        # Meta-tools: kept inline (they touch the skill registry itself, not a skill).
+        if name == "load_skill_reference":
+            from ..skills.registry import read_skill_reference, skill_by_name
+            sk = args.get("skill", "")
+            fn = args.get("filename", "")
+            target = skill_by_name(sk)
+            if target is None:
+                return {"ok": False, "error": f"Skill inconnu : {sk}"}
+            content = await loop.run_in_executor(None, lambda: read_skill_reference(sk, fn))
+            if content is None:
+                return {"ok": False, "error": f"Référence introuvable : {sk}/references/{fn}"}
+            return {"ok": True, "skill": sk, "filename": fn, "content": content}
 
-        elif name == "count_odoo":
-            count = await loop.run_in_executor(None, lambda: odoo.search_count(
-                args["model"], args.get("domain", [])
-            ))
-            return {"ok": True, "count": count}
+        if name == "run_skill_script":
+            from ..skills.registry import resolve_skill_script, skill_by_name
+            sk = args.get("skill", "")
+            fn = args.get("filename", "")
+            script_args = [str(a) for a in (args.get("args") or [])]
+            target = skill_by_name(sk)
+            if target is None:
+                return {"ok": False, "error": f"Skill inconnu : {sk}"}
+            if not target.permissions.scripts:
+                return {"ok": False, "error": (
+                    f"Le skill '{sk}' n'accorde pas la permission d'exécuter des scripts. "
+                    "Ajoutez `scripts: true` dans le bloc `permissions` de son SKILL.md.")}
+            script_path = await loop.run_in_executor(None, lambda: resolve_skill_script(sk, fn))
+            if script_path is None:
+                return {"ok": False, "error": f"Script introuvable : {sk}/scripts/{fn}"}
+            return await _run_skill_script_subprocess(script_path, script_args, target)
 
-        elif name == "read_group_odoo":
-            rows = await loop.run_in_executor(None, lambda: odoo.read_group(
-                args["model"],
-                args.get("domain", []),
-                args.get("fields", []),
-                args.get("groupby", []),
-                min(int(args.get("limit", 80)), 500),
-                max(int(args.get("offset", 0)), 0),
-                args.get("orderby", ""),
-                bool(args.get("lazy", True)),
-            ))
-            return {"ok": True, "count": len(rows), "groups": rows}
+        # Generic skill dispatch.
+        handler = _resolve_handler(name)
+        if handler is None:
+            return {"ok": False, "error": f"Outil inconnu: {name}"}
 
-        elif name == "get_odoo_fields":
-            attrs = ["string", "type", "relation", "relation_field",
-                     "required", "store", "help"]
-            raw = await loop.run_in_executor(None, lambda: odoo.fields_get(
-                args["model"], attrs
-            ))
-            wanted = [str(n).strip() for n in (args.get("field_names") or []) if str(n).strip()]
-            if wanted:
-                detail = {}
-                missing = []
-                for fname in wanted:
-                    if fname in raw:
-                        v = raw[fname]
-                        entry = {"label": v.get("string"), "type": v.get("type")}
-                        for k in ("relation", "relation_field", "required", "store", "help"):
-                            val = v.get(k)
-                            if val not in (None, "", False):
-                                entry[k] = val
-                        detail[fname] = entry
-                    else:
-                        missing.append(fname)
-                return {"ok": True, "model": args["model"], "fields": detail,
-                        **({"missing": missing} if missing else {})}
-            # Condensed index — prioritize custom (x_*) and relational fields, cap to 150.
-            def _priority(item):
-                fname, v = item
-                t = v.get("type") or ""
-                is_custom = fname.startswith("x_")
-                is_rel = t in ("many2one", "one2many", "many2many")
-                return (0 if is_custom else (1 if is_rel else 2), fname)
-            ordered = sorted(raw.items(), key=_priority)
-            condensed = {}
-            for fname, v in ordered[:150]:
-                entry = {"label": v.get("string"), "type": v.get("type")}
-                rel = v.get("relation")
-                if rel:
-                    entry["relation"] = rel
-                rel_f = v.get("relation_field")
-                if rel_f:
-                    entry["relation_field"] = rel_f
-                condensed[fname] = entry
-            return {"ok": True, "model": args["model"],
-                    "total_fields": len(raw), "fields": condensed,
-                    "note": ("Index condensé (max 150, custom + relations en tête). "
-                             "Rappelle get_odoo_fields avec field_names=[...] pour le détail complet.")
-                            if len(raw) > 150 else None}
+        ctx = _ToolContext(
+            odoo=odoo, source_path=source_path, repo_path=repo_path,
+            target_path=target_path, loop=loop,
+        )
+        for flag, attr, error_msg in _RESOURCE_CHECKS:
+            if getattr(handler, flag, False) and getattr(ctx, attr) is None:
+                return {"ok": False, "error": error_msg}
 
-        elif name == "inspect_installed_modules":
-            if odoo is None:
-                return {"ok": False, "error": "Connexion Odoo requise pour inspecter les modules installés"}
-            return await _inspect_installed_modules(args, odoo)
-
-        elif name == "inspect_security":
-            if odoo is None:
-                return {"ok": False, "error": "Connexion Odoo requise pour inspecter la sécurité"}
-            return await _inspect_security(args, odoo)
-
-        elif name == "inspect_menus_actions":
-            if odoo is None:
-                return {"ok": False, "error": "Connexion Odoo requise pour inspecter menus et actions"}
-            return await _inspect_menus_actions(args, odoo)
-
-        elif name == "search_odoo_source":
-            if not source_path:
-                return {"ok": False, "error": "Code source non disponible — installez les sources depuis la page Sources"}
-            return await _search_odoo_source(args, source_path)
-
-        elif name == "read_odoo_file":
-            if not source_path:
-                return {"ok": False, "error": "Code source non disponible"}
-            return await _read_odoo_file(args, source_path)
-
-        elif name == "search_project_source":
-            if not repo_path:
-                return {"ok": False, "error": "Code source du projet non disponible — clonez le dépôt depuis la fiche projet"}
-            return await _search_odoo_source(args, repo_path, include_enterprise=False)
-
-        elif name == "read_project_file":
-            if not repo_path:
-                return {"ok": False, "error": "Code source du projet non disponible"}
-            return await _read_odoo_file(args, repo_path, include_enterprise=False)
-
-        elif name == "list_project_modules":
-            if not repo_path:
-                return {"ok": False, "error": "Code source du projet non disponible — clonez le dépôt depuis la fiche projet"}
-            from ..skills.project_modules import list_project_modules
-            return list_project_modules(
-                repo_path,
-                path=args.get("path") or "",
-                include_invalid=bool(args.get("include_invalid", True)),
-                limit=max(1, min(int(args.get("limit") or 300), 1000)),
-            )
-
-        elif name == "search_target_source":
-            if not target_path:
-                return {"ok": False, "error": "Sources de la version cible non disponibles — téléchargez-les depuis la page Sources"}
-            return await _search_odoo_source(args, target_path)
-
-        elif name == "read_target_file":
-            if not target_path:
-                return {"ok": False, "error": "Sources de la version cible non disponibles"}
-            return await _read_odoo_file(args, target_path)
-
-        elif name == "git_show_commit":
-            return await _git_show_commit(args, source_path, repo_path, target_path)
-
-        elif name == "count_source_lines":
-            scope = (args.get("scope") or "").lower()
-            scope_map = {"odoo": source_path, "target": target_path, "project": repo_path}
-            if scope not in scope_map:
-                return {"ok": False, "error": "scope doit être 'odoo', 'target' ou 'project'"}
-            base = scope_map[scope]
-            if not base:
-                labels = {"odoo": "Sources Odoo", "target": "Sources de la version cible", "project": "Repo projet client"}
-                return {"ok": False, "error": f"{labels[scope]} non disponible"}
-            return await _count_lines(args, base)
-
-        elif name == "inspect_studio":
-            if odoo is None:
-                return {"ok": False, "error": "Connexion Odoo requise pour inspecter Studio — ouvrez un projet depuis la page Projets"}
-            return await _inspect_studio(args, odoo)
-
-        elif name == "inspect_odoo_view":
-            if odoo is None:
-                return {"ok": False, "error": "Connexion Odoo requise pour inspecter une vue — ouvrez un projet depuis la page Projets"}
-            from .view_service import inspect_odoo_view
-            return await inspect_odoo_view(
-                odoo, args.get("model", ""), args.get("view_type"), args.get("view_id"))
-
-        elif name == "inspect_odoo_report":
-            if odoo is None:
-                return {"ok": False, "error": "Connexion Odoo requise pour inspecter un rapport — ouvrez un projet depuis la page Projets"}
-            from .view_service import inspect_odoo_report
-            return await inspect_odoo_report(
-                odoo, args.get("model"), args.get("report_name"))
-
-        return {"ok": False, "error": f"Outil inconnu: {name}"}
+        return await handler.run(args, ctx)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
 

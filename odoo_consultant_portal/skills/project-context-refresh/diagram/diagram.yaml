@@ -1,0 +1,28 @@
+inputs:
+  - Profil client
+  - Environnement actif
+  - Clé Anthropic
+inputs_en:
+  - Client profile
+  - Active environment
+  - Anthropic key
+steps:
+  - "Vérifier l'accès Odoo (XML-RPC)"
+  - git pull sur le dépôt custom
+  - Détecter la localisation (companies → country)
+  - Recalculer la complexité technique (Studio / dev / vanilla)
+  - Appeler auto_fill_context() pour régénérer le markdown projet
+steps_en:
+  - "Check Odoo access (XML-RPC)"
+  - git pull on the custom repository
+  - Detect localization (companies → country)
+  - Recompute technical complexity (Studio / dev / vanilla)
+  - Call auto_fill_context() to regenerate project markdown
+outputs:
+  - "project-context.md mis à jour"
+  - "Toast UI multi-steps"
+outputs_en:
+  - "Updated project-context.md"
+  - "Multi-step UI toast"
+notes: "Chaque sous-étape est isolée : un échec n'interrompt pas les autres."
+notes_en: "Each sub-step is isolated: a failure does not stop the others."

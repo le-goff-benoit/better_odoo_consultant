@@ -1,0 +1,66 @@
+inputs:
+  - Prompt utilisateur
+  - Version Odoo
+  - Profil projet
+  - "Blocs prioritaires (warning, localization, complexity)"
+  - Liste des skills désactivés
+inputs_en:
+  - User prompt
+  - Odoo version
+  - Project profile
+  - "Priority blocks (warning, localization, complexity)"
+  - List of disabled skills
+steps:
+  - "Demander leur contribution à chaque sous-skill activé"
+  - "Trier les sections : core (jamais coupées) puis routées"
+  - Réserver le budget aux blocs prioritaires en premier
+  - "Empiler les sections routées jusqu'à 36 000 caractères"
+  - "Cacher le résultat par (prompt, profil, version, locale)"
+steps_en:
+  - "Ask each enabled sub-skill for its contribution"
+  - "Order sections: core (never trimmed) then routed"
+  - Reserve the budget for priority blocks first
+  - Stack routed sections up to 36 000 chars
+  - "Cache the result by (prompt, profile, version, locale)"
+outputs:
+  - S
+  - y
+  - s
+  - t
+  - e
+  - m
+  - " "
+  - p
+  - r
+  - o
+  - m
+  - p
+  - t
+  - " "
+  - M
+  - a
+  - r
+  - k
+  - d
+  - o
+  - w
+  - n
+  - " "
+  - f
+  - i
+  - n
+  - a
+  - l
+  - ","
+  - " "
+  - ≤
+  - " "
+  - 3
+  - 6
+  - " "
+  - k
+  - B
+outputs_en:
+  - "Final Markdown system prompt, ≤ 36 kB"
+notes: "Skill cœur structurant — désactiver tout l'agrégateur revient à parler à un LLM nu."
+notes_en: Structural core skill — fully disabling it amounts to talking to a bare LLM.

@@ -1,0 +1,14 @@
+inputs:
+  - Chemin
+  - Version cible
+inputs_en:
+  - Path
+  - Target version
+steps:
+  - Lire le fichier sous la version cible
+steps_en:
+  - Read the file under the target version
+outputs:
+  - Contenu
+outputs_en:
+  - Content

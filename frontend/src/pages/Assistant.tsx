@@ -1416,7 +1416,7 @@ export default function Assistant() {
     <ConversationContextPanel
       mode={perspectiveMode}
       effectivePerspective={perspective}
-      onModeChange={setPerspective}
+      onModeChange={disabledTools.includes('perspective_router') ? undefined : setPerspective}
       disabled={streaming}
       provider={currentProv?.label}
       model={currentProv?.models.find(m => m.id === modelId)?.label}
@@ -1433,7 +1433,7 @@ export default function Assistant() {
 	      skillsUsed={skillsUsed}
 	      sources={conversationSources}
       attachments={readyAttachments.map(a => a.name)}
-      onRefresh={handleRefreshContext}
+      onRefresh={disabledTools.includes('project_context_refresh') ? undefined : handleRefreshContext}
     />
   ) : null
 

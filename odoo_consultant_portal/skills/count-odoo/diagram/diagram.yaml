@@ -1,0 +1,14 @@
+inputs:
+  - Modèle Odoo
+  - Domaine
+inputs_en:
+  - Odoo model
+  - Domain
+steps:
+  - "Appeler search_count via XML-RPC"
+steps_en:
+  - "Call search_count via XML-RPC"
+outputs:
+  - Entier
+outputs_en:
+  - Integer

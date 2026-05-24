@@ -1,0 +1,16 @@
+inputs:
+  - "Modèle ou nom d'écran"
+inputs_en:
+  - Model or screen name
+steps:
+  - Rechercher ir.actions liées
+  - Remonter ir.ui.menu vers la racine
+  - Construire le chemin de navigation
+steps_en:
+  - Search related ir.actions
+  - Walk ir.ui.menu up to the root
+  - Build the navigation path
+outputs:
+  - "Liste de chemins 'menu > sous-menu > action'"
+outputs_en:
+  - "List of 'menu > submenu > action' paths"

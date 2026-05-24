@@ -1,0 +1,14 @@
+inputs:
+  - xml_id ou nom de modèle + type
+inputs_en:
+  - xml_id or model name + type
+steps:
+  - "Appeler get_view (assemble l'arch complète)"
+  - "Résoudre l'héritage et les xpath"
+steps_en:
+  - Call get_view (assembles the full arch)
+  - Resolve inheritance and xpaths
+outputs:
+  - "Arch XML final servi à l'utilisateur"
+outputs_en:
+  - Final XML arch served to the user

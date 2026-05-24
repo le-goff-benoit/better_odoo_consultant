@@ -82,6 +82,13 @@ export const saveModelConfig = (config: Record<string, string[]>) => api.post('/
 export const getToolConfig = () => api.get('/ai/tool-config')
 export const saveToolConfig = (config: { disabled_tools: string[] }) => api.post('/ai/tool-config', config)
 export const getAiSkills = () => api.get('/ai/skills')
+export const getSkillDiagram = (name: string) => api.get(`/ai/skills/${encodeURIComponent(name)}/diagram`)
+export const getSkillReference = (name: string, filename: string) =>
+  api.get(`/ai/skills/${encodeURIComponent(name)}/reference/${encodeURIComponent(filename)}`)
+export const getSkillTemplate = (name: string, filename: string) =>
+  api.get(`/ai/skills/${encodeURIComponent(name)}/template/${encodeURIComponent(filename)}`)
+export const getSkillExample = (name: string, filename: string) =>
+  api.get(`/ai/skills/${encodeURIComponent(name)}/example/${encodeURIComponent(filename)}`)
 
 // Context files
 export const listContextFiles = (locale = 'fr') => api.get(`/context/?locale=${encodeURIComponent(locale)}`)

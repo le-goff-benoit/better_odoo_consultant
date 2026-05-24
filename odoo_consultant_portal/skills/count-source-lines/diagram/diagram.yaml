@@ -1,0 +1,18 @@
+inputs:
+  - Racine
+  - Filtres ext/dossier optionnels
+inputs_en:
+  - Root
+  - Optional ext/folder filters
+steps:
+  - Walk récursif
+  - "wc -l par fichier"
+  - Agréger par module/extension
+steps_en:
+  - Recursive walk
+  - "wc -l per file"
+  - Aggregate by module/extension
+outputs:
+  - Totaux + breakdown
+outputs_en:
+  - Totals + breakdown

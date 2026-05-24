@@ -1,0 +1,16 @@
+inputs:
+  - Requête
+  - Profil client
+  - Env actif
+inputs_en:
+  - Query
+  - Client profile
+  - Active env
+steps:
+  - "ripgrep sur ~/.odoo-consultant/repos/<profile>/<env>"
+steps_en:
+  - "ripgrep on ~/.odoo-consultant/repos/<profile>/<env>"
+outputs:
+  - Matches dans le code custom
+outputs_en:
+  - Matches in the custom code

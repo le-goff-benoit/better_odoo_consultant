@@ -1,0 +1,16 @@
+inputs:
+  - Modèle
+inputs_en:
+  - Model
+steps:
+  - Lire ir.model.access pour le modèle
+  - Lire ir.rule (record rules)
+  - Lister les groupes liés
+steps_en:
+  - Read ir.model.access for the model
+  - Read ir.rule (record rules)
+  - List linked groups
+outputs:
+  - Synthèse droits + règles + groupes
+outputs_en:
+  - Summary of rights + rules + groups
