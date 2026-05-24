@@ -129,6 +129,8 @@ const sourcesCopy = {
     missing: 'Absent',
     running: 'En cours',
     upToDate: 'À jour',
+    updateAvailable: 'Maj disponible',
+    updating: 'Maj en cours',
     noSshTitle: "Pas d'accès SSH GitHub",
     noSshWithKey: "Une clé SSH existe mais n'est pas encore autorisée sur GitHub.",
     noSshNoKey: 'Aucune clé SSH. Créez-en une pour télécharger Odoo Enterprise.',
@@ -212,6 +214,8 @@ const sourcesCopy = {
     missing: 'Missing',
     running: 'Running',
     upToDate: 'Up to date',
+    updateAvailable: 'Update available',
+    updating: 'Updating',
     noSshTitle: 'No GitHub SSH access',
     noSshWithKey: 'An SSH key exists but is not authorized on GitHub yet.',
     noSshNoKey: 'No SSH key. Create one to download Odoo Enterprise.',
@@ -610,18 +614,24 @@ export default function Sources() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <StatusBadge status={status} isInstalled={isInstalled} loading={statusLoading} labels={c} />
+                    <StatusBadge
+                      status={status}
+                      isInstalled={isInstalled}
+                      loading={statusLoading}
+                      behind={Math.max(repoInfo?.behind ?? 0, entInfo?.behind ?? 0)}
+                      labels={c}
+                    />
                   </div>
                 </div>
 
-                {/* Running status label */}
-                {(status === 'running' || status === 'error' || status === 'done') && card?.currentLabel && (
+                {/* Running label kept only while a sync is actually in progress */}
+                {status === 'running' && card?.currentLabel && (
                   <div style={{
                     fontSize: 11, marginBottom: 8,
-                    color: status === 'error' ? t.danger : status === 'done' ? t.success : t.muted,
+                    color: t.muted,
                     fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
-                    {status === 'running' ? card.currentLabel : status === 'done' ? card.currentLabel : card.currentLabel}
+                    {card.currentLabel}
                   </div>
                 )}
 
@@ -822,12 +832,9 @@ function InstalledStrip({ info, entInfo, version, label, showCommits, onToggleCo
         </div>
       )}
       <div className="source-installed-actions">
-        {(info.recent_commits?.length ?? 0) > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={onToggleCommits} title={labels.latestUpdates}>
-            <RefreshCw size={13} /> {labels.latestUpdatesShort}
-            <span style={{ marginLeft: 4, opacity: .65 }}>{info.recent_commits!.length}</span>
-          </button>
-        )}
+        <button className="btn btn-ghost btn-sm" onClick={onToggleCommits} title={labels.latestUpdates}>
+          <RefreshCw size={13} /> {labels.latestUpdatesShort}
+        </button>
         <button className="btn btn-outline btn-sm" onClick={buildSummary} disabled={summaryLoading}>
           {summaryLoading
             ? <RefreshCw size={13} style={{ animation: 'spin .9s linear infinite' }} />
@@ -1131,6 +1138,13 @@ function CommitsModal({ label, commPath, entPath, onClose, onAskAi, onAskAiCommi
   labels: typeof sourcesCopy.fr
 }) {
   const [days, setDays] = useState(30)
+  // `effectiveDays` is what actually drives the fetch — debounced from `days`
+  // so typing "365" doesn't fire one request per keystroke.
+  const [effectiveDays, setEffectiveDays] = useState(30)
+  useEffect(() => {
+    const id = window.setTimeout(() => setEffectiveDays(days), 400)
+    return () => window.clearTimeout(id)
+  }, [days])
   const [query, setQuery] = useState('')
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
   const [commits, setCommits] = useState<TaggedCommit[]>([])
@@ -1145,7 +1159,7 @@ function CommitsModal({ label, commPath, entPath, onClose, onAskAi, onAskAiCommi
 
     Promise.all(targets.map(async tgt => {
       try {
-        const res = await getCommitsSince(tgt.path, days)
+        const res = await getCommitsSince(tgt.path, effectiveDays)
         const arr: CommitSince[] = res.data?.commits ?? []
         return arr.map(c => ({ ...c, _kind: tgt.kind }))
       } catch { return [] as (CommitSince & { _kind: 'community' | 'enterprise' })[] }
@@ -1171,7 +1185,7 @@ function CommitsModal({ label, commPath, entPath, onClose, onAskAi, onAskAiCommi
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [days, commPath, entPath])
+  }, [effectiveDays, commPath, entPath])
 
   const availableTags = useMemo(() => {
     const counts = new Map<string, number>()
@@ -1273,7 +1287,7 @@ function CommitsModal({ label, commPath, entPath, onClose, onAskAi, onAskAiCommi
             padding: '10px 12px', maxHeight: '52vh', overflowY: 'auto',
             border: `1px solid ${t.border}`,
           }}>
-            {loading ? (
+            {(loading || days !== effectiveDays) ? (
               <div style={{ fontSize: 12, color: t.muted, padding: '14px 4px' }}>{labels.loadingCommits}</div>
             ) : filtered.length === 0 ? (
               <div style={{ fontSize: 12, color: t.muted, padding: '14px 4px' }}>{labels.noCommits}</div>
@@ -1357,16 +1371,15 @@ function LogBox({ logs }: { logs: string[] }) {
   )
 }
 
-function StatusBadge({ status, isInstalled, loading, labels }: { status: CardState; isInstalled?: boolean; loading?: boolean; labels: typeof sourcesCopy.fr }) {
+function StatusBadge({ status, isInstalled, loading, behind, labels }: {
+  status: CardState; isInstalled?: boolean; loading?: boolean; behind?: number; labels: typeof sourcesCopy.fr
+}) {
   if (loading) return <StatusPill tone="running">{labels.status}</StatusPill>
-  const cfg: Record<CardState, { tone: 'ok' | 'warning' | 'error' | 'idle' | 'running'; label: string }> = {
-    idle:    isInstalled ? { tone: 'ok', label: labels.installed } : { tone: 'idle', label: labels.missing },
-    running: { tone: 'running', label: labels.running },
-    done:    { tone: 'ok', label: labels.upToDate },
-    error:   { tone: 'error', label: labels.error },
-  }
-  const item = cfg[status]
-  return <StatusPill tone={item.tone}>{item.label}</StatusPill>
+  if (status === 'running') return <StatusPill tone="running">{labels.updating}</StatusPill>
+  if (status === 'error') return <StatusPill tone="error">{labels.error}</StatusPill>
+  if (!isInstalled) return <StatusPill tone="idle">{labels.missing}</StatusPill>
+  if ((behind ?? 0) > 0) return <StatusPill tone="warning">{labels.updateAvailable} ({behind})</StatusPill>
+  return <StatusPill tone="ok">{labels.upToDate}</StatusPill>
 }
 
 function SshSetup({ hasKeys, sshStep, publicKey, copied, onGenerate, onCopy, onRecheck, labels }: {

@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.55.0',
+    version: '0.56.0',
     date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'IA — nouvel outil `git_show_commit(sha, scope)` : l\'assistant lit désormais le diff réel d\'un commit (Community, Enterprise, version cible ou dépôt projet) au lieu de spéculer ; deepen automatique du clone shallow (jusqu\'à 3× 500 commits) quand le SHA est trop ancien',
+      'IA — system prompt enrichi : « quand l\'utilisateur référence un SHA, appelle toujours `git_show_commit` » + mentions des scopes `target` et `project`',
+      'Sources — compteur « N » retiré du bouton « Mises à jour » (le modal s\'ouvre toujours sur les 30 derniers jours)',
+      'Sources — modal commits : période en jours désormais debouncée (400 ms) pour ne plus déclencher une requête par frappe, et l\'état « Chargement » reste visible pendant le pending pour éviter le faux « Aucun commit »',
+      'Sources — pastille de statut dynamique : « Maj en cours » pendant un sync, « Maj disponible (N) » si Community ou Enterprise est en retard, sinon « À jour » — suppression du texte « ✓ Terminé » statique',
+    ],
+  },
+  {
+    version: '0.55.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Assistant — restauration automatique de la dernière conversation à l\'arrivée sur la page (sinon « Odoo général » par défaut)',
       'Sources — modal « Dernières mises à jour » enrichi : recherche (message / SHA / auteur), période en jours configurable (défaut 30, jusqu\'à 10 ans), chips de filtre par tag Odoo (FIX, IMP, ADD, PERF…) avec compteurs colorés',

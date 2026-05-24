@@ -90,6 +90,30 @@ _TOOL_READ_REPO = {
     ),
 }
 
+_TOOL_GIT_SHOW = {
+    "name": "git_show_commit",
+    "description": (
+        "Afficher le contenu réel d'un commit Git : auteur, date, message, fichiers modifiés "
+        "et patch (diff unifié). À utiliser CHAQUE FOIS que l'utilisateur référence un commit "
+        "par son SHA (ex: `fa2bfa97`, `abc123`) — n'invente JAMAIS le contenu d'un commit, "
+        "appelle cet outil pour le lire dans les sources locales.\n"
+        "Le clone est `shallow` par défaut : si le SHA n'est pas dans l'historique téléchargé, "
+        "l'outil tente automatiquement un fetch deepen progressif (jusqu'à 3 fois 500 commits) "
+        "avant d'abandonner.\n"
+        "Paramètres :\n"
+        "- `sha` (obligatoire) : SHA court (7+ caractères) ou complet (40 caractères).\n"
+        "- `scope` (obligatoire) : où chercher le commit.\n"
+        "    * `odoo`       — sources Odoo Community de la version courante\n"
+        "    * `enterprise` — sources Odoo Enterprise de la version courante\n"
+        "    * `target`     — sources Odoo de la version cible (mode migration)\n"
+        "    * `project`    — dépôt custom du projet client\n"
+        "- `max_lines` (optionnel, défaut 400, max 2000) : limite du diff (le résumé `stats` et "
+        "la liste `files` ne sont jamais tronqués).\n"
+        "Retourne : sha complet, auteur, date, message, stats (nb fichiers, insertions, suppressions), "
+        "liste des fichiers avec +/-, et le diff unifié."
+    ),
+}
+
 _TOOL_INSPECT_STUDIO = {
     "name": "inspect_studio",
     "description": (
@@ -196,6 +220,12 @@ TOOLS_CLAUDE = [
         "start_line": {"type": "integer", "description": "Première ligne à lire (défaut: 1)", "default": 1},
         "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + 150)", "default": 0},
     }}},
+    {**_TOOL_GIT_SHOW, "input_schema": {"type": "object", "required": ["sha", "scope"], "properties": {
+        "sha":       {"type": "string",  "description": "SHA court (≥7 caractères hex) ou complet (40 caractères hex)."},
+        "scope":     {"type": "string",  "enum": ["odoo", "enterprise", "target", "project"],
+                       "description": "Repo cible : 'odoo' = Community courant, 'enterprise' = Enterprise courant, 'target' = version cible, 'project' = dépôt client."},
+        "max_lines": {"type": "integer", "description": "Nombre max de lignes du diff (défaut 400, max 2000).", "default": 400},
+    }}},
 ]
 
 # ── OpenAI tool schemas ───────────────────────────────────────────
@@ -227,6 +257,11 @@ TOOLS_OPENAI = [
         "path":       {"type": "string"},
         "start_line": {"type": "integer", "default": 1},
         "end_line":   {"type": "integer", "default": 0},
+    }}}},
+    {"type": "function", "function": {**_TOOL_GIT_SHOW, "parameters": {"type": "object", "required": ["sha", "scope"], "properties": {
+        "sha":       {"type": "string"},
+        "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
+        "max_lines": {"type": "integer", "default": 400},
     }}}},
 ]
 
@@ -263,6 +298,12 @@ TOOLS_GEMINI = [
                  "start_line": {"type": "integer"},
                  "end_line":   {"type": "integer"},
              }}},
+            {"name": "git_show_commit", "description": _TOOL_GIT_SHOW["description"],
+             "parameters": {"type": "object", "required": ["sha", "scope"], "properties": {
+                 "sha":       {"type": "string"},
+                 "scope":     {"type": "string"},
+                 "max_lines": {"type": "integer"},
+             }}},
         ]
     }
 ]
@@ -281,6 +322,11 @@ TOOLS_CLAUDE_SRC = [
         "start_line": {"type": "integer", "description": "Première ligne à lire (défaut: 1)", "default": 1},
         "end_line":   {"type": "integer", "description": "Dernière ligne à lire (défaut: start_line + 150)", "default": 0},
     }}},
+    {**_TOOL_GIT_SHOW, "input_schema": {"type": "object", "required": ["sha", "scope"], "properties": {
+        "sha":       {"type": "string"},
+        "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
+        "max_lines": {"type": "integer", "default": 400},
+    }}},
 ]
 
 TOOLS_OPENAI_SRC = [
@@ -294,6 +340,11 @@ TOOLS_OPENAI_SRC = [
         "path":       {"type": "string"},
         "start_line": {"type": "integer", "default": 1},
         "end_line":   {"type": "integer", "default": 0},
+    }}}},
+    {"type": "function", "function": {**_TOOL_GIT_SHOW, "parameters": {"type": "object", "required": ["sha", "scope"], "properties": {
+        "sha":       {"type": "string"},
+        "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
+        "max_lines": {"type": "integer", "default": 400},
     }}}},
 ]
 
@@ -312,6 +363,12 @@ TOOLS_GEMINI_SRC = [
                  "path":       {"type": "string"},
                  "start_line": {"type": "integer"},
                  "end_line":   {"type": "integer"},
+             }}},
+            {"name": "git_show_commit", "description": _TOOL_GIT_SHOW["description"],
+             "parameters": {"type": "object", "required": ["sha", "scope"], "properties": {
+                 "sha":       {"type": "string"},
+                 "scope":     {"type": "string"},
+                 "max_lines": {"type": "integer"},
              }}},
         ]
     }
@@ -985,7 +1042,10 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
             "- `search_odoo_source(pattern=\"_name = 'helpdesk.ticket'\", path=\"enterprise/helpdesk\")`  ← module Enterprise\n"
             "- `read_odoo_file(path=\"community/addons/account/models/account_move.py\", start_line=1, end_line=100)`\n"
             "- `read_odoo_file(path=\"community/odoo/addons/base/models/ir_model.py\")`  ← module base\n"
-            "- `read_odoo_file(path=\"community/odoo/fields.py\")`  ← cœur ORM"
+            "- `read_odoo_file(path=\"community/odoo/fields.py\")`  ← cœur ORM\n"
+            "GIT — quand l'utilisateur référence un commit par SHA (ex `fa2bfa97`), appelle "
+            "TOUJOURS `git_show_commit(sha=..., scope='odoo'|'enterprise')` au lieu de spéculer "
+            "sur le contenu. Le clone shallow est deepené automatiquement si besoin."
         )
     else:
         parts.append("### Code source Odoo\nNon disponible pour cette version (téléchargez-les depuis la page Sources).")
@@ -994,7 +1054,8 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
         parts.append(
             f"### Code source Odoo (version cible)\n"
             f"Disponible : `{target_path}`.\n"
-            "→ Utilise `search_target_source` / `read_target_file` pour la version cible."
+            "→ Utilise `search_target_source` / `read_target_file` pour la version cible. "
+            "Pour un commit précis : `git_show_commit(sha=..., scope='target')`."
         )
 
     if repo_path:
@@ -1004,7 +1065,8 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
             "→ Pour découvrir les modules custom, commence TOUJOURS par :\n"
             "  `search_project_source(pattern=\"name\", file_types=[\"__manifest__.py\"])`\n"
             "Puis `read_project_file` pour lire les fichiers pertinents. "
-            "Ne cherche PAS `__manifest__.py` comme pattern — c'est un nom de fichier, pas du contenu."
+            "Ne cherche PAS `__manifest__.py` comme pattern — c'est un nom de fichier, pas du contenu.\n"
+            "Pour inspecter un commit précis du dépôt projet : `git_show_commit(sha=..., scope='project')`."
         )
 
     if source_path or repo_path or target_path:
@@ -1639,6 +1701,152 @@ async def _count_lines(args: dict, base_dir: str) -> dict:
     }
 
 
+# ── Git show tool ─────────────────────────────────────────────────
+
+_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+_NUMSTAT_RE = re.compile(r"^(\d+|-)\t(\d+|-)\t(.+)$")
+
+
+async def _git_show_commit(args: dict, source_path: Optional[str], repo_path: Optional[str], target_path: Optional[str]) -> dict:
+    """Show one commit (metadata + numstat + unified diff) from a local git repo.
+
+    Tolerates shallow clones by deepening on demand (up to 3 × --deepen 500) when
+    the SHA is unknown. Returns structured stats plus the textual diff capped to
+    ``max_lines``.
+    """
+    sha = (args.get("sha") or "").strip()
+    scope = (args.get("scope") or "").strip().lower()
+    max_lines_raw = args.get("max_lines")
+    try:
+        max_lines = int(max_lines_raw) if max_lines_raw is not None else 400
+    except (TypeError, ValueError):
+        max_lines = 400
+    max_lines = max(50, min(max_lines, 2000))
+
+    if not sha or not _SHA_RE.match(sha):
+        return {"ok": False, "error": "SHA invalide (7 à 40 caractères hexadécimaux attendus)."}
+
+    # Map scope → repo path
+    if scope == "odoo":
+        repo = source_path
+    elif scope == "enterprise":
+        repo = (source_path + "-enterprise") if source_path else None
+    elif scope == "target":
+        repo = target_path
+    elif scope == "project":
+        repo = repo_path
+    else:
+        return {"ok": False, "error": "scope doit être 'odoo', 'enterprise', 'target' ou 'project'."}
+
+    if not repo or not os.path.isdir(os.path.join(repo, ".git")):
+        labels = {"odoo": "Sources Odoo Community", "enterprise": "Sources Odoo Enterprise",
+                  "target": "Sources de la version cible", "project": "Repo projet client"}
+        return {"ok": False, "error": f"{labels.get(scope, scope)} non disponible — clonez-les depuis l'app."}
+
+    async def _git(*git_args: str, timeout: int = 30) -> tuple[int, str, str]:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "-C", repo, *git_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            return 124, "", "timeout"
+        return proc.returncode or 0, stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace")
+
+    # Try to find the commit; deepen the shallow clone if missing.
+    deepened = 0
+    rc, out, _ = await _git("cat-file", "-e", sha, timeout=10)
+    if rc != 0:
+        branch_rc, branch_out, _ = await _git("rev-parse", "--abbrev-ref", "HEAD", timeout=10)
+        branch = branch_out.strip() if branch_rc == 0 else ""
+        for _ in range(3):
+            if not branch or branch == "HEAD":
+                break
+            frc, _, _ = await _git("fetch", "--quiet", "--deepen=500", "origin", branch, timeout=90)
+            deepened += 1
+            if frc != 0:
+                break
+            rc, _, _ = await _git("cat-file", "-e", sha, timeout=10)
+            if rc == 0:
+                break
+        if rc != 0:
+            return {
+                "ok": False,
+                "error": f"Commit {sha} introuvable dans le clone local (même après {deepened} deepen).",
+                "suggestion": (
+                    "Vérifie le SHA, ou mets à jour la source depuis l'app (bouton « Vérifier »). "
+                    "Si le commit est très ancien, il peut ne plus être atteignable depuis la branche actuelle."
+                ),
+            }
+
+    # Header (metadata + commit message)
+    rc, header_out, header_err = await _git(
+        "show", "--no-patch",
+        "--pretty=format:%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b",
+        sha, timeout=20,
+    )
+    if rc != 0:
+        return {"ok": False, "error": f"git show (header) a échoué : {header_err.strip()[:200]}"}
+
+    parts = header_out.split("\x1f")
+    if len(parts) < 5:
+        return {"ok": False, "error": "Sortie git show inattendue."}
+    full_sha, author, email, iso_date, subject = parts[0], parts[1], parts[2], parts[3], parts[4]
+    body = parts[5].strip() if len(parts) > 5 else ""
+
+    # Per-file numstat
+    rc, num_out, _ = await _git("show", "--numstat", "--format=", sha, timeout=30)
+    files: list[dict] = []
+    total_add = total_del = 0
+    if rc == 0:
+        for line in num_out.splitlines():
+            m = _NUMSTAT_RE.match(line.strip())
+            if not m:
+                continue
+            add_s, del_s, fpath = m.group(1), m.group(2), m.group(3)
+            adds = 0 if add_s == "-" else int(add_s)
+            dels = 0 if del_s == "-" else int(del_s)
+            files.append({"path": fpath, "additions": adds, "deletions": dels})
+            total_add += adds
+            total_del += dels
+
+    # Unified diff
+    rc, diff_out, diff_err = await _git("show", "--patch", "--format=", sha, timeout=45)
+    if rc != 0:
+        return {"ok": False, "error": f"git show (diff) a échoué : {diff_err.strip()[:200]}"}
+
+    diff_lines = diff_out.splitlines()
+    truncated = len(diff_lines) > max_lines
+    diff_text = "\n".join(diff_lines[:max_lines])
+
+    return {
+        "ok": True,
+        "scope": scope,
+        "sha": full_sha,
+        "short_sha": full_sha[:8],
+        "author": author,
+        "email": email,
+        "date": iso_date,
+        "subject": subject,
+        "message": body,
+        "stats": {
+            "files": len(files),
+            "insertions": total_add,
+            "deletions": total_del,
+        },
+        "files": files,
+        "diff": diff_text,
+        "diff_lines": len(diff_lines),
+        "truncated": truncated,
+        "deepened": deepened or None,
+        "note": (f"Diff tronqué à {max_lines} lignes — augmentez max_lines (max 2000) ou demandez un fichier précis."
+                 if truncated else None),
+    }
+
+
 # ── Studio inspection tool ────────────────────────────────────────
 
 async def _inspect_studio(args: dict, odoo: "OdooClient") -> dict:
@@ -1756,6 +1964,9 @@ async def _run_tool(name: str, args: dict, odoo: "OdooClient", source_path: Opti
             if not target_path:
                 return {"ok": False, "error": "Sources de la version cible non disponibles"}
             return await _read_odoo_file(args, target_path)
+
+        elif name == "git_show_commit":
+            return await _git_show_commit(args, source_path, repo_path, target_path)
 
         elif name == "count_source_lines":
             scope = (args.get("scope") or "").lower()
