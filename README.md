@@ -5,7 +5,10 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.55.0** — outillage Sources et mémoire conversationnelle :
+> Version actuelle : **0.57.0** — outillage Sources, mémoire conversationnelle et tool IA git :
+> - **IA — `git_show_commit`** : nouvel outil qui lit le diff réel d'un commit (Community / Enterprise / version cible / projet) avec deepen automatique du clone shallow. L'assistant ne spécule plus quand un SHA est mentionné.
+> - **Sources — pastille de statut dynamique** : « Maj en cours », « Maj disponible (N) », « À jour », « Absent », « Erreur ». Bouton « Vérifier » retiré, auto-check au chargement de la page.
+> - **Sources — bouton « Commits »** (anciennement « Mises à jour ») : ouvre le modal git enrichi (recherche message/SHA/auteur, période en jours debouncée, chips de filtre par tag FIX/IMP/ADD/PERF…, badge Community/Enterprise/Both par commit, bouton IA au survol pour expliquer un commit précis).
 > - **Assistant** : la dernière conversation active est rouverte automatiquement quand on revient sur la page (sinon « Odoo général » par défaut). Les onglets À propos / Fonctionnement / Paramètres sont regroupés dans un menu déroulant ouvert depuis l'avatar utilisateur.
 > - **Sources — modal commits** : recherche (message / SHA / auteur), période configurable (défaut 30 j, jusqu'à 10 ans), chips de filtre par tag Odoo (FIX, IMP, ADD, PERF, REF, DOC…), badge `Community` / `Enterprise` / `Les deux` par commit (dédup par SHA), bouton IA au survol d'une ligne pour expliquer un commit précis dans l'assistant.
 > - **Sources — modal Maintenance** : nouveau bouton en bas de carte (parité avec Projets) ouvre un modal regroupant « Ouvrir dans VS Code » (génère un `.code-workspace` Community + Enterprise), « Ouvrir le dossier » (xdg-open / open / startfile), édition du contexte version (même fichier `odoo-{version}.md` que Settings), liens GitHub `odoo/odoo@branche` et `odoo/enterprise@branche`, et retrait des versions custom.

@@ -95,7 +95,7 @@ const sourcesCopy = {
     hide: 'Masquer',
     aiSummary: 'Résumé 30 j',
     latestUpdates: 'Dernières mises à jour',
-    latestUpdatesShort: 'Mises à jour',
+    latestUpdatesShort: 'Commits',
     askAi: 'Résumé IA',
     closeModal: 'Fermer',
     searchCommits: 'Rechercher (message, SHA, auteur)…',
@@ -180,7 +180,7 @@ const sourcesCopy = {
     hide: 'Hide',
     aiSummary: '30d summary',
     latestUpdates: 'Latest updates',
-    latestUpdatesShort: 'Updates',
+    latestUpdatesShort: 'Commits',
     askAi: 'AI summary',
     closeModal: 'Close',
     searchCommits: 'Search (message, SHA, author)…',
@@ -424,21 +424,6 @@ export default function Sources() {
     }
   }
 
-  const doCheckUpdates = async (version: string) => {
-    const path = customPaths[version] || defaultPath(version)
-    setUpdatesLoading(p => ({ ...p, [version]: true, [`${version}-enterprise`]: true }))
-    try {
-      const [commRes, entRes] = await Promise.allSettled([
-        checkSourceUpdates(version, path),
-        checkSourceUpdates(`${version}-enterprise`, path.replace(version, `${version}-enterprise`)),
-      ])
-      if (commRes.status === 'fulfilled') setRepoOverrides(p => ({ ...p, [version]: commRes.value.data }))
-      if (entRes.status === 'fulfilled')  setRepoOverrides(p => ({ ...p, [`${version}-enterprise`]: entRes.value.data }))
-    } finally {
-      setUpdatesLoading(p => ({ ...p, [version]: false, [`${version}-enterprise`]: false }))
-    }
-  }
-
   const startSync = async (version: string, includeEnterprise = enterprise[version] ?? false) => {
     const path = customPaths[version] || defaultPath(version)
     const ent  = includeEnterprise
@@ -644,8 +629,6 @@ export default function Sources() {
                     label={label}
                     showCommits={showCommits[version] ?? false}
                     onToggleCommits={() => setShowCommits(p => ({ ...p, [version]: !p[version] }))}
-                    onCheckUpdates={() => doCheckUpdates(version)}
-                    checking={checking}
                     lang={lang}
                     labels={c}
                     onAiSummary={(prefill) => navigate('/assistant', { state: { prefill, version, autoSend: true } })}
@@ -753,10 +736,10 @@ export default function Sources() {
 
 // ── InstalledStrip ──────────────────────────────────────────────
 
-function InstalledStrip({ info, entInfo, version, label, showCommits, onToggleCommits, onCheckUpdates, checking, onAiSummary, onAskAiCommit, lang, labels }: {
+function InstalledStrip({ info, entInfo, version, label, showCommits, onToggleCommits, onAiSummary, onAskAiCommit, lang, labels }: {
   info: RepoInfo; entInfo?: RepoInfo; version: string; label: string
-  showCommits: boolean; onToggleCommits: () => void; onCheckUpdates: () => void
-  checking: boolean; onAiSummary: (prefill: string) => void
+  showCommits: boolean; onToggleCommits: () => void
+  onAiSummary: (prefill: string) => void
   onAskAiCommit: (commit: TaggedCommit) => void
   lang: UiLanguage; labels: typeof sourcesCopy.fr
 }) {
@@ -839,10 +822,6 @@ function InstalledStrip({ info, entInfo, version, label, showCommits, onToggleCo
           {summaryLoading
             ? <RefreshCw size={13} style={{ animation: 'spin .9s linear infinite' }} />
             : <Bot size={13} />} {labels.aiSummary}
-        </button>
-        <button className="btn btn-ghost btn-sm source-check-button" onClick={onCheckUpdates} disabled={checking}>
-          <RefreshCw size={13} style={checking ? { animation: 'spin .9s linear infinite' } : undefined} />
-          {checking ? labels.checking : labels.check}
         </button>
       </div>
       {showCommits && createPortal(

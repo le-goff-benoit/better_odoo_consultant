@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.56.0',
+    version: '0.57.0',
     date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Sources — bouton « Vérifier » retiré des cartes : la pastille de statut dynamique + l\'auto-check au chargement de la page rendent l\'action manuelle inutile',
+      'Sources — bouton « Mises à jour » renommé en « Commits » (plus parlant pour ouvrir le modal de l\'historique git)',
+    ],
+  },
+  {
+    version: '0.56.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'IA — nouvel outil `git_show_commit(sha, scope)` : l\'assistant lit désormais le diff réel d\'un commit (Community, Enterprise, version cible ou dépôt projet) au lieu de spéculer ; deepen automatique du clone shallow (jusqu\'à 3× 500 commits) quand le SHA est trop ancien',
       'IA — system prompt enrichi : « quand l\'utilisateur référence un SHA, appelle toujours `git_show_commit` » + mentions des scopes `target` et `project`',
