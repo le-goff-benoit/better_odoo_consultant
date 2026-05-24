@@ -7,10 +7,38 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.64.0',
+    version: '0.66.0',
     date: '2026-05-24',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'UI réponses — refonte des « propositions d\'action » : les puces d\'action d\'une réponse IA sont désormais extraites et affichées sous la réponse comme une strip de chips « Propositions d\'action » (identique aux suggestions du composer). Plus de petit paper-plane perdu à la fin des items',
+      'UI réponses — les propositions d\'action sont visibles aussi en plein écran (fullscreen ResponseModal), corrigeant un trou de longue date où le bouton « Lancer » disparaissait',
+      'UI réponses — interaction unifiée : suggestions initiales du composer et propositions d\'action issues des réponses partagent la même esthétique (chip pill brandé) et le même mode d\'usage (clic = envoi immédiat)',
+      'Markdown — nouveau helper exporté `extractActionItems(text)` qui parse une réponse Markdown et retourne les items listés sous une heading « Prochaines actions / Action items / Todo / Points d\'action ». Réutilisable depuis n\'importe quelle bubble (Assistant, Migration, futur Creator)',
+      'Markdown — nettoyage : suppression du bouton inline `ActionPromptButton` (devenu redondant avec la chip strip) et de son CSS associé `.markdown-action-item-*`',
+    ],
+  },
+  {
+    version: '0.65.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Skills — nouveau skill cœur `attachment_handler` pour la gestion PDF + images : 3 références (matrice provider, stratégie d\'extraction, patterns de comparaison), 4 examples métier (extraction facture, comparaison devis, diagnostic capture d\'écran, usage canonique), 3 scripts standalone (extract_pdf_text, pdf_to_images, compare_documents) + handler in-process exposant ces 3 tools au LLM',
+      'IA — fix bug 400 « type has to be either \'image_url\' or \'text\' » sur GitHub Models / Copilot : `_openai_content` applique désormais une chaîne de fallback pour les PDFs (pypdf extraction texte → pdf2image conversion en images si scanné). Claude et Gemini gardent le format natif, OpenAI direct garde le bloc `file`',
+      'IA — 3 nouveaux tools exposés à Claude / OpenAI / Gemini : `extract_pdf_text(attachment_name, pages?)`, `pdf_to_images(attachment_name, pages?, dpi?)`, `compare_documents(name_a, name_b, mode)`. Permettent à l\'IA d\'agir sur les PDFs uploadés (extraction ciblée, conversion visuelle, diff structuré)',
+      'IA — auto-load triggers pour les références du skill : prompts évoquant erreur 400 PDF, support multimodal ou PDF scanné chargent automatiquement la matrice provider ou la stratégie d\'extraction',
+      'Backend — nouveau `services/attachment_store.py` (ContextVar + dict in-memory) pour exposer les attachments uploadés aux tools du skill sans plumbing supplémentaire. Stream_chat publie l\'inventaire au début de chaque chat, le nettoie en `finally`',
+      'Use cases supportés : facture fournisseur → vendor bill draft Odoo, comparaison devis client signé vs Odoo, diagnostic depuis capture d\'écran, plan comptable / BL scanné, mockup wireframe → brief Studio, contrat multi-page (extraction clauses), logo client → suggestion QWeb layout',
+      'Install — `pyproject.toml` ajoute `pdf2image>=1.17` ; `install.sh` détecte et installe `poppler-utils` automatiquement (apt/brew/dnf). Sans poppler, le skill bascule sur pypdf seul avec message explicite si le PDF est scanné',
+    ],
+  },
+  {
+    version: '0.64.0',
+    date: '2026-05-24',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skills — playbooks opérationnels complétés sur les 27 SKILL.md : déclencheurs, séquence recommandée, paramètres, pièges, combinaisons et critères de réponse systématiques',
       'IA — sélecteur de skills enrichi par familles d’intention : données live, KPI, vues, rapports, sécurité, Studio, source Odoo, source projet, migration cible, volumétrie et commits. Les bundles chargent les skills complémentaires dès le premier prompt',

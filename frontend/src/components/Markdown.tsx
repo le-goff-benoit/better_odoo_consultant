@@ -277,27 +277,69 @@ function nextContentLine(lines: string[], start: number): string {
   return ''
 }
 
-function ActionPromptButton({ actionText }: { actionText: string }) {
-  const { onPromptAction } = useContext(MarkdownActionsCtx)
-  if (!onPromptAction) return null
-  return (
-    <button
-      type="button"
-      className="markdown-action-item-button"
-      title="Demander à l'IA de réaliser cette action"
-      aria-label="Demander à l'IA de réaliser cette action"
-      onClick={() => onPromptAction(actionPrompt(stripMarkdownInline(actionText)))}
-    >
-      <Send size={11} />
-    </button>
-  )
+/** Build the prompt that will be sent to the AI when the user picks one of
+ *  the action items extracted from a previous response. Exported so the
+ *  bubbles can build chip click handlers without duplicating the wording. */
+export function actionPromptFor(actionText: string): string {
+  return actionPrompt(stripMarkdownInline(actionText))
+}
+
+/** Walk a Markdown string and return the list items found under any
+ *  « Actions à faire / Next actions / Todo » heading. Used to surface the
+ *  action items as a chip strip beneath the response (unified with the
+ *  initial composer suggestions). Stops collecting at the next heading. */
+export function extractActionItems(text: string): string[] {
+  const lines = text.split('\n')
+  const out: string[] = []
+  let inActionList = false
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const fence = line.trimStart().startsWith('```')
+    if (fence) {
+      // skip code block
+      i++
+      while (i < lines.length && !lines[i].trimStart().startsWith('```')) i++
+      continue
+    }
+    const hMatch = line.match(/^(#{1,6})\s+(.+)/)
+    if (hMatch) {
+      inActionList = ACTION_HEADING_RE.test(stripMarkdownInline(hMatch[2]))
+      continue
+    }
+    if (
+      ACTION_HEADING_RE.test(stripMarkdownInline(line))
+      && isListLine(nextContentLine(lines, i + 1))
+    ) {
+      inActionList = true
+      continue
+    }
+    const listMatch = line.match(/^[-*]\s+(.+)/)
+    if (listMatch) {
+      if (inActionList) out.push(stripMarkdownInline(listMatch[1]))
+      continue
+    }
+    const olMatch = line.match(/^(\d+)\.\s+(.+)/)
+    if (olMatch) {
+      if (inActionList) out.push(stripMarkdownInline(olMatch[2]))
+      continue
+    }
+    // Non-list non-empty line ends an action list section.
+    if (line.trim()) inActionList = false
+  }
+  // De-dupe while preserving order.
+  const seen = new Set<string>()
+  return out.filter(item => {
+    if (seen.has(item)) return false
+    seen.add(item)
+    return true
+  })
 }
 
 export default function Markdown({ text }: { text: string }) {
   const lines = text.split('\n')
   const result: React.ReactNode[] = []
   let i = 0
-  let inActionList = false
 
   while (i < lines.length) {
     const line = lines[i]
@@ -327,7 +369,6 @@ export default function Markdown({ text }: { text: string }) {
       const sizes = [18, 16, 14, 13, 12, 12]
       const margins = ['14px 0 4px', '12px 0 4px', '10px 0 3px', '8px 0 3px', '8px 0 3px', '8px 0 3px']
       const level = hMatch[1].length
-      inActionList = ACTION_HEADING_RE.test(stripMarkdownInline(hMatch[2]))
       result.push(<div key={i} style={{
         fontSize: sizes[level - 1], fontWeight: 700, color: t.text, margin: margins[level - 1],
       }}>{hMatch[2]}</div>)
@@ -339,8 +380,7 @@ export default function Markdown({ text }: { text: string }) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
           <span style={{ color: t.brandFg, flexShrink: 0 }}>•</span>
-          <span className={inActionList ? 'markdown-action-item-text' : undefined}>{inlineMarkdown(listMatch[1])}</span>
-          {inActionList && <ActionPromptButton actionText={listMatch[1]} />}
+          <span>{inlineMarkdown(listMatch[1])}</span>
         </div>
       )
       i++; continue
@@ -351,8 +391,7 @@ export default function Markdown({ text }: { text: string }) {
       result.push(
         <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
           <span style={{ color: t.brandFg, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
-          <span className={inActionList ? 'markdown-action-item-text' : undefined}>{inlineMarkdown(olMatch[2])}</span>
-          {inActionList && <ActionPromptButton actionText={olMatch[2]} />}
+          <span>{inlineMarkdown(olMatch[2])}</span>
         </div>
       )
       i++; continue
@@ -364,12 +403,10 @@ export default function Markdown({ text }: { text: string }) {
       ACTION_HEADING_RE.test(stripMarkdownInline(line))
       && isListLine(nextContentLine(lines, i + 1))
     ) {
-      inActionList = true
       result.push(<p key={i} style={{ margin: '0 0 4px', fontWeight: 700 }}>{inlineMarkdown(line)}</p>)
       i++; continue
     }
 
-    inActionList = false
     result.push(<p key={i} style={{ margin: '0 0 4px' }}>{inlineMarkdown(line)}</p>)
     i++
   }

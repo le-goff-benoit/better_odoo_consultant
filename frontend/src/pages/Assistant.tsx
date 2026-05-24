@@ -38,7 +38,8 @@ import { useRefreshProjectContext } from '../utils/refreshProjectContext'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
-import Markdown, { MarkdownActionsProvider } from '../components/Markdown'
+import Markdown, { MarkdownActionsProvider, extractActionItems } from '../components/Markdown'
+import ActionProposals from '../components/ActionProposals'
 
 // Module-level buffer: message arrays survive component unmount so streams
 // that finish after navigation are captured and shown on remount.
@@ -2077,6 +2078,11 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               <MarkdownActionsProvider onEditTable={onEditTable} onPromptAction={onPromptAction}>
                 <Markdown text={textEvt.content} />
               </MarkdownActionsProvider>
+              <ActionProposals
+                items={extractActionItems(textEvt.content)}
+                onPromptAction={onPromptAction}
+                disabled={loading}
+              />
             </div>
           </div>
         )}
@@ -2091,7 +2097,23 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             askMoreLabel={c.askMore}
             askMoreDisabled={loading}
           >
-            <Markdown text={textEvt.content} />
+            <MarkdownActionsProvider
+              onEditTable={onEditTable}
+              onPromptAction={prompt => {
+                setExpanded(false)
+                onPromptAction?.(prompt)
+              }}
+            >
+              <Markdown text={textEvt.content} />
+            </MarkdownActionsProvider>
+            <ActionProposals
+              items={extractActionItems(textEvt.content)}
+              disabled={loading}
+              onPromptAction={prompt => {
+                setExpanded(false)
+                onPromptAction?.(prompt)
+              }}
+            />
           </ResponseModal>
         )}
 

@@ -13,7 +13,8 @@ import WorkspaceShell from '../components/WorkspaceShell'
 import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
-import Markdown, { MarkdownActionsProvider } from '../components/Markdown'
+import Markdown, { MarkdownActionsProvider, extractActionItems } from '../components/Markdown'
+import ActionProposals from '../components/ActionProposals'
 import AiSelector from '../components/AiSelector'
 import { useWorkspaceContext } from '../components/Layout'
 import { PROVIDERS } from '../constants/providers'
@@ -845,6 +846,12 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               <MarkdownActionsProvider onPromptAction={onPromptAction}>
                 <Markdown text={textEvt.content} />
               </MarkdownActionsProvider>
+              <ActionProposals
+                items={extractActionItems(textEvt.content)}
+                onPromptAction={onPromptAction}
+                disabled={loading}
+                lang={lang === 'fr' ? 'fr' : 'en'}
+              />
             </div>
           </div>
         )}
@@ -859,7 +866,23 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             askMoreLabel={lang === 'fr' ? 'Plus de détail' : 'More detail'}
             askMoreDisabled={loading}
           >
-            <Markdown text={textEvt.content} />
+            <MarkdownActionsProvider
+              onPromptAction={prompt => {
+                setExpanded(false)
+                onPromptAction?.(prompt)
+              }}
+            >
+              <Markdown text={textEvt.content} />
+            </MarkdownActionsProvider>
+            <ActionProposals
+              items={extractActionItems(textEvt.content)}
+              disabled={loading}
+              lang={lang === 'fr' ? 'fr' : 'en'}
+              onPromptAction={prompt => {
+                setExpanded(false)
+                onPromptAction?.(prompt)
+              }}
+            />
           </ResponseModal>
         )}
 

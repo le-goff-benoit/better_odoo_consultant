@@ -5,11 +5,12 @@
 Better Odoo Assistant est une application web qui tourne sur votre machine. Elle centralise tout ce dont vous avez besoin en mission : connexion aux instances clients, exploration des sources Odoo, et surtout un **assistant IA qui connaît vos données et votre code**.
 
 > Fonctionne entièrement en local. Seuls les appels aux API IA (Claude, OpenAI…) transitent par internet.  
-> Version actuelle : **0.64.0** — assistant piloté par skills :
-> - **Skills — playbooks complets** : les 27 `SKILL.md` décrivent quand utiliser chaque capacité, les déclencheurs FR/EN, la séquence recommandée, les paramètres, les pièges et les combinaisons utiles.
-> - **Sélection IA — routage par intention** : le dispatcher combine les skills pertinents dès le premier prompt (record métier, KPI, vue, sécurité, Studio, migration, source projet/Odoo, volumétrie, commit).
+> Version actuelle : **0.66.0** — assistant piloté par skills, multimodal et actionnable :
+> - **Propositions d'action unifiées** : les puces d'action des réponses IA (« Prochaines actions / Action items ») sont extraites et présentées sous la réponse comme des chips brandées — même esthétique que les suggestions du composer, visibles aussi en plein écran. Clic = lance immédiatement l'action.
+> - **PDF + images, partout** : nouveau skill cœur `attachment_handler` avec fallback automatique pour les providers qui ne supportent pas les PDFs natifs (pypdf → pdf2image). Plus de bug 400 sur GitHub Models / Copilot.
+> - **3 tools dédiés** : `extract_pdf_text`, `pdf_to_images`, `compare_documents` — l'IA peut agir sur un PDF uploadé (extraire, paginer, differ). Use cases : facture → vendor bill draft, devis client signé vs Odoo, diagnostic capture d'écran, contrat multi-page, etc.
+> - **Skills — playbooks complets** : les 28 `SKILL.md` décrivent quand utiliser chaque capacité, les déclencheurs FR/EN, la séquence recommandée, les paramètres, les pièges et les combinaisons utiles.
 > - **Données Odoo — lectures exhaustives bornées** : `query_odoo` récupère tous les records visibles par défaut jusqu'au plafond configuré, avec pagination, compte total et warning explicite en cas de résultat partiel.
-> - **Contexte — plus lisible** : le panneau Contexte reste visible en desktop sur Assistant, Migration et Creator, et la liste des skills utilisés n'est plus tronquée.
 
 ---
 
