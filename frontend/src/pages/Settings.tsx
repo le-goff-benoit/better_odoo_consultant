@@ -1210,7 +1210,7 @@ function SkillDetailModal({ open, name, meta, enabled, scope, health, providersS
         <nav style={{ display: 'flex', gap: 6, padding: '10px 18px', borderBottom: '1px solid var(--th-border)', background: 'var(--th-bg-card)', overflowX: 'auto' }}>
           {tabs.map(({ id, label: tabLabel, count }) => (
             <button key={id} onClick={() => setTab(id)} style={{ padding: '7px 10px', borderRadius: 7, border: '1px solid ' + (tab === id ? 'var(--brand, #2563EB)' : 'var(--th-border)'), background: tab === id ? 'var(--brand-bg, rgba(37,99,235,0.12))' : 'transparent', color: tab === id ? 'var(--brand, #2563EB)' : 'var(--th-muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              {tabLabel}{typeof count === 'number' ? ` · ${count}` : ''}
+              {tabLabel}
             </button>
           ))}
         </nav>

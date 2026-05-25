@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.93.0',
+    version: '0.93.1',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'UI Settings — onglets du détail de skill : suppression du suffixe `· N` (compteurs) sur Références / Exemples / Tests routing / Historique d\'utilisation. Les libellés s\'affichent seuls, l\'info de volume était bruyante et peu actionnable',
+      'Skills — comblement des 2 vrais trous documentaires : `odoo_query_records` reçoit une référence lazy `query_pitfalls.md` (domaines polonais, `active_test`, contexte `lang`/`tz`/`company`/`bin_size`, pagination 500/5000, modèles courants `account.move` / `sale.order` / `stock.move`, erreurs XML-RPC fréquentes)',
+      'Skills — `odoo_inspect_modules` reçoit une référence lazy `module_taxonomy.md` (distinguer Community/Enterprise/custom, conventions de nommage `l10n_*` / `<client>_*`, lecture de stack PME, dépendances pour cadrage migration, pièges `state=to upgrade` / `uninstalled sales`)',
+      'Skills — les deux références sont en lazy load (non listées dans `references_auto_load`) : coût contexte zéro tant que le LLM ne les demande pas via `load_skill_reference`. Pas d\'impact routage, pas d\'impact runtime',
+    ],
+  },
+  {
+    version: '0.93.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Audit BETTER_SKILLS — application des 3 P2 issus de l\'audit de conformité aux best practices OpenAI / Anthropic / Agent Skills : élargissement des clauses limites sur les 3 skills qui ne citaient qu\'un seul sibling (ou aucun)',
       '`output_report_writer` — limite étendue à `runtime_attachment_handler` : un PDF utilisateur ne déclenche plus le rédacteur de rapports sauf demande explicite de livrable formaté',

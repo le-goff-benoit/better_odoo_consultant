@@ -6,7 +6,7 @@ Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sour
 
 > **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
 >
-> **Version actuelle :** `0.93.0` — audit BETTER_SKILLS appliqué (clauses limites élargies sur 3 skills, nouvelle règle dispatcher `pruned:deliverable-focus`, +6 cas eval ciblant les nouvelles frontières), 592 tests régressifs. Voir le changelog complet dans la page **À propos** de l'app.
+> **Version actuelle :** `0.93.1` — UI Settings : suppression des compteurs `· N` sur les onglets du détail de skill ; comblement des 2 vrais trous documentaires (références lazy `query_pitfalls.md` pour `odoo_query_records`, `module_taxonomy.md` pour `odoo_inspect_modules`). Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 
