@@ -6,7 +6,7 @@ Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sour
 
 > **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
 >
-> **Version actuelle :** `0.95.1` — rendu Mermaid amélioré : cartes titrées, liens linéaires, actions copier/télécharger et skill `generate_diagram` durci pour produire des diagrammes présentables. Voir le changelog complet dans la page **À propos** de l'app.
+> **Version actuelle :** `0.95.2` — reprise de page fiabilisée dans Assistant IA et Migration : les navigations pendant une génération ne créent plus de fausse erreur « Session interrompue ». Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 

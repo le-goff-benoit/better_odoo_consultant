@@ -135,7 +135,7 @@ function persistHistory(h: Record<string, SavedConv[]>) {
   try { localStorage.setItem(LS_HISTORY, JSON.stringify(h)) } catch { /* quota */ }
 }
 function finalizeOrphanedMessages(msgs: Message[]): Message[] {
-  return msgs.map(m => {
+  return msgs.flatMap(m => {
     if (!m.loading) return m
     const events = m.events ?? []
     const calls   = events.filter(e => e.type === 'tool_call')
@@ -143,10 +143,18 @@ function finalizeOrphanedMessages(msgs: Message[]): Message[] {
     const extraResults: AiEvent[] = calls
       .filter(c => !results.find(r => r.name === c.name))
       .map(c => ({ type: 'tool_result' as const, name: c.name, ok: false }))
+    const nextEvents = [...events, ...extraResults]
+    const hasRenderableContent = nextEvents.some(e =>
+      (e.type === 'text' && Boolean(e.content?.trim())) ||
+      e.type === 'tool_result' ||
+      e.type === 'error' ||
+      e.type === 'warning'
+    )
+    if (m.role === 'assistant' && !hasRenderableContent) return []
     return {
       ...m,
       loading: false,
-      events: [...events, ...extraResults, { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }],
+      events: nextEvents,
     }
   })
 }
@@ -589,7 +597,7 @@ export default function Assistant() {
     if (buffered && buffered.length > 0) {
       setConversations(prev => {
         const existing = prev[convKey] ?? []
-        if (buffered.length > existing.length) return { ...prev, [convKey]: buffered }
+        if (buffered !== existing) return { ...prev, [convKey]: buffered }
         return prev
       })
     }
@@ -853,11 +861,15 @@ export default function Assistant() {
 
   const setMessages = (fn: (prev: Message[]) => Message[]) => {
     if (!convKey) return
-    setConversations(prev => {
-      const next = fn(prev[convKey] ?? [])
-      _msgBuffer.set(convKey, next)  // survives unmount
-      return { ...prev, [convKey]: next }
-    })
+    const current = _msgBuffer.get(convKey) ?? conversations[convKey] ?? []
+    const next = fn(current)
+    _msgBuffer.set(convKey, next)  // survives unmount
+    try {
+      const all = JSON.parse(localStorage.getItem(LS_ACTIVE) ?? '{}')
+      all[convKey] = next
+      localStorage.setItem(LS_ACTIVE, JSON.stringify(all))
+    } catch { /* quota */ }
+    setConversations(prev => ({ ...prev, [convKey]: next }))
   }
 
   const addAttachmentError = (file: File, error: string) => {

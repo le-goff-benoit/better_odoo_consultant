@@ -158,7 +158,7 @@ function migAutoTitle(msgs: Message[]): string {
   return first.length > 60 ? first.slice(0, 57) + '…' : first || 'Migration'
 }
 function _finalizeOrphaned(msgs: Message[]): Message[] {
-  return msgs.map(m => {
+  return msgs.flatMap(m => {
     if (!m.loading) return m
     const events = m.events ?? []
     const calls   = events.filter(e => e.type === 'tool_call')
@@ -167,10 +167,18 @@ function _finalizeOrphaned(msgs: Message[]): Message[] {
     const extraResults: AiEvent[] = calls
       .filter(c => !results.find(r => r.name === c.name))
       .map(c => ({ type: 'tool_result' as const, name: c.name, ok: false }))
+    const nextEvents = [...events, ...extraResults]
+    const hasRenderableContent = nextEvents.some(e =>
+      (e.type === 'text' && Boolean(e.content?.trim())) ||
+      e.type === 'tool_result' ||
+      e.type === 'error' ||
+      e.type === 'warning'
+    )
+    if (m.role === 'assistant' && !hasRenderableContent) return []
     return {
       ...m,
       loading: false,
-      events: [...events, ...extraResults, { type: 'error' as const, msg: 'Session interrompue — relancez la question.' }],
+      events: nextEvents,
     }
   })
 }

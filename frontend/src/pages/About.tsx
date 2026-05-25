@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.95.1',
+    version: '0.95.2',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Assistant IA / Migration — reprise de page fiabilisée : une génération quittée puis retrouvée ne produit plus de fausse erreur « Session interrompue »',
+      'Assistant IA — persistance active renforcée pendant les streams hors page : les messages sont écrits immédiatement en localStorage et resynchronisés depuis le buffer mémoire au retour',
+      'Conversations actives — nettoyage des réponses interrompues sans contenu visible : suppression des bulles assistant vides et conservation des sorties partielles ou résultats d’outils déjà reçus',
+    ],
+  },
+  {
+    version: '0.95.1',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Mermaid — rendu enrichi : boutons copier / télécharger `.mmd` / plein écran dans les blocs Mermaid et dans la modale, avec feedback visuel après copie',
       'Mermaid — liens flowchart configurés en `curve: linear` et styles CSS plus nets pour éviter les courbes libres désordonnées',

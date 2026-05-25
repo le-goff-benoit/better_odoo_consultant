@@ -2,7 +2,7 @@
 
 Guide d'orientation pour Claude Code, GitHub Copilot et tout autre assistant IA qui intervient sur ce repository.
 
-Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.95.1` et les derniers commits `main`.
+Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.95.2` et les derniers commits `main`.
 
 ## Mission du produit
 
@@ -17,6 +17,7 @@ Principes produit à préserver :
 ## État récent à connaître
 
 Les derniers commits ont surtout transformé l'IA en architecture pilotée par skills :
+- `0.95.2` : fiabilisation de la reprise Assistant IA / Migration après navigation. Les conversations actives ne synthétisent plus une fausse erreur « Session interrompue » quand un message `loading` est retrouvé sans stream live ; les bulles assistant vides sont supprimées, les sorties partielles et résultats d'outils sont conservés. Côté Assistant, `setMessages` persiste aussi immédiatement les conversations actives dans `localStorage` et resynchronise depuis le buffer mémoire au retour de page.
 - `0.95.1` : amélioration qualité Mermaid — `MermaidBlock` ajoute copier le Mermaid brut, téléchargement `.mmd`, plein écran et feedback copie ; rendu flowchart configuré `curve: linear` avec styles CSS plus nets. Skill `generate_diagram` durci : cartes titrées (`<b>Titre</b>` + détail), templates avec `classDef`, consignes anti-spaghetti, helper `mermaid_flowchart` partagé enrichi pour produire des nœuds titrés et des classes visuelles par défaut.
 - `0.95.0` : ajout de 2 skills IA self-contained — `inspect_financial_reports` (rapports financiers Enterprise `account.report` : list/recommend/describe/run/export, options période/partner/analytique/société/journaux) et `inspect_spreadsheet` (Odoo Spreadsheets et dashboards : list/inspect/explain_formula/suggest_formula, payload JSON/XLSX, inventaire `ODOO.*`). Nouveaux services `financial_report_service.py` et `spreadsheet_service.py`. Dispatcher enrichi avec bundles/patterns `financial_audit`, `spreadsheet_audit`, `financial-report-pattern`, `spreadsheet-formula-pattern` et pruning `financial-report-focus`, `spreadsheet-focus`. Eval queries 34/34 skills.
 - `0.94.0` : ajout de 4 skills IA self-contained — `compare_odoo_versions` (diff statique modèle/vue/module entre versions Odoo locales), `inspect_automations` (audit `ir.cron`, `base.automation`, `ir.actions.server`, `mail.template`), `inspect_module_graph` (dépendances manifest + héritages modèles + Mermaid), `generate_diagram` (flow/class/model/view/module graph en Mermaid). Markdown frontend rend désormais les fences `mermaid` via lazy-load `MermaidBlock`. Dispatcher enrichi avec bundles/patterns `version_compare`, `automation_audit`, `diagram`, `module_graph` et pruning `automation-focus`, `diagram-focus`, `module-graph-focus`. Eval queries 32/32 skills.
