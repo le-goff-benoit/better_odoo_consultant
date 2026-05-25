@@ -36,6 +36,7 @@ references_auto_load:
 - Skill en lecture seule : il transforme contexte ou sources en Mermaid.
 - Toujours rendre le résultat dans un bloc fenced `mermaid`.
 - Borner le nombre de nœuds pour garder un diagramme lisible.
+- Standard qualité attendu : diagramme propre, cartes titrées, flux orthogonal/linéaire, labels courts, styles Mermaid cohérents.
 
 ## generate_diagram
 Utilise `generate_diagram` pour produire un diagramme Mermaid à partir d'une description, de sources locales ou de l'instance live.
@@ -50,6 +51,10 @@ Utilise `generate_diagram` pour produire un diagramme Mermaid à partir d'une de
 - `kind=class` ou `model-inheritance` pour les modèles Python.
 - `kind=view-inheritance` avec `scope=live` pour les vues assemblées de l'instance.
 - `kind=module-graph` pour les dépendances manifest.
+- Pour un flowchart "joli", chaque nœud doit avoir un titre court en gras (`<b>Titre</b>`) puis une ligne de détail ; pas de carte avec seulement un paragraphe long.
+- Ajouter l'init Mermaid `curve: linear`, `htmlLabels: true`, `nodeSpacing` et `rankSpacing` pour éviter les liens courbes libres.
+- Utiliser `classDef` pour 3-5 types maximum : départ/acteur, action, décision, validation, résultat/risque.
+- Préférer `flowchart TD` pour un processus et `flowchart LR` pour un graphe de dépendances ; éviter les liens qui remontent ou traversent tout le diagramme.
 
 ## Déclencheurs
 - "Dessine", "montre le diagramme", "fais un schéma", "class diagram", "flowchart", "show graph".
@@ -64,6 +69,8 @@ Utilise `generate_diagram` pour produire un diagramme Mermaid à partir d'une de
 ## Pièges
 - Mermaid n'est pas une preuve : citer aussi les sources si le diagramme découle d'un audit.
 - Un diagramme trop dense doit être découpé par sous-domaine.
+- Ne pas produire de "spaghetti diagram" : si plus de 12 cartes ou si plusieurs branches se croisent, regrouper en sous-graphes ou simplifier.
+- Ne pas multiplier les labels sur les liens ; nommer les cartes de manière assez claire pour que les liens puissent rester simples.
 
 ## Combinaisons
 - `inspect_module_graph` pour un audit plus détaillé du module.
@@ -72,3 +79,4 @@ Utilise `generate_diagram` pour produire un diagramme Mermaid à partir d'une de
 
 ## Critères de réponse
 - Fournir le bloc Mermaid, puis une légende courte et les limites de périmètre.
+- Le bloc Mermaid doit être présentable directement à un client : titres visibles, espacement lisible, cartes homogènes, pas de liaisons courbes ou retours arrière inutiles.

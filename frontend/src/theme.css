@@ -1559,6 +1559,13 @@ textarea:focus-visible {
   background: var(--th-bg-muted);
 }
 
+.mermaid-block-actions,
+.mermaid-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .mermaid-block-label {
   font-size: 11px;
   font-weight: 700;
@@ -1576,6 +1583,37 @@ textarea:focus-visible {
   max-width: 100%;
   height: auto;
   margin: 0 auto;
+}
+
+.mermaid-render .edgePaths path,
+.mermaid-render .flowchart-link {
+  stroke-linecap: square !important;
+  stroke-linejoin: miter !important;
+}
+
+.mermaid-render .node rect,
+.mermaid-render .node polygon,
+.mermaid-render .node circle,
+.mermaid-render .node ellipse {
+  rx: 2px !important;
+  ry: 2px !important;
+  stroke-width: 1.2px !important;
+}
+
+.mermaid-render .nodeLabel {
+  line-height: 1.35 !important;
+}
+
+.mermaid-render .nodeLabel p,
+.mermaid-render .nodeLabel div {
+  margin: 0 !important;
+}
+
+.mermaid-render .nodeLabel p:first-child,
+.mermaid-render .nodeLabel div:first-child,
+.mermaid-render .nodeLabel span:first-child {
+  font-weight: 760 !important;
+  color: #0f172a !important;
 }
 
 .mermaid-render-large {

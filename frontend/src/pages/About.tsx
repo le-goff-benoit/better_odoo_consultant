@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.95.0',
+    version: '0.95.1',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Mermaid — rendu enrichi : boutons copier / télécharger `.mmd` / plein écran dans les blocs Mermaid et dans la modale, avec feedback visuel après copie',
+      'Mermaid — liens flowchart configurés en `curve: linear` et styles CSS plus nets pour éviter les courbes libres désordonnées',
+      'Skill `generate_diagram` — standard qualité renforcé : cartes titrées (`<b>Titre</b>` + détail), templates Mermaid avec `classDef`, espacement explicite, consignes anti-spaghetti et sorties déterministes plus présentables',
+      'Graphes générés — helper partagé `mermaid_flowchart` produit désormais des nœuds titrés et des classes visuelles par défaut pour les graphes de modules et d\'héritage',
+    ],
+  },
+  {
+    version: '0.95.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skills — 2 nouveaux skills IA self-contained : `inspect_financial_reports` pour les rapports financiers Enterprise `account.report` (list/recommend/describe/run/export) et `inspect_spreadsheet` pour les Odoo Spreadsheets et dashboards (list/inspect/explain_formula/suggest_formula)',
       'Backend — nouveaux services `financial_report_service.py` et `spreadsheet_service.py` : lecture bornée `account.report`, lignes/colonnes/expressions, exécution `_get_lines`, export XLSX borné à 5 MB, inspection payload JSON/XLSX spreadsheet et inventaire des formules `ODOO.*`',

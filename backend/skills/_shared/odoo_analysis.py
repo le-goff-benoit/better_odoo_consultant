@@ -170,7 +170,16 @@ def _is_field_call(node: ast.AST) -> bool:
 
 
 def mermaid_flowchart(edges: list[dict[str, str]], *, direction: str = "TD", max_edges: int = 60) -> str:
-    lines = [f"flowchart {direction}"]
+    lines = [
+        "%%{init: {'flowchart': {'curve': 'linear', 'htmlLabels': true, 'nodeSpacing': 65, 'rankSpacing': 75}}}%%",
+        f"flowchart {direction}",
+    ]
+    labels: dict[str, str] = {}
+    for edge in edges[:max_edges]:
+        labels.setdefault(_mermaid_id(edge["from"]), _node_title(edge["from"]))
+        labels.setdefault(_mermaid_id(edge["to"]), _node_title(edge["to"]))
+    for node_id, label in sorted(labels.items()):
+        lines.append(f'  {node_id}["<b>{_escape_label(label)}</b>"]')
     seen: set[tuple[str, str, str]] = set()
     for edge in edges[:max_edges]:
         src = _mermaid_id(edge["from"])
@@ -185,7 +194,11 @@ def mermaid_flowchart(edges: list[dict[str, str]], *, direction: str = "TD", max
         else:
             lines.append(f"  {src} --> {dst}")
     if len(edges) > max_edges:
-        lines.append(f"  truncated[\"... {len(edges) - max_edges} liens masqués\"]")
+        lines.append(f"  truncated[\"<b>Diagramme tronqué</b><br/>{len(edges) - max_edges} liens masqués\"]")
+    lines.extend([
+        "  classDef default fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1px,color:#111827;",
+        "  classDef truncated fill:#FEF3C7,stroke:#D97706,stroke-width:1.5px,color:#78350F;",
+    ])
     return "\n".join(lines)
 
 
@@ -233,3 +246,11 @@ def _mermaid_id(value: str) -> str:
     if clean[0].isdigit():
         clean = f"n_{clean}"
     return clean
+
+
+def _node_title(value: str) -> str:
+    return str(value).replace("_", " ").replace(".", " · ").strip()[:80]
+
+
+def _escape_label(value: str) -> str:
+    return str(value).replace("&", "&amp;").replace('"', "'").replace("<", "&lt;").replace(">", "&gt;")

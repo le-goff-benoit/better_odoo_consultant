@@ -2,7 +2,7 @@
 
 Guide d'orientation pour Claude Code, GitHub Copilot et tout autre assistant IA qui intervient sur ce repository.
 
-Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.95.0` et les derniers commits `main`.
+Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.95.1` et les derniers commits `main`.
 
 ## Mission du produit
 
@@ -17,6 +17,7 @@ Principes produit à préserver :
 ## État récent à connaître
 
 Les derniers commits ont surtout transformé l'IA en architecture pilotée par skills :
+- `0.95.1` : amélioration qualité Mermaid — `MermaidBlock` ajoute copier le Mermaid brut, téléchargement `.mmd`, plein écran et feedback copie ; rendu flowchart configuré `curve: linear` avec styles CSS plus nets. Skill `generate_diagram` durci : cartes titrées (`<b>Titre</b>` + détail), templates avec `classDef`, consignes anti-spaghetti, helper `mermaid_flowchart` partagé enrichi pour produire des nœuds titrés et des classes visuelles par défaut.
 - `0.95.0` : ajout de 2 skills IA self-contained — `inspect_financial_reports` (rapports financiers Enterprise `account.report` : list/recommend/describe/run/export, options période/partner/analytique/société/journaux) et `inspect_spreadsheet` (Odoo Spreadsheets et dashboards : list/inspect/explain_formula/suggest_formula, payload JSON/XLSX, inventaire `ODOO.*`). Nouveaux services `financial_report_service.py` et `spreadsheet_service.py`. Dispatcher enrichi avec bundles/patterns `financial_audit`, `spreadsheet_audit`, `financial-report-pattern`, `spreadsheet-formula-pattern` et pruning `financial-report-focus`, `spreadsheet-focus`. Eval queries 34/34 skills.
 - `0.94.0` : ajout de 4 skills IA self-contained — `compare_odoo_versions` (diff statique modèle/vue/module entre versions Odoo locales), `inspect_automations` (audit `ir.cron`, `base.automation`, `ir.actions.server`, `mail.template`), `inspect_module_graph` (dépendances manifest + héritages modèles + Mermaid), `generate_diagram` (flow/class/model/view/module graph en Mermaid). Markdown frontend rend désormais les fences `mermaid` via lazy-load `MermaidBlock`. Dispatcher enrichi avec bundles/patterns `version_compare`, `automation_audit`, `diagram`, `module_graph` et pruning `automation-focus`, `diagram-focus`, `module-graph-focus`. Eval queries 32/32 skills.
 - `0.93.1` : UI Settings — onglets du détail de skill nettoyés (suppression du suffixe `· N` sur Références / Exemples / Tests routing / Historique). Skills — comblement des 2 trous documentaires identifiés : `odoo_query_records` reçoit `references/query_pitfalls.md` (domaines polonais, `active_test`, contexte `lang`/`tz`/`company`/`bin_size`, pagination 500/5000, pièges modèles courants, erreurs XML-RPC) ; `odoo_inspect_modules` reçoit `references/module_taxonomy.md` (Community/Enterprise/custom, conventions de nommage, lecture de stack, dépendances pour cadrage migration). Lazy load, pas d'impact routage.
@@ -117,7 +118,7 @@ Skills présents au moment de cette mise à jour : `attachment-handler`, `compar
 
 - TypeScript strict : `npm run build` exécute `tsc -b` puis Vite.
 - Pas de `react-markdown` : utiliser `components/Markdown.tsx`.
-- Les blocs fenced `mermaid` sont rendus par `components/MermaidBlock.tsx` avec `import("mermaid")` lazy ; garder Mermaid hors du rendu Markdown initial et prévoir fallback code brut si le parse échoue.
+- Les blocs fenced `mermaid` sont rendus par `components/MermaidBlock.tsx` avec `import("mermaid")` lazy ; garder Mermaid hors du rendu Markdown initial et prévoir fallback code brut si le parse échoue. Le rendu doit rester présentable : cartes titrées, liens linéaires, actions copier/télécharger disponibles.
 - Les actions issues des réponses IA doivent passer par `extractActionItems` + `ActionProposals`, pas par un bouton inline dans le Markdown.
 - Pas de styled-components : styles dans `theme.css` ou inline ponctuel.
 - i18n simple : objets `copy = { fr: ..., en: ... }` dans les pages/composants ; UI `language` séparée de `contextLanguage`.

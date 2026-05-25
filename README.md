@@ -6,7 +6,7 @@ Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sour
 
 > **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
 >
-> **Version actuelle :** `0.95.0` — 2 nouveaux skills IA pour les rapports financiers Enterprise `account.report` (`inspect_financial_reports`) et les Odoo Spreadsheets / dashboards (`inspect_spreadsheet`). Voir le changelog complet dans la page **À propos** de l'app.
+> **Version actuelle :** `0.95.1` — rendu Mermaid amélioré : cartes titrées, liens linéaires, actions copier/télécharger et skill `generate_diagram` durci pour produire des diagrammes présentables. Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 
@@ -162,7 +162,7 @@ skills/<slug>/
 | Famille | Skills | Rôle |
 |---|---|---|
 | **Live Odoo** (`live`) | `odoo-query-records`, `odoo-count-records`, `odoo-aggregate-records`, `odoo-inspect-fields`, `odoo-inspect-modules`, `odoo-inspect-navigation`, `odoo-inspect-report`, `odoo-inspect-security`, `odoo-inspect-studio`, `odoo-inspect-view`, `inspect-automations`, `inspect-financial-reports`, `inspect-spreadsheet` | Lecture XML-RPC bornée, schema, KPI, vues assemblées, droits, automatismes serveur, rapports financiers, spreadsheets |
-| **Source standard** (`src`) | `source-search-odoo`, `source-read-odoo-file`, `source-show-commit`, `compare-odoo-versions`, `generate-diagram` | Grep / read / git show sur Odoo Community + Enterprise local, diff de versions, diagrammes Mermaid |
+| **Source standard** (`src`) | `source-search-odoo`, `source-read-odoo-file`, `source-show-commit`, `compare-odoo-versions`, `generate-diagram` | Grep / read / git show sur Odoo Community + Enterprise local, diff de versions, diagrammes Mermaid avec standard visuel |
 | **Dépôt client** (`repo`) | `repo-search-code`, `repo-read-file`, `repo-list-modules`, `repo-count-source-lines`, `inspect-module-graph` | Idem mais sur le dépôt custom cloné, graphes manifest/héritage |
 | **Migration** (`target`) | `migration-search-target-source`, `migration-read-target-file` | Sources de la version cible pour comparaison source → cible |
 | **Output** | `output-report-writer` | Livrables structurés : revue technique, plan de migration, email client, cahier des charges |

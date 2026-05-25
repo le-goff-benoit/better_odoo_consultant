@@ -98,13 +98,41 @@ def _resolve_root(scope: str, ctx) -> str | None:
 def _flow_from_description(description: str, *, max_nodes: int) -> str:
     chunks = [part.strip(" .;:") for part in description.replace("\n", ".").split(".") if part.strip()]
     chunks = chunks[:max_nodes] or [description[:80]]
-    lines = ["flowchart TD"]
+    lines = [
+        "%%{init: {'flowchart': {'curve': 'linear', 'htmlLabels': true, 'nodeSpacing': 65, 'rankSpacing': 75}}}%%",
+        "flowchart TD",
+    ]
     previous = None
     for idx, chunk in enumerate(chunks, start=1):
         node = f"N{idx}"
-        label = chunk.replace('"', "'")[:80]
+        title, detail = _split_card_text(chunk)
+        label = f"<b>{_escape_label(title)}</b>"
+        if detail:
+            label += f"<br/>{_escape_label(detail)}"
         lines.append(f'  {node}["{label}"]')
+        if idx == 1:
+            lines.append(f"  class {node} start;")
         if previous:
             lines.append(f"  {previous} --> {node}")
         previous = node
+    lines.extend([
+        "  classDef default fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1px,color:#111827;",
+        "  classDef start fill:#EFF6FF,stroke:#2563EB,stroke-width:1.5px,color:#0F172A;",
+    ])
     return "\n".join(lines)
+
+
+def _split_card_text(text: str) -> tuple[str, str]:
+    clean = " ".join(text.replace('"', "'").split())
+    for sep in (" - ", " : ", ": "):
+        if sep in clean:
+            left, right = clean.split(sep, 1)
+            return left[:48], right[:110]
+    words = clean.split()
+    if len(words) <= 5:
+        return clean[:58], ""
+    return " ".join(words[:5])[:58], " ".join(words[5:])[:110]
+
+
+def _escape_label(value: str) -> str:
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
