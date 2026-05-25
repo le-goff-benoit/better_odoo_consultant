@@ -4,5 +4,7 @@
   {"query": "Write a functional spec deliverable for this feature", "expected_skill": "output_report_writer", "should_trigger": true, "category": "positive", "language": "en", "notes": "template:functional_spec"},
   {"query": "Combien de factures en brouillon ?", "expected_skill": "output_report_writer", "should_trigger": false, "category": "negative", "language": "fr", "notes": "short conversational answer, no formal report needed"},
   {"query": "Bonjour, peux-tu m'aider ?", "expected_skill": "output_report_writer", "should_trigger": false, "category": "negative", "language": "fr"},
-  {"query": "Quel temps fait-il aujourd'hui ?", "expected_skill": "output_report_writer", "should_trigger": false, "category": "negative", "language": "fr"}
+  {"query": "Quel temps fait-il aujourd'hui ?", "expected_skill": "output_report_writer", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Extrais juste le texte de cette pièce jointe PDF", "expected_skill": "runtime_attachment_handler", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "plain extraction request — attachment handler, not a formatted deliverable"},
+  {"query": "Just read this attached PDF and tell me what's inside", "expected_skill": "runtime_attachment_handler", "should_trigger": false, "category": "near_miss", "language": "en", "notes": "raw read of attachment, no template needed"}
 ]

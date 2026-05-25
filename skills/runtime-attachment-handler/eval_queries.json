@@ -5,5 +5,7 @@
   {"query": "Extract text from this attached invoice PDF", "expected_skill": "runtime_attachment_handler", "should_trigger": true, "category": "positive", "language": "en"},
   {"query": "Que vois-tu sur cette capture écran ?", "expected_skill": "runtime_attachment_handler", "should_trigger": true, "category": "positive", "language": "fr"},
   {"query": "Diagnostique le rapport PDF de facture Odoo invoice_document", "expected_skill": "odoo_inspect_report", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "Odoo-side report, not user-uploaded PDF"},
-  {"query": "Quel est le layout du rapport QWeb facture ?", "expected_skill": "odoo_inspect_report", "should_trigger": false, "category": "near_miss", "language": "fr"}
+  {"query": "Quel est le layout du rapport QWeb facture ?", "expected_skill": "odoo_inspect_report", "should_trigger": false, "category": "near_miss", "language": "fr"},
+  {"query": "Rédige un livrable formel à partir de cette pièce jointe PDF", "expected_skill": "output_report_writer", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "deliverable intent dominates — output_report_writer owns the response shape"},
+  {"query": "Generate a formal client report from this attached PDF", "expected_skill": "output_report_writer", "should_trigger": false, "category": "near_miss", "language": "en", "notes": "formatted deliverable, not a raw extraction"}
 ]

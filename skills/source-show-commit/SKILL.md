@@ -8,8 +8,8 @@ group: src
 builtin: false
 read_only: true
 risk_level: low
-description: "Analyser un commit Git précis dans les sources Odoo ou un dépôt projet : diff complet, message, fichiers modifiés, auteur, date, génération d'une entrée changelog, diagnostic de régression ou de patch. Utiliser dès que l'utilisateur fournit un SHA ou demande l'historique d'un changement spécifique. Ne pas utiliser pour parcourir l'historique large sans SHA ni pour comparer deux versions complètes (préférer migration_search_target_source)."
-description_en: "Inspect a precise Git commit in Odoo sources or a project repo: full diff, message, changed files, author, date, changelog entry generation, regression or patch diagnosis. Use as soon as the user gives a SHA or asks about a specific change's history. Do not use to browse broad history without a SHA or to compare two full versions (prefer migration_search_target_source)."
+description: "Analyser un commit Git précis dans les sources Odoo ou un dépôt projet : diff complet, message, fichiers modifiés, auteur, date, génération d'une entrée changelog, diagnostic de régression ou de patch. Utiliser dès que l'utilisateur fournit un SHA ou demande l'historique d'un changement spécifique. Ne pas utiliser pour lire un fichier source précis sans SHA (source_read_odoo_file), pour chercher du code dans les sources sans SHA (source_search_odoo), pour parcourir l'historique large sans SHA, ni pour comparer deux versions complètes (préférer migration_search_target_source)."
+description_en: "Inspect a precise Git commit in Odoo sources or a project repo: full diff, message, changed files, author, date, changelog entry generation, regression or patch diagnosis. Use as soon as the user gives a SHA or asks about a specific change's history. Do not use to read a precise source file without a SHA (source_read_odoo_file), to grep source code without a SHA (source_search_odoo), to browse broad history without a SHA, or to compare two full versions (prefer migration_search_target_source)."
 requirement: Sources ou dépôt Git disponible
 requirement_en: Sources or Git repository available
 modes: [assistant, migration, creator]

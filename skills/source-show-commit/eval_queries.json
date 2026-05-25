@@ -41,5 +41,21 @@
     "should_trigger": false,
     "category": "negative",
     "language": "fr"
+  },
+  {
+    "query": "Lis sale/models/sale_order.py des sources Odoo",
+    "expected_skill": "source_read_odoo_file",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "single-file read without SHA — read, not commit show"
+  },
+  {
+    "query": "Cherche action_confirm dans les sources Odoo",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "grep without SHA — search, not commit show"
   }
 ]

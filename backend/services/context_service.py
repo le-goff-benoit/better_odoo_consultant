@@ -872,6 +872,24 @@ def _prune_skill_routes(
             deselect("odoo_inspect_report", "pruned:attachment-focus")
             deselect("odoo_inspect_view", "pruned:attachment-focus")
 
+    # Deliverable-focus: when the prompt explicitly asks for a *formatted
+    # deliverable* on top of an attachment, the response shape is owned by
+    # ``output_report_writer`` (template-driven). ``runtime_attachment_handler``
+    # tools are still callable, but the playbook injection adds noise.
+    deliverable_terms = (
+        "livrable", "deliverable", "rédige un rapport", "redige un rapport",
+        "rédige une note", "redige une note", "rédige un email",
+        "rédige un livrable", "redige un livrable", "génère un rapport",
+        "genere un rapport", "generate a report", "formal report",
+        "produire un document", "produce a document", "format formel",
+        "formal deliverable", "client report",
+    )
+    if (selected("runtime_attachment_handler")
+            and _has_any(prompt_norm, deliverable_terms)):
+        # Tools remain callable; only the playbook injection is pruned so the
+        # response shape stays owned by the deliverable intent.
+        deselect("runtime_attachment_handler", "pruned:deliverable-focus")
+
     # Navigation-pattern is one of the strongest single signals (score 75) —
     # the user literally asks where to click / which menu opens a screen.
     # Sibling skills should stay out unless they bring an own strong term.

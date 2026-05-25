@@ -13,8 +13,8 @@ risk_level: low
 version: "1.0.0"
 author: Le Goff Benoît - Camptocamp SA
 tags: [reporting, output, format]
-description: "Produire un livrable consultant structuré dans un template stable : revue technique de module, plan de migration, email client, cahier des charges fonctionnel, spécification, audit de code. Utiliser quand l'utilisateur demande explicitement un document formaté à remettre. Ne pas utiliser pour une réponse conversationnelle courte, une simple synthèse Markdown ou une entrée changelog issue d'un commit (source_show_commit)."
-description_en: "Produce a structured consultant deliverable in a stable template: module technical review, migration plan, client email, functional spec, code audit. Use when the user explicitly asks for a formatted document to hand over. Do not use for short conversational answers, plain Markdown summaries or a changelog entry derived from a commit (source_show_commit)."
+description: "Produire un livrable consultant structuré dans un template stable : revue technique de module, plan de migration, email client, cahier des charges fonctionnel, spécification, audit de code. Utiliser quand l'utilisateur demande explicitement un document formaté à remettre. Ne pas utiliser pour une réponse conversationnelle courte, une simple synthèse Markdown, une entrée changelog issue d'un commit (source_show_commit) ni pour la simple lecture/extraction d'une pièce jointe utilisateur (runtime_attachment_handler)."
+description_en: "Produce a structured consultant deliverable in a stable template: module technical review, migration plan, client email, functional spec, code audit. Use when the user explicitly asks for a formatted document to hand over. Do not use for short conversational answers, plain Markdown summaries, a changelog entry derived from a commit (source_show_commit) or the plain reading/extraction of a user attachment (runtime_attachment_handler)."
 requirement: Aucun
 requirement_en: None
 modes: [assistant, migration, creator]

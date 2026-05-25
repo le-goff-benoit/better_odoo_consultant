@@ -7,10 +7,25 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.92.0',
+    version: '0.93.0',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Audit BETTER_SKILLS — application des 3 P2 issus de l\'audit de conformité aux best practices OpenAI / Anthropic / Agent Skills : élargissement des clauses limites sur les 3 skills qui ne citaient qu\'un seul sibling (ou aucun)',
+      '`output_report_writer` — limite étendue à `runtime_attachment_handler` : un PDF utilisateur ne déclenche plus le rédacteur de rapports sauf demande explicite de livrable formaté',
+      '`runtime_attachment_handler` — limite étendue à `output_report_writer` : une demande de livrable formel à partir d\'une pièce jointe route vers le rédacteur, pas vers l\'extraction brute',
+      '`source_show_commit` — limite enrichie : cite désormais `source_read_odoo_file` (lecture de fichier sans SHA) et `source_search_odoo` (grep sans SHA) en plus de `migration_search_target_source`',
+      'Dispatcher — nouvelle règle `pruned:deliverable-focus` : quand le prompt contient des termes livrables clairs (`livrable`, `rédige un rapport`, `formal deliverable`, `generate a report`, `client report`...), `runtime_attachment_handler` est désélectionné de la liste de playbooks (les tools restent appelables ; seule l\'injection du playbook est élidée pour que la forme de réponse reste owned par l\'intention livrable)',
+      'Eval queries — +6 cas négatifs ciblant les nouvelles limites (2 pour output-report-writer, 2 pour runtime-attachment-handler, 2 pour source-show-commit). Couverture eval reste 28/28 skills, désormais 190 cas (vs 184)',
+      'Tests — suite : 586 → 592 passed, 0 xfailed',
+    ],
+  },
+  {
+    version: '0.92.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Routing — dispatcher durci : 5 nouvelles règles de pruning (`query-focus`, `volume-focus`, `search-focus`, `repo-focus`, `migration-search/read-focus`) qui éliminent les fuites bundle entre familles count/query/aggregate, repo/source, read/search/list-modules. Toutes les xfail précédentes du dispatcher (overlap `compare cible`, `repo` partagé, `lignes de code` vs `combien`) sont désormais vertes',
       'Routing — nouveau pattern `migration-compare-pattern` : `compare`/`comparer` + `cible`/`target`/`v18` route explicitement vers `migration_read_target_file` (score 75). Bundle `migration_target` enrichi : inclut désormais `migration_read_target_file`. Bundle `odoo_source` enrichi avec pluriels et `odoo/addons`',

@@ -2,7 +2,7 @@
 
 Guide d'orientation pour Claude Code, GitHub Copilot et tout autre assistant IA qui intervient sur ce repository.
 
-Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.92.0` et les derniers commits `main`.
+Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.93.0` et les derniers commits `main`.
 
 ## Mission du produit
 
@@ -17,6 +17,7 @@ Principes produit à préserver :
 ## État récent à connaître
 
 Les derniers commits ont surtout transformé l'IA en architecture pilotée par skills :
+- `0.93.0` : audit BETTER_SKILLS appliqué (P2) — clauses limites élargies sur `output_report_writer` (cite désormais `runtime_attachment_handler`), `runtime_attachment_handler` (cite `output_report_writer`) et `source_show_commit` (cite `source_read_odoo_file` + `source_search_odoo`). Nouvelle règle dispatcher `pruned:deliverable-focus` (livrable + pièce jointe → attachment_handler désélectionné, output_report_writer dominant). +6 cas eval, couverture reste 28/28 skills, 190 cas. 592 tests.
 - `0.92.0` : routing durci — 5 nouvelles règles de pruning (`query-focus`, `volume-focus`, `search-focus`, `repo-focus`, `migration-{search,read}-focus`) qui éliminent les fuites bundle entre familles ; nouveau pattern `migration-compare-pattern` ; `runtime_project_context_refresh` devient `allow_implicit_invocation: false` ; `source_read_odoo_file` enrichi de 17 keywords ciblés ; bundle `migration_target` étendu à `migration_read_target_file` ; bundle `odoo_source` enrichi (pluriels + `odoo/addons`). Eval queries 28/28 skills (couverture complète), 173 cas tous verts, **0 xfailed**. Nouveau panneau frontend « Tests routing » dans le détail de skill (route `GET /api/ai/skills/{name}/eval-queries`). 586 tests.
 - `0.10.0` : implémentation des recommandations P0/P1 de l'audit runtime — fail-loud `unshare` absent (script refusé si `network=false`), +9 fichiers `eval_queries.json` (couverture 19/28 skills), nouveau test `test_no_implicit_core_invocation.py` (28 prompts × 6 runtime cœur), test `test_script_sandbox.py`, harnais `scripts/quality_eval/` (dataset 20 prompts + runner routing phase 1 100 % accuracy + README pour phase 2 LLM-as-judge). 528 tests passent, 15 xfailed documentent des faiblesses dispatcher connues.
 - `0.9.0` : refonte des descriptions des 28 SKILL.md (front-load keywords, limites explicites, FR+EN), durcissement du dispatcher (`_MIN_SKILL_SCORE=25`, 6 nouvelles règles `pruned:*-focus`, word-boundary FR/EN), `allow_implicit_invocation: false` sur les 6 runtime cœur, token counting dans `execution_done`, +64 tests régressifs (path traversal, trigger routing sur 10 skills via `eval_queries.json`, cross-provider parity, budget overflow, auto-load references). 436 tests passent.
