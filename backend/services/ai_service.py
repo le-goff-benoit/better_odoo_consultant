@@ -356,6 +356,23 @@ _TOOL_GENERATE_DIAGRAM = {
     ),
 }
 
+_TOOL_INSPECT_FINANCIAL_REPORTS = {
+    "name": "inspect_financial_reports",
+    "description": (
+        "Lister, recommander, décrire, exécuter ou exporter les rapports financiers Enterprise account.report : "
+        "bilan, compte de résultat/P&L, grand livre, tax report/TVA, aged receivable/payable. "
+        "Utilise cet outil pour les états financiers avec filtres période, partenaire, analytique, société ou journal."
+    ),
+}
+
+_TOOL_INSPECT_SPREADSHEET = {
+    "name": "inspect_spreadsheet",
+    "description": (
+        "Lister et inspecter les Odoo Spreadsheets et dashboards, lire le payload JSON/XLSX, inventorier les "
+        "formules ODOO.PIVOT / ODOO.LIST / ODOO.FILTER.VALUE, expliquer ou suggérer une formule Odoo Spreadsheet."
+    ),
+}
+
 _COMPARE_VERSION_PROPS = {
     "target": {"type": "string", "description": "model:sale.order, view:xml_id ou module:sale"},
     "from_version": {"type": "string", "description": "Version source locale, ex 17.0"},
@@ -383,6 +400,22 @@ _DIAGRAM_PROPS = {
     "scope": {"type": "string", "enum": ["odoo", "enterprise", "project", "live"], "default": "odoo"},
     "description": {"type": "string", "default": ""},
     "max_nodes": {"type": "integer", "default": 25},
+}
+
+_FINANCIAL_REPORT_PROPS = {
+    "action": {"type": "string", "enum": ["list", "recommend", "describe", "run", "export"], "default": "list"},
+    "report": {"type": "string", "description": "ID ou nom du rapport account.report", "default": ""},
+    "query": {"type": "string", "description": "Demande libre pour recommend", "default": ""},
+    "options": {"type": "object", "description": "date_from, date_to, partner_ids, analytic_account_ids, company_ids, journal_ids, unfold_all, comparison", "default": {}},
+}
+
+_SPREADSHEET_PROPS = {
+    "action": {"type": "string", "enum": ["list", "inspect", "explain_formula", "suggest_formula"], "default": "list"},
+    "document_id": {"type": "integer", "default": 0},
+    "model": {"type": "string", "enum": ["documents.document", "spreadsheet.dashboard"], "default": "documents.document"},
+    "formula": {"type": "string", "default": ""},
+    "query": {"type": "string", "default": ""},
+    "model_hint": {"type": "string", "default": ""},
 }
 
 # ── Claude tool schemas ───────────────────────────────────────────
@@ -458,6 +491,8 @@ TOOLS_CLAUDE = [
     {**_TOOL_INSPECT_AUTOMATIONS, "input_schema": {"type": "object", "properties": _AUTOMATION_PROPS}},
     {**_TOOL_INSPECT_MODULE_GRAPH, "input_schema": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
     {**_TOOL_GENERATE_DIAGRAM, "input_schema": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
+    {**_TOOL_INSPECT_FINANCIAL_REPORTS, "input_schema": {"type": "object", "properties": _FINANCIAL_REPORT_PROPS}},
+    {**_TOOL_INSPECT_SPREADSHEET, "input_schema": {"type": "object", "properties": _SPREADSHEET_PROPS}},
     {**_TOOL_LOAD_REFERENCE, "input_schema": {"type": "object", "required": ["skill", "filename"], "properties": {
         "skill":    {"type": "string", "description": "Nom technique du skill (ex 'odoo_inspect_studio')"},
         "filename": {"type": "string", "description": "Nom de fichier de référence (ex 'studio_limits.md')"},
@@ -552,6 +587,8 @@ TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_INSPECT_AUTOMATIONS, "parameters": {"type": "object", "properties": _AUTOMATION_PROPS}}},
     {"type": "function", "function": {**_TOOL_INSPECT_MODULE_GRAPH, "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}}},
     {"type": "function", "function": {**_TOOL_GENERATE_DIAGRAM, "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_FINANCIAL_REPORTS, "parameters": {"type": "object", "properties": _FINANCIAL_REPORT_PROPS}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_SPREADSHEET, "parameters": {"type": "object", "properties": _SPREADSHEET_PROPS}}},
     {"type": "function", "function": {**_TOOL_LOAD_REFERENCE, "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
         "skill":    {"type": "string"},
         "filename": {"type": "string"},
@@ -651,6 +688,10 @@ TOOLS_GEMINI = [
              "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
             {"name": "generate_diagram", "description": _TOOL_GENERATE_DIAGRAM["description"],
              "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
+            {"name": "inspect_financial_reports", "description": _TOOL_INSPECT_FINANCIAL_REPORTS["description"],
+             "parameters": {"type": "object", "properties": _FINANCIAL_REPORT_PROPS}},
+            {"name": "inspect_spreadsheet", "description": _TOOL_INSPECT_SPREADSHEET["description"],
+             "parameters": {"type": "object", "properties": _SPREADSHEET_PROPS}},
             {"name": "load_skill_reference", "description": _TOOL_LOAD_REFERENCE["description"],
              "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
                  "skill":    {"type": "string"},

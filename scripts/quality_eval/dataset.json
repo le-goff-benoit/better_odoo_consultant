@@ -169,5 +169,33 @@
     "category": "diagram",
     "expected_skills": ["generate_diagram"],
     "criteria": ["répond avec un bloc mermaid", "limite le diagramme aux étapes utiles"]
+  },
+  {
+    "id": "q25-financial-balance",
+    "prompt": "Donne-moi le bilan du client Acme au 31/03/2026",
+    "category": "financial_report",
+    "expected_skills": ["inspect_financial_reports"],
+    "criteria": ["utilise account.report", "résout le partenaire si nécessaire"]
+  },
+  {
+    "id": "q26-financial-project-pl",
+    "prompt": "P&L du projet PRJ-42 sur Q1 2026",
+    "category": "financial_report",
+    "expected_skills": ["inspect_financial_reports"],
+    "criteria": ["filtre par analytique", "mentionne la période"]
+  },
+  {
+    "id": "q27-spreadsheet-formula",
+    "prompt": "Explique la formule =ODOO.PIVOT(\"1\", \"amount_total\")",
+    "category": "spreadsheet_formula",
+    "expected_skills": ["inspect_spreadsheet"],
+    "criteria": ["identifie ODOO.PIVOT", "ne traite pas comme une formule Excel générique"]
+  },
+  {
+    "id": "q28-spreadsheet-list",
+    "prompt": "Liste les spreadsheets disponibles dans cette instance",
+    "category": "spreadsheet_inventory",
+    "expected_skills": ["inspect_spreadsheet"],
+    "criteria": ["liste documents.document spreadsheet", "inclut spreadsheet.dashboard si disponible"]
   }
 ]

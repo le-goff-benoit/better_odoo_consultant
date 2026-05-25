@@ -1,0 +1,10 @@
+[
+  {"query": "Donne-moi le bilan du client Acme au 31/03/2026", "category": "positive", "should_trigger": true, "expected_skill": "inspect_financial_reports"},
+  {"query": "P&L du projet PRJ-42 sur Q1 2026", "category": "positive", "should_trigger": true, "expected_skill": "inspect_financial_reports"},
+  {"query": "Quel rapport comptable utiliser pour la déclaration TVA T1 ?", "category": "positive", "should_trigger": true, "expected_skill": "inspect_financial_reports"},
+  {"query": "Exporte le compte de résultat 2025 en Excel", "category": "positive", "should_trigger": true, "expected_skill": "inspect_financial_reports"},
+  {"query": "Décris la structure du rapport account.report Profit and Loss", "category": "positive", "should_trigger": true, "expected_skill": "inspect_financial_reports"},
+  {"query": "Liste les factures d'Acme ouvertes", "category": "near_miss", "should_trigger": false, "expected_skill": "odoo_query_records"},
+  {"query": "Inspecte le rapport QWeb sale.report_invoice", "category": "near_miss", "should_trigger": false, "expected_skill": "odoo_inspect_report"},
+  {"query": "Rapport des ventes par commercial ce mois-ci", "category": "negative", "should_trigger": false, "expected_skill": "odoo_aggregate_records"}
+]

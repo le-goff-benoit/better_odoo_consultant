@@ -1,0 +1,10 @@
+[
+  {"query": "Explique la formule =ODOO.PIVOT(\"1\", \"amount_total\")", "category": "positive", "should_trigger": true, "expected_skill": "inspect_spreadsheet"},
+  {"query": "Inspecte le spreadsheet Budget 2026 et liste ses formules ODOO", "category": "positive", "should_trigger": true, "expected_skill": "inspect_spreadsheet"},
+  {"query": "Quelle formule Odoo Spreadsheet pour récupérer le CA par client ?", "category": "positive", "should_trigger": true, "expected_skill": "inspect_spreadsheet"},
+  {"query": "Liste les spreadsheets disponibles dans cette instance", "category": "positive", "should_trigger": true, "expected_skill": "inspect_spreadsheet"},
+  {"query": "Montre les dashboards spreadsheet Sales", "category": "positive", "should_trigger": true, "expected_skill": "inspect_spreadsheet"},
+  {"query": "Liste les rapports QWeb disponibles", "category": "near_miss", "should_trigger": false, "expected_skill": "odoo_inspect_report"},
+  {"query": "Explique la formule Excel SOMME.SI pour un tableau simple", "category": "near_miss", "should_trigger": false, "expected_skill": "none"},
+  {"query": "Quel bilan utiliser pour la situation TVA ?", "category": "negative", "should_trigger": false, "expected_skill": "inspect_financial_reports"}
+]

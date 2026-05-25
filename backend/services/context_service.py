@@ -142,6 +142,7 @@ _BOUNDARY_TOKENS = frozenset({
     "custom", "right", "group", "groupe", "groupes", "groups",
     "read", "view", "vue", "orm",
     "cron", "flow", "flux", "graphe", "graph",
+    "bilan", "gl",
 })
 
 _SECTION_TITLES = {
@@ -252,6 +253,19 @@ _SKILL_INTENT_BUNDLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] 
         "action serveur", "actions serveur", "server action",
         "ir.actions.server", "mail template", "template mail",
     ), ("inspect_automations",)),
+    ("financial_audit", (
+        "bilan", "balance sheet", "compte de résultat", "compte de resultat",
+        "p&l", "profit and loss", "grand livre", "general ledger",
+        "tax report", "déclaration tva", "declaration tva", "état financier",
+        "etat financier", "financial report", "account.report",
+        "rapport comptable", "situation client", "résultat projet",
+        "resultat projet",
+    ), ("inspect_financial_reports",)),
+    ("spreadsheet_audit", (
+        "spreadsheet", "tableur odoo", "odoo spreadsheet", "dashboard spreadsheet",
+        "spreadsheet.dashboard", "documents.document", "odoo.pivot",
+        "odoo.list", "odoo.filter.value", "formule odoo", "formule spreadsheet",
+    ), ("inspect_spreadsheet",)),
     ("diagram", (
         "diagramme", "diagram", "schéma visuel", "flowchart",
         "class diagram", "mermaid", "dessine", "dessiner", "draw",
@@ -807,6 +821,27 @@ def _prune_skill_routes(
         if lacks_any(("studio", "x_studio", "personnalisation", "customization", "customisation")):
             deselect("odoo_inspect_studio", "pruned:automation-focus")
 
+    financial_terms = (
+        "bilan", "balance sheet", "compte de résultat", "compte de resultat",
+        "p&l", "profit and loss", "grand livre", "general ledger",
+        "tax report", "déclaration tva", "declaration tva", "état financier",
+        "etat financier", "financial report", "account.report",
+        "rapport comptable", "situation client", "résultat projet", "resultat projet",
+    )
+    if selected("inspect_financial_reports") and _has_any(prompt_norm, financial_terms):
+        for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
+            deselect(name, "pruned:financial-report-focus")
+        deselect("odoo_inspect_report", "pruned:financial-report-focus")
+
+    spreadsheet_terms = (
+        "spreadsheet", "tableur odoo", "odoo spreadsheet", "dashboard spreadsheet",
+        "spreadsheet.dashboard", "documents.document", "odoo.pivot",
+        "odoo.list", "odoo.filter.value", "formule odoo", "formule spreadsheet",
+    )
+    if selected("inspect_spreadsheet") and _has_any(prompt_norm, spreadsheet_terms):
+        for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields", "odoo_inspect_report"):
+            deselect(name, "pruned:spreadsheet-focus")
+
     diagram_terms = (
         "diagramme", "diagram", "schéma visuel", "flowchart",
         "class diagram", "mermaid", "dessine", "dessiner", "draw",
@@ -1208,6 +1243,18 @@ def _select_skill_playbooks(
         add("inspect_module_graph", 80, "module-graph-pattern")
     if _has_any(prompt_norm, ("cron", "ir.cron", "base.automation", "action serveur", "server action", "ir.actions.server", "mail template", "template mail")):
         add("inspect_automations", 80, "automation-pattern")
+    if _has_any(prompt_norm, (
+        "bilan", "balance sheet", "compte de résultat", "compte de resultat",
+        "p&l", "profit and loss", "grand livre", "general ledger",
+        "tax report", "déclaration tva", "declaration tva", "état financier",
+        "etat financier", "financial report", "account.report",
+    )):
+        add("inspect_financial_reports", 85, "financial-report-pattern")
+    if re.search(r"\bodoo\.[a-z0-9_.]+\s*\(", prompt_norm) or _has_any(prompt_norm, (
+        "spreadsheet", "tableur odoo", "odoo spreadsheet", "spreadsheet.dashboard",
+        "odoo.pivot", "odoo.list", "odoo.filter.value", "formule odoo",
+    )):
+        add("inspect_spreadsheet", 85, "spreadsheet-formula-pattern")
     if _has_any(prompt_norm, ("kpi", "par mois", "par statut", "read_group", "chiffre d'affaires", "ca par")):
         add("odoo_aggregate_records", 75, "kpi-pattern")
     if _has_any(prompt_norm, (

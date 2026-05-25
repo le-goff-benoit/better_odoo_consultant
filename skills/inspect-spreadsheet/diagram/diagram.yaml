@@ -1,0 +1,28 @@
+inputs:
+  - Connexion Odoo active
+  - Sources Odoo locales pour catalogue de formules
+  - Action, document, formule ou besoin libre
+steps:
+  - Lister documents spreadsheet et dashboards
+  - Lire payload JSON ou XLSX depuis l'attachement
+  - Extraire feuilles, cellules et formules `ODOO.*`
+  - Charger le catalogue depuis les sources JS locales
+outputs:
+  - Liste des spreadsheets
+  - Inventaire des feuilles et formules
+  - Explication ou suggestion de formule
+inputs_en:
+  - Active Odoo connection
+  - Local Odoo sources for formula catalog
+  - Action, document, formula or free-form need
+steps_en:
+  - List spreadsheet documents and dashboards
+  - Read JSON or XLSX payload from attachment
+  - Extract sheets, cells and `ODOO.*` formulas
+  - Load catalog from local JS sources
+outputs_en:
+  - Spreadsheet list
+  - Sheet and formula inventory
+  - Formula explanation or suggestion
+notes: Les cellules retournées sont bornées à 2000.
+notes_en: Returned cells are capped at 2000.

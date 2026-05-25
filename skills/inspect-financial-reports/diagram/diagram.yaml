@@ -1,0 +1,26 @@
+inputs:
+  - Demande de rapport financier
+  - Connexion Odoo active
+  - Options de période, partenaire, analytique, société ou journal
+steps:
+  - Lister ou résoudre le rapport `account.report`
+  - Décrire lignes, colonnes et filtres si nécessaire
+  - Exécuter `_get_lines` ou exporter XLSX selon l'action
+outputs:
+  - Rapports disponibles ou recommandés
+  - Structure du rapport
+  - Lignes chiffrées, totaux ou export borné
+inputs_en:
+  - Financial report request
+  - Active Odoo connection
+  - Period, partner, analytic, company or journal options
+steps_en:
+  - List or resolve the `account.report`
+  - Describe lines, columns and filters when needed
+  - Run `_get_lines` or export XLSX depending on action
+outputs_en:
+  - Available or recommended reports
+  - Report structure
+  - Report lines, totals or bounded export
+notes: Les exports supérieurs à 5 MB renvoient un avertissement au lieu du contenu.
+notes_en: Exports larger than 5 MB return a warning instead of content.

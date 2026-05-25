@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.94.0',
+    version: '0.95.0',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skills — 2 nouveaux skills IA self-contained : `inspect_financial_reports` pour les rapports financiers Enterprise `account.report` (list/recommend/describe/run/export) et `inspect_spreadsheet` pour les Odoo Spreadsheets et dashboards (list/inspect/explain_formula/suggest_formula)',
+      'Backend — nouveaux services `financial_report_service.py` et `spreadsheet_service.py` : lecture bornée `account.report`, lignes/colonnes/expressions, exécution `_get_lines`, export XLSX borné à 5 MB, inspection payload JSON/XLSX spreadsheet et inventaire des formules `ODOO.*`',
+      'Routing — bundles et patterns `financial_audit` / `spreadsheet_audit`, avec pruning `financial-report-focus` et `spreadsheet-focus` pour éviter les fuites vers query/fields/report quand la demande vise clairement un état financier ou un tableur Odoo',
+      'Qualité — couverture eval queries portée à 34/34 skills et dataset routing enrichi avec bilan client, P&L projet, explication `ODOO.PIVOT` et inventaire spreadsheet',
+    ],
+  },
+  {
+    version: '0.94.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skills — 4 nouveaux skills IA self-contained : `compare_odoo_versions` (diff statique modèle/vue/module entre versions Odoo), `inspect_automations` (audit crons, base.automation, actions serveur et templates mail), `inspect_module_graph` (dépendances manifest + héritages modèles) et `generate_diagram` (diagrammes Mermaid flow/class/inheritance/module)',
       'Routing — bundles et patterns dédiés pour comparaison de versions, automatismes, graphes de module et diagrammes, avec pruning `automation-focus`, `diagram-focus` et `module-graph-focus` pour éviter les fuites vers query/fields/view/read-file',
