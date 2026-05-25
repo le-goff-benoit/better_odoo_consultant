@@ -4,7 +4,11 @@
     "expected_skill": "odoo_query_records",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Sors-moi les dix dernières factures impayées de nos clients.",
+      "Donne-moi en liste les factures clients ouvertes les plus récentes (10 lignes)."
+    ]
   },
   {
     "query": "Montre les commandes confirmées du commercial Marc en juin",

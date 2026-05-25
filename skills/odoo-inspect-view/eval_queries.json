@@ -4,7 +4,11 @@
     "expected_skill": "odoo_inspect_view",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Sur le formulaire d'une commande de vente, le champ contact a disparu — pourquoi ?",
+      "Dans la vue form de sale.order, pourquoi partner_id n'est plus rendu visible ?"
+    ]
   },
   {
     "query": "Explique les attrs states readonly invisible dans la vue formulaire sale.order",

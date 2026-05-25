@@ -4,21 +4,32 @@
     "category": "positive",
     "should_trigger": true,
     "expected_skill": "compare_odoo_versions",
-    "modes": ["migration"]
+    "modes": [
+      "migration"
+    ],
+    "paraphrases": [
+      "Quelles différences sur le modèle sale.order entre les versions 17 et 18 ?",
+      "Diff entre 17.0 et 18.0 sur sale.order : montre-moi."
+    ]
   },
   {
     "query": "Compare le module hr_holidays entre 17.0 et 18.0 côté Enterprise",
     "category": "positive",
     "should_trigger": true,
     "expected_skill": "compare_odoo_versions",
-    "modes": ["assistant", "migration"]
+    "modes": [
+      "assistant",
+      "migration"
+    ]
   },
   {
     "query": "Fais le diff de la vue sale.view_order_form entre Odoo 18 et 19",
     "category": "positive",
     "should_trigger": true,
     "expected_skill": "compare_odoo_versions",
-    "modes": ["migration"]
+    "modes": [
+      "migration"
+    ]
   },
   {
     "query": "Lis le fichier addons/sale/models/sale_order.py dans les sources Odoo 18",

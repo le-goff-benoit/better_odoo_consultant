@@ -1,11 +1,69 @@
 [
-  {"query": "voici le traceback python d'odoo, peux-tu me dire d'où vient le bug ?", "expected_skill": "triage_odoo_error", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "j'ai une ValidationError dans Odoo, c'est un bug code ou data ?", "expected_skill": "triage_odoo_error", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "diagnostique ce log d'erreur odoo", "expected_skill": "triage_odoo_error", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "what causes this Odoo traceback?", "expected_skill": "triage_odoo_error", "should_trigger": true, "category": "positive", "language": "en"},
-  {"query": "classer cette erreur : studio, custom, data ou source ?", "expected_skill": "triage_odoo_error", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "column \"x_partner_score\" does not exist", "expected_skill": "triage_odoo_error", "should_trigger": true, "category": "positive", "language": "en"},
-  {"query": "compte les factures impayées", "expected_skill": "triage_odoo_error", "should_trigger": false, "category": "near_miss", "language": "fr"},
-  {"query": "lis sale_order.py", "expected_skill": "triage_odoo_error", "should_trigger": false, "category": "near_miss", "language": "fr"},
-  {"query": "explique le module hr_holidays", "expected_skill": "triage_odoo_error", "should_trigger": false, "category": "near_miss", "language": "fr"}
+  {
+    "query": "voici le traceback python d'odoo, peux-tu me dire d'où vient le bug ?",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "paraphrases": [
+      "Voici la stack trace d'Odoo, je n'arrive pas à identifier la cause racine.",
+      "Cette exception Python remonte d'Odoo en prod, peux-tu la classer ?"
+    ]
+  },
+  {
+    "query": "j'ai une ValidationError dans Odoo, c'est un bug code ou data ?",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "diagnostique ce log d'erreur odoo",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "what causes this Odoo traceback?",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "classer cette erreur : studio, custom, data ou source ?",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "column \"x_partner_score\" does not exist",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "compte les factures impayées",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr"
+  },
+  {
+    "query": "lis sale_order.py",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr"
+  },
+  {
+    "query": "explique le module hr_holidays",
+    "expected_skill": "triage_odoo_error",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr"
+  }
 ]

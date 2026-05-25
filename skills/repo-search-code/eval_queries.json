@@ -4,7 +4,11 @@
     "expected_skill": "repo_search_code",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Dans le dépôt custom du client, qui surcharge sale.order ?",
+      "Trouve les modules custom qui héritent ou modifient sale.order."
+    ]
   },
   {
     "query": "Trouve l'override _inherit account.move dans notre code custom",

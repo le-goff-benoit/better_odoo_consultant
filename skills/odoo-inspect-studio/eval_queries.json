@@ -1,9 +1,56 @@
 [
-  {"query": "Audit Studio du projet : quels modèles x_ sont custom ?", "expected_skill": "odoo_inspect_studio", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Liste les automatisations base.automation ajoutées via Studio", "expected_skill": "odoo_inspect_studio", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Quels champs x_studio_ existent sur res.partner ?", "expected_skill": "odoo_inspect_studio", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Évalue la dette Studio pour la migration", "expected_skill": "odoo_inspect_studio", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "List all Studio customizations on this instance", "expected_skill": "odoo_inspect_studio", "should_trigger": true, "category": "positive", "language": "en"},
-  {"query": "Cherche le code Python d'un module custom dans le repo", "expected_skill": "repo_search_code", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "developer code, not Studio"},
-  {"query": "Quels sont les champs standards de sale.order ?", "expected_skill": "odoo_inspect_fields", "should_trigger": false, "category": "near_miss", "language": "fr"}
+  {
+    "query": "Audit Studio du projet : quels modèles x_ sont custom ?",
+    "expected_skill": "odoo_inspect_studio",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "paraphrases": [
+      "Fais l'inventaire des champs et modèles Studio du projet en cours.",
+      "Audit complet : qu'est-ce qui a été ajouté en Studio sur cette base ?"
+    ]
+  },
+  {
+    "query": "Liste les automatisations base.automation ajoutées via Studio",
+    "expected_skill": "odoo_inspect_studio",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Quels champs x_studio_ existent sur res.partner ?",
+    "expected_skill": "odoo_inspect_studio",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Évalue la dette Studio pour la migration",
+    "expected_skill": "odoo_inspect_studio",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "List all Studio customizations on this instance",
+    "expected_skill": "odoo_inspect_studio",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Cherche le code Python d'un module custom dans le repo",
+    "expected_skill": "repo_search_code",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "developer code, not Studio"
+  },
+  {
+    "query": "Quels sont les champs standards de sale.order ?",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr"
+  }
 ]

@@ -15,7 +15,7 @@ requirement_en: Active Odoo connection
 version: "1.0.0"
 author: Le Goff Benoît - Camptocamp SA
 modes: [assistant, migration, creator]
-keywords: [kpi, indicateur, dashboard, synthèse, agrég, aggregate, group, group by, grouped by, par mois, par statut, par commercial, par journal, per month, per quarter, per status, per salesperson, read_group, somme, moyenne, average, sum, total by, chiffre d'affaires, revenue, ca par, marge par, margin per]
+keywords: [kpi, indicateur, dashboard, synthèse, agrég, aggregate, group, group by, grouped by, par mois, par statut, par commercial, par journal, per month, per quarter, per status, per salesperson, read_group, somme, moyenne, average, sum, total by, chiffre d'affaires, revenue, ca par, ca mensuel, ca annuel, ca trimestriel, mensuel, annuel, trimestriel, hebdomadaire, monthly, yearly, quarterly, weekly, marge par, margin per, réalisé, realise, evolution, tendance]
 permissions:
   filesystem: read
   network: false

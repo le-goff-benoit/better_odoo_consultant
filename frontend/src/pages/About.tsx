@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.97.0',
-    date: '2026-05-25',
+    version: '0.97.1',
+    date: '2026-05-26',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skill dispatcher — nouveau harnais d\'éval unifié `scripts/quality_eval/run_skill_dispatcher_eval.py` qui ingère les 28 prompts curated de `dataset.json` + les 256 queries des `skills/*/eval_queries.json` (284 cas au total). Mesure positive accuracy / negative accuracy / paraphrase accuracy avec split stable train/dev/test 70/15/15 (hash sha1 de l\'id), matrice de confusion skill-to-skill et exclusion des cas `xfail` du scoring. Mirror exact de `run_agent_response_eval.py` pour la couche dispatcher',
+      'Skills — paraphrases ajoutées sur 12 skills pivots (24 reformulations sur `odoo_query_records`, `odoo_count_records`, `odoo_aggregate_records`, `odoo_inspect_view`, `odoo_inspect_security`, `odoo_inspect_report`, `odoo_inspect_studio`, `source_search_odoo`, `source_show_commit`, `repo_search_code`, `triage_odoo_error`, `compare_odoo_versions`). 2 trous détectés à la mesure et corrigés : `odoo_aggregate_records` enrichi avec `ca mensuel`/`mensuel`/`annuel`/`trimestriel`/`monthly`/`yearly`/`réalisé`/`tendance` (paraphrase "Quel CA mensuel a-t-on réalisé sur 2025 ?" ne matchait plus), `triage_odoo_error` enrichi avec `exception python`/`exception remonte`/`cause racine`/`does not exist`/`peux-tu la classer` (paraphrase "Cette exception Python remonte d\'Odoo en prod, peux-tu la classer ?" partait vers `source_search_odoo`)',
+      'Tests — +3 cas (`test_skill_dispatcher_eval.py`) : chargement du corpus complet, baseline ≥97%, exclusion xfail. Suite 807 passed',
+      'Résultats vs 0.97.0 (offline, 284 cas) : accuracy 100%, positive 100%, negative 100%, paraphrase 100% sur les 24 paraphrases ajoutées. Train/dev/test tous à 100%. Confusion matrix vide. Le dispatcher était déjà tuné sur ce corpus — le vrai signal viendra des futurs ajouts hors-corpus',
+    ],
+  },
+  {
+    version: '0.97.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Routing agents — refonte de la boucle de feedback en 5 itérations mesurables. Le dataset d\'éval (200 cas) reçoit un split stratifié train/dev/test 70/15/15 et 54 paraphrases sur 27 cas golden : la métrique d\'agent accuracy passe d\'un faux 100% (overfit lexical du verbatim) à un baseline honnête de 69.5%, puis remonte à 90.5% par couches successives — incident framing detector (support 38→78%), strategy framing detector (architect 72→94%), code-artefact framing detector (developer 72→96%), vote sémantique TF-IDF sur les corpus d\'agents (paraphrase 64.8→72.2%), enrichissement chirurgical des descriptions FR+EN sans duplication des keywords (support→BA confusion 16→9)',
       'Backend — nouveau module `_count_framing` dans `ai_service.py` avec 3 listes de tokens de framing orthogonaux aux `auto_keywords` agents : `_INCIDENT_FRAMING_TERMS` (~55 tokens, boost support +4/hit cap 10), `_STRATEGY_FRAMING_TERMS` (~30 tokens, boost architect), `_CODE_ARTEFACT_FRAMING_TERMS` (~30 tokens, boost developer). Appliqués en phase 3a de `_infer_perspective`, tracés dans `last_result.candidates` pour audit',

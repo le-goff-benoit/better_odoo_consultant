@@ -4,7 +4,11 @@
     "expected_skill": "odoo_aggregate_records",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Quel CA mensuel a-t-on réalisé sur 2025 ?",
+      "Évolution du chiffre d'affaires de l'année dernière, par mois."
+    ]
   },
   {
     "query": "Quel KPI de marge par commercial ce trimestre ?",

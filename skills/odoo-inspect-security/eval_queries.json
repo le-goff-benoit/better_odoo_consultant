@@ -4,7 +4,11 @@
     "expected_skill": "odoo_inspect_security",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Marc, qui est commercial, ne voit pas les commandes de ses collègues alors qu'il devrait.",
+      "Un user du groupe sales n'a pas accès aux SO des autres équipes — c'est un problème de droits ?"
+    ]
   },
   {
     "query": "Analyse les ACL et record rules sur res.partner",

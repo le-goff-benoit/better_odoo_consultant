@@ -4,7 +4,11 @@
     "expected_skill": "odoo_count_records",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Y a-t-il beaucoup de factures encore au statut brouillon ?",
+      "Quel est le nombre exact de factures en draft actuellement ?"
+    ]
   },
   {
     "query": "Quel est le nombre total de partenaires actifs ?",

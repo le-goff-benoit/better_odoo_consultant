@@ -4,7 +4,11 @@
     "expected_skill": "source_show_commit",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Que fait le commit a3f8b2c1 dans le code Odoo ?",
+      "Décris-moi en détail le commit a3f8b2c1."
+    ]
   },
   {
     "query": "Que change le commit deadbeef12345 sur account.move ?",

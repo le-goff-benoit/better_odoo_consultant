@@ -5,7 +5,11 @@
     "should_trigger": true,
     "category": "positive",
     "language": "fr",
-    "notes": "intent: search standard Odoo source for a method"
+    "notes": "intent: search standard Odoo source for a method",
+    "paraphrases": [
+      "Où, dans le code natif d'Odoo, le calcul du TTC d'une vente est-il implémenté ?",
+      "Montre-moi où Odoo standard gère le compute du montant total taxes incluses."
+    ]
   },
   {
     "query": "Cherche la méthode _compute_amount dans les sources Odoo Community",

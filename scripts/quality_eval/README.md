@@ -22,6 +22,37 @@ Le dataset couvre les catégories live data, schema, view, security, report,
 navigation, studio, near-miss email, commit, migration, no-skill, etc.) avec
 une cible explicite par prompt.
 
+## 1bis. Skill dispatcher unifié (déterministe, hors-ligne)
+
+```bash
+python scripts/quality_eval/run_skill_dispatcher_eval.py
+python scripts/quality_eval/run_skill_dispatcher_eval.py --report runs/dispatcher.md
+```
+
+Ingère **tout** le corpus de routage skills :
+
+- les 28 prompts curated de `dataset.json` ;
+- les 256 queries des `skills/*/eval_queries.json` (positifs + near-miss).
+
+Pour chaque cas, rejoue `_select_skill_playbooks` dans **tous les modes
+déclarés** (`modes: [migration]` est obligatoire pour les skills migration),
+puis mesure :
+
+- **positive accuracy** : owner skill présent quand `should_trigger=true` ;
+- **negative accuracy** : owner skill absent quand `should_trigger=false` ;
+- **paraphrase accuracy** : si l'entrée porte un champ `paraphrases: [...]`,
+  chaque reformulation est routée séparément ;
+- **matrice de confusion** : quand l'owner échoue, quels skills business ont
+  été sélectionnés à la place (alimente le diagnostic « ajouter un
+  framing detector » vs « affiner le pruning » vs « strengthen keywords »).
+
+Un split stable train/dev/test (70/15/15) est calculé en hashant l'`id`
+de chaque cas (`sha1 % 100`), donc une nouvelle entrée tombe
+déterministiquement dans la bonne tranche.
+
+Les cas marqués `"xfail": "raison..."` (faiblesses dispatcher documentées)
+sont **exclus du scoring** mais listés dans le rapport.
+
 ## 2. Réponses agents (déterministe + traces optionnelles)
 
 ```bash

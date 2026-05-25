@@ -18,7 +18,11 @@ modes: [assistant, migration]
 keywords: [
   "traceback", "log d'erreur", "log derreur", "log error", "stack trace", "stacktrace",
   "userError", "user error", "validationError", "validation error", "missingError",
-  "integrityError", "psycopg", "psycopg2", "exception odoo",
+  "integrityError", "psycopg", "psycopg2", "exception odoo", "exception python",
+  "exception remonte", "exception en prod", "exception en production",
+  "cause racine", "root cause", "type d'erreur", "categoriser l'erreur",
+  "categorise l'erreur", "categoriser ce bug", "peux-tu la classer", "peux-tu le classer",
+  "does not exist", "column does not", "n'existe pas", "doesn't exist",
   "qu'est-ce qui cause", "d'où vient ce bug", "d'où vient cette erreur", "what causes this",
   "where does this error come from", "diagnose error", "diagnostiquer erreur",
   "classer l'erreur", "classer cette erreur", "classifier l'erreur", "triage", "trier l'erreur",

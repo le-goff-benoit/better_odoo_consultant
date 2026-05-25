@@ -4,7 +4,11 @@
     "expected_skill": "odoo_inspect_report",
     "should_trigger": true,
     "category": "positive",
-    "language": "fr"
+    "language": "fr",
+    "paraphrases": [
+      "Le PDF de la facture client sort sans logo depuis hier.",
+      "Le template QWeb du rapport facture ne génère plus correctement le header."
+    ]
   },
   {
     "query": "Analyse le rapport PDF facture et propose un xpath QWeb fiable",
