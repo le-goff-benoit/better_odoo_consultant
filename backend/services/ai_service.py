@@ -1264,6 +1264,94 @@ def _score_terms(text: str, weak: tuple[str, ...], strong: tuple[str, ...]) -> i
     return n
 
 
+# Incident-framing tokens that are *behaviour* descriptors of a production
+# problem rather than business-domain nouns. They survive paraphrase (real
+# tickets use this vocabulary) and don't appear in the business analyst
+# strong/weak lists, so detecting ≥2 of them is a high-precision signal that
+# the prompt is a support / run incident — even when the prompt also mentions
+# heavy BA nouns like "factures" or "comptable".
+_INCIDENT_FRAMING_TERMS: tuple[str, ...] = (
+    "erreur 500", "erreur 404", "erreur 403", "internal server error",
+    "page blanche", "écran blanc", "login impossible", "connexion impossible",
+    "ne fonctionne pas", "ne marche pas", "plante", "crashe", "freeze",
+    "timeout", "renvoie une erreur", "renvoie une 404", "renvoie une 403",
+    "renvoie 404", "renvoie 403", "tombent sur une 404", "tombent sur une 403",
+    "tourne en boucle", "ne se synchronise", "ne récupère plus", "ne recupere plus",
+    "ne reçoivent", "ne recoivent", "ne reçoit pas", "ne recoit pas",
+    "bouton grisé", "n'apparaissent pas", "a disparu", "ne voit pas",
+    "ne reprend pas", "invalid field", "external id not found",
+    "est faux", "sont faux", "affiche une erreur", "affichent une erreur",
+    "depuis ce matin", "depuis hier", "depuis vendredi", "après l'update",
+    "apres l'update", "après la mise à jour", "apres la mise a jour",
+    "après migration", "apres migration", "depuis l'update", "depuis le déploiement",
+    "hors service", "inaccessible", "panne", "sla", "lenteur",
+    "tombent sur", "n'arrive plus", "narrive plus", "reste bloqué",
+    "restent bloquées", "restent bloquees", "n'arrive pas à", "narrive pas a",
+    "bloque avec", "bloque sur", "ne plus pouvoir", "erreur de capture",
+    "échoue avec", "echoue avec",
+)
+
+
+# Strategy / trade-off framing tokens. These describe an *architectural*
+# decision shape (compare options, define a strategy, draw a blueprint) and
+# don't appear in the BA strong lists. They map a prompt to Architect even
+# when it also mentions BA-flavoured nouns (factures, client, processus, …).
+_STRATEGY_FRAMING_TERMS: tuple[str, ...] = (
+    "adr", "trade-off", "tradeoff", "blueprint", "feuille de route", "roadmap",
+    "stratégie de migration", "strategie de migration", "stratégie edi",
+    "strategie edi", "stratégie performance", "strategie performance",
+    "stratégie de tests", "strategie de tests", "stratégie backup",
+    "strategie backup", "frontière entre studio", "frontiere entre studio",
+    "frontière studio", "frontiere studio", "frontière entre", "frontiere entre",
+    "ownership", "graphe de dépendances", "graphe de dependances",
+    "stack reporting", "comparer odoo", "comparer entre", "choisir entre",
+    "rester en community", "passer enterprise", "community vs enterprise",
+    "community ou enterprise", "oca vs", "on-premise", "on premise",
+    "odoo.sh", "hébergement", "hebergement", "haute disponibilité",
+    "haute disponibilite", "multi-société", "multi-societe", "multi-pays",
+    "multi pays", "registre des risques", "orchestrer ba", "reporting consolidé",
+    "reporting consolide", "dessine un diagramme", "diagramme du flux",
+    "blueprint odoo", "cutover", "rollout", "consolidation",
+)
+
+
+# Code-artefact framing tokens. These describe a code-level *deliverable* (a
+# controller, a CSV, an ORM method, a formula) rather than a business
+# question about a feature. Used to route developer-coded asks that would
+# otherwise look BA-shaped because they mention "facture" or "client".
+_CODE_ARTEFACT_FRAMING_TERMS: tuple[str, ...] = (
+    "controller", "controllers", "controller portal", "ir.model.access",
+    "ir.model.access.csv", "record rule", "modifiers", "onchange",
+    "compute stocké", "compute stocke", "_compute", "_inherit", "_inherits",
+    "@api.depends", "@api.constrains", "@api.model", "@api.onchange",
+    "post_init_hook", "queue_job", "with_company", "safe_eval", "xpath",
+    "qweb", "read_group", "search_read", "search dans chaque", "boucle qui fait search",
+    "script de migration", "odoo.pivot", "odoo.read_group", "=odoo",
+    "template mail", "mail.template", "external id not found", "xmlid",
+    "prefetch", "self.env", "env[", "browse(", "recordset",
+    "psycopg", "@api", "__manifest__",
+)
+
+
+def _count_framing(text: str, terms: tuple[str, ...]) -> int:
+    if not text:
+        return 0
+    return sum(1 for t in terms if _term_matches(text, t))
+
+
+def _count_incident_framing(text: str) -> int:
+    """Return how many incident-framing tokens are present in ``text``.
+
+    Used as a high-precision tie-breaker in ``_infer_perspective``: a prompt
+    with ≥2 incident-framing hits should route to the Support agent even when
+    it mentions business-domain nouns (factures, stock, comptable, …) that
+    would otherwise pull the Business Analyst agent.
+    """
+    if not text:
+        return 0
+    return sum(1 for t in _INCIDENT_FRAMING_TERMS if _term_matches(text, t))
+
+
 # ── Explicit-prompt agent detection ──────────────────────────
 # Patterns FR + EN that should short-circuit the keyword scoring loop and
 # pick the named agent with confidence=high (BETTER §4.2). Matches phrases
@@ -1365,6 +1453,28 @@ def _infer_perspective(text: str, fallback: str = PERSPECTIVE_BA) -> str:
             PERSPECTIVE_BA: _score_terms(t, _BA_WEAK, _BA_STRONG),
         }
 
+    # Incident-framing boost: a production-incident phrasing reliably maps to
+    # the Support agent even when business-domain nouns push BA. Apply a
+    # bounded bonus rather than overriding, so genuinely BA-only prompts that
+    # happen to contain one incident token (eg. "sla" alone) are not flipped.
+    # Framing boosts (BETTER §4.3): three high-precision detectors that
+    # surface the *intent shape* of a prompt, orthogonal to its domain
+    # vocabulary. Each fires only when ≥1 dedicated token is present and is
+    # capped so a single mention doesn't override an otherwise strong agent.
+    #
+    # - Incident framing → Support (resolves support↔BA collision).
+    # - Strategy framing → Architect (resolves architect↔BA collision).
+    # - Code-artefact framing → Developer (resolves developer↔BA collision).
+    for agent_name, hits, boost_per_hit, cap in (
+        (PERSPECTIVE_SUPPORT, _count_incident_framing(t), 4, 10),
+        (PERSPECTIVE_ARCHITECT, _count_framing(t, _STRATEGY_FRAMING_TERMS), 4, 10),
+        (PERSPECTIVE_DEVELOPER, _count_framing(t, _CODE_ARTEFACT_FRAMING_TERMS), 4, 10),
+    ):
+        if hits >= 1 and agent_name in scores:
+            boost = min(boost_per_hit * hits, cap)
+            scores[agent_name] += boost
+            candidates_log.append({"name": f"_framing_boost:{agent_name}", "hits": hits, "boost": boost})
+
     # Stable ordering: support → architect → developer → BA first (matches
     # historical tie-break), then any extra agent in registration order.
     preferred_order = [PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA]
@@ -1391,15 +1501,44 @@ def _infer_perspective(text: str, fallback: str = PERSPECTIVE_BA) -> str:
         _record(best, "auto_scored", "high",
                 f"top score {best_score} with margin {best_score - second_score}")
         return best
+
+    # Semantic agent vote (BETTER §4.4): when lexical is undecided (below
+    # threshold) or low-margin, ask the TF-IDF index over agent corpora.
+    # The index is built from agent descriptions + auto_keywords, so it
+    # generalises across paraphrases the explicit keyword lists missed.
+    semantic_pick: Optional[str] = None
+    semantic_cos: float = 0.0
+    try:
+        from . import semantic_router as _semrouter
+        hit = _semrouter.semantic_agent_vote(t)
+        if hit and hit.name in scores:
+            semantic_pick = hit.name
+            semantic_cos = hit.cosine
+            candidates_log.append({
+                "name": "_semantic_agent_vote", "selected": hit.name, "cosine": hit.cosine,
+            })
+    except Exception:
+        pass
+
     if best_score >= 3:
-        # Above threshold but low margin → keep the best but flag as medium
-        # confidence (informational; routing still returns the best agent).
-        _record(best, "auto_scored", "medium",
-                f"top score {best_score} but margin {best_score - second_score} < 2; fallback used")
+        # Above threshold but low margin. Trust lexical, but if semantic
+        # agrees with strong cosine, promote to high confidence.
+        confidence = "high" if (semantic_pick == best and semantic_cos >= 0.18) else "medium"
+        _record(best, "auto_scored", confidence,
+                f"top score {best_score} margin {best_score - second_score}; semantic={semantic_pick} ({semantic_cos:.2f})")
         return best
-    else:
-        _record(fallback, "fallback", "low",
-                f"best score {best_score} below threshold (>=3)")
+
+    # Lexical below threshold: prefer semantic vote (≥0.15 cosine) over the
+    # blind BA fallback. This is the path that catches "Les techniciens
+    # terrain ont une erreur sur l'app mobile" style support prompts that
+    # don't surface any of the explicit incident-framing tokens.
+    if semantic_pick and semantic_cos >= 0.15:
+        _record(semantic_pick, "semantic_fallback", "medium",
+                f"lexical below threshold (best={best_score}); semantic={semantic_pick} cos={semantic_cos:.2f}")
+        return semantic_pick
+
+    _record(fallback, "fallback", "low",
+            f"best score {best_score} below threshold (>=3); semantic_cos={semantic_cos:.2f}")
     return fallback
 
 

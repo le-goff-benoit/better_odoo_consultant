@@ -60,6 +60,8 @@ class EvalCase:
     tags: tuple[str, ...]
     golden: bool
     expected_handoff: tuple[str, ...]
+    split: str
+    paraphrases: tuple[str, ...]
 
 
 def _as_str_tuple(raw: Any, field: str, case_id: str) -> tuple[str, ...]:
@@ -106,6 +108,10 @@ def _validate_case(
     if unknown_skills:
         raise DatasetError(f"{case_id}: unknown skills: {unknown_skills}")
 
+    split = str(raw.get("split") or "train").strip()
+    if split not in {"train", "dev", "test"}:
+        raise DatasetError(f"{case_id}: split must be train, dev or test")
+    paraphrases = _as_str_tuple(raw.get("paraphrases"), "paraphrases", case_id) if raw.get("paraphrases") else ()
     return EvalCase(
         id=case_id,
         prompt=prompt,
@@ -119,6 +125,8 @@ def _validate_case(
         tags=tags,
         golden=bool(raw.get("golden")),
         expected_handoff=_as_str_tuple(raw.get("expected_handoff"), "expected_handoff", case_id),
+        split=split,
+        paraphrases=paraphrases,
     )
 
 
@@ -222,6 +230,31 @@ def _qualitative_scores(trace: dict[str, Any] | None) -> dict[str, dict[str, Any
     return out
 
 
+def _route_one(case: EvalCase, prompt: str) -> dict[str, Any]:
+    """Run the agent inference + skill router for one prompt variant."""
+    selected_agent = _infer_perspective(prompt, fallback="business_analyst")
+    _select_skill_playbooks(
+        prompt,
+        migration=(case.mode == "migration"),
+        creation=(case.mode == "creator"),
+        disabled_tools=None,
+        locale="fr",
+        perspective=selected_agent,
+    )
+    matched = set(getattr(_select_skill_playbooks, "_last_matched", []) or [])
+    expected = set(case.expected_skills)
+    forbidden = set(case.forbidden_skills)
+    return {
+        "prompt": prompt,
+        "selected_agent": selected_agent,
+        "agent_ok": selected_agent == case.expected_agent,
+        "matched": sorted(matched),
+        "missing": sorted(expected - matched),
+        "forbidden_hit": sorted(forbidden & matched),
+        "confidence": last_skill_route_confidence(),
+    }
+
+
 def evaluate_case(case: EvalCase, response_trace: dict[str, Any] | None = None) -> dict[str, Any]:
     selected_agent = _infer_perspective(case.prompt, fallback="business_analyst")
     agent_result = dict(getattr(_infer_perspective, "last_result", {}) or {})
@@ -242,6 +275,12 @@ def evaluate_case(case: EvalCase, response_trace: dict[str, Any] | None = None) 
     forbidden = set(case.forbidden_skills)
     agent_ok = selected_agent == case.expected_agent
     tool_score, tool_issues = _score_tool_use(expected, forbidden, matched)
+
+    paraphrase_runs = [_route_one(case, p) for p in case.paraphrases]
+    paraphrase_agent_ok = sum(1 for r in paraphrase_runs if r["agent_ok"])
+    paraphrase_tool_ok = sum(
+        1 for r in paraphrase_runs if not r["missing"] and not r["forbidden_hit"]
+    )
 
     dimensions: dict[str, dict[str, Any]] = {
         "agent_fit": {
@@ -280,9 +319,14 @@ def evaluate_case(case: EvalCase, response_trace: dict[str, Any] | None = None) 
         "id": case.id,
         "prompt": case.prompt,
         "mode": case.mode,
+        "split": case.split,
         "expected_agent": case.expected_agent,
         "selected_agent": selected_agent,
         "agent_result": agent_result,
+        "paraphrases": paraphrase_runs,
+        "paraphrase_agent_ok": paraphrase_agent_ok,
+        "paraphrase_tool_ok": paraphrase_tool_ok,
+        "paraphrase_total": len(paraphrase_runs),
         "expected_skills": sorted(expected),
         "forbidden_skills": sorted(forbidden),
         "matched_skills": sorted(matched),
@@ -312,26 +356,86 @@ def evaluate_case(case: EvalCase, response_trace: dict[str, Any] | None = None) 
     }
 
 
+def _stats(items: list[dict[str, Any]]) -> dict[str, Any]:
+    n = len(items)
+    if not n:
+        return {"total": 0, "agent_accuracy": 0, "tool_accuracy": 0, "paraphrase_total": 0, "paraphrase_agent_accuracy": 0, "paraphrase_tool_accuracy": 0}
+    agent_ok = sum(1 for r in items if r["selected_agent"] == r["expected_agent"])
+    tool_ok = sum(1 for r in items if not r["missing_skills"] and not r["forbidden_skills_selected"])
+    p_total = sum(r["paraphrase_total"] for r in items)
+    p_agent = sum(r["paraphrase_agent_ok"] for r in items)
+    p_tool = sum(r["paraphrase_tool_ok"] for r in items)
+    return {
+        "total": n,
+        "agent_accuracy": round(agent_ok / n, 3),
+        "tool_accuracy": round(tool_ok / n, 3),
+        "paraphrase_total": p_total,
+        "paraphrase_agent_accuracy": round(p_agent / p_total, 3) if p_total else None,
+        "paraphrase_tool_accuracy": round(p_tool / p_total, 3) if p_total else None,
+    }
+
+
+def _confusion_matrix(results: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    """Build an expected→selected agent confusion matrix.
+
+    Outer key = expected agent (the truth), inner key = selected agent (what
+    the router did). Cell = case count. Use to spot which agent pair is
+    actually colliding before deciding whether to add a framing detector,
+    trim keywords, or write a pruning rule.
+    """
+    matrix: dict[str, dict[str, int]] = {}
+    agents = sorted({r["expected_agent"] for r in results} | {r["selected_agent"] for r in results})
+    for a in agents:
+        matrix[a] = {b: 0 for b in agents}
+    for r in results:
+        matrix[r["expected_agent"]][r["selected_agent"]] += 1
+    return matrix
+
+
+def _top_confusions(matrix: dict[str, dict[str, int]], limit: int = 6) -> list[dict[str, Any]]:
+    """Return the largest off-diagonal cells, descending."""
+    cells = [
+        {"expected": e, "selected": s, "count": c}
+        for e, row in matrix.items() for s, c in row.items()
+        if e != s and c > 0
+    ]
+    cells.sort(key=lambda x: -x["count"])
+    return cells[:limit]
+
+
 def _summarise(results: list[dict[str, Any]]) -> dict[str, Any]:
     by_agent: dict[str, dict[str, Any]] = {}
     failures = Counter(reason for r in results for reason in r["failure_reasons"])
     for agent in sorted({r["expected_agent"] for r in results}):
         items = [r for r in results if r["expected_agent"] == agent]
         by_agent[agent] = {
-            "total": len(items),
-            "agent_ok": sum(1 for r in items if r["selected_agent"] == r["expected_agent"]),
-            "tool_ok": sum(1 for r in items if not r["missing_skills"] and not r["forbidden_skills_selected"]),
+            **_stats(items),
             "golden_failures": sum(1 for r in items if r["golden"] and r["failure_reasons"]),
             "avg_deterministic_score": round(sum(r["deterministic_score"] for r in items) / len(items), 2) if items else 0,
         }
+    by_split: dict[str, dict[str, Any]] = {}
+    for split in ("train", "dev", "test"):
+        items = [r for r in results if r.get("split") == split]
+        if items:
+            by_split[split] = {
+                **_stats(items),
+                "golden_failures": sum(1 for r in items if r["golden"] and r["failure_reasons"]),
+            }
+    confusion = _confusion_matrix(results)
     return {
         "total": len(results),
-        "agent_accuracy": round(sum(1 for r in results if r["selected_agent"] == r["expected_agent"]) / len(results), 3) if results else 0,
-        "tool_expectation_accuracy": round(sum(1 for r in results if not r["missing_skills"] and not r["forbidden_skills_selected"]) / len(results), 3) if results else 0,
+        **_stats(results),
+        "confusion_matrix": confusion,
+        "top_confusions": _top_confusions(confusion),
         "golden_failures": sum(1 for r in results if r["golden"] and r["failure_reasons"]),
         "failure_reasons": dict(failures),
         "by_agent": by_agent,
+        "by_split": by_split,
     }
+
+
+def _fmt_pct(v: float | None) -> str:
+    return f"{v:.1%}" if isinstance(v, (int, float)) else "—"
 
 
 def build_report(summary: dict[str, Any], results: list[dict[str, Any]]) -> str:
@@ -339,20 +443,53 @@ def build_report(summary: dict[str, Any], results: list[dict[str, Any]]) -> str:
         "# Agent Response Eval Report",
         "",
         f"- Cases: {summary['total']}",
-        f"- Agent accuracy: {summary['agent_accuracy']:.1%}",
-        f"- Tool expectation accuracy: {summary['tool_expectation_accuracy']:.1%}",
+        f"- Agent accuracy: {_fmt_pct(summary['agent_accuracy'])}",
+        f"- Tool expectation accuracy: {_fmt_pct(summary['tool_accuracy'])}",
+        f"- Paraphrase agent accuracy: {_fmt_pct(summary.get('paraphrase_agent_accuracy'))} (n={summary.get('paraphrase_total', 0)})",
+        f"- Paraphrase tool accuracy: {_fmt_pct(summary.get('paraphrase_tool_accuracy'))}",
         f"- Golden failures: {summary['golden_failures']}",
+        "",
+        "## By Split",
+        "",
+        "| Split | Cases | Agent OK | Tool OK | Paraphrase agent | Paraphrase tool | Golden fail |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for split, stats in summary.get("by_split", {}).items():
+        lines.append(
+            f"| {split} | {stats['total']} | {_fmt_pct(stats['agent_accuracy'])} | "
+            f"{_fmt_pct(stats['tool_accuracy'])} | {_fmt_pct(stats['paraphrase_agent_accuracy'])} | "
+            f"{_fmt_pct(stats['paraphrase_tool_accuracy'])} | {stats['golden_failures']} |"
+        )
+    lines.extend([
         "",
         "## By Agent",
         "",
-        "| Agent | Cases | Agent OK | Tool OK | Golden failures | Avg deterministic score |",
-        "|---|---:|---:|---:|---:|---:|",
-    ]
+        "| Agent | Cases | Agent OK | Tool OK | Paraphrase agent | Golden fail | Avg det. score |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ])
     for agent, stats in summary["by_agent"].items():
         lines.append(
-            f"| {agent} | {stats['total']} | {stats['agent_ok']} | {stats['tool_ok']} | "
+            f"| {agent} | {stats['total']} | {_fmt_pct(stats['agent_accuracy'])} | "
+            f"{_fmt_pct(stats['tool_accuracy'])} | {_fmt_pct(stats['paraphrase_agent_accuracy'])} | "
             f"{stats['golden_failures']} | {stats['avg_deterministic_score']} |"
         )
+    matrix = summary.get("confusion_matrix") or {}
+    if matrix:
+        agents = sorted(matrix.keys())
+        header = "| expected ↓ / selected → | " + " | ".join(agents) + " |"
+        sep = "|---|" + "|".join("---:" for _ in agents) + "|"
+        lines.extend(["", "## Confusion Matrix", "", header, sep])
+        for e in agents:
+            cells = []
+            for s in agents:
+                v = matrix[e].get(s, 0)
+                cells.append(f"**{v}**" if e == s else str(v))
+            lines.append(f"| {e} | " + " | ".join(cells) + " |")
+        top = summary.get("top_confusions") or []
+        if top:
+            lines.extend(["", "### Top confusions (off-diagonal)", ""])
+            for cell in top:
+                lines.append(f"- expected `{cell['expected']}` → selected `{cell['selected']}` : {cell['count']}")
     lines.extend(["", "## Failure Reasons", ""])
     if summary["failure_reasons"]:
         for reason, count in sorted(summary["failure_reasons"].items(), key=lambda item: (-item[1], item[0])):
@@ -426,7 +563,7 @@ def main() -> int:
         print(
             f"Agent response eval: {summary['total']} cases, "
             f"agent_accuracy={summary['agent_accuracy']:.1%}, "
-            f"tool_accuracy={summary['tool_expectation_accuracy']:.1%}, "
+            f"tool_accuracy={summary['tool_accuracy']:.1%}, "
             f"golden_failures={summary['golden_failures']}"
         )
         if args.report:

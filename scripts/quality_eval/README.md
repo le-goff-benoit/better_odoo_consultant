@@ -92,6 +92,67 @@ coûteuse et non déterministe. Modèle recommandé :
 Ne jamais optimiser uniquement sur le score LLM-as-judge : garder les cas
 golden humains pour détecter le grader hacking.
 
+## Split train / dev / test
+
+Chaque cas porte un champ `split` (70/15/15, stratifié par agent × difficulté,
+avec goldens distribués). Conventions :
+
+- **train** : visible quand on tune le dispatcher / les `auto_keywords` agents.
+- **dev** : utilisé pour itérer sans triche (peut être lu en tuning, mais éviter
+  de hard-coder ses phrases).
+- **test** : **jamais** lu pendant le tuning. Sert à mesurer la généralisation
+  d'une release à l'autre.
+
+Règle de revue : un commit qui touche `auto_keywords`, `context_service.py`
+ou un `SKILL.md` doit améliorer dev sans dégrader test (vérifier la table
+`## By Split` du rapport).
+
+## Robustesse aux paraphrases
+
+~25 cas golden portent un champ `paraphrases: [...]` (2 reformulations
+naturelles). Le runner les évalue séparément et expose `paraphrase_agent_accuracy`
+/ `paraphrase_tool_accuracy`. Une chute >10 % paraphrase vs original signale
+de l'overfit lexical sur le verbatim du dataset.
+
+## Boucle de feedback prod → dataset
+
+Les tours réels sont logués dans `~/.odoo-consultant/routing-feedback.jsonl`
+(reformulations utilisateur, confiance basse, drift d'agent). Le helper
+
+```bash
+python scripts/quality_eval/promote_feedback.py --summary
+python scripts/quality_eval/promote_feedback.py --filter reformulated --out runs/candidates.jsonl
+```
+
+extrait les candidats à ajouter au **dev set** uniquement. Chaque candidat
+doit être revu manuellement : compléter `expected_agent`, `expected_skills`,
+`criteria` avant de l'ajouter au JSONL.
+
+## LLM-as-judge
+
+`scripts/quality_eval/llm_judge.py` note `odoo_accuracy`, `answer_quality`,
+`handoff_quality` sur 20 chacun à partir d'un fichier de traces
+(`{id, response_text, tool_calls}`). Sortie compatible avec
+`run_agent_response_eval.py --responses`. Toujours utiliser le même modèle
+juge (`claude-opus-4-7` par défaut) pour comparer les runs entre eux.
+
+```bash
+# 1. Hors-ligne : produire les traces en appelant le backend (manuel).
+# 2. Juger sur le dev split.
+python scripts/quality_eval/llm_judge.py \
+  --responses runs/responses.jsonl \
+  --out runs/judge-dev.jsonl \
+  --split dev
+# 3. Réinjecter pour rapport consolidé.
+python scripts/quality_eval/run_agent_response_eval.py \
+  --responses runs/judge-dev.jsonl \
+  --report runs/dev-graded.md
+```
+
+Anti-grader-hacking : revoir manuellement les 38 cas golden une fois.
+Si le juge dérive de >3 pts sur >20 % des goldens, c'est un drift du juge,
+pas un progrès agent.
+
 ## Ajouter un prompt
 
 Pour le routing skills, éditer `dataset.json`. Chaque entrée :

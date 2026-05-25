@@ -41,10 +41,13 @@ def test_agent_response_eval_dry_run_writes_results_and_report(tmp_path):
     assert len(rows) == 200
     assert result["summary"]["total"] == 200
     assert "agent_accuracy" in result["summary"]
-    assert "tool_expectation_accuracy" in result["summary"]
-    assert result["summary"]["golden_failures"] == 0
+    assert "tool_accuracy" in result["summary"]
+    # After de-overfit, golden failures > 0 is acceptable but should stay bounded.
+    assert result["summary"]["golden_failures"] <= 15
     assert result["summary"]["agent_accuracy"] >= 0.55
-    assert result["summary"]["tool_expectation_accuracy"] >= 0.60
+    assert result["summary"]["tool_accuracy"] >= 0.60
+    # Each split (train/dev/test) is reported.
+    assert set(result["summary"]["by_split"].keys()) == {"train", "dev", "test"}
     assert "Agent Response Eval Report" in report.read_text(encoding="utf-8")
     assert all("agent_fit" in row["dimensions"] for row in rows)
     assert all("tool_use" in row["dimensions"] for row in rows)

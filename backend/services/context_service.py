@@ -714,18 +714,13 @@ def _prune_skill_routes(
 
     functional_planning_terms = (
         "plan de recette", "recette uat", "scénarios uat", "scenarios uat",
-        "aide à décider", "aide a decider", "comment décider", "comment decider",
-        "priorise ce backlog", "prioriser ce backlog", "prépare un plan",
-        "prepare un plan", "rédige un email", "redige un email",
-        "compte-rendu", "compte rendu", "workshop", "kpi proposer",
-        "quels kpi proposer", "plan de formation", "processus cible",
-        "politique de", "cartographie le parcours", "critères d'acceptation",
-        "criteres d'acceptation", "critères d acceptation", "criteres d acceptation",
-        "cartographie le processus", "cadrer le to-be", "cadrer le processus",
+        "compte-rendu", "compte rendu", "workshop", "atelier",
+        "plan de formation", "processus cible", "politique de validation",
+        "critères d'acceptation", "criteres d'acceptation",
+        "critères d acceptation", "criteres d acceptation",
         "user stories", "dashboard métier", "dashboard metier",
-        "plan de conduite du changement", "conduite du changement",
-        "script de démo", "script de demo", "processus cible",
-        "politique de validation", "atelier comptable",
+        "conduite du changement", "cadrer le to-be", "cadrer le processus",
+        "rédige un email", "redige un email", "rédige une note", "redige une note",
     )
     if _has_any(prompt_norm, functional_planning_terms):
         for name in (
@@ -744,16 +739,11 @@ def _prune_skill_routes(
             deselect(name, "pruned:functional-planning-focus")
 
     architecture_no_data_terms = (
-        "architecture d'intégration", "architecture d'integration",
-        "architecture integration", "recommander entre odoo",
-        "ownership des référentiels", "ownership des referentiels",
-        "stratégie backup", "strategie backup", "backup/restore",
-        "registre des risques", "contrat api", "stratégie edi",
-        "strategie edi", "clients publics français", "clients publics francais",
-        "qr-bill", "architecture d intégration", "architecture integration",
-        "architecture d integration",
-        "reporting consolidé", "reporting consolide", "rédige adr",
-        "redige adr", "rédige un adr", "redige un adr",
+        "architecture", "ownership", "stratégie backup", "strategie backup",
+        "backup/restore", "registre des risques", "contrat api",
+        "stratégie edi", "strategie edi", "reporting consolidé",
+        "reporting consolide", " adr ", "adr,", "adr.", "adr:",
+        "blueprint", "cutover", "rollout",
     )
     if _has_any(prompt_norm, architecture_no_data_terms):
         for name in (
@@ -764,20 +754,13 @@ def _prune_skill_routes(
             "repo_search_code",
         ):
             deselect(name, "pruned:architecture-decision-focus")
-        if _has_any(prompt_norm, (
-            "architecture d'intégration", "architecture d'integration",
-            "architecture integration", "ownership des référentiels",
-            "ownership des referentiels",
-        )):
+        if _has_any(prompt_norm, ("architecture d'intégration", "architecture d'integration", "ownership")):
             deselect("compare_odoo_versions", "pruned:architecture-decision-focus")
-        if _has_any(prompt_norm, ("registre des risques",)) and not _has_any(prompt_norm, ("risques migration", "upgrade", "edi", "blueprint")):
+        if _has_any(prompt_norm, ("registre des risques",)) and not _has_any(prompt_norm, ("migration", "upgrade", "edi", "blueprint")):
             deselect("odoo_inspect_modules", "pruned:architecture-decision-focus")
 
-    support_ticket_triage_terms = (
-        "priorise ces trois tickets", "priorise ces tickets",
-        "prioriser ces trois tickets", "prioriser ces tickets",
-    )
-    if _has_any(prompt_norm, support_ticket_triage_terms):
+    support_ticket_triage_terms = ("priorise", "prioriser", "classer", "hiérarchiser", "hierarchiser")
+    if _has_any(prompt_norm, support_ticket_triage_terms) and _has_any(prompt_norm, ("ticket", "tickets", "incident", "incidents")):
         for name in (
             "odoo_query_records", "odoo_count_records", "odoo_aggregate_records",
             "odoo_inspect_fields", "odoo_inspect_view", "odoo_inspect_navigation",

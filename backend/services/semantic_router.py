@@ -185,6 +185,110 @@ class _SemanticIndex:
 _INDEX = _SemanticIndex()
 
 
+@dataclass(frozen=True)
+class AgentSemanticHit:
+    name: str
+    cosine: float
+
+
+class _AgentSemanticIndex(_SemanticIndex):
+    """TF-IDF index over the agent catalogue.
+
+    Reuses ``_SemanticIndex`` machinery but builds its corpus from agent
+    ``description + description_en + auto_keywords.weak + auto_keywords.strong``.
+    Used by ``_infer_perspective`` as a tie-breaker when the deterministic
+    lexical scorer is below threshold or has a low margin — catches paraphrases
+    where the explicit keywords miss but the overall vocabulary still
+    matches an agent's domain.
+    """
+
+    def build(self, agents: Iterable[object]) -> None:  # type: ignore[override]
+        docs: list[tuple[str, list[str]]] = []
+        for ag in agents:
+            name = getattr(ag, "name", None)
+            if not name:
+                continue
+            kw = getattr(ag, "auto_keywords", None)
+            weak = getattr(kw, "weak", ()) if kw else ()
+            strong = getattr(kw, "strong", ()) if kw else ()
+            parts: list[str] = [
+                str(name).replace("_", " "),
+                str(getattr(ag, "description", "") or ""),
+                str(getattr(ag, "description_en", "") or ""),
+                " ".join(weak),
+                # repeat strong terms so they outweigh weak in TF
+                " ".join(strong) + " " + " ".join(strong),
+            ]
+            tokens = _tokenize(" ".join(parts))
+            if tokens:
+                docs.append((str(name), tokens))
+
+        if not docs:
+            self._vectors = []
+            self._idf = {}
+            self._built = False
+            return
+
+        n_docs = len(docs)
+        df: dict[str, int] = {}
+        for _, toks in docs:
+            for term in set(toks):
+                df[term] = df.get(term, 0) + 1
+        self._idf = {term: math.log((n_docs + 1) / (count + 1)) + 1 for term, count in df.items()}
+
+        vectors: list[_SkillVector] = []
+        for name, toks in docs:
+            tf: dict[str, int] = {}
+            for term in toks:
+                tf[term] = tf.get(term, 0) + 1
+            tfidf: dict[str, float] = {}
+            for term, count in tf.items():
+                idf = self._idf.get(term, 0.0)
+                if idf <= 0:
+                    continue
+                tfidf[term] = (count / len(toks)) * idf
+            norm = math.sqrt(sum(v * v for v in tfidf.values())) or 1.0
+            vectors.append(_SkillVector(name=name, tfidf=tfidf, norm=norm))
+        self._vectors = vectors
+        self._built = True
+
+
+_AGENT_INDEX = _AgentSemanticIndex()
+
+
+def rebuild_agent_index(agents: Optional[Iterable[object]] = None) -> None:
+    """Rebuild the semantic agent index. If ``agents`` is None, pull the
+    current agent registry."""
+    if agents is None:
+        try:
+            from ..agents import list_agents as _list_agents
+            agents = _list_agents()
+        except Exception as exc:  # pragma: no cover
+            _logger.warning("Cannot load agent registry for semantic index: %s", exc)
+            return
+    _AGENT_INDEX.build(agents)
+
+
+def semantic_agent_vote(prompt: str, *, min_cosine: float = 0.10) -> Optional[AgentSemanticHit]:
+    """Return the top agent by cosine similarity, or None if no agent clears
+    ``min_cosine``. Used by ``_infer_perspective`` as a fallback / tie-breaker
+    when lexical scoring is low-confidence."""
+    if not _AGENT_INDEX.enabled():
+        return None
+    hits = _AGENT_INDEX.query(prompt, top_k=1, min_cosine=min_cosine)
+    if not hits:
+        return None
+    h = hits[0]
+    return AgentSemanticHit(name=h.name, cosine=h.cosine)
+
+
+# Lazy build at import time, swallow failures.
+try:
+    rebuild_agent_index()
+except Exception as exc:  # pragma: no cover
+    _logger.warning("Initial agent semantic index build failed: %s", exc)
+
+
 def rebuild_index(skills: Optional[Iterable[object]] = None) -> None:
     """Rebuild the semantic index. If ``skills`` is None, the function
     pulls ``SKILL_DEFINITIONS`` from the skill registry — kept lazy to avoid

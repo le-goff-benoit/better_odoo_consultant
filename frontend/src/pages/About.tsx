@@ -7,10 +7,24 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.96.2',
+    version: '0.97.0',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Routing agents — refonte de la boucle de feedback en 5 itérations mesurables. Le dataset d\'éval (200 cas) reçoit un split stratifié train/dev/test 70/15/15 et 54 paraphrases sur 27 cas golden : la métrique d\'agent accuracy passe d\'un faux 100% (overfit lexical du verbatim) à un baseline honnête de 69.5%, puis remonte à 90.5% par couches successives — incident framing detector (support 38→78%), strategy framing detector (architect 72→94%), code-artefact framing detector (developer 72→96%), vote sémantique TF-IDF sur les corpus d\'agents (paraphrase 64.8→72.2%), enrichissement chirurgical des descriptions FR+EN sans duplication des keywords (support→BA confusion 16→9)',
+      'Backend — nouveau module `_count_framing` dans `ai_service.py` avec 3 listes de tokens de framing orthogonaux aux `auto_keywords` agents : `_INCIDENT_FRAMING_TERMS` (~55 tokens, boost support +4/hit cap 10), `_STRATEGY_FRAMING_TERMS` (~30 tokens, boost architect), `_CODE_ARTEFACT_FRAMING_TERMS` (~30 tokens, boost developer). Appliqués en phase 3a de `_infer_perspective`, tracés dans `last_result.candidates` pour audit',
+      'Backend — `semantic_router.py` étendu avec `_AgentSemanticIndex` indexant `description + description_en + auto_keywords` des 4 agents. Nouveau `semantic_agent_vote(prompt)` consommé par `_infer_perspective` en phase 3b : promotion à confidence high si le vote sémantique confirme le best lexical (cos ≥0.18), choix sémantique au lieu du fallback BA aveugle si lexical < seuil et cos ≥0.15. Désactivable via `BETTER_SEMANTIC_ROUTER=0`',
+      'Harnais qualité — `scripts/quality_eval/` enrichi avec matrice de confusion par split (`_confusion_matrix` + `_top_confusions`), métriques paraphrase agent/tool, vue par-split (train/dev/test) dans le rapport Markdown. Nouveau script `promote_feedback.py` qui extrait les candidats du log `routing-feedback.jsonl` vers le dev set (filtre `reformulated` / `low-confidence` / `drift`). Nouveau scaffold `llm_judge.py` (modèle figé `claude-opus-4-7`) pour noter `odoo_accuracy`/`answer_quality`/`handoff_quality` à partir de traces de réponses externes',
+      'Agents — descriptions FR+EN des 4 AGENT.md enrichies avec 5-8 "formes de demande typiques" narratives orthogonales aux `auto_keywords` (évite la duplication TF-IDF). `auto_keywords` parallèlement trimmées des ~120 phrases dataset-verbatim ajoutées en 0.96.2 (overfit) ; conservation des tokens d\'incident génériques qui survivent aux paraphrases',
+      'Tests — suite backend 804 passed, +1 cas (`test_agent_response_eval` mis à jour pour la nouvelle clé `tool_accuracy` et `by_split`). Rapport final : agent_accuracy 90.5%, tool_accuracy 98.5%, paraphrase 70.4%, dev split 93.8%, golden failures 4',
+    ],
+  },
+  {
+    version: '0.96.2',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skills — nouveau skill `triage_odoo_error` (mode assistant + migration) : prend un traceback / log Odoo en entrée, parse la stack (frame innermost, classe d\'exception, module) et classe la cause racine entre 5 familles — `migration`, `studio`, `data`, `custom_dev`, `source_code`. Sort un verdict + niveau de confiance + évidence + prochaine action recommandée (un seul skill). Inclus dans `preferred_skills` des agents `support` et `business_analyst`. 2 références auto-loadables (arbre de décision + patterns d\'erreur migration)',
       'Système — correction de 4 bugs de pinning version/locale dans le system prompt : (1) le bloc `## Instance connectée` lisait `profile.odoo_version` même quand un environnement non-primaire (staging/test) imposait une version différente, créant un décalage silencieux avec les sources et les requêtes XML-RPC ; (2) idem en mode migration ; (3) le pays/localisation fiscale n\'apparaissait que dans le priority block routé, vulnérable à la pression budgétaire — désormais épinglé directement sous l\'Instance ; (4) en mode général, le `country_code` choisi dans l\'UI n\'était jamais répété en tête de prompt, l\'IA était aveugle au pays. `stream_chat` propage maintenant `country_code` et `country_name`. +8 tests dédiés (`test_system_prompt_pinning.py`)',

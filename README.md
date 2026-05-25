@@ -6,7 +6,7 @@ Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sour
 
 > **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
 >
-> **Version actuelle :** `0.96.2` — skill `triage_odoo_error` qui classe un traceback / log Odoo entre `migration` / `studio` / `data` / `custom_dev` / `source_code` avec verdict + confiance + prochaine action (utilisé par support et business_analyst). Correction de 4 bugs de pinning version/locale dans le system prompt. Voir le changelog complet dans la page **À propos** de l'app.
+> **Version actuelle :** `0.97.0` — refonte de la boucle de feedback du routing agents en 5 itérations mesurables. Split train/dev/test stratifié 70/15/15 + 54 paraphrases sur 27 cas golden, 3 framing detectors orthogonaux (incident / strategy / code-artefact), vote sémantique TF-IDF sur le corpus d'agents, descriptions FR+EN enrichies. Le dispatcher passe d'un faux 100 % d'accuracy (overfit lexical) à un 90.5 % honnête + paraphrase 70.4 % + dev split 93.8 %. Nouveaux outils dans `scripts/quality_eval/` : matrice de confusion par split, `promote_feedback.py` (extrait des candidats du log `routing-feedback.jsonl`), scaffold `llm_judge.py`. Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 
