@@ -7,6 +7,7 @@ import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
 import { Perspective, PerspectiveMode, loadPerspective, savePerspective } from '../components/PerspectiveToggle'
+import AgentBadge from '../components/AgentBadge'
 import ConversationContextPanel from '../components/ConversationContextPanel'
 import ConversationHistoryPanel from '../components/ConversationHistoryPanel'
 import WorkspaceShell from '../components/WorkspaceShell'
@@ -106,11 +107,19 @@ function technicalComplexityLabel(raw?: string | null) {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'text' | 'error' | 'warning' | 'done' | 'end'
+  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'orchestration_selected' | 'orchestration_step' | 'text' | 'error' | 'warning' | 'done' | 'end'
   name?: string
   args?: Record<string, unknown>
   skills?: string[]
   candidates?: SkillRouteCandidateLike[]
+  orchestration?: AgentOrchestrationLike
+  mode?: string
+  step?: number
+  status?: string
+  agent?: string
+  purpose?: string
+  role?: string
+  chars?: number
   run_id?: string
   context_trace?: ContextTraceEventLike[]
   event?: Record<string, unknown>
@@ -123,6 +132,24 @@ interface AiEvent {
   output_tokens?: number
   cache_creation_input_tokens?: number
   cache_read_input_tokens?: number
+}
+
+interface AgentOrchestrationStepLike {
+  step: number
+  agent: string
+  purpose?: string
+  role?: string
+}
+
+interface AgentOrchestrationLike {
+  mode: 'single_agent' | 'sequential_agents' | string
+  primaryAgent?: string
+  finalAgent?: string
+  reason?: string
+  ruleId?: string
+  decisionSource?: string
+  sequence?: AgentOrchestrationStepLike[]
+  triggeredRules?: string[]
 }
 
 interface Message {
@@ -750,9 +777,10 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, onAskMore, onPromptAction }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, perspective, onAskMore, onPromptAction }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
+  perspective?: Perspective
   onAskMore?: (selectedText: string) => void
   onPromptAction?: (prompt: string) => void
 }) {
@@ -763,6 +791,9 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
   const prov = PROVIDERS.find(p => p.id === provider)
   const textEvt    = events.find(e => e.type === 'text')
   const toolEvents = events.filter(e => e.type === 'tool_call' || e.type === 'tool_result')
+  const orchestrationEvt = events.find(e => e.type === 'orchestration_selected' && e.orchestration)
+  const orchestrationSteps = events.filter(e => e.type === 'orchestration_step')
+  const effectiveAgent = orchestrationEvt?.orchestration?.finalAgent || perspective
   const errorEvt   = events.find(e => e.type === 'error')
   const time   = fmtTime(timestamp)
   const tokens = fmtTokens(inputTokens, outputTokens)
@@ -802,6 +833,8 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
+        <OrchestrationStrip orchestration={orchestrationEvt?.orchestration} stepEvents={orchestrationSteps} />
+
         {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} />}
 
         {textEvt?.content && (
@@ -919,6 +952,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             <span style={{ fontWeight: 500 }}>
               {toolEvents.length > 0 ? c.analyzing : c.thinking}
             </span>
+            {effectiveAgent && <AgentBadge perspective={effectiveAgent} compact />}
           </div>
         )}
 
@@ -977,6 +1011,55 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function OrchestrationStrip({ orchestration, stepEvents }: {
+  orchestration?: AgentOrchestrationLike
+  stepEvents: AiEvent[]
+}) {
+  const lang = useUiLanguage()
+  if (!orchestration || orchestration.mode !== 'sequential_agents' || !orchestration.sequence?.length) return null
+  const latestRunning = [...stepEvents].reverse().find(e => e.status === 'running')
+  const latestDone = [...stepEvents].reverse().find(e => e.status === 'done')
+  const activeStep = latestRunning?.step ?? latestDone?.step
+  const activeAgent = latestRunning?.agent ?? latestDone?.agent
+  const label = lang === 'fr' ? 'Réponse préparée en séquence' : 'Answer prepared as a sequence'
+  const reasonLabel = lang === 'fr' ? 'Raison' : 'Reason'
+  const finalLabel = lang === 'fr' ? 'réponse finale' : 'final answer'
+  const status = latestRunning
+    ? (lang === 'fr' ? 'en cours' : 'running')
+    : latestDone
+      ? (lang === 'fr' ? 'terminé' : 'done')
+      : (lang === 'fr' ? 'préparée' : 'prepared')
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+      marginBottom: 8, padding: '7px 10px',
+      background: 'color-mix(in srgb, var(--brand-fg) 7%, var(--th-bg-muted))',
+      border: `1px solid ${t.border}`, borderRadius: t.radius,
+      fontSize: 12, color: t.textSub,
+    }}>
+      <span style={{ fontWeight: 700, color: t.text }}>{label}</span>
+      {orchestration.sequence.map((step, index) => (
+        <React.Fragment key={`${step.step}-${step.agent}`}>
+          {index > 0 && <span style={{ color: t.muted }}>→</span>}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            opacity: activeStep && step.step > activeStep ? .58 : 1,
+          }}>
+            <AgentBadge perspective={step.agent} compact status={step.agent === activeAgent ? status : undefined} />
+          </span>
+        </React.Fragment>
+      ))}
+      <span style={{ color: t.muted }}>→ {finalLabel}</span>
+      {orchestration.reason && (
+        <span style={{ color: t.muted, flexBasis: '100%', lineHeight: 1.35 }}>
+          {reasonLabel} : {orchestration.reason}
+        </span>
+      )}
     </div>
   )
 }
@@ -1787,6 +1870,7 @@ export default function Migration() {
                 startTime={m.startTime}
                 inputTokens={m.inputTokens}
                 outputTokens={m.outputTokens}
+                perspective={perspective}
                 onAskMore={askMoreOnSelection}
                 onPromptAction={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
               />

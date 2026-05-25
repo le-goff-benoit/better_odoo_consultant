@@ -1,0 +1,15 @@
+{
+  "positive": [
+    {"prompt": "Choisir entre Community et Enterprise pour notre roadmap multi-pays", "expected_agent": "architect", "category": "positive"},
+    {"prompt": "Stratégie de migration v14 vers v17, trajectoire et ADR à produire", "expected_agent": "architect", "category": "positive"},
+    {"prompt": "Quels risques de scalabilité pour notre setup multi-société", "expected_agent": "architect", "category": "positive"},
+    {"prompt": "Should we deploy on-premise or SaaS for this multi-company setup", "expected_agent": "architect", "category": "positive"},
+    {"prompt": "Réponds comme un architecte: ADR pour le choix de queue_job vs cron", "expected_agent": "architect", "category": "explicit_prompt"},
+    {"prompt": "Gouvernance multi-pays et choix technique d'hébergeur on-premise", "expected_agent": "architect", "category": "near_miss", "not_expected_agent": "business_analyst"}
+  ],
+  "negative": [
+    {"prompt": "Erreur 500 sur le serveur de prod", "expected_agent": "support", "category": "negative", "not_expected_agent": "architect"},
+    {"prompt": "Comment configurer les équipes commerciales", "expected_agent": "business_analyst", "category": "negative", "not_expected_agent": "architect"},
+    {"prompt": "Override de la méthode create dans res.partner", "expected_agent": "developer", "category": "negative", "not_expected_agent": "architect"}
+  ]
+}

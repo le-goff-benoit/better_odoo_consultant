@@ -1097,6 +1097,22 @@ _VALID_RESPONSE_LANGUAGES = {"auto", "fr", "en"}
 
 
 def _normalize_perspective(p: Optional[str]) -> str:
+    """Resolve a perspective string to a known agent name.
+
+    Sources, in order:
+    1. The agent registry (folder-backed personas with aliases).
+    2. The legacy hardcoded ``_VALID_PERSPECTIVES`` / ``_LEGACY_PERSPECTIVE_ALIASES``
+       constants — kept as a fallback so tests stay green even if the catalog
+       directory is unavailable.
+    Defaults to ``developer`` when nothing matches."""
+    if p:
+        try:
+            from ..agents import get_agent as _get_agent
+            ag = _get_agent(p)
+            if ag is not None:
+                return ag.name
+        except Exception:
+            pass
     if p in _VALID_PERSPECTIVES:
         return p  # type: ignore[return-value]
     if p in _LEGACY_PERSPECTIVE_ALIASES:
@@ -1220,48 +1236,174 @@ _DEV_STRONG = (
 )
 
 
+def _term_matches(text: str, term: str) -> bool:
+    """Substring match for multi-word phrases, word-boundary match for short
+    single-word tokens (≤4 chars or any pure alphanumeric short word).
+
+    The boundary guard avoids classic false positives like ``adr`` matching
+    inside ``cadrer`` or ``pra`` matching inside ``rapprochement`` while
+    keeping the cheap substring behaviour for longer / multi-word terms
+    such as ``"stratégie de migration"`` or ``"_inherit"``."""
+    if not term:
+        return False
+    needs_boundary = len(term) <= 4 and term.isalnum()
+    if not needs_boundary:
+        return term in text
+    import re as _re
+    return _re.search(rf"(?<!\w){_re.escape(term)}(?!\w)", text) is not None
+
+
 def _score_terms(text: str, weak: tuple[str, ...], strong: tuple[str, ...]) -> int:
     n = 0
     for t in weak:
-        if t in text:
+        if _term_matches(text, t):
             n += 1
     for t in strong:
-        if t in text:
+        if _term_matches(text, t):
             n += 3
     return n
 
 
+# ── Explicit-prompt agent detection ──────────────────────────
+# Patterns FR + EN that should short-circuit the keyword scoring loop and
+# pick the named agent with confidence=high (BETTER §4.2). Matches phrases
+# like "réponds comme un architecte", "passe en mode developer",
+# "answer as a business analyst", "switch to support mode".
+_EXPLICIT_AGENT_PATTERNS: tuple[tuple[str, str], ...] = (
+    # FR — "réponds/réagis/parle comme un[e] <rôle>"
+    (PERSPECTIVE_SUPPORT,    r"comme\s+un[e]?\s+(?:agent\s+)?support"),
+    (PERSPECTIVE_BA,         r"comme\s+un[e]?\s+(?:business[\s-]?analyst|analyste\s+m[ée]tier|application\s+manager|consultant[e]?\s+fonctionnel)"),
+    (PERSPECTIVE_ARCHITECT,  r"comme\s+un[e]?\s+architecte"),
+    (PERSPECTIVE_DEVELOPER,  r"comme\s+un[e]?\s+(?:d[ée]veloppeur|developer|dev)\b"),
+    # FR — "passe/passons en mode <rôle>" / "mode <rôle>"
+    (PERSPECTIVE_SUPPORT,    r"\bmode\s+support\b"),
+    (PERSPECTIVE_BA,         r"\bmode\s+(?:business[\s-]?analyst|analyste\s+m[ée]tier|ba|am)\b"),
+    (PERSPECTIVE_ARCHITECT,  r"\bmode\s+(?:architect|architecte)\b"),
+    (PERSPECTIVE_DEVELOPER,  r"\bmode\s+(?:developer|d[ée]veloppeur|dev)\b"),
+    # EN — "answer as a <role>" / "respond as a <role>" / "switch to <role> mode"
+    (PERSPECTIVE_SUPPORT,    r"\bas\s+(?:an?\s+)?support\b"),
+    (PERSPECTIVE_BA,         r"\bas\s+(?:an?\s+)?business[\s-]?analyst\b"),
+    (PERSPECTIVE_ARCHITECT,  r"\bas\s+(?:an?\s+)?architect\b"),
+    (PERSPECTIVE_DEVELOPER,  r"\bas\s+(?:an?\s+)?(?:developer|dev)\b"),
+    (PERSPECTIVE_SUPPORT,    r"\bsupport\s+mode\b"),
+    (PERSPECTIVE_BA,         r"\b(?:business[\s-]?analyst|ba)\s+mode\b"),
+    (PERSPECTIVE_ARCHITECT,  r"\barchitect\s+mode\b"),
+    (PERSPECTIVE_DEVELOPER,  r"\b(?:developer|dev)\s+mode\b"),
+)
+
+
+def _detect_explicit_prompt_agent(text: str) -> Optional[str]:
+    """Return the canonical agent name if the user explicitly named a role
+    in the prompt (FR or EN), else None. Case-insensitive."""
+    if not text:
+        return None
+    lowered = text.lower()
+    for agent_name, pattern in _EXPLICIT_AGENT_PATTERNS:
+        if re.search(pattern, lowered):
+            return agent_name
+    return None
+
+
 def _infer_perspective(text: str, fallback: str = PERSPECTIVE_BA) -> str:
-    """Python mirror of frontend inferPerspective(). Best-effort fallback for
-    clients sending `perspective="auto"`. Returns *fallback* below confidence."""
+    """Best-effort fallback for clients sending ``perspective="auto"``.
+
+    Priority chain (BETTER §4):
+      1. Explicit prompt (regex FR/EN) — confidence=high, mode=explicit_prompt
+      2. Strong dev signals (code block, ORM tokens, traceback) — confidence=high
+      3. Keyword scoring across registered agents — confidence=high if
+         best>=3 and margin>=2, medium if best>=3, low otherwise → fallback.
+
+    Side-channel ``_infer_perspective.last_result`` exposes the full routing
+    decision (selected, mode, confidence, reason, candidates) so the SSE
+    layer can emit an ``agent_selected`` event without changing this
+    function's public string return type."""
+    candidates_log: list[dict[str, object]] = []
+
+    def _record(selected: str, mode: str, confidence: str, reason: str) -> None:
+        _infer_perspective.last_result = {  # type: ignore[attr-defined]
+            "selected": selected,
+            "mode": mode,
+            "confidence": confidence,
+            "reason": reason,
+            "candidates": candidates_log,
+        }
+
     if not text or not text.strip():
+        _record(fallback, "fallback", "low", "empty-prompt")
         return fallback
+
     t = text.lower()
-    # Strong dev signals: code block, ORM tokens, traceback.
+
+    # 1) Explicit prompt detection — highest priority.
+    explicit = _detect_explicit_prompt_agent(t)
+    if explicit is not None:
+        _record(explicit, "explicit_prompt", "high", f"matched explicit pattern for '{explicit}'")
+        return explicit
+
+    # 2) Heuristic strong dev signals.
     if "```" in t or "_inherit" in t or "@api." in t or "self.env" in t or "traceback" in t:
+        _record(PERSPECTIVE_DEVELOPER, "auto_scored", "high", "strong-dev-signal (code/orm/traceback)")
         return PERSPECTIVE_DEVELOPER
-    scores = {
-        PERSPECTIVE_SUPPORT: _score_terms(t, _SUPPORT_WEAK, _SUPPORT_STRONG),
-        PERSPECTIVE_ARCHITECT: _score_terms(t, _ARCH_WEAK, _ARCH_STRONG),
-        PERSPECTIVE_DEVELOPER: _score_terms(t, _DEV_WEAK, _DEV_STRONG),
-        PERSPECTIVE_BA: _score_terms(t, _BA_WEAK, _BA_STRONG),
-    }
-    order = [PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA]
+
+    # 3) Keyword scoring across registered agents.
+    scores: dict[str, int] = {}
+    try:
+        from ..agents import list_agents as _list_agents
+        for ag in _list_agents():
+            scores[ag.name] = _score_terms(t, ag.auto_keywords.weak, ag.auto_keywords.strong)
+    except Exception:
+        scores = {
+            PERSPECTIVE_SUPPORT: _score_terms(t, _SUPPORT_WEAK, _SUPPORT_STRONG),
+            PERSPECTIVE_ARCHITECT: _score_terms(t, _ARCH_WEAK, _ARCH_STRONG),
+            PERSPECTIVE_DEVELOPER: _score_terms(t, _DEV_WEAK, _DEV_STRONG),
+            PERSPECTIVE_BA: _score_terms(t, _BA_WEAK, _BA_STRONG),
+        }
+
+    # Stable ordering: support → architect → developer → BA first (matches
+    # historical tie-break), then any extra agent in registration order.
+    preferred_order = [PERSPECTIVE_SUPPORT, PERSPECTIVE_ARCHITECT, PERSPECTIVE_DEVELOPER, PERSPECTIVE_BA]
+    order = [p for p in preferred_order if p in scores] + [p for p in scores if p not in preferred_order]
+
+    candidates_log[:] = [
+        {"name": p, "score": scores.get(p, 0)}
+        for p in sorted(order, key=lambda x: (-scores.get(x, 0), x))
+    ]
+
     best = fallback
     best_score = 0
     second_score = 0
     for p in order:
-        s = scores[p]
+        s = scores.get(p, 0)
         if s > best_score:
             second_score = best_score
             best_score = s
             best = p
         elif s > second_score:
             second_score = s
-    # Require min confidence + margin over runner-up, matching the frontend.
+
     if best_score >= 3 and best_score - second_score >= 2:
+        _record(best, "auto_scored", "high",
+                f"top score {best_score} with margin {best_score - second_score}")
         return best
+    if best_score >= 3:
+        # Above threshold but low margin → keep the best but flag as medium
+        # confidence (informational; routing still returns the best agent).
+        _record(best, "auto_scored", "medium",
+                f"top score {best_score} but margin {best_score - second_score} < 2; fallback used")
+    else:
+        _record(fallback, "fallback", "low",
+                f"best score {best_score} below threshold (>=3)")
     return fallback
+
+
+# Initialise the side-channel so callers can always read the attribute.
+_infer_perspective.last_result = {  # type: ignore[attr-defined]
+    "selected": PERSPECTIVE_DEVELOPER,
+    "mode": "uninitialized",
+    "confidence": "low",
+    "reason": "no inference yet",
+    "candidates": [],
+}
 
 
 def _last_user_text(messages: list) -> str:
@@ -1526,11 +1668,30 @@ _PERSPECTIVE_MIGRATION_ADDONS: dict[str, str] = {
 
 def _perspective_block(perspective: str, *, migration: bool = False) -> str:
     """Return a markdown block injected at the top of the system prompt
-    to bias the assistant's reasoning, vocabulary and output format."""
+    to bias the assistant's reasoning, vocabulary and output format.
+
+    The content lives in ``agents/<slug>/AGENT.md`` (body) and the optional
+    ``migration.md`` add-on. Falls back to the in-code ``_PERSPECTIVE_BLOCKS``
+    constants if the agent registry is unavailable (defensive — should not
+    happen in production)."""
+    from ..agents import resolve_agent as _resolve_agent
     perspective = _normalize_perspective(perspective)
-    block = _PERSPECTIVE_BLOCKS.get(perspective, _PERSPECTIVE_BLOCKS[PERSPECTIVE_DEVELOPER])
-    if migration:
-        block = block + _PERSPECTIVE_MIGRATION_ADDONS.get(perspective, "")
+    block: str = ""
+    try:
+        ag = _resolve_agent(perspective)
+        block = ag.body or ""
+        if migration and ag.migration_fr_file:
+            try:
+                from pathlib import Path as _P
+                block = block + "\n\n" + _P(ag.migration_fr_file).read_text(encoding="utf-8")
+            except Exception:
+                pass
+    except Exception:
+        block = ""
+    if not block:
+        block = _PERSPECTIVE_BLOCKS.get(perspective, _PERSPECTIVE_BLOCKS[PERSPECTIVE_DEVELOPER])
+        if migration:
+            block = block + _PERSPECTIVE_MIGRATION_ADDONS.get(perspective, "")
     return block.strip() + "\n\n---\n"
 
 
@@ -1553,13 +1714,10 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
             "http) sous `community/odoo/` (ex. `community/odoo/models.py`, `community/odoo/fields.py`, "
             "`community/odoo/api.py`).\n"
             "- Enterprise : modules directement sous `enterprise/<module>/` (PAS sous addons/).\n"
-            "Exemples :\n"
-            "- `source_search_odoo(pattern=\"_name = 'sale.order'\")`  ← sans path = cherche partout (C+E)\n"
-            "- `source_search_odoo(pattern=\"def action_confirm\", path=\"addons/sale\")`  ← module Community\n"
-            "- `source_search_odoo(pattern=\"_name = 'helpdesk.ticket'\", path=\"enterprise/helpdesk\")`  ← module Enterprise\n"
-            "- `source_read_odoo_file(path=\"community/addons/account/models/account_move.py\", start_line=1, end_line=100)`\n"
-            "- `source_read_odoo_file(path=\"community/odoo/addons/base/models/ir_model.py\")`  ← module base\n"
-            "- `source_read_odoo_file(path=\"community/odoo/fields.py\")`  ← cœur ORM\n"
+            "OUTILS : commence par `source_search_odoo`; lis ensuite les fichiers pertinents avec "
+            "`source_read_odoo_file`. Sans `path`, la recherche couvre Community + Enterprise. "
+            "Pour cibler Enterprise, utilise un chemin `enterprise/<module>` ; pour le cœur ORM, "
+            "lis sous `community/odoo/`.\n"
             "GIT — quand l'utilisateur référence un commit par SHA (ex `fa2bfa97`), appelle "
             "TOUJOURS `source_show_commit(sha=..., scope='odoo'|'enterprise')` au lieu de spéculer "
             "sur le contenu. Le clone shallow est deepené automatiquement si besoin."
@@ -1599,7 +1757,7 @@ def _source_instructions(source_path: Optional[str] = None, repo_path: Optional[
             "Ne déduis JAMAIS un nombre total de lignes à partir de `search_*_source` : ces outils retournent "
             "les *occurrences* d'un pattern, pas un comptage exhaustif."
         )
-    return "\n\n".join(parts)
+    return "<source_context>\n" + "\n\n".join(parts) + "\n</source_context>"
 
 
 _DATA_PLAYBOOK = """## Exploration des données — méthode
@@ -1711,7 +1869,11 @@ def build_system(
     )
     stable_parts.append(_DATA_PLAYBOOK.strip())
     if project_context:
-        stable_parts.append(f"## Contexte projet\n{_trim_project_context(project_context.strip())}")
+        stable_parts.append(
+            "<project_context>\n"
+            f"## Contexte projet\n{_trim_project_context(project_context.strip())}\n"
+            "</project_context>"
+        )
 
     stable = "\n\n".join(stable_parts).strip()
 
@@ -1739,7 +1901,7 @@ def _build_variable_block(
     parts.append(_perspective_block(perspective, migration=migration).rstrip())
     ctx = context_md.strip() if context_md else ""
     if ctx:
-        parts.append(f"---\n\n{_trim_context(ctx)}")
+        parts.append(f"---\n\n<routed_context>\n{_trim_context(ctx)}\n</routed_context>")
     return "\n\n".join(p for p in parts if p)
 
 
@@ -1825,7 +1987,11 @@ def build_system_migration(
     if has_instance:
         stable_parts.append(_DATA_PLAYBOOK.strip())
     if project_context:
-        stable_parts.append(f"## Contexte projet\n{_trim_project_context(project_context.strip())}")
+        stable_parts.append(
+            "<project_context>\n"
+            f"## Contexte projet\n{_trim_project_context(project_context.strip())}\n"
+            "</project_context>"
+        )
 
     stable = "\n\n".join(stable_parts).strip()
     variable = _build_variable_block(
@@ -2228,6 +2394,22 @@ async def stream_chat(
         perspective = _infer_perspective(_last_user_text(messages))
     perspective = _normalize_perspective(perspective)
     response_language = _normalize_response_language(response_language)
+
+    # Merge agent-level ``denied_skills`` into the per-request disabled_tools
+    # list. This is the only real backend gate on which skills are exposed
+    # to the LLM for this turn — agent body text is not a security
+    # boundary (BETTER §6). Idempotent and order-preserving.
+    try:
+        from ..agents import get_agent as _get_agent_for_deny
+        _agent_def_deny = _get_agent_for_deny(perspective)
+    except Exception:
+        _agent_def_deny = None
+    if _agent_def_deny and _agent_def_deny.denied_skills:
+        _merged = list(disabled_tools or [])
+        for sk in _agent_def_deny.denied_skills:
+            if sk not in _merged:
+                _merged.append(sk)
+        disabled_tools = _merged
 
     # Trim conversation history to avoid context-window overflow on long sessions.
     messages = _trim_history(messages)

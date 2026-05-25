@@ -9,13 +9,13 @@ inputs_en:
 steps:
   - "Si une perspective explicite est fournie → l'utiliser"
   - "Sinon, scorer les mots-clés du prompt par rôle"
-  - "Charger le fichier profile-<role>.md correspondant"
-  - Injecter les consignes de ton/format au début du system prompt
+  - "Charger l'agent résolu depuis agents/<slug>/AGENT.md"
+  - Injecter les consignes de rôle et de format au début du system prompt
 steps_en:
   - If an explicit perspective is provided → use it
   - "Otherwise, score prompt keywords per role"
-  - "Load the matching profile-<role>.md file"
-  - Inject tone/format guidance at the top of the system prompt
+  - "Load the resolved agent from agents/<slug>/AGENT.md"
+  - Inject role and output-format guidance at the top of the system prompt
 outputs:
   - "Bloc Markdown 'profil' injecté"
   - Rôle effectif renvoyé au frontend

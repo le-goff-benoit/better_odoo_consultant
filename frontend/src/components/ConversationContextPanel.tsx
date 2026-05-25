@@ -129,7 +129,7 @@ export default function ConversationContextPanel({
   const c = lang === 'en'
     ? {
       title: title ?? 'Conversation context',
-      profile: 'Response profile',
+      profile: 'Response agent',
       automatic: 'Automatic',
       manual: 'Manual',
       selection: 'Current selection',
@@ -142,15 +142,15 @@ export default function ConversationContextPanel({
       localization: 'Fiscal localization',
       ai: 'AI',
 	      context: 'Markdown files',
-	      skills: 'Skills used',
-        routing: 'Routing reasons',
-        routingSelected: 'selected',
-        routingPruned: 'pruned',
-        trace: 'Runtime trace',
-        traceRefs: 'refs',
-        traceTruncations: 'trims',
-        traceCache: 'cache',
-        runId: 'Run',
+	      skills: 'Skills prepared',
+        routing: 'Why these skills?',
+        routingSelected: 'kept',
+        routingPruned: 'ignored',
+        trace: 'Context loading',
+        traceRefs: 'references loaded',
+        traceTruncations: 'blocks shortened',
+        traceCache: 'cache reused',
+        runId: 'Trace',
       sources: 'Sources used',
       attachments: 'Attachments',
       none: 'None yet',
@@ -163,7 +163,7 @@ export default function ConversationContextPanel({
     }
     : {
       title: title ?? 'Contexte de discussion',
-      profile: 'Profil de réponse',
+      profile: 'Agent de réponse',
       automatic: 'Automatique',
       manual: 'Manuel',
       selection: 'Sélection courante',
@@ -176,15 +176,15 @@ export default function ConversationContextPanel({
       localization: 'Localisation fiscale',
       ai: 'IA',
 	      context: 'Fichiers Markdown',
-	      skills: 'Skills utilisés',
-        routing: 'Raisons de routing',
-        routingSelected: 'sélectionnés',
-        routingPruned: 'prunés',
-        trace: 'Trace runtime',
-        traceRefs: 'réfs',
-        traceTruncations: 'coupes',
-        traceCache: 'cache',
-        runId: 'Run',
+	      skills: 'Skills préparés',
+        routing: 'Pourquoi ces skills ?',
+        routingSelected: 'gardés',
+        routingPruned: 'ignorés',
+        trace: 'Chargement du contexte',
+        traceRefs: 'références chargées',
+        traceTruncations: 'blocs raccourcis',
+        traceCache: 'cache réutilisé',
+        runId: 'Trace',
       sources: 'Sources utilisées',
       attachments: 'Pièces jointes',
       none: 'Aucun pour le moment',
@@ -544,6 +544,11 @@ function SkillRoutingPreview({ routing, labels, lang }: {
         <span className="context-file-pill"><span className="context-file-name">{routing.selected.length} {labels.selected}</span></span>
         {routing.pruned.length > 0 && <span className="context-file-pill"><span className="context-file-name">{routing.pruned.length} {labels.pruned}</span></span>}
       </div>
+      <span style={{ fontSize: 11, color: 'var(--th-muted)', lineHeight: 1.35 }}>
+        {lang === 'en'
+          ? 'The assistant selected the most relevant skill playbooks before calling tools.'
+          : "L'assistant a préparé les modes d'emploi de skills les plus utiles avant d'appeler les outils."}
+      </span>
       <div style={{ display: 'grid', gap: 4 }}>
         {rows.map(({ candidate, tone }, index) => (
           <span key={`${candidate.name ?? 'route'}-${tone}-${index}`} style={{ fontSize: 10.5, color: 'var(--th-muted)', lineHeight: 1.35 }}>
@@ -558,11 +563,32 @@ function SkillRoutingPreview({ routing, labels, lang }: {
 function formatRouteCandidate(candidate: SkillRouteCandidateLike, tone: 'selected' | 'pruned', lang: 'fr' | 'en'): string {
   const name = candidate.name ?? 'skill'
   const score = typeof candidate.score === 'number' ? ` · ${candidate.score}` : ''
-  const reason = candidate.reason ? ` · ${candidate.reason}` : ''
+  const reason = candidate.reason ? ` · ${formatRouteReason(candidate.reason, lang)}` : ''
   const status = tone === 'pruned'
-    ? (lang === 'en' ? 'Pruned' : 'Pruné')
-    : (lang === 'en' ? 'Selected' : 'Sélectionné')
+    ? (lang === 'en' ? 'Ignored' : 'Ignoré')
+    : (lang === 'en' ? 'Kept' : 'Gardé')
   return `${status}: ${name}${score}${reason}`
+}
+
+function formatRouteReason(reason: string, lang: 'fr' | 'en'): string {
+  const parts = reason.split(',').map(r => r.trim()).filter(Boolean)
+  const mapped = parts.map(part => {
+    if (part === 'skill-keywords') return lang === 'en' ? 'keyword match' : 'mots-clés détectés'
+    if (part === 'explicit-skill-name') return lang === 'en' ? 'skill named explicitly' : 'skill nommé explicitement'
+    if (part === 'migration-default') return lang === 'en' ? 'migration mode default' : 'utile en mode migration'
+    if (part === 'creator-default') return lang === 'en' ? 'creator mode default' : 'utile en mode Creator'
+    if (part.startsWith('intent:')) {
+      const intent = part.slice('intent:'.length).replace(/_/g, ' ')
+      return lang === 'en' ? `intent: ${intent}` : `intention : ${intent}`
+    }
+    if (part.startsWith('template:')) return lang === 'en' ? 'output template requested' : 'format de sortie demandé'
+    if (part.endsWith('-pattern')) return lang === 'en' ? 'strong prompt pattern' : 'signal fort du prompt'
+    if (part.startsWith('pruned:')) return lang === 'en' ? 'removed to keep context focused' : 'retiré pour garder le contexte ciblé'
+    if (part === 'below-threshold') return lang === 'en' ? 'score too low' : 'score trop faible'
+    if (part === 'implicit-invocation-disabled') return lang === 'en' ? 'implicit trigger disabled' : 'déclenchement implicite désactivé'
+    return part
+  })
+  return Array.from(new Set(mapped)).join(lang === 'en' ? ', ' : ', ')
 }
 
 function ContextTracePreview({ trace, labels, lang }: {
@@ -586,6 +612,11 @@ function ContextTracePreview({ trace, labels, lang }: {
         )}
         {chips.map(chip => <span key={chip} className="context-file-pill"><span className="context-file-name">{chip}</span></span>)}
       </div>
+      <span style={{ fontSize: 11, color: 'var(--th-muted)', lineHeight: 1.35 }}>
+        {lang === 'en'
+          ? 'Technical summary of context assembly: references, cache and size limits.'
+          : 'Résumé technique de la préparation du contexte : références, cache et limites de taille.'}
+      </span>
       <div style={{ display: 'grid', gap: 4 }}>
         {trace.latest.map((event, index) => (
           <span key={`${event.type ?? 'trace'}-${index}`} style={{ fontSize: 10.5, color: 'var(--th-muted)', lineHeight: 1.35 }}>

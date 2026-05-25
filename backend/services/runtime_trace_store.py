@@ -32,6 +32,7 @@ def persist_runtime_trace_summary(
     candidates: list[dict],
     context_trace: list[dict],
     output_template: Optional[dict] = None,
+    orchestration: Optional[dict] = None,
     provider: Optional[str] = None,
     mode: Optional[str] = None,
 ) -> dict:
@@ -48,6 +49,7 @@ def persist_runtime_trace_summary(
         "candidates": _compact(candidates),
         "context_trace": _compact(context_trace),
         "output_template": output_template,
+        "orchestration": _compact(orchestration) if orchestration else None,
     }
     with _TRACE_STORE_PATH.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")

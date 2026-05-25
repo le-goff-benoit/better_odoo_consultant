@@ -1,0 +1,15 @@
+{
+  "positive": [
+    {"prompt": "Comment configurer le standard de facturation pour le nouveau client", "expected_agent": "business_analyst", "category": "positive"},
+    {"prompt": "Cadrer le processus achats end-to-end avec les rôles concernés", "expected_agent": "business_analyst", "category": "positive"},
+    {"prompt": "Quels sont les cas d'usage du module de note de frais", "expected_agent": "business_analyst", "category": "positive"},
+    {"prompt": "Walk me through the standard sales workflow and the KPIs involved", "expected_agent": "business_analyst", "category": "positive"},
+    {"prompt": "Passe en mode business analyst pour préparer la recette UAT", "expected_agent": "business_analyst", "category": "explicit_prompt"},
+    {"prompt": "Préparer le compte-rendu du workshop sur la facturation", "expected_agent": "business_analyst", "category": "near_miss", "not_expected_agent": "developer"}
+  ],
+  "negative": [
+    {"prompt": "Erreur 500 en production, workaround urgent", "expected_agent": "support", "category": "negative", "not_expected_agent": "business_analyst"},
+    {"prompt": "Stratégie de migration multi-société et risques", "expected_agent": "architect", "category": "negative", "not_expected_agent": "business_analyst"},
+    {"prompt": "Surcharger compute_amount_total avec @api.depends", "expected_agent": "developer", "category": "negative", "not_expected_agent": "business_analyst"}
+  ]
+}

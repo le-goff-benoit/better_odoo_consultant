@@ -1,0 +1,74 @@
+[
+  {
+    "query": "Analyse cette traceback puis prépare un message client simple.",
+    "expected_mode": "sequential_agents",
+    "expected_sequence": ["developer", "business_analyst"],
+    "expected_final_agent": "business_analyst",
+    "expected_rule": "technical_diagnosis->client_output",
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Diagnose the stack trace then translate into client terms.",
+    "expected_mode": "sequential_agents",
+    "expected_sequence": ["developer", "business_analyst"],
+    "expected_final_agent": "business_analyst",
+    "expected_rule": "technical_diagnosis->client_output",
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Clarifie le besoin métier puis propose une architecture Odoo.",
+    "expected_mode": "sequential_agents",
+    "expected_sequence": ["business_analyst", "architect"],
+    "expected_final_agent": "architect",
+    "expected_rule": "business_scope->architecture_decision",
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Scope the business need then design the Odoo architecture.",
+    "expected_mode": "sequential_agents",
+    "expected_sequence": ["business_analyst", "architect"],
+    "expected_final_agent": "architect",
+    "expected_rule": "business_scope->architecture_decision",
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Décide l'architecture et prépare le plan d'implémentation.",
+    "expected_mode": "sequential_agents",
+    "expected_sequence": ["architect", "developer"],
+    "expected_final_agent": "developer",
+    "expected_rule": "architecture_decision->implementation_plan",
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Design the architecture then provide implementation steps.",
+    "expected_mode": "sequential_agents",
+    "expected_sequence": ["architect", "developer"],
+    "expected_final_agent": "developer",
+    "expected_rule": "architecture_decision->implementation_plan",
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Audit pré-prod dev + studio avec risques métier et technique.",
+    "expected_mode": "single_agent",
+    "expected_sequence": ["support"],
+    "expected_final_agent": "support",
+    "expected_rule": "single_agent_default",
+    "category": "near_miss",
+    "language": "fr"
+  },
+  {
+    "query": "Migration Odoo 16 vers 18 avec Studio et modules custom.",
+    "expected_mode": "single_agent",
+    "expected_sequence": ["support"],
+    "expected_final_agent": "support",
+    "expected_rule": "single_agent_default",
+    "category": "near_miss",
+    "language": "fr"
+  }
+]

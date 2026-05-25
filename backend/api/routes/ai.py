@@ -16,6 +16,11 @@ from ...services.odoo_client import OdooClient
 from ...services.ai_service import (
     stream_chat, DEFAULT_MODELS,
     GITHUB_MODELS_BASE_URL, COPILOT_BASE_URL, COPILOT_HEADERS,
+    _infer_perspective, _normalize_perspective, _last_user_text,
+)
+from ...services.orchestration_service import (
+    AgentOrchestrationDecision,
+    decide_orchestration,
 )
 from ...services.context_service import (
     load_context_for_prompt,
@@ -78,6 +83,150 @@ def _skills_selected_payload(
     if context_trace:
         payload["context_trace"] = context_trace
     return payload
+
+
+def _agent_selected_payload(
+    agent: str,
+    routing_info: dict,
+    *,
+    run_id: Optional[str] = None,
+) -> dict:
+    """SSE payload mirroring ``skills_selected`` for the active agent.
+
+    ``routing_info`` is the dict produced by ``_infer_perspective.last_result``
+    (or a synthesised equivalent when the client explicitly picked an agent
+    in the UI). Fields: ``selected``, ``mode``, ``confidence``, ``reason``,
+    ``candidates: [{name, score}]``."""
+    payload = {
+        "type": "agent_selected",
+        "agent": agent,
+        "mode": routing_info.get("mode", "unknown"),
+        "confidence": routing_info.get("confidence", "low"),
+        "reason": routing_info.get("reason", ""),
+        "candidates": routing_info.get("candidates", []),
+    }
+    if run_id:
+        payload["run_id"] = run_id
+    return payload
+
+
+def _orchestration_selected_payload(
+    decision: AgentOrchestrationDecision,
+    *,
+    run_id: Optional[str] = None,
+) -> dict:
+    payload = {"type": "orchestration_selected", "orchestration": decision.to_dict()}
+    if run_id:
+        payload["run_id"] = run_id
+    return payload
+
+
+def _orchestration_step_payload(
+    decision: AgentOrchestrationDecision,
+    *,
+    step: int,
+    status: str,
+    run_id: Optional[str] = None,
+    chars: Optional[int] = None,
+) -> dict:
+    selected = next((item for item in decision.sequence if item.step == step), None)
+    payload = {
+        "type": "orchestration_step",
+        "mode": decision.mode,
+        "step": step,
+        "status": status,
+    }
+    if selected:
+        payload.update(selected.to_dict())
+    if chars is not None:
+        payload["chars"] = chars
+    if run_id:
+        payload["run_id"] = run_id
+    return payload
+
+
+async def _collect_internal_agent_text(*args, **kwargs) -> str:
+    """Run a non-final agent step and return its terminal text.
+
+    Tool/runtime events are intentionally not forwarded to the browser in V1:
+    the UI only needs to show that a sequence is happening, while the final
+    agent remains responsible for the user-facing answer.
+    """
+    chunks: list[str] = []
+    last_error = ""
+    async for evt in stream_chat(*args, **kwargs):
+        if evt.get("type") == "text" and evt.get("content"):
+            chunks.append(str(evt.get("content") or ""))
+        elif evt.get("type") == "error":
+            last_error = str(evt.get("msg") or "")
+    text = "\n\n".join(chunk.strip() for chunk in chunks if chunk.strip()).strip()
+    if text:
+        return text
+    if last_error:
+        return f"Étape intermédiaire échouée : {last_error}"
+    return "Étape intermédiaire terminée sans sortie exploitable."
+
+
+def _messages_for_intermediate_step(messages: list[dict], decision: AgentOrchestrationDecision) -> list[dict]:
+    step = decision.sequence[0]
+    patched = [dict(m) for m in messages]
+    if not patched:
+        return patched
+    original = str(patched[-1].get("content") or "")
+    patched[-1] = {
+        **patched[-1],
+        "content": (
+            f"{original}\n\n---\n\n"
+            "Tu es l'agent intermédiaire d'une séquence multi-agent. "
+            f"Objectif de cette étape : {step.purpose}\n"
+            "Produis une analyse courte et structurée. Ne rédige pas la réponse finale utilisateur. "
+            "Retourne seulement les faits utiles, hypothèses, risques et recommandation de ton rôle."
+        ).strip(),
+    }
+    return patched
+
+
+def _messages_for_final_step(messages: list[dict], decision: AgentOrchestrationDecision, intermediate_text: str) -> list[dict]:
+    patched = [dict(m) for m in messages]
+    if not patched:
+        return patched
+    original = str(patched[-1].get("content") or "")
+    first = decision.sequence[0]
+    final = decision.sequence[-1]
+    patched[-1] = {
+        **patched[-1],
+        "content": (
+            f"{original}\n\n---\n\n"
+            "Séquence multi-agent active.\n"
+            f"Étape précédente : agent `{first.agent}` — {first.purpose}\n\n"
+            f"Sortie structurée de l'étape précédente :\n{intermediate_text}\n\n"
+            f"Ton rôle final : agent `{final.agent}` — {final.purpose}\n"
+            "Utilise cette analyse comme entrée obligatoire, tranche les éventuelles ambiguïtés, "
+            "et rédige uniquement la réponse finale destinée à l'utilisateur."
+        ).strip(),
+    }
+    return patched
+
+
+def _resolve_perspective_with_log(req_perspective: Optional[str], user_prompt: str) -> tuple[str, dict]:
+    """Resolve the request's perspective field into a concrete agent name plus
+    routing-decision log. When the client sent an explicit role we record
+    ``mode='explicit_ui'`` with confidence=high; only ``auto`` (or empty)
+    triggers ``_infer_perspective`` which fills its own side-channel."""
+    raw = (req_perspective or "").strip().lower()
+    if raw and raw not in ("auto",):
+        normalised = _normalize_perspective(raw)
+        return normalised, {
+            "selected": normalised,
+            "mode": "explicit_ui",
+            "confidence": "high",
+            "reason": f"User selected '{raw}' in the UI",
+            "candidates": [{"name": normalised, "score": 100}],
+        }
+    inferred = _infer_perspective(user_prompt or "")
+    info = dict(getattr(_infer_perspective, "last_result", {}) or {})
+    info.setdefault("selected", inferred)
+    return inferred, info
 
 
 async def _exchange_copilot_token(oauth_token: str) -> str:
@@ -468,7 +617,36 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     _complexity_active = "runtime_complexity_analyzer" not in _disabled_skills
     # Effective perspective: when the router is disabled, fall back to a neutral
     # developer baseline so no role bias leaks into the prompt.
-    _effective_perspective = (req.perspective or "developer") if _perspective_active else "developer"
+    if _perspective_active:
+        _effective_perspective, _agent_routing_info = _resolve_perspective_with_log(req.perspective, user_prompt)
+    else:
+        _effective_perspective = "developer"
+        _agent_routing_info = {
+            "selected": "developer",
+            "mode": "router_disabled",
+            "confidence": "low",
+            "reason": "runtime_perspective_router disabled by user",
+            "candidates": [],
+        }
+    _explicit_agent = (req.perspective or "").strip().lower() or None
+    _orchestration = decide_orchestration(
+        user_prompt=user_prompt,
+        effective_agent=_effective_perspective,
+        explicit_agent=_explicit_agent,
+        perspective_router_active=_perspective_active,
+    )
+    if _orchestration.mode == "sequential_agents":
+        _effective_perspective = _orchestration.final_agent
+        _agent_routing_info = {
+            "selected": _effective_perspective,
+            "mode": "orchestration_final",
+            "confidence": "high",
+            "reason": _orchestration.reason,
+            "candidates": [
+                {"name": step.agent, "score": 100 - step.step}
+                for step in _orchestration.sequence
+            ],
+        }
 
     # ── General / Migration mode (no profile) ─────────────────────
     if req.profile_id is None:
@@ -498,6 +676,20 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         _skill_candidates = last_skill_route_candidates() if _aggregator_active else []
         _output_template = last_output_template_selection() if _aggregator_active else None
         _context_trace = last_context_trace() if _aggregator_active else []
+        _first_step_context_md = ""
+        if _aggregator_active and _orchestration.mode == "sequential_agents" and _orchestration.sequence:
+            _first_step_context_md = load_context_for_prompt(
+                version,
+                target_version=_gen_target_ver,
+                migration=req.migration_mode,
+                user_prompt=user_prompt,
+                perspective=_orchestration.sequence[0].agent,
+                locale=_context_locale,
+                country_code=req.country_code if _localization_active else None,
+                force_localization=bool(req.country_code) and _localization_active,
+                disabled_tools=_disabled_tools_cleaned,
+                run_id=f"{_run_id}-step1",
+            )
         if _aggregator_active:
             persist_runtime_trace_summary(
                 run_id=_run_id,
@@ -505,6 +697,7 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
                 candidates=_skill_candidates,
                 context_trace=_context_trace,
                 output_template=_output_template,
+                orchestration=_orchestration.to_dict(),
                 provider=req.provider,
                 mode="migration" if req.migration_mode else "general",
             )
@@ -521,9 +714,27 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
 
         async def generate_general():
             try:
+                yield _sse(_orchestration_selected_payload(_orchestration, run_id=_run_id))
+                yield _sse(_agent_selected_payload(_effective_perspective, _agent_routing_info, run_id=_run_id))
                 yield _sse(_skills_selected_payload(_selected_skills, _skill_candidates, _output_template, run_id=_run_id, context_trace=_context_trace))
-                async for evt in stream_chat(req.provider, api_key, req.model, None, None, messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id):
+                final_messages = messages
+                if _orchestration.mode == "sequential_agents" and _orchestration.sequence:
+                    yield _sse(_orchestration_step_payload(_orchestration, step=1, status="running", run_id=_run_id))
+                    intermediate_text = await _collect_internal_agent_text(
+                        req.provider, api_key, req.model, None, None,
+                        _messages_for_intermediate_step(messages, _orchestration),
+                        source_path, _first_step_context_md, version, _user_profile,
+                        None, None, _gen_target_path, req.migration_mode, _gen_target_ver,
+                        _orchestration.sequence[0].agent, _response_language,
+                        disabled_tools=_disabled_tools_cleaned, run_id=f"{_run_id}-step1",
+                    )
+                    yield _sse(_orchestration_step_payload(_orchestration, step=1, status="done", run_id=_run_id, chars=len(intermediate_text)))
+                    yield _sse(_orchestration_step_payload(_orchestration, step=2, status="running", run_id=_run_id))
+                    final_messages = _messages_for_final_step(messages, _orchestration, intermediate_text)
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, final_messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id):
                     yield _sse(evt)
+                if _orchestration.mode == "sequential_agents":
+                    yield _sse(_orchestration_step_payload(_orchestration, step=2, status="done", run_id=_run_id))
             except Exception as exc:
                 yield _sse({"type": "error", "msg": str(exc)})
             yield _sse({"type": "end"})
@@ -665,6 +876,21 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
     _skill_candidates = last_skill_route_candidates() if _aggregator_active else []
     _output_template = last_output_template_selection() if _aggregator_active else None
     _context_trace = last_context_trace() if _aggregator_active else []
+    _first_step_context_md = ""
+    if _aggregator_active and _orchestration.mode == "sequential_agents" and _orchestration.sequence:
+        _first_step_context_md = load_context_for_prompt(
+            _version_to_use,
+            target_version=_target_version,
+            migration=req.migration_mode,
+            user_prompt=user_prompt,
+            perspective=_orchestration.sequence[0].agent,
+            locale=_context_locale,
+            country_code=(_active_company.get("country_code") if _active_company else None) if _localization_active else None,
+            complexity_mode=_complexity_mode,
+            disabled_tools=_disabled_tools_cleaned,
+            priority_blocks=[b for b in (_source_warning, localization_md, complexity_md, profile_tuning) if b],
+            run_id=f"{_run_id}-step1",
+        )
     if _aggregator_active:
         persist_runtime_trace_summary(
             run_id=_run_id,
@@ -672,15 +898,34 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
             candidates=_skill_candidates,
             context_trace=_context_trace,
             output_template=_output_template,
+            orchestration=_orchestration.to_dict(),
             provider=req.provider,
             mode="migration" if req.migration_mode else "assistant",
         )
 
     async def generate():
         try:
+            yield _sse(_orchestration_selected_payload(_orchestration, run_id=_run_id))
+            yield _sse(_agent_selected_payload(_effective_perspective, _agent_routing_info, run_id=_run_id))
             yield _sse(_skills_selected_payload(_selected_skills, _skill_candidates, _output_template, run_id=_run_id, context_trace=_context_trace))
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id):
+            final_messages = messages
+            if _orchestration.mode == "sequential_agents" and _orchestration.sequence:
+                yield _sse(_orchestration_step_payload(_orchestration, step=1, status="running", run_id=_run_id))
+                intermediate_text = await _collect_internal_agent_text(
+                    req.provider, api_key, req.model, odoo, profile,
+                    _messages_for_intermediate_step(messages, _orchestration),
+                    source_path, _first_step_context_md, _version_to_use, _user_profile,
+                    _active_company_name, repo_path, target_path, req.migration_mode,
+                    _target_version, _orchestration.sequence[0].agent, _response_language,
+                    disabled_tools=_disabled_tools_cleaned, run_id=f"{_run_id}-step1",
+                )
+                yield _sse(_orchestration_step_payload(_orchestration, step=1, status="done", run_id=_run_id, chars=len(intermediate_text)))
+                yield _sse(_orchestration_step_payload(_orchestration, step=2, status="running", run_id=_run_id))
+                final_messages = _messages_for_final_step(messages, _orchestration, intermediate_text)
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, final_messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id):
                 yield _sse(evt)
+            if _orchestration.mode == "sequential_agents":
+                yield _sse(_orchestration_step_payload(_orchestration, step=2, status="done", run_id=_run_id))
         except Exception as exc:
             yield _sse({"type": "error", "msg": str(exc)})
         yield _sse({"type": "end"})

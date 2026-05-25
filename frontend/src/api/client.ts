@@ -93,6 +93,17 @@ export const getSkillExample = (name: string, filename: string) =>
 export const getSkillEvalQueries = (name: string) =>
   api.get(`/ai/skills/${encodeURIComponent(name)}/eval-queries`)
 
+// ── Agents (response personas) ──────────────────────────────────────
+export const getAgents = () => api.get('/agents')
+export const getAgent = (name: string) =>
+  api.get(`/agents/${encodeURIComponent(name)}`)
+export const getAgentMarkdown = (name: string) =>
+  api.get(`/agents/${encodeURIComponent(name)}/markdown`)
+export const getAgentMigration = (name: string, lang: 'fr' | 'en' = 'fr') =>
+  api.get(`/agents/${encodeURIComponent(name)}/migration`, { params: { lang } })
+export const getAgentEvalQueries = (name: string) =>
+  api.get(`/agents/${encodeURIComponent(name)}/eval-queries`)
+
 // Context files
 export const listContextFiles = (locale = 'fr') => api.get(`/context/?locale=${encodeURIComponent(locale)}`)
 export const getContextFile = (name: string, locale = 'fr') => api.get(`/context/file/${name}?locale=${encodeURIComponent(locale)}`)

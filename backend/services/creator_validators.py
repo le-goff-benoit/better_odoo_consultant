@@ -50,7 +50,7 @@ _CRON_INTERVALS = {"minutes", "hours", "days", "weeks", "months"}
 _SERVER_ACTION_STATES = {"code", "object_create", "object_write", "multi"}
 
 # Models the consultant must NEVER touch via create / update — matches the
-# rule in profile-creator.md. Touching them would corrupt ventes / compta /
+# rule in creator-conventions.md. Touching them would corrupt ventes / compta /
 # stock flows.
 _TRANSACTIONAL_MODELS = {
     "sale.order", "sale.order.line",

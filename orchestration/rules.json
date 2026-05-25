@@ -1,0 +1,62 @@
+[
+  {
+    "ruleId": "technical_diagnosis->client_output",
+    "requiredSignals": ["technical_diagnosis", "client_output"],
+    "primaryAgent": "developer",
+    "finalAgent": "business_analyst",
+    "confidence": 0.9,
+    "reason": "Diagnostic technique demandé avant une explication ou un message client.",
+    "sequence": [
+      {
+        "agent": "developer",
+        "role": "executor",
+        "purpose": "Diagnostiquer le problème Odoo et isoler la cause technique."
+      },
+      {
+        "agent": "business_analyst",
+        "role": "synthesizer",
+        "purpose": "Transformer le diagnostic en réponse finale claire pour le client."
+      }
+    ]
+  },
+  {
+    "ruleId": "business_scope->architecture_decision",
+    "requiredSignals": ["business_scope", "architecture_decision"],
+    "primaryAgent": "business_analyst",
+    "finalAgent": "architect",
+    "confidence": 0.86,
+    "reason": "Cadrage métier demandé avant une recommandation d'architecture.",
+    "sequence": [
+      {
+        "agent": "business_analyst",
+        "role": "executor",
+        "purpose": "Clarifier le besoin, les acteurs, le périmètre et les critères d'acceptation."
+      },
+      {
+        "agent": "architect",
+        "role": "synthesizer",
+        "purpose": "Proposer la décision d'architecture à partir du cadrage métier."
+      }
+    ]
+  },
+  {
+    "ruleId": "architecture_decision->implementation_plan",
+    "requiredSignals": ["architecture_decision", "implementation_plan"],
+    "primaryAgent": "architect",
+    "finalAgent": "developer",
+    "confidence": 0.84,
+    "reason": "Décision d'architecture demandée avant le plan d'implémentation.",
+    "sequence": [
+      {
+        "agent": "architect",
+        "role": "executor",
+        "purpose": "Décider l'orientation technique, les trade-offs et les risques."
+      },
+      {
+        "agent": "developer",
+        "role": "synthesizer",
+        "purpose": "Décliner la décision en plan d'implémentation concret et testable."
+      }
+    ]
+  }
+]

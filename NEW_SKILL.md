@@ -1,201 +1,227 @@
-# Plan — 4 nouveaux skills IA (compare-versions, automations, module-graph, generate-diagram)
+# Plan — 2 nouveaux skills IA (financial-reports, spreadsheet)
 
 ## Contexte
 
-L'app `better_odoo_consultant` (v0.93.1) expose aujourd'hui 28 skills couvrant essentiellement la **lecture** (sources Odoo, données live XML-RPC, fichiers projet). Trois zones de travail consultant restent mal outillées :
+L'app `better_odoo_consultant` (v0.94.0) couvre les rapports QWeb/PDF via `odoo_inspect_report` mais **pas** les rapports financiers Enterprise (`account.report` : compte de résultat, bilan, grand livre, tax report) ni les **Odoo Spreadsheets** (`documents.document` + `spreadsheet.dashboard` avec formules `ODOO.PIVOT` / `ODOO.LIST` / `ODOO.FILTER.VALUE`).
 
-1. **Cadrage de migration** : pas de diff sémantique entre versions Odoo. `migration-read-target-file` lit mais ne *compare* pas.
-2. **Audit d'automatismes** : `ir.cron`, `base.automation`, `ir.actions.server`, `mail.template` ne sont accessibles qu'au travers de `query_odoo`, sans regroupement métier.
-3. **Compréhension d'architecture** : dépendances de modules, héritages de modèles ou de vues, flux métier — aujourd'hui décrits en prose, jamais visualisés.
+Or ce sont deux zones très consultantes :
 
-Ce plan ajoute **4 skills** pour combler ces trous et **enrichit le renderer Markdown** pour afficher des diagrammes Mermaid dans les réponses IA. Objectif : passer de 28/28 à 32/32 skills avec couverture eval queries complète et pruning anti-fuites.
+- **Financial reports** — usages attendus :
+  1. *Conseiller un rapport adapté à une demande* (« quel rapport pour la situation TVA T2 ? »).
+  2. *Décrire la structure* d'un rapport (lignes, colonnes, filtres, variantes).
+  3. **Exécuter le rapport pour un périmètre donné** (client = partner, projet = analytic_account, période, société) et retourner les chiffres.
+  4. *Exporter* (XLSX/PDF) avec les mêmes filtres.
+  5. *Commenter / proposer des modifications* (futur — read-only à ce stade).
+- **Spreadsheets** — usages attendus :
+  1. Lister les spreadsheets et dashboards disponibles dans une instance.
+  2. Lire le contenu JSON et inventorier les formules (en particulier les formules `ODOO.*`).
+  3. Expliquer une formule, valider sa syntaxe, suggérer une formule alternative pour un besoin donné, en s'appuyant sur la liste des formules exposées par les sources Enterprise locales.
 
----
-
-## Vue d'ensemble des 4 skills
-
-| Slug | Sources | Permissions | Output | Tool name (underscore) |
-|---|---|---|---|---|
-| `compare-odoo-versions` | sources locales | filesystem:read, network:false, odoo:none | Diff structuré FR | `compare_odoo_versions` |
-| `inspect-automations` | XML-RPC | odoo:read | Tableau récap + détails | `inspect_automations` |
-| `inspect-module-graph` | sources + sources projet | filesystem:read | Graphe + sortie Mermaid | `inspect_module_graph` |
-| `generate-diagram` | sources / XML-RPC / target | filesystem:read, odoo:read | Bloc ` ```mermaid ` | `generate_diagram` |
-
-Tous : `read_only: true`, `risk_level: low`, `modes: [assistant, migration]` (+ `creator` pour `generate-diagram`).
+Objectif : passer de 32/32 à 34/34 skills, eval queries complètes, pruning anti-fuites.
 
 ---
 
-## Skill 1 — `compare-odoo-versions`
+## Skill 1 — `inspect-financial-reports`
 
-**But** : diff sémantique d'un modèle, vue, ou module entre deux versions Odoo (ex. 17.0 ↔ 18.0, Community ↔ Enterprise).
+### Périmètre
 
-**Args handler** :
-- `target` : `"model:sale.order" | "view:<xml_id>" | "module:<name>"`
-- `from_version` : `"17.0"` (résolu via `~/.odoo-consultant/sources/<version>[-enterprise]`)
-- `to_version` : `"18.0"`
-- `scope` : `"odoo" | "enterprise"` (par défaut `odoo`)
+Un skill unifié à **5 modes** (argument `action`) ; permissions `odoo: read`, `filesystem: read`, `read_only: true` (l'export reste une lecture côté Odoo : `_get_lines` + génération XLSX serveur via méthode standard, mais pas d'écriture).
 
-**Implémentation** :
-- Réutilise la résolution de path de `backend/skills/_shared/git_ops.py` (lignes 32-41).
-- Pour `model:` → grep récursif des fichiers `models/*.py` dans les deux versions, extraction AST des classes héritant via `_inherit`/`_name`, diff des champs et méthodes.
-- Pour `view:` → glob `**/views/*.xml`, match sur `<record id="<xml_id>">`, diff XML structurel (utiliser `lxml`).
-- Pour `module:` → diff du `__manifest__.py` (depends, version, data) + liste de fichiers ajoutés/supprimés.
-- Pas de subprocess externe : tout en Python (`ast` + `lxml`).
-
-**Frontmatter clés** : `keywords: [comparer versions, diff version, migration 17 18, upgrade, change between, version diff, what changed]`, `allow_implicit_invocation: true`.
-
-**Eval queries** : 6-8 cas — positifs (« qu'est-ce qui change sur sale.order entre 17 et 18 », « diff du module hr_holidays »), négatifs (« lis sale_order.py en 18 » → `source_read_odoo_file`), 1-2 near-miss.
-
-**Files** :
-- `skills/compare-odoo-versions/SKILL.md`
-- `skills/compare-odoo-versions/scripts/handler.py`
-- `skills/compare-odoo-versions/diagram/diagram.yaml`
-- `skills/compare-odoo-versions/eval_queries.json`
-- `skills/compare-odoo-versions/references/diff_strategies.md`
-- `skills/compare-odoo-versions/templates/comparison_report.md`
-
----
-
-## Skill 2 — `inspect-automations`
-
-**But** : vue unifiée des automatismes serveur d'une instance — ir.cron, base.automation, ir.actions.server, mail.template.
-
-**Args handler** :
-- `kind` : `"cron" | "automation" | "server_action" | "mail_template" | "all"` (défaut `"all"`)
-- `module` : optionnel, filtre sur `ir.model.data.module`
-- `model` : optionnel, filtre sur le modèle cible
-- `active_only` : bool, défaut `true`
-
-**Implémentation** :
-- `REQUIRES_ODOO = True`.
-- Utilise `search_read_bounded` (`backend/services/odoo_pagination.py`) sur chaque modèle.
-- Pour chaque automation : récupère le `code` Python associé, le tronque (~ 4000 chars), conserve les champs clés (`active`, `interval_number`, `nextcall`, `trigger`, `state`).
-- Jointure manuelle avec `ir.model.data` pour identifier le module d'origine (vs custom).
-- Sortie : structure JSON regroupée par `kind`, prête à être rendue en tableau Markdown.
-
-**Frontmatter clés** : `keywords: [cron, automation, automated action, server action, mail template, scheduled, planifié, base.automation, ir.cron]`.
-
-**Eval queries** : positifs (« quels crons tournent sur sale.order », « affiche les server actions du module CRM »), négatifs (« liste les utilisateurs admin » → `query_odoo`).
-
-**Pruning** : règle `pruned:automation-focus` dans `_select_skill_playbooks` → désélectionne `query_odoo`/`read_group_odoo` si query verbatim contient cron/automation/server action sans énumération de modèle générique.
-
----
-
-## Skill 3 — `inspect-module-graph`
-
-**But** : graphe de dépendances `__manifest__.py` + arbre d'héritages de modèles d'un module.
-
-**Args handler** :
-- `module` : nom du module
-- `scope` : `"odoo" | "enterprise" | "project"` (résout `source_path`, `source_path-enterprise`, ou `repo_path`)
-- `depth` : profondeur dépendances, défaut 2
-- `include_inheritance` : bool, défaut `true`
-
-**Implémentation** :
-- Parse `__manifest__.py` via `ast.literal_eval` sur la dict literal (pattern déjà utilisé dans `skills/list-project-modules`).
-- Walk récursif `depends:` jusqu'à `depth`.
-- Si `include_inheritance` : AST sur `models/*.py`, extraire `_name` / `_inherit` / `_inherits` par classe.
-- Détection de cycles + overrides via dict.
-- Sortie : nodes + edges + bloc Mermaid pré-formaté (réutilisable par le frontend).
-
-**Frontmatter clés** : `keywords: [dépendances module, dependency graph, manifest depends, héritage module, override, qui hérite de, who inherits, module tree]`.
-
-**Eval queries** : positifs (« graphe de dépendances de sale_management », « qui hérite de res.partner dans le module CRM »), négatifs (« lis le manifest de sale » → `source_read_odoo_file`).
-
----
-
-## Skill 4 — `generate-diagram` (le nouveau différenciateur)
-
-**But** : générer un diagramme **Mermaid** prêt à afficher dans la réponse, pour 5 types :
-
-| `kind` | Mermaid type | Source data |
+| `action` | Description | Données retournées |
 |---|---|---|
-| `flow` | `flowchart TD` | description libre dans `description` arg |
-| `class` | `classDiagram` | AST `models/*.py` (sources ou projet) |
-| `model-inheritance` | `flowchart LR` | XML-RPC `ir.model` + `_inherit` AST |
-| `view-inheritance` | `flowchart LR` | XML-RPC `ir.ui.view` (`inherit_id`) |
-| `module-graph` | `flowchart LR` | manifest depends (réutilise logique skill 3) |
+| `list` | Liste les rapports `account.report` disponibles, regroupés par `country_id` et `root_report_id`. | `[{id, name, country, variants, filters_enabled}]` |
+| `recommend` | À partir d'une description libre (`query` arg), score les rapports candidats par intersection de mots-clés (nom + traductions FR/EN + `account_type`) et retourne le top 3 avec justification. | `[{report, score, why}]` |
+| `describe` | Décrit un rapport : lignes, colonnes, filtres activables, variantes, sections. | `{lines, columns, filters, variants, sections}` |
+| `run` | **Exécute le rapport** avec options (`date_from`, `date_to`, `partner_ids`, `analytic_account_ids`, `company_ids`, `journal_ids`, `unfold_all`). Appelle la méthode `_get_lines` via XML-RPC. | `{lines: [{name, columns, level, unfoldable, ...}], totals, options_used}` |
+| `export` | Identique à `run` mais déclenche `export_to_xlsx`. Retourne un base64 borné (max 5 MB) + nom de fichier ; au-delà, retourne un message demandant un export manuel. | `{filename, mime, content_b64, truncated}` |
 
-**Args handler** :
-- `kind` : un des 5 ci-dessus
-- `target` : modèle / vue / module selon `kind`
-- `scope` : `"odoo" | "enterprise" | "project" | "live"` (live = XML-RPC)
-- `description` : pour `kind=flow` uniquement, prompt narratif que le LLM transforme en flowchart
-- `max_nodes` : défaut 25, plafond 60 (anti-context-rot)
+### Args handler
 
-**Implémentation** :
-- `REQUIRES_ODOO` conditionnel sur `scope=live`, `REQUIRES_SOURCE` sinon.
-- Construction directe d'une chaîne Mermaid (pas de lib externe côté backend). Renvoie `{"mermaid": "<source>", "summary": "...", "node_count": N}`.
-- Pour `class` : extrait fields/methods par classe via `ast`, limite à `max_nodes`, ajoute legend si tronqué.
-- Pour `model-inheritance` : `_inherit` chain via parsing AST croisé avec sources Odoo.
-- Pour `view-inheritance` : `search_read` sur `ir.ui.view` avec `inherit_id != False`, build tree.
-- Pour `flow` : ce skill n'a pas besoin d'inférence — le LLM rédige le diagramme Mermaid lui-même dans sa réponse en s'appuyant sur les conventions documentées dans `references/mermaid_cheatsheet.md` (auto-load `triggers: [diagramme, schéma, diagram, flowchart]`).
-
-**Frontmatter clés** :
-```yaml
-keywords: [diagramme, diagram, schéma, flowchart, class diagram, héritage de modèle, arbre d'héritage,
-           graphe, mermaid, dessine, dessiner, draw, visualise, visualize, show graph]
+```python
+{
+  "action": "list" | "recommend" | "describe" | "run" | "export",
+  "report": int | str,                # id ou name technique (pour describe/run/export)
+  "query": str,                       # pour recommend
+  "options": {                        # pour run/export
+    "date_from": "2026-01-01",
+    "date_to": "2026-03-31",
+    "partner_ids": [12, 34],
+    "analytic_account_ids": [7],
+    "company_ids": [1],
+    "journal_ids": [...],
+    "unfold_all": false,
+    "comparison": "previous_period" | "previous_year" | null,
+  }
+}
 ```
 
-**Eval queries** : positifs (« dessine le diagramme de classe de sale.order », « montre l'arbre d'héritage de res.partner », « fais-moi un flowchart du workflow de validation des congés »), négatifs (« liste les champs de sale.order » → `odoo_inspect_fields`).
+### Implémentation backend
 
-**Pruning** : règle `pruned:diagram-focus` → si verbe de visualisation explicite (`dessine`, `montre le diagramme`, `flowchart`, `class diagram`) et `generate_diagram` sélectionné, désélectionne `odoo_inspect_view`, `odoo_inspect_fields`, `query_odoo`.
+- **Nouveau service** : `backend/services/financial_report_service.py`, exposant :
+  - `async def list_financial_reports(odoo_ctx)` → `search_read_bounded` sur `account.report` (champs `name`, `country_id`, `root_report_id`, filtres bool/selection).
+  - `async def recommend_financial_report(odoo_ctx, query)` → scoring tf-idf léger côté Python sur `name` + traductions disponibles via `ir.translation` (limit raisonnable) + heuristiques sur mots-clés (`bilan` → BS, `résultat` → P&L, `TVA`/`tax` → Tax Report, `grand livre`/`GL` → General Ledger, `analytique` → variantes analytiques).
+  - `async def describe_financial_report(odoo_ctx, report)` → `read` du record + `search_read` sur `account.report.line`, `account.report.column`, `account.report.expression`.
+  - `async def run_financial_report(odoo_ctx, report, options)` → construit le dict `options` au format attendu par Odoo (lookup des filtres dispos via `describe` en cache local mémoire de session), puis appelle `account.report._get_lines(options)` via `call_kw` XML-RPC. Tronque les lignes au-delà de `max_lines=500` avec `truncated: true`.
+  - `async def export_financial_report(odoo_ctx, report, options)` → `call_kw` sur `export_to_xlsx`, récupère le `content`, vérifie taille, encode base64.
+- **Handler** : `skills/inspect-financial-reports/scripts/handler.py`, mince :
+  ```python
+  REQUIRES_ODOO = True
+  async def run(args, ctx):
+      from backend.services.financial_report_service import dispatch_financial_report_action
+      return await dispatch_financial_report_action(ctx.odoo, args)
+  ```
+
+### Cas client / projet (cf. message utilisateur)
+
+- **Client** → `options.partner_ids = [client_id]`. Précondition : si l'utilisateur dit « pour le client X », le LLM résout d'abord `partner_id` via `query_odoo` (`res.partner` `name ilike X`) puis appelle `inspect_financial_reports` avec `action=run`.
+- **Projet** → `options.analytic_account_ids = [aa_id]`. Résolution analogue via `account.analytic.account` ou `project.project.analytic_account_id`.
+- **Période** → `date_from`/`date_to` parsés depuis verbatim (T1, mars 2026, etc.). Documenté dans `references/run_options.md`.
+
+### Frontmatter clés
+
+```yaml
+keywords: [bilan, balance sheet, compte de résultat, P&L, profit and loss, grand livre,
+           general ledger, tax report, déclaration TVA, état financier, financial report,
+           account.report, rapport comptable, exporter rapport, situation client,
+           résultat projet, analytique, partenaire]
+permissions:
+  filesystem: read
+  network: false
+  scripts: false
+  odoo: read
+references_auto_load:
+  - file: account_report_taxonomy.md
+    triggers: [bilan, compte de résultat, tax, grand livre, GL, BS, P&L, financial report]
+  - file: run_options.md
+    triggers: [date_from, date_to, partner, analytic, période, exporter]
+```
+
+### References
+
+- `references/account_report_taxonomy.md` — taxonomie des `account.report` standard (BS, P&L, GL, Aged receivable/payable, Tax, Cash Flow), variantes par pays, mode `use_sections`.
+- `references/run_options.md` — format complet `options` attendu par `_get_lines`, comment résoudre partenaire/analytique/société/période depuis le langage naturel.
+
+### Templates
+
+- `templates/financial_report_summary.md` — format de réponse standard quand `action=run` : intro 2 lignes (rapport / périmètre), tableau Markdown des lignes principales, totaux, footnote sur les filtres appliqués.
+
+### Eval queries (10-12 cas)
+
+- Positifs : « bilan du client Acme au 31/03 », « P&L du projet PRJ-42 sur 2026 », « grand livre janvier février 2026 », « quel rapport pour voir la situation TVA T1 » (→ `recommend`), « exporte le compte de résultat 2025 en Excel ».
+- Négatifs : « liste les factures d'Acme » (→ `query_odoo`), « inspecte le rapport QWeb sale.report_invoice » (→ `odoo_inspect_report`).
+- Near-miss : « rapport des ventes par commercial » (→ `read_group_odoo`, pas un `account.report`).
 
 ---
 
-## Renderer Markdown — bloc Mermaid dans les réponses
+## Skill 2 — `inspect-spreadsheet`
 
-**Fichier critique** : `frontend/src/components/Markdown.tsx`
+### Périmètre
 
-**Approche** : étendre le rendu des code fences. Quand `language === "mermaid"`, rendre via un composant `MermaidBlock` (nouveau, `frontend/src/components/MermaidBlock.tsx`) :
-- Lazy-load `mermaid` (`import("mermaid")`), initialisation une fois avec thème aligné sur `theme.css` (variables `--color-*`).
-- Render SVG dans un container avec bordure cohérente `SkillDiagramModal` (réutiliser classes `ui-card-*` existantes).
-- Fallback : si parsing échoue, afficher le code brut dans un `<pre>` avec message d'erreur.
-- Bouton "agrandir" qui ouvre un modal plein écran (réutilise pattern `SkillDiagramModal`).
+Un skill unifié à **4 modes** (`action`) ; permissions `odoo: read`, `filesystem: read`, `read_only: true`.
 
-**Dépendance** : ajouter `mermaid` à `frontend/package.json` (~ 600 KB minifié, lazy-loaded donc pas dans le bundle initial).
+| `action` | Description | Données retournées |
+|---|---|---|
+| `list` | Liste spreadsheets (`documents.document` `handler='spreadsheet'`) et dashboards (`spreadsheet.dashboard`). | `[{id, name, kind, folder, owner}]` |
+| `inspect` | Lit un spreadsheet : décode `attachment_id.raw` (JSON ou XLSX zippé), liste les sheets, cellules non-vides, **inventaire des formules `ODOO.*`** avec leur cellule. | `{sheets: [{name, cells, formulas}], formula_summary}` |
+| `explain_formula` | Explique une formule donnée (`formula` arg) en s'appuyant sur la doc des formules `ODOO.*` chargée depuis sources Enterprise. | `{formula, signature, params, example, notes}` |
+| `suggest_formula` | À partir d'un besoin libre (`query` arg) et optionnellement d'un modèle Odoo, suggère 1-3 formules `ODOO.*` candidates avec un squelette. | `[{formula, why, sample}]` |
 
-**Tests** : `frontend` — test unitaire `Markdown.test.tsx` vérifiant qu'un bloc ` ```mermaid ` rend bien `<MermaidBlock>`.
+### Args handler
+
+```python
+{
+  "action": "list" | "inspect" | "explain_formula" | "suggest_formula",
+  "document_id": int,                 # pour inspect
+  "model": "documents.document" | "spreadsheet.dashboard",
+  "formula": str,                     # pour explain_formula
+  "query": str,                       # pour suggest_formula
+  "model_hint": str,                  # modèle Odoo visé (suggest_formula)
+}
+```
+
+### Implémentation backend
+
+- **Nouveau service** : `backend/services/spreadsheet_service.py` :
+  - `async def list_spreadsheets(odoo_ctx)` → `search_read` sur `documents.document` (`handler='spreadsheet'`) + `spreadsheet.dashboard`.
+  - `async def inspect_spreadsheet(odoo_ctx, document_id, model)` :
+    1. `read` `attachment_id` → récupère `raw` (base64 sur XML-RPC).
+    2. Décode : tentative JSON direct, sinon dézippe XLSX. Helper `_parse_spreadsheet_payload(bytes)` qui retourne un dict `{sheets, version}`.
+    3. Pour chaque sheet, walk les cellules, extrait `content`. Détecte formules : regex `=\s*ODOO\.[A-Z_.]+\(...\)` (multilignes possibles).
+    4. Construit l'inventaire : `{formula_name → [{sheet, cell, raw}]}`.
+    5. Borne : max 2000 cellules retournées, `truncated: true` au-delà.
+  - **Inventaire des formules `ODOO.*` disponibles** : helper `load_odoo_spreadsheet_formula_catalog(source_path_enterprise)` qui parse les JS sources `spreadsheet/static/src/**/*.js` et `spreadsheet_edition/static/src/**/*.js` à la recherche de `category: "Odoo"` et `name: "ODOO.XYZ"`, extraction de `description`, `args`, `returns`. Cache en mémoire `{version → catalog}` (clé `source_path`). Réutilisé par `explain_formula` et `suggest_formula`.
+  - `async def explain_formula(formula, source_path)` → match exact dans le catalogue, fallback fuzzy.
+  - `async def suggest_formula(query, model_hint, source_path)` → heuristiques sur intent (agréger → `ODOO.PIVOT`, lister → `ODOO.LIST`, valeur filtrée → `ODOO.FILTER.VALUE`, lookup → `ODOO.LOOKUP` si présent).
+- **Handler** : `skills/inspect-spreadsheet/scripts/handler.py`, mince, dispatch sur `action`.
+- **`REQUIRES_ODOO = True` ; `REQUIRES_SOURCE = True`** (catalogue formules vient des sources Enterprise locales).
+
+### Modules sources confirmés (Enterprise)
+
+Confirmés présents en 18.0-enterprise : `spreadsheet_edition`, `documents_spreadsheet`, `spreadsheet_dashboard_edition`, 14+ variantes sectorielles `spreadsheet_dashboard_*`. Le module Community `spreadsheet` (assets JS) doit être pris depuis `~/.odoo-consultant/sources/18.0/spreadsheet/static/src/` si présent ; sinon fallback sur les JS d'`spreadsheet_edition`.
+
+### References
+
+- `references/odoo_spreadsheet_formulas.md` — synthèse manuelle des formules `ODOO.*` clés (PIVOT, LIST, FILTER.VALUE, LOOKUP), avec exemples. Note : la liste exhaustive vient du catalogue runtime extrait des JS sources, ce fichier est un raccourci pédagogique.
+- `references/spreadsheet_payload_format.md` — format JSON interne (sheets[], cells, dataSources pour pivots/lists, globalFilters), différences XLSX-only vs JSON natif Odoo.
+
+### Templates
+
+- `templates/spreadsheet_inspection_report.md` — format `inspect` : intro, table sheets, top 10 formules `ODOO.*` avec localisation, recommandations.
+
+### Eval queries (8-10 cas)
+
+- Positifs : « explique la formule =ODOO.PIVOT(...) », « inspecte le spreadsheet Budget 2026 », « quelle formule pour récupérer le CA par client », « liste les spreadsheets dispos ».
+- Négatifs : « liste les rapports QWeb » (→ `odoo_inspect_report`), « formule Excel SOMME.SI » (hors scope → réponse normale, pas ce skill).
+- Near-miss : « dashboard Sales » (→ ambigu, doit déclencher `list` si `spreadsheet.dashboard` présent, sinon `query_odoo` sur autre modèle).
 
 ---
 
 ## Modifications backend transverses
 
-1. **`backend/services/context_service.py`** (`_select_skill_playbooks`, lignes 700-850) :
-   - Ajouter 2-3 règles `pruned:*-focus` (automation, diagram, module-graph).
-   - Ajouter les patterns explicites (ex. `compare-version-pattern` → score 80).
-   - Étendre `_BOUNDARY_TOKENS` avec `cron`, `flow`, `flux`, `graphe`, `graph` si risque de match dans mots plus longs.
+1. **`backend/services/context_service.py`** (dispatcher) :
+   - Ajouter bundle `financial_audit` (ciblant `inspect_financial_reports` + éventuellement `query_odoo` pour résoudre partner/analytic — mais avec pruning `pruned:financial-run-focus` qui désélectionne `query_odoo` si la query mentionne explicitement « bilan / P&L / compte de résultat / grand livre » avec un périmètre clair, pour éviter doublons).
+   - Ajouter bundle `spreadsheet_audit` (ciblant `inspect_spreadsheet`).
+   - Patterns dédiés (score ~ 85) : `financial-report-pattern` (regex sur « bilan », « compte de résultat », « grand livre », « tax report », « état financier ») et `spreadsheet-formula-pattern` (regex sur `ODOO\.[A-Z]+`, « spreadsheet », « tableur Odoo »).
+   - Étendre `_BOUNDARY_TOKENS` avec `bilan`, `P&L` (échappé), `GL` si nécessaire.
 
-2. **Aucune modif registry** : les 4 skills sont chargés automatiquement par le loader.
+2. **Aucune modif `registry.py`** : loader auto.
 
-3. **Bundles d'intent** (dans `context_service.py`) : ajouter `diagram` bundle (cible : `generate_diagram` + `inspect_module_graph` quand contexte module), `automation_audit` bundle (cible : `inspect_automations` + `inspect_security` éventuellement).
+3. **Aucune dépendance Python nouvelle** : `pypdf` déjà présent (PDF financial reports si jamais), `zipfile` stdlib pour XLSX spreadsheet.
 
 ---
 
-## Fichiers critiques à créer / modifier
+## Fichiers à créer / modifier
 
-**Création** (16 fichiers minimum, ~ 4 dossiers de skill) :
-- `skills/compare-odoo-versions/{SKILL.md, scripts/handler.py, diagram/diagram.yaml, eval_queries.json, references/diff_strategies.md, templates/comparison_report.md}`
-- `skills/inspect-automations/{SKILL.md, scripts/handler.py, diagram/diagram.yaml, eval_queries.json, references/automation_types.md}`
-- `skills/inspect-module-graph/{SKILL.md, scripts/handler.py, diagram/diagram.yaml, eval_queries.json, references/manifest_anatomy.md}`
-- `skills/generate-diagram/{SKILL.md, scripts/handler.py, diagram/diagram.yaml, eval_queries.json, references/mermaid_cheatsheet.md, templates/mermaid_blocks.md}`
-- `frontend/src/components/MermaidBlock.tsx` (nouveau)
-- `frontend/src/components/MermaidBlock.test.tsx` (nouveau)
+**Création** (skills + services) :
+- `skills/inspect-financial-reports/SKILL.md`
+- `skills/inspect-financial-reports/scripts/handler.py`
+- `skills/inspect-financial-reports/diagram/diagram.yaml`
+- `skills/inspect-financial-reports/eval_queries.json`
+- `skills/inspect-financial-reports/references/account_report_taxonomy.md`
+- `skills/inspect-financial-reports/references/run_options.md`
+- `skills/inspect-financial-reports/templates/financial_report_summary.md`
+- `skills/inspect-spreadsheet/SKILL.md`
+- `skills/inspect-spreadsheet/scripts/handler.py`
+- `skills/inspect-spreadsheet/diagram/diagram.yaml`
+- `skills/inspect-spreadsheet/eval_queries.json`
+- `skills/inspect-spreadsheet/references/odoo_spreadsheet_formulas.md`
+- `skills/inspect-spreadsheet/references/spreadsheet_payload_format.md`
+- `skills/inspect-spreadsheet/templates/spreadsheet_inspection_report.md`
+- `backend/services/financial_report_service.py`
+- `backend/services/spreadsheet_service.py`
 
 **Modification** :
-- `backend/services/context_service.py` (pruning + patterns + bundles)
-- `frontend/src/components/Markdown.tsx` (détection fence `mermaid` → `MermaidBlock`)
-- `frontend/package.json` (+ `mermaid`)
-- `frontend/src/version.ts` → bump `0.94.0`
-- `frontend/src/pages/About.tsx` (entrée changelog en tête, retire badge `Actuel` du précédent)
-- `README.md` (mention version + capacité diagrammes)
-- `CLAUDE.md` (section "État récent" + skills présents : 28 → 32, +ligne 0.94.0)
+- `backend/services/context_service.py` (bundles + patterns + 1-2 règles `pruned:*-focus`)
+- `frontend/src/version.ts` → `0.95.0`
+- `frontend/src/pages/About.tsx` (entrée changelog en tête, badge `Actuel` déplacé)
+- `README.md` (capacités financières + spreadsheet)
+- `CLAUDE.md` (état récent + skills présents 32 → 34)
 
-**Helpers à réutiliser (pas réécrire)** :
-- `backend/skills/_shared/git_ops.py::show_commit` — modèle de helper partagé
-- `backend/services/odoo_pagination.py::search_read_bounded` — pagination XML-RPC standard
-- `backend/services/tool_context.py::ToolContext` — pas de nouveau champ requis
-- `backend/skills/registry.py::SkillDiagram` — dataclass déjà compatible avec les nouveaux `diagram.yaml`
+**Helpers à réutiliser (cf. exploration)** :
+- `backend/services/odoo_pagination.py::search_read_bounded`
+- `backend/services/odoo_client.py::OdooClient.call_kw` (pour `_get_lines`, `export_to_xlsx`)
+- `backend/services/tool_context.py::ToolContext` (`odoo`, `source_path` suffisent — pas de nouveau champ)
+- Pattern handler-mince + service-épais déjà éprouvé par `odoo_inspect_report` (`backend/services/view_service.py`)
 
 ---
 
@@ -204,46 +230,41 @@ keywords: [diagramme, diagram, schéma, flowchart, class diagram, héritage de m
 1. **Backend** :
    ```bash
    source .venv/bin/activate
-   pytest tests/test_skill_registry_integrity.py tests/test_tool_limits.py -q   # 32 skills chargés, frontmatter valide
-   pytest tests/test_trigger_routing.py -q                                       # 32/32 eval_queries, 0 xfail
-   pytest tests/test_skill_quality.py -q                                         # descriptions OK
-   pytest tests/test_no_implicit_core_invocation.py -q                           # cores toujours protégés
-   pytest -q                                                                     # full sweep
+   pytest tests/test_skill_registry_integrity.py tests/test_tool_limits.py -q
+   pytest tests/test_trigger_routing.py -q                 # 34/34 skills couverts, 0 xfail
+   pytest tests/test_skill_quality.py -q
+   pytest -q                                                # full sweep
    ```
 
 2. **Frontend** :
    ```bash
    cd frontend
-   npm test                # MermaidBlock + Markdown
-   npm run build           # tsc + Vite, vérifier que mermaid n'est pas dans le bundle initial
+   npm test
+   npm run build
    ```
 
 3. **Quality eval (routing)** :
    ```bash
    python scripts/quality_eval/run_routing_eval.py
    ```
-   → 100 % accuracy maintenu après ajout des prompts diagram/automation/module-graph/compare-versions dans `dataset.json`.
+   Ajouter ~ 4 prompts représentatifs dans `dataset.json` (bilan client, P&L projet, explain formula, list spreadsheets) — 100 % accuracy maintenu.
 
-4. **Test manuel app** :
-   ```bash
-   bash scripts/start.sh
-   ```
-   - Assistant : « dessine le diagramme de classe du modèle sale.order en v18 » → réponse contient bloc Mermaid rendu visuellement.
-   - Migration : « qu'est-ce qui change sur hr.leave entre 17 et 18 » → tableau diff structuré.
-   - Assistant : « liste les crons actifs sur le module CRM » → tableau automatisations.
-   - Assistant : « graphe de dépendances de sale_management » → réponse texte + bloc Mermaid.
+4. **Tests manuels app** (`bash scripts/start.sh`) :
+   - Assistant : « donne-moi le bilan du client Acme au 31/03/2026 » → résolution partner via `query_odoo` puis appel `inspect_financial_reports action=run`, réponse contient tableau Markdown des lignes et totaux.
+   - Assistant : « P&L du projet PRJ-42 sur Q1 2026 » → résolution `analytic_account_id` puis `run`.
+   - Assistant : « quel rapport pour la déclaration TVA T1 ? » → `action=recommend`, top 3 avec justification.
+   - Assistant : « explique cette formule =ODOO.PIVOT("1",...) » → `inspect_spreadsheet action=explain_formula`.
+   - Assistant : « inspecte le spreadsheet Budget 2026 et liste ses formules ODOO » → `inspect` retourne sheets + inventaire formules.
 
-5. **Versioning** (cf. CLAUDE.md §Versioning) :
-   - Bump `APP_VERSION` → `0.94.0`.
-   - Entrée About.tsx au sommet, badge `Actuel` déplacé.
-   - README + CLAUDE.md + AGENTS.md alignés.
-   - Commit unique sur `main` au format `v0.94.0 — 4 nouveaux skills (compare-versions, automations, module-graph, generate-diagram) + Mermaid dans Markdown`.
+5. **Versioning** : bump `0.95.0`, About + README + CLAUDE.md alignés, commit `v0.95.0 — inspect-financial-reports + inspect-spreadsheet`.
 
 ---
 
 ## Risques et atténuations
 
-- **Fuites de routing entre les 4 nouveaux skills et les existants** → eval_queries exhaustives + règles `pruned:*-focus`.
-- **Bundle frontend qui grossit** → `mermaid` lazy-loaded via `import()` dynamique, pas dans bundle initial.
-- **`generate-diagram` qui hallucine** → références Mermaid auto-loadées + post-validation Python du code Mermaid avant de retourner (regex simple détectant les blocs invalides).
-- **Coût XML-RPC `inspect-automations`** → pagination bornée 500/5000 standard, agrégation côté serveur Odoo via `read_group` quand possible.
+- **`_get_lines` peut être lent** sur grand ledger / multi-société → bornes : `max_lines=500`, timeout XML-RPC standard, message `truncated` clair.
+- **Format spreadsheet hétérogène** (JSON natif vs XLSX zippé selon version) → `_parse_spreadsheet_payload` qui détecte magic bytes et choisit le bon décodeur ; fail-loud si format inconnu.
+- **Catalogue formules `ODOO.*` dépendant des sources Enterprise locales** → si `source_path-enterprise` absent, `explain_formula` / `suggest_formula` fallback sur `references/odoo_spreadsheet_formulas.md` statique avec un warning explicite.
+- **Fuites de routing avec `query_odoo`** (très tentant sur « donne-moi les factures non payées de X ») → règles de pruning serrées + eval queries near-miss explicites.
+- **Sortie XLSX de `export_to_xlsx`** peut dépasser 5 MB → garde-fou taille, sinon retourne consigne de passer par l'UI Odoo.
+- **Risque évolution future « modifier le rapport »** : volontairement hors scope v0.95.0 — toute écriture passera plus tard par un workflow Creator dédié, jamais par ce skill.

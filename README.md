@@ -98,13 +98,13 @@ Tout est cumulatif : plus vous configurez de sources, plus l'IA peut répondre a
 | **Tableau de bord** | Vue d'ensemble : projets, sources installées, dernières conversations |
 | **Sources** | Téléchargement et mise à jour des sources Odoo (`~/.odoo-consultant/sources/`) |
 | **Mes projets** | Liste des projets clients avec environnements, dépôts custom, contexte projet |
-| **Assistant IA** | Chat outillé, mode projet ou général, perspectives consultant (Support / BA / Architecte / Dev) |
+| **Assistant IA** | Chat outillé, mode projet ou général, agents consultants (Support / BA / Architecte / Dev — extensibles via `agents/<slug>/AGENT.md`) |
 | **Migration** | Chat dédié migration : sources source + cible chargées, release notes filtrées par domaine |
 | **Creator** | Workflow Studio : propositions IA, aperçu vue / PDF, application sur l'instance |
 | **Requêtes** | Console XML-RPC manuelle pour exploration ponctuelle |
 | **Historique** | Conversations archivées par projet |
 | **Fonctionnement** | Diagramme vertical de bout en bout : profil, providers, contexte, outils |
-| **Paramètres** | Profil consultant, clés API, modèles activés, fichiers Markdown de contexte |
+| **Paramètres** | Profil consultant, clés API, modèles activés, fichiers Markdown de contexte, agents de réponse |
 | **À propos** | Changelog complet de toutes les versions |
 
 ---
@@ -226,7 +226,7 @@ Trois niveaux indépendants :
 
 1. **Langue de l'app** — Paramètres → Profil. Bascule l'UI complète FR ↔ EN.
 2. **Langue des réponses IA** — Auto (dernier message utilisateur), Français forcé, English forcé. Les identifiants Odoo (modèles, champs, XML IDs, chemins) ne sont jamais traduits.
-3. **Langue des fichiers de contexte** — `~/.odoo-consultant/context/` pour FR (legacy), `~/.odoo-consultant/context/en/` pour EN. Defaults fournis pour `skills.md`, `migration.md`, `studio.md`, `meeting-minute.md`, `odoo-15.0.md` → `odoo-19.0.md`.
+3. **Langue des fichiers de contexte** — `~/.odoo-consultant/context/` pour FR (legacy), `~/.odoo-consultant/context/en/` pour EN. Defaults fournis pour `consultant-memo.md` (mémo consultant, pas dispatcher de skills), `creator-conventions.md`, `migration.md`, `studio.md`, `meeting-minute.md` et `odoo-15.0.md` → `odoo-19.0.md`.
 
 ---
 
@@ -245,7 +245,7 @@ Tous les chemins sont sous `~/.odoo-consultant/` :
 ├── repos/
 │   └── <profile>/<env>/      # dépôts custom clonés par environnement
 ├── workspaces/               # workspaces VS Code générés
-└── context/                  # fichiers Markdown éditables (skills.md, studio.md, …)
+└── context/                  # fichiers Markdown éditables (consultant-memo.md, studio.md, …)
     └── en/                   # variantes anglaises
 ```
 
@@ -281,6 +281,11 @@ L'app ne stocke **jamais** de dumps client, de données Odoo répliquées ou de 
 
 ```
 better_odoo_consultant/
+├── agents/                       # Agents de réponse (personas) — un dossier
+│   ├── support/                  # par agent, AGENT.md + profile + migration
+│   ├── business-analyst/         # + eval_queries.json. Loader pur,
+│   ├── architect/                # nouveau dossier = nouvel agent dans l'UI.
+│   └── developer/
 ├── backend/
 │   ├── api/
 │   │   ├── app.py                 # FastAPI app, CORS, static build serving

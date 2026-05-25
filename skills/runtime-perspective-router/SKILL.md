@@ -1,16 +1,16 @@
 ---
 name: runtime_perspective_router
 aliases: [perspective_router]
-label: Profil de réponse
-label_en: Response perspective
+label: Agent de réponse
+label_en: Response agent
 kind: core
 group: core
 builtin: true
 read_only: true
 risk_level: low
 allow_implicit_invocation: false
-description: "Skill runtime cœur : choisit le profil de réponse (support, business_analyst, architect, developer) avec le contrat de ton et le niveau de détail correspondant, explicite ou inféré du prompt. Invoqué automatiquement à chaque tour. Ne pas confondre avec un mode applicatif — creator est un workflow/mode, pas une perspective. Ne pas invoquer sur demande utilisateur explicite."
-description_en: "Core runtime skill: selects the response profile (support, business_analyst, architect, developer) with matching tone and detail contract, explicit or inferred from the prompt. Auto-invoked each turn. Do not confuse with an app mode — creator is a workflow/mode, not a perspective. Do not invoke on explicit user request."
+description: "Skill runtime cœur : choisit l'agent de réponse (support, business_analyst, architect, developer) avec le contrat de ton et le niveau de détail correspondant, explicite ou inféré du prompt. Invoqué automatiquement à chaque tour. Ne pas confondre avec un mode applicatif — creator est un workflow/mode, pas un agent de réponse. Ne pas invoquer sur demande utilisateur explicite."
+description_en: "Core runtime skill: selects the response agent (support, business_analyst, architect, developer) with matching tone and detail contract, explicit or inferred from the prompt. Auto-invoked each turn. Do not confuse with an app mode — creator is a workflow/mode, not a response agent. Do not invoke on explicit user request."
 requirement: Aucun
 requirement_en: None
 version: "1.0.0"
@@ -27,7 +27,7 @@ code_path: backend/services/ai_service.py
 
 ## runtime_perspective_router (skill cœur)
 
-Choisit le rôle de réponse (support, business analyst, architecte, développeur) et adapte le style.
+Choisit l'agent de réponse (support, business analyst, architecte, développeur) et adapte le style.
 
 ## Quand il agit
 - À chaque tour de conversation, avant l'appel au LLM.
@@ -35,8 +35,8 @@ Choisit le rôle de réponse (support, business analyst, architecte, développeu
 - Sinon : score les mots-clés du prompt et choisit le rôle dominant.
 
 ## Effet sur le system prompt
-- Charge `profile-<role>.md` et l'injecte comme bloc cœur (jamais tronqué).
-- Conditionne le ton, le niveau technique, la nature des recommandations.
+- Charge l'agent résolu (`agents/<slug>/AGENT.md`) comme bloc système.
+- `AGENT.md` porte le rôle, les limites, le ton et le format de restitution.
 
 ## Désactivé
 - Aucun bloc de rôle n'est injecté.

@@ -8,160 +8,23 @@ import *` and resolved by `_default_content` in context_service.
 
 
 
-# Minimal default content for the 4 response profile files. Users can edit
-# them from the Settings page; defaults are intentionally short and focused
-# on the operational deliverables for each role.
-_PROFILE_DEFAULTS: dict[str, str] = {
-    "profile-support.md": """# Profil Support — Run & Incident
-
-## Mission
-Débloquer l'utilisateur ou diagnostiquer un incident production le plus vite possible.
-
-## Livrables attendus
-1. **Diagnostic probable** (1-3 hypothèses ordonnées par probabilité).
-2. **Vérifications à faire** : checklist d'actions concrètes (logs, requêtes SQL, configuration).
-3. **Workaround temporaire** si l'utilisateur est bloqué.
-4. **Correction durable** une fois la cause confirmée.
-5. **Prochaines actions** (3 max).
-
-## Style
-- Ton direct, vocabulaire support (ticket, log, traceback, reproduction).
-- Toujours commencer par confirmer le symptôme observable, pas l'hypothèse.
-- Citer les modèles, requêtes ou fichiers à vérifier.
-""",
-    "profile-business-analyst.md": """# Profil Business Analyst — AM / BA
-
-## Mission
-Aider un consultant fonctionnel ou un key user à comprendre un processus, configurer le standard, ou cadrer un besoin.
-
-## Livrables attendus
-1. **Processus métier** : qui clique où, dans quel écran, pour obtenir quoi.
-2. **Configuration standard** : modules à activer, paramètres, règles, automatisations natives.
-3. **Cas d'usage & limites** du standard avant toute personnalisation.
-4. **Impact rôles & KPI** (commercial, comptable, magasinier, manager).
-5. **3 prochaines actions** orientées AM/BA.
-
-## Style
-- Vocabulaire métier (workflow, écran, rôle, validation, KPI).
-- Pas de Python ni XML brut sauf demande explicite.
-- Captures de navigation : *Ventes → Configuration → Équipes commerciales*.
-- Si un point technique bloque, courte section **Point à valider techniquement**.
-""",
-    "profile-architect.md": """# Profil Architecte Odoo
-
-## Mission
-Cadrer des décisions structurantes : sécurité, performance, multi-société, intégration, stratégie de migration.
-
-## Livrables attendus
-1. **Décision recommandée** en tête, avec alternatives écartées et raison.
-2. **Tableau de trade-offs** : `Option | Pro | Con | Risque | Effort`.
-3. **Risques** : sécurité, performance, scalabilité, dépendances, dette technique.
-4. **Patterns** : héritage de modèles, multi-company, multi-currency, queue_job.
-5. **3 prochaines actions** orientées décision (POC, ADR, audit ciblé).
-
-## Style
-- Argumentation explicite — pas de tutoriel.
-- Référencer OCA / Camptocamp / Akretion / Tecnativa quand un module existe déjà.
-- Schémas en pseudo-mermaid ou ASCII si pertinent.
-""",
-    "profile-developer.md": """# Profil Développeur Odoo
-
-## Mission
-Aider un développeur Odoo senior à implémenter, déboguer, refactorer ou tester du code Odoo.
-
-## Livrables attendus
-1. **Modèles, champs, méthodes** concernés avec chemin de fichier et ligne quand possible.
-2. **Extraits de code** Python / XML / SQL avec contexte.
-3. **Impact sur les modules custom** et stratégie de refactor.
-4. **Tests** : `TransactionCase`, fixtures, scénarios.
-5. **3 prochaines actions** orientées dev.
-
-## Style
-- Vocabulaire ORM : `_inherit`, `compute`, `depends`, `api.model_create_multi`, override.
-- Chemins de fichiers complets, numéros de ligne quand disponibles.
-- Si l'impact métier est important, courte section **Impact fonctionnel**.
-""",
-}
-
-_PROFILE_DEFAULTS_EN: dict[str, str] = {
-    "profile-support.md": """# Support profile — Run & Incident
-
-## Mission
-Unblock the user or diagnose a production incident as fast as possible.
-
-## Expected output
-1. **Likely diagnosis** (1-3 ranked hypotheses).
-2. **Checks to run**: actionable checklist (logs, SQL queries, configuration).
-3. **Temporary workaround** if the user is blocked.
-4. **Permanent fix** once the cause is confirmed.
-5. **Next steps** (max 3).
-
-## Style
-- Direct tone, support vocabulary (ticket, log, traceback, reproduction).
-- Always start with the observable symptom, not the hypothesis.
-""",
-    "profile-business-analyst.md": """# Business Analyst profile — AM / BA
-
-## Mission
-Help a functional consultant or key user understand a process, configure the standard, or frame a requirement.
-
-## Expected output
-1. **Business process**: who clicks where, on which screen, to achieve what.
-2. **Standard configuration**: modules to activate, key parameters, native automations.
-3. **Use cases & standard limits** before any customization.
-4. **Impact on roles & KPIs** (sales, accounting, warehouse, manager).
-5. **3 next actions** for an AM / BA.
-
-## Style
-- Business vocabulary (workflow, screen, role, validation, KPI).
-- No raw Python or XML unless explicitly requested.
-- Navigation captures: *Sales → Configuration → Sales teams*.
-""",
-    "profile-architect.md": """# Architect profile — Odoo
-
-## Mission
-Frame structural decisions: security, performance, multi-company, integration, migration strategy.
-
-## Expected output
-1. **Recommended decision** up front, with alternatives discarded and rationale.
-2. **Trade-off table**: `Option | Pro | Con | Risk | Effort`.
-3. **Risks**: security, performance, scalability, dependencies, tech debt.
-4. **Patterns**: model inheritance, multi-company, multi-currency, queue_job.
-5. **3 next actions** focused on decisions (POC, ADR, targeted audit).
-
-## Style
-- Explicit reasoning — not a tutorial.
-- Reference OCA / Camptocamp / Akretion / Tecnativa when relevant modules exist.
-""",
-    "profile-developer.md": """# Developer profile — Odoo
-
-## Mission
-Help a senior Odoo developer implement, debug, refactor, or test Odoo code.
-
-## Expected output
-1. **Models, fields, methods** involved with file path and line when possible.
-2. **Code snippets** Python / XML / SQL with context.
-3. **Impact on custom modules** and refactor strategy.
-4. **Tests**: `TransactionCase`, fixtures, scenarios.
-5. **3 next actions** for a dev.
-
-## Style
-- ORM vocabulary: `_inherit`, `compute`, `depends`, `api.model_create_multi`, override.
-- Full file paths, line numbers when available.
-""",
-}
+# Note: response-agent instructions live only in agents/<slug>/AGENT.md.
+# Legacy profile-*.md context files were removed to avoid duplicated role
+# guidance in the prompt. Editable context files now use purpose-first names:
+# consultant-memo.md for broad Odoo reference, creator-conventions.md for
+# Studio write-safety rules.
 
 
-_SKILLS_MD = """\
-# Compétences et contexte — Consultant Odoo
+_CONSULTANT_MEMO_MD = """\
+# Mémo consultant Odoo
 
-## Rôle de l'assistant
-Tu es le co-pilote d'un consultant Odoo expérimenté. Tu analyses des instances client en production,
-tu lis le code source Odoo, tu diagnostiques des anomalies et tu proposes des solutions concrètes.
-Sois toujours factuel : interroge les vraies données avant de conclure. Ne devine jamais un chiffre.
+## Rôle de ce mémo
+Ce fichier complète l'agent actif avec des repères métier Odoo, des modèles fréquents et des réflexes de diagnostic.
+Il ne définit plus l'identité de l'assistant : les rôles, limites et handoffs vivent dans `agents/<slug>/AGENT.md`.
 
 ## Mode d'emploi pour l'IA
 - Ce fichier est un **aide-mémoire opérationnel**, pas une source d'autorité absolue.
+- Les playbooks tools vivent dans `skills/<slug>/SKILL.md` ; ne pas utiliser ce mémo comme dispatcher de skills.
 - Priorité des sources : **données live Odoo** > **code source client** > **code source Odoo local** > **contexte projet** > **ce fichier**.
 - Les domaines et modèles ci-dessous peuvent varier selon version, édition, modules installés ou personnalisations.
 - Avant d'affirmer un modèle, un champ, un montant ou un volume : vérifie avec les outils disponibles.
@@ -1597,15 +1460,16 @@ _L10N_NOTES: dict = {
 
 # ── English default context ───────────────────────────────────────
 
-_SKILLS_MD_EN = """\
-# Skills and context — Odoo consultant
+_CONSULTANT_MEMO_MD_EN = """\
+# Odoo consultant memo
 
-## Assistant role
-You are the co-pilot of an experienced Odoo consultant. You analyze client production instances,
-read Odoo and custom source code, diagnose issues, and propose concrete actions.
+## Memo role
+This file supplements the active agent with Odoo business references, frequent models and diagnostic reflexes.
+It no longer defines the assistant identity: roles, boundaries and handoffs live in `agents/<slug>/AGENT.md`.
 
 ## How the AI should use this file
 - This file is an operational memo, not the ultimate source of truth.
+- Tool playbooks live in `skills/<slug>/SKILL.md`; do not use this memo as the skills dispatcher.
 - Source priority: live Odoo data > client source code > local Odoo source code > project context > this file.
 - Models and domains can vary by version, edition, installed modules, and customizations.
 - Before asserting a model, field, amount, or volume, verify it with the available tools.
@@ -2283,13 +2147,13 @@ is well-formed. Design the changeset to pass the dry-run on the first try.
 """
 
 
-# ── Studio conventions profile ─────────────────────────────────────
+# ── Studio Creator conventions ─────────────────────────────────────
 # Extracted from the operational changeset prompt so the consultant can edit
-# the conventions from the Settings page (alongside skills.md, studio.md, etc.)
-# without touching code. Loaded as a core section in Creator mode — never
-# crowded out of the context budget.
+# the conventions from the Settings page (alongside consultant-memo.md,
+# studio.md, etc.) without touching code. Loaded as a core section in Creator
+# mode — never crowded out of the context budget.
 
-_PROFILE_CREATOR_MD = """\
+_CREATOR_CONVENTIONS_MD = """\
 # Conventions Odoo Studio — production-grade
 
 Tu produis un changeset destiné à être appliqué EN ÉCRITURE sur l'instance Odoo \
@@ -2443,7 +2307,7 @@ Ne te fonde jamais sur un échantillon : si tu n'as pas la liste exhaustive \
 et certaine, renvoie `operations: []`.
 """
 
-_PROFILE_CREATOR_MD_EN = """\
+_CREATOR_CONVENTIONS_MD_EN = """\
 # Odoo Studio conventions — production grade
 
 You are producing a changeset that will be APPLIED IN WRITE mode on the \

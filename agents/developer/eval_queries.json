@@ -1,0 +1,15 @@
+{
+  "positive": [
+    {"prompt": "Surcharger account.move create avec @api.model_create_multi", "expected_agent": "developer", "category": "positive"},
+    {"prompt": "Traceback sur self.env['res.partner'].browse, comment debug", "expected_agent": "developer", "category": "positive"},
+    {"prompt": "Refactor du compute _amount_total avec dépendances @api.depends", "expected_agent": "developer", "category": "positive"},
+    {"prompt": "Write a TransactionCase test for the custom sale workflow", "expected_agent": "developer", "category": "positive"},
+    {"prompt": "Passe en mode developer: convertir attrs en invisible Odoo 17", "expected_agent": "developer", "category": "explicit_prompt"},
+    {"prompt": "Implémenter un _inherit propre sur stock.move avec compute upgrade-safe", "expected_agent": "developer", "category": "near_miss", "not_expected_agent": "architect"}
+  ],
+  "negative": [
+    {"prompt": "Le module est planté en prod, erreur 500", "expected_agent": "support", "category": "negative", "not_expected_agent": "developer"},
+    {"prompt": "Cadrer le processus de relance client avec les KPI", "expected_agent": "business_analyst", "category": "negative", "not_expected_agent": "developer"},
+    {"prompt": "Choix Community vs Enterprise pour la migration multi-pays", "expected_agent": "architect", "category": "negative", "not_expected_agent": "developer"}
+  ]
+}

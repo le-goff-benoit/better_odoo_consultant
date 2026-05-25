@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowRight, Check, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, HardDrive, KeyRound, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Search, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Bot, Check, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, HardDrive, KeyRound, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Search, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getSkillDiagram, getSkillMarkdown, getSkillReference, getSkillTemplate, getSkillExample, getSkillEvalQueries, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import Markdown from '../components/Markdown'
+import AgentsSettingsPanel from '../components/AgentsSection'
 import { applyBrandColor, applyThemeMode } from '../App'
 import { WIDTH_OPTIONS, WIDTH_KEY, getStoredWidth, type ContentWidth } from '../components/Layout'
 import { Tabs } from '../components/ui'
@@ -93,7 +94,7 @@ interface CopilotFlowState {
   error?: string
 }
 
-type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage' | 'skills'
+type SettingsTab = 'profile' | 'api' | 'context' | 'interface' | 'storage' | 'skills' | 'agents'
 
 export default function Settings() {
   const lang = useUiLanguage()
@@ -101,13 +102,13 @@ export default function Settings() {
   const c = {
     fr: {
       title: 'Paramètres',
-      tabs: { profile: 'Profil', api: 'Clés API', context: 'Contexte IA', interface: 'Interface', storage: 'Stockage', skills: 'Skills' },
+      tabs: { profile: 'Profil', api: 'Clés API', context: 'Contexte IA', interface: 'Interface', storage: 'Stockage', skills: 'Skills', agents: 'Agents' },
       profileIntro: "Personnalisez votre identité et l'apparence de l'interface. Le nom et le poste sont injectés dans le contexte de l'assistant IA.",
       contextIntro: "Ces fichiers Markdown sont injectés dans le prompt système de l'assistant. Modifiez-les pour adapter le contexte métier.",
     },
     en: {
       title: 'Settings',
-      tabs: { profile: 'Profile', api: 'API keys', context: 'AI context', interface: 'Interface', storage: 'Storage', skills: 'Skills' },
+      tabs: { profile: 'Profile', api: 'API keys', context: 'AI context', interface: 'Interface', storage: 'Storage', skills: 'Skills', agents: 'Agents' },
       profileIntro: 'Customize your identity and interface appearance. Your name and role are injected into the AI assistant context.',
       contextIntro: 'These Markdown files are injected into the assistant system prompt. Edit them to adapt the business context.',
     },
@@ -118,6 +119,7 @@ export default function Settings() {
     { id: 'api' as const,       label: c.tabs.api, icon: <KeyRound size={15} /> },
     { id: 'context' as const,   label: c.tabs.context, icon: <FileText size={15} /> },
     { id: 'skills' as const,    label: c.tabs.skills, icon: <Zap size={15} /> },
+    { id: 'agents' as const,    label: c.tabs.agents, icon: <Bot size={15} /> },
     { id: 'interface' as const, label: c.tabs.interface, icon: <LayoutPanelTop size={15} /> },
     { id: 'storage' as const,   label: c.tabs.storage, icon: <Database size={15} /> },
   ]
@@ -153,6 +155,8 @@ export default function Settings() {
       {tab === 'storage' && <StorageSection />}
 
       {tab === 'skills' && <SkillsSection />}
+
+      {tab === 'agents' && <AgentsSettingsPanel />}
 
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
     </div>
@@ -2185,7 +2189,6 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
 
 type ContextFileGroup =
   | 'core'
-  | 'profiles'
   | 'localization'
   | 'versions'
 
@@ -2200,15 +2203,12 @@ interface ContextFileMeta {
 }
 
 const KNOWN_FILES: ContextFileMeta[] = [
-  { name: 'skills.md',          label: 'Compétences consultant', labelEn: 'Consultant skills', icon: 'skills', desc: 'Connaissances métier, patterns courants, approche de diagnostic', descEn: 'Business knowledge, common patterns, diagnostic approach', contextGroup: 'core' },
+  { name: 'consultant-memo.md', label: 'Mémo consultant Odoo', labelEn: 'Odoo consultant memo', icon: 'skills', desc: 'Référentiel métier global, domaines Odoo et réflexes de diagnostic. Les playbooks tools vivent dans les SKILL.md.', descEn: 'Global business reference, Odoo domains and diagnostic reflexes. Tool playbooks live in SKILL.md files.', contextGroup: 'core' },
   { name: 'meeting-minute.md',  label: 'Modèle compte-rendu', labelEn: 'Meeting minutes template', icon: 'document', desc: 'Template utilisé par le bouton "Meeting Minute" dans le chat', descEn: 'Template used by the "Meeting Minute" button in chat', contextGroup: 'core' },
   { name: 'migration.md',       label: 'Méthodologie migration', labelEn: 'Migration methodology', icon: 'workflow',  desc: 'Checklist et breaking changes injectés dans l\'assistant Migration', descEn: 'Checklist and breaking changes injected into the Migration assistant', contextGroup: 'core' },
   { name: 'studio.md',          label: 'Inspection Studio', labelEn: 'Studio inspection', icon: 'studio', desc: 'Guide d\'interprétation des personnalisations Studio (modèles, champs, vues, automatisations)', descEn: 'Interpretation guide for Studio customizations (models, fields, views, automations)', contextGroup: 'core' },
   { name: 'creation.md',        label: 'Méthodologie création', labelEn: 'Creation methodology', icon: 'skill', desc: 'Conventions et méthodologie injectées dans l\'outil Création (changeset Studio, dry-run, versions)', descEn: 'Conventions and methodology injected into the Creator tool (Studio changeset, dry-run, versions)', contextGroup: 'core' },
-  { name: 'profile-support.md', label: 'Profil Support', labelEn: 'Support profile', icon: 'profile', desc: 'Guidelines de réponse orientées support incident et run.', descEn: 'Response guidelines focused on incident support and operations.', contextGroup: 'profiles' },
-  { name: 'profile-business-analyst.md', label: 'Profil Business Analyst', labelEn: 'Business Analyst profile', icon: 'profile', desc: 'Guidelines orientées processus, projet et conseil.', descEn: 'Guidelines focused on process, project and consulting.', contextGroup: 'profiles' },
-  { name: 'profile-architect.md', label: 'Profil Architecte', labelEn: 'Architect profile', icon: 'profile', desc: 'Guidelines architecture, sécurité, performance et migration.', descEn: 'Architecture, security, performance and migration guidance.', contextGroup: 'profiles' },
-  { name: 'profile-developer.md', label: 'Profil Développeur', labelEn: 'Developer profile', icon: 'profile', desc: 'Guidelines techniques code, modèles, vues et tests.', descEn: 'Technical guidance for code, models, views and tests.', contextGroup: 'profiles' },
+  { name: 'creator-conventions.md', label: 'Conventions Creator', labelEn: 'Creator conventions', icon: 'studio', desc: 'Règles de sécurité et de nommage Studio chargées uniquement dans le Creator.', descEn: 'Studio safety and naming rules loaded only in Creator mode.', contextGroup: 'core' },
   { name: 'l10n_ch.md',          label: 'Localisation CH', labelEn: 'CH localization', icon: 'localization', desc: 'Mémo fiscal Suisse injecté quand le pays CH est sélectionné.', descEn: 'Swiss fiscal memo injected when country CH is selected.', contextGroup: 'localization' },
   { name: 'l10n_fr.md',          label: 'Localisation FR', labelEn: 'FR localization', icon: 'localization', desc: 'Mémo fiscal France injecté quand le pays FR est sélectionné.', descEn: 'French fiscal memo injected when country FR is selected.', contextGroup: 'localization' },
   { name: 'l10n_be.md',          label: 'Localisation BE', labelEn: 'BE localization', icon: 'localization', desc: 'Mémo fiscal Belgique injecté quand le pays BE est sélectionné.', descEn: 'Belgian fiscal memo injected when country BE is selected.', contextGroup: 'localization' },
@@ -2222,7 +2222,6 @@ const KNOWN_FILES: ContextFileMeta[] = [
 
 const CONTEXT_FILE_GROUPS: { id: ContextFileGroup; label: string; labelEn: string; icon: string }[] = [
   { id: 'core', label: 'Socle IA', labelEn: 'AI foundation', icon: 'skills' },
-  { id: 'profiles', label: 'Profils de réponse', labelEn: 'Response profiles', icon: 'profile' },
   { id: 'localization', label: 'Localisations', labelEn: 'Localizations', icon: 'localization' },
   { id: 'versions', label: 'Notes Odoo', labelEn: 'Odoo notes', icon: 'document' },
 ]
@@ -2293,7 +2292,7 @@ function ContextEditor() {
       languageChange: 'Modifications non sauvegardées. Changer de langue ?',
     }
   const qc = useQueryClient()
-  const [selected, setSelected] = useState('skills.md')
+  const [selected, setSelected] = useState('consultant-memo.md')
   const [locale, setLocale] = useState<'fr' | 'en'>('fr')
   const [content, setContent] = useState('')
   const [dirty, setDirty] = useState(false)

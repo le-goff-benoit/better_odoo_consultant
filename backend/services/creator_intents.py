@@ -1,7 +1,7 @@
 """Detect the *kind* of Creator operation a user prompt is asking for, and
 return a focused snippet to inject into the LLM context.
 
-The general profile-creator.md already carries the full Studio conventions.
+The general creator-conventions.md already carries the full Studio conventions.
 This module zooms in: when the user explicitly mentions a cron, a computed
 field, an automation, etc., we add a short snippet that surfaces the
 gotchas and patterns specific to *that* operation type. It keeps the rest
@@ -34,7 +34,7 @@ def _has_any(text: str, terms: tuple[str, ...]) -> bool:
 
 
 # Each entry: (intent_key, FR terms, EN terms, FR snippet, EN snippet).
-# Snippets are short, focused — they reinforce profile-creator.md, never replace
+# Snippets are short, focused — they reinforce creator-conventions.md, never replace
 # it. Wording matches the user's likely vocabulary in each language.
 _INTENTS: tuple[tuple[str, tuple[str, ...], tuple[str, ...], str, str], ...] = (
     (

@@ -48,7 +48,7 @@ export default function PerspectiveToggle({
   const activeLabel = value === 'auto' ? `auto → ${effectiveValue ?? 'developer'}` : value
   const copy = lang === 'en'
     ? {
-      group: `Response profile, active mode ${activeLabel}`,
+      group: `Response agent, active mode ${activeLabel}`,
       active: `Active mode: ${activeLabel}`,
       auto: 'Auto',
       support: 'Support',
@@ -57,7 +57,7 @@ export default function PerspectiveToggle({
       developer: 'Dev',
     }
     : {
-      group: `Profil de réponse, mode actif ${activeLabel}`,
+      group: `Agent de réponse, mode actif ${activeLabel}`,
       active: `Mode actif : ${activeLabel}`,
       auto: 'Auto',
       support: 'Support',

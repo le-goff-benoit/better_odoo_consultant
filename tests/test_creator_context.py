@@ -34,11 +34,11 @@ def test_studio_guide_loaded_even_without_studio_keywords_in_creator_mode():
     assert "Projet avec Studio" not in non_creator
 
 
-# ── Phase 1.2 — profile-creator.md core section ──────────────────
+# ── Phase 1.2 — creator-conventions.md core section ──────────────
 
 
-def test_creator_profile_is_a_core_section_in_creator_mode():
-    """Phase 1.2: the Studio conventions profile is loaded as core (never
+def test_creator_conventions_are_a_core_section_in_creator_mode():
+    """Phase 1.2: the Studio Creator conventions are loaded as core (never
     crowded out of the budget) when creation=True."""
     context = load_context_for_prompt(
         "18.0",
@@ -53,8 +53,8 @@ def test_creator_profile_is_a_core_section_in_creator_mode():
     assert "x_" in context
 
 
-def test_creator_profile_absent_outside_creator_mode():
-    """The Studio conventions profile is a Creator-mode concept."""
+def test_creator_conventions_absent_outside_creator_mode():
+    """The Studio Creator conventions are a Creator-mode concept."""
     context = load_context_for_prompt(
         "18.0",
         user_prompt="Analyse les factures clients en retard",
@@ -190,8 +190,9 @@ def test_dev_md_absent_for_pure_studio_project_without_dev_keyword():
 def test_creator_context_assembly_order_is_stable():
     """The Creator context must contain these sections, in this order. Any
     drift changes how the LLM weighs the guidance and must be an explicit
-    decision. The role profile (Profil de réponse) is NOT loaded in Creator
-    mode — profile-creator.md ("Conventions Studio") is the locked authority."""
+    decision. Response-agent profile context is not loaded in Creator mode;
+    AGENT.md remains the only response-agent authority.
+    mode — creator-conventions.md ("Conventions Studio") is the locked authority."""
     context = load_context_for_prompt(
         "18.0",
         user_prompt="Crée un champ calculé x_total sur sale.order",
@@ -201,7 +202,7 @@ def test_creator_context_assembly_order_is_stable():
 
     # Sections that must all be present.
     expected_present = [
-        "Compétences consultant",
+        "Mémo consultant Odoo",
         "Projet avec Studio",
         "Méthodologie de création Studio",
         "Conventions Studio",
@@ -210,8 +211,9 @@ def test_creator_context_assembly_order_is_stable():
     missing = [n for n, p in positions.items() if p < 0]
     assert not missing, f"missing sections: {missing}"
 
-    # The role profile must NOT leak into Creator mode.
-    assert "Profil de réponse" not in context
+    # Legacy role profile context must NOT leak into Creator mode.
+    assert "Complément de profil agent" not in context
+    assert "Agent profile supplement" not in context
     assert "Profil Développeur" not in context
 
     # And the Studio creation methodology must come before its conventions

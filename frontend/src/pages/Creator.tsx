@@ -19,6 +19,7 @@ import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components
 import CreatorPreviewModal, { type PreviewResult } from '../components/CreatorPreviewModal'
 import { Button, Card, Field, Badge, Modal, EmptyState } from '../components/ui'
 import ToolCallGroup, { type ToolEvent } from '../components/ToolCallGroup'
+import AgentBadge from '../components/AgentBadge'
 import Markdown from '../components/Markdown'
 import AiSelector from '../components/AiSelector'
 import ConversationContextPanel from '../components/ConversationContextPanel'
@@ -1180,7 +1181,10 @@ export default function Creator() {
           <div className="page-card-body-compact">
             <div className="ui-section-title">
               {phase === 'analyzing'
-                ? <><Loader2 size={15} className="creator-spin" /> {c.analyzing}</>
+                ? <>
+                    <Loader2 size={15} className="creator-spin" /> {c.analyzing}
+                    <AgentBadge perspective="developer" compact />
+                  </>
                 : <><ScanSearch size={15} /> {c.aiWork}</>}
             </div>
             {toolEvents.length > 0 && (

@@ -1,0 +1,15 @@
+{
+  "positive": [
+    {"prompt": "L'utilisateur ne peut plus se connecter, erreur 500 ce matin", "expected_agent": "support", "category": "positive"},
+    {"prompt": "Bug en production sur les factures, workaround urgent", "expected_agent": "support", "category": "positive"},
+    {"prompt": "Incident P1 sur le module stock, ticket SLA 2h", "expected_agent": "support", "category": "positive"},
+    {"prompt": "Production is down, login impossible since the deployment", "expected_agent": "support", "category": "positive"},
+    {"prompt": "Réponds comme un agent support: le POS plante en encaissement", "expected_agent": "support", "category": "explicit_prompt"},
+    {"prompt": "Lenteur soudaine sur les vues kanban, page blanche par moments", "expected_agent": "support", "category": "near_miss", "not_expected_agent": "developer"}
+  ],
+  "negative": [
+    {"prompt": "Cadrer le processus de facturation pour le nouveau client", "expected_agent": "business_analyst", "category": "negative", "not_expected_agent": "support"},
+    {"prompt": "Choisir entre Community et Enterprise pour la migration", "expected_agent": "architect", "category": "negative", "not_expected_agent": "support"},
+    {"prompt": "Comment surcharger la méthode create d'account.move", "expected_agent": "developer", "category": "negative", "not_expected_agent": "support"}
+  ]
+}

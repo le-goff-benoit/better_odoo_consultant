@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type React from 'react'
-import { Briefcase, Building2, Check, ChevronDown, Code2, Sparkles, Wrench } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronDown, Sparkles } from 'lucide-react'
 import { useUiLanguage } from '../i18n'
 import {
   PERSPECTIVE_COLORS,
@@ -8,6 +7,7 @@ import {
   type PerspectiveMode,
 } from './PerspectiveToggle'
 import { perspectiveLabel } from '../utils/aiContext'
+import { agentIcon, useAgents, type Agent } from '../agents/registry'
 
 interface PerspectiveSelectProps {
   value: PerspectiveMode
@@ -41,21 +41,50 @@ export default function PerspectiveSelect({
     }
   }, [open])
 
-  const items: { id: PerspectiveMode; icon: React.ReactNode; label: string }[] = [
-    { id: 'auto',             icon: <Sparkles size={14} />,  label: lang === 'en' ? 'Automatic' : 'Automatique' },
-    { id: 'support',          icon: <Wrench size={14} />,    label: 'Support' },
-    { id: 'business_analyst', icon: <Briefcase size={14} />, label: lang === 'en' ? 'Business Analyst' : 'Analyste métier' },
-    { id: 'architect',        icon: <Building2 size={14} />, label: lang === 'en' ? 'Architect' : 'Architecte' },
-    { id: 'developer',        icon: <Code2 size={14} />,     label: lang === 'en' ? 'Developer' : 'Développeur' },
+  // Pull the live agent catalog so icons/colors/labels stay aligned with
+  // backend frontmatter (a new agent surfaces here automatically).
+  const { data: agentsData } = useAgents()
+  const agents: Agent[] = agentsData?.agents ?? []
+  const agentBy = useMemo(() => {
+    const m = new Map<string, Agent>()
+    for (const a of agents) m.set(a.name, a)
+    return m
+  }, [agents])
+
+  const renderAgentIcon = (name: string, size = 14) => {
+    const ag = agentBy.get(name)
+    const Icon = agentIcon(ag?.icon)
+    return <Icon size={size} />
+  }
+  const colorFor = (id: PerspectiveMode): string => {
+    if (id === 'auto') return PERSPECTIVE_COLORS.auto
+    const ag = agentBy.get(id)
+    return ag?.color || PERSPECTIVE_COLORS[id as Perspective] || '#64748b'
+  }
+  const items: { id: PerspectiveMode; label: string }[] = [
+    { id: 'auto', label: lang === 'en' ? 'Automatic' : 'Automatique' },
+    ...(agents.length
+      ? agents.map(a => ({ id: a.name as PerspectiveMode, label: lang === 'en' ? a.label_en : a.label }))
+      // Fallback: when the catalog has not loaded yet, keep the historical 4
+      // built-ins so the UI never appears empty during the initial fetch.
+      : [
+        { id: 'support' as PerspectiveMode,          label: 'Support' },
+        { id: 'business_analyst' as PerspectiveMode, label: lang === 'en' ? 'Business Analyst' : 'Analyste métier' },
+        { id: 'architect' as PerspectiveMode,        label: lang === 'en' ? 'Architect' : 'Architecte' },
+        { id: 'developer' as PerspectiveMode,        label: lang === 'en' ? 'Developer' : 'Développeur' },
+      ]),
   ]
+
   const activePersp: Perspective = value === 'auto'
     ? (effectiveValue ?? 'developer')
-    : value
-  const dotColor = PERSPECTIVE_COLORS[activePersp]
+    : (value as Perspective)
+  const dotColor = colorFor(activePersp)
   const subLabel = value === 'auto'
     ? (lang === 'en' ? 'auto' : 'auto')
     : (lang === 'en' ? 'manual' : 'manuel')
-  const activeIcon = items.find(item => item.id === (value === 'auto' ? 'auto' : activePersp))?.icon
+  const activeIcon = value === 'auto'
+    ? <Sparkles size={14} />
+    : renderAgentIcon(activePersp, 14)
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -95,7 +124,8 @@ export default function PerspectiveSelect({
           }}>
           {items.map(it => {
             const selected = value === it.id
-            const dotIfNotAuto = it.id !== 'auto' ? PERSPECTIVE_COLORS[it.id as Perspective] : null
+            const dotIfNotAuto = it.id !== 'auto' ? colorFor(it.id) : null
+            const icon = it.id === 'auto' ? <Sparkles size={14} /> : renderAgentIcon(it.id, 14)
             return (
               <button
                 key={it.id}
@@ -104,14 +134,14 @@ export default function PerspectiveSelect({
                 aria-selected={selected}
                 onClick={() => { onChange(it.id); setOpen(false) }}
                 className={`perspective-select-option${selected ? ' is-selected' : ''}`}
-                style={{ '--persp-color': dotIfNotAuto ?? PERSPECTIVE_COLORS[activePersp] } as React.CSSProperties}>
+                style={{ '--persp-color': dotIfNotAuto ?? colorFor(activePersp) } as React.CSSProperties}>
                 {dotIfNotAuto
                   ? <span aria-hidden="true" style={{
                       width: 7, height: 7, borderRadius: 4, background: dotIfNotAuto, flexShrink: 0,
                     }} />
                   : <span style={{ width: 7, flexShrink: 0 }} />}
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                  {it.icon}
+                  {icon}
                   <span>{it.label}</span>
                 </span>
                 {selected && <Check size={13} style={{ color: 'var(--brand-fg)' }} />}

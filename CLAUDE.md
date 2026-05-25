@@ -115,6 +115,43 @@ Règles importantes :
 
 Skills présents au moment de cette mise à jour : `attachment-handler`, `compare-odoo-versions`, `complexity-analyzer`, `context-aggregator`, `count-odoo`, `count-source-lines`, `generate-diagram`, `get-odoo-fields`, `git-show-commit`, `inspect-automations`, `inspect-financial-reports`, `inspect-installed-modules`, `inspect-menus-actions`, `inspect-module-graph`, `inspect-odoo-report`, `inspect-odoo-view`, `inspect-security`, `inspect-spreadsheet`, `inspect-studio`, `list-project-modules`, `localization-detector`, `perspective-router`, `project-context-refresh`, `query-odoo`, `read-group-odoo`, `read-odoo-file`, `read-project-file`, `read-target-file`, `release-notes-injector`, `report-writer`, `search-odoo-source`, `search-project-source`, `search-target-source`, `skill-dispatcher`.
 
+## Architecture agents (personnages de réponse)
+
+Les anciens « profils de réponse » (support / business_analyst / architect / developer) sont désormais des **agents** au sens Anthropic / OpenAI Agents SDK : chacun vit dans un dossier autonome sous `agents/<slug>/` à la racine du repo.
+
+Structure canonique d'un agent :
+```text
+agents/<slug>/
+  AGENT.md              frontmatter YAML + corps Markdown (system prompt FR
+                        injecté en tête de chaque tour)
+  AGENT.en.md           corps Markdown EN (sans frontmatter)
+  migration.md / migration.en.md   addon optionnel concaténé au system prompt
+                                   en mode Migration
+  eval_queries.json     fixtures de routage : positives + negatives
+```
+
+Frontmatter clés (voir `backend/agents/registry.py` pour le schéma complet) :
+- `name`, `label`, `label_en`, `description`, `description_en` (FR + EN, limites explicites à la skill convention).
+- `icon` : nom Lucide (`Wrench`, `Briefcase`, `Building2`, `Code2`, etc.).
+- `color` : hex `#rrggbb`. Sert au badge UI et au tint du panneau Settings.
+- `default: true` — un seul agent doit l'être (le défaut applicatif est `developer`).
+- `auto_keywords.weak` / `auto_keywords.strong` — alimentent le scoring `_infer_perspective` (`+1` weak, `+3` strong, seuil 3 et marge 2). Pour les tokens courts, le matching utilise désormais des word boundaries (`_term_matches`) pour éviter les faux positifs type `adr` dans `cadrer`.
+- `recommended_model` — informationnel (affiché dans Settings, pas encore forcé runtime).
+- `preferred_skills` — liste de skills favoris : reçoivent un boost dispatcher de `+20` **uniquement** si leur score actuel est sous `_MIN_SKILL_SCORE` (rescue des skills role-relevant, sans biaiser les invocations explicites).
+- `preferred_tools` — meta-tools privilégiés (`load_skill_reference`, `run_skill_script`) ; informationnel.
+- `aliases` — pour la rétro-compat (`technical` → developer, `functional` → business_analyst).
+
+Règles importantes :
+- Ajouter un agent = créer un dossier sous `agents/<slug>/` avec un `AGENT.md` valide. Aucun code à modifier — il apparaît automatiquement dans le sélecteur UI, l'onglet Settings → Agents, et l'inférence auto.
+- `AGENT.md` est la source d'autorité du rôle, des limites, du handoff, du ton et du format de restitution. Ne pas réintroduire de fichiers `profile-*.md` ou `profile.md` pour dupliquer ces consignes.
+- Loader : `backend/agents/registry.py` (mirror minimaliste de `backend/skills/registry.py`).
+- API : `GET /api/agents`, `GET /api/agents/{name}/{markdown,migration,eval-queries}` (voir `backend/api/routes/agents.py`).
+- Frontend : `frontend/src/agents/registry.ts` expose `useAgents()` + `agentIcon()`. `PerspectiveSelect` lit la liste dynamiquement (fallback aux 4 built-ins pendant le premier fetch). `AgentBadge` (logo + label tinté) est injecté pendant le streaming dans Assistant / Migration / Creator.
+- Rétro-compatibilité : les payloads `perspective: "functional"|"technical"|"support"|...` continuent de fonctionner. `_normalize_perspective` route via le registre puis tombe sur les constantes legacy de `ai_service.py` si le catalogue est indisponible.
+- Tests : `tests/test_agent_registry_integrity.py`, `tests/test_agent_routing.py` (auto-paramétré sur `eval_queries.json`), `tests/test_perspective_backward_compat.py`.
+
+Agents présents au moment de cette mise à jour : `support`, `business-analyst`, `architect`, `developer`.
+
 ## Frontend : règles de contribution
 
 - TypeScript strict : `npm run build` exécute `tsc -b` puis Vite.
@@ -134,7 +171,8 @@ Skills présents au moment de cette mise à jour : `attachment-handler`, `compar
 - Providers supportés : Claude, OpenAI/GitHub Models/Copilot, Gemini.
 - Les PDFs natifs sont gardés pour providers compatibles ; GitHub Models/Copilot passent par texte `pypdf`, puis images `pdf2image` si PDF scanné.
 - `install.sh` tente d'installer `poppler-utils`/`poppler` pour `pdf2image`; sans poppler, expliquer clairement la limitation.
-- Le contexte IA combine profil utilisateur, profil projet, localisation, complexité, release notes Odoo, sources locales, repo client, skills routés, données live et attachments.
+- Le contexte IA combine profil utilisateur, contexte projet, localisation, complexité, release notes Odoo, sources locales, repo client, mémo consultant routé, skills routés, données live et attachments.
+- Les fichiers éditables globaux utilisent des noms orientés usage : `consultant-memo.md` pour le référentiel métier Odoo, `creator-conventions.md` pour les règles Studio du Creator. Ne pas réintroduire `skills.md` ou `profile-creator.md` comme sources de contexte.
 - `userProfile.contextLanguage` prime sur `userProfile.language` pour les fichiers de contexte ; fallback `fr`.
 - Perspectives valides seulement : `support`, `business_analyst`, `architect`, `developer`. `creator` est un workflow, pas une perspective.
 - Si un prompt mentionne un SHA, pousser l'usage de `git_show_commit` plutôt que spéculer.

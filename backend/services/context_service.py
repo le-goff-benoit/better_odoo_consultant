@@ -31,19 +31,21 @@ class ContextTraceEvent(TypedDict, total=False):
 from ..core.context_constants import CONTEXT_BUDGET_CHARS as _CONTEXT_BUDGET_CHARS
 
 from .context_defaults import (
-    _PROFILE_DEFAULTS, _PROFILE_DEFAULTS_EN,
-    _SKILLS_MD, _SKILLS_MD_EN,
+    _CONSULTANT_MEMO_MD, _CONSULTANT_MEMO_MD_EN,
     _MEETING_MINUTE_MD, _MEETING_MINUTE_MD_EN,
     _MIGRATION_MD, _MIGRATION_MD_EN,
     _STUDIO_MD, _STUDIO_MD_EN,
     _CREATION_MD, _CREATION_MD_EN,
-    _PROFILE_CREATOR_MD, _PROFILE_CREATOR_MD_EN,
+    _CREATOR_CONVENTIONS_MD, _CREATOR_CONVENTIONS_MD_EN,
     _DEV_MD, _DEV_MD_EN,
     _VERSION_NOTES, _VERSION_NOTES_EN,
     _L10N_NOTES, _L10N_NOTES_EN,
 )
 from .output_renderer import DEFAULT_OUTPUT_RENDERER, OutputTemplateSelection
 from ..skills.registry import SKILL_DEFINITIONS, normalize_disabled_skill_names
+from ..agents import (
+    get_agent as _get_agent,
+)
 
 _CONTEXT_DIR = Path.home() / ".odoo-consultant" / "context"
 _SUPPORTED_LOCALES = {"fr", "en"}
@@ -86,13 +88,13 @@ _MIN_SKILL_SCORE = 25
 _ALLOWED_NAME = re.compile(r'^[\w\-\.]+\.md$')
 _HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$", re.MULTILINE)
 _CORE_SKILLS_HEADINGS = (
-    "Rôle de l'assistant",
+    "Rôle de ce mémo",
     "Mode d'emploi pour l'IA",
     "Règles d'or du consultant",
     "Contrat de réponse par défaut",
 )
 _CORE_SKILLS_HEADINGS_EN = (
-    "Assistant role",
+    "Memo role",
     "How the AI should use this file",
     "Consultant rules",
     "Default response contract",
@@ -147,14 +149,13 @@ _BOUNDARY_TOKENS = frozenset({
 
 _SECTION_TITLES = {
     "fr": {
-        "skills": "Compétences consultant",
+        "skills": "Mémo consultant Odoo",
         "meeting": "Modèle compte-rendu",
         "studio": "Projet avec Studio",
         "dev": "Projet avec dev custom",
         "version": "Notes de version Odoo {version}",
         "migration": "Méthodologie de migration",
         "creation": "Méthodologie de création Studio",
-        "profile": "Profil de réponse",
         "creator_profile": "Conventions Studio",
         "localization": "Localisation fiscale {country}",
         "creator_intent": "Spécificité de l'opération demandée",
@@ -162,14 +163,13 @@ _SECTION_TITLES = {
         "examples": "Exemples de tools en situation",
     },
     "en": {
-        "skills": "Consultant skills",
+        "skills": "Odoo consultant memo",
         "meeting": "Meeting minutes template",
         "studio": "Project with Studio",
         "dev": "Project with custom dev",
         "version": "Odoo {version} release notes",
         "migration": "Migration methodology",
         "creation": "Studio creation methodology",
-        "profile": "Response profile",
         "creator_profile": "Studio conventions",
         "localization": "Fiscal localization {country}",
         "creator_intent": "Operation-specific guidance",
@@ -190,18 +190,6 @@ _FISCAL_TERMS = (
     "qr-bill", "qr bill", "qr-facture", "bvr", "iso 20022", "paie", "payroll",
     "salaire", "déclaration", "declaration", "swissdec", "factur-x", "chorus",
 )
-
-# Map of perspective → markdown filename. Legacy aliases are mapped to their
-# closest new role so older clients (or stored prompts) still pick up a profile.
-_PROFILE_FILES = {
-    "support": "profile-support.md",
-    "business_analyst": "profile-business-analyst.md",
-    "architect": "profile-architect.md",
-    "developer": "profile-developer.md",
-    # legacy aliases
-    "functional": "profile-business-analyst.md",
-    "technical": "profile-developer.md",
-}
 
 _BA_LIKE = {"business_analyst", "functional"}
 
@@ -487,7 +475,7 @@ def list_files(locale: Optional[str] = None) -> list[dict]:
 
 
 # Mtime-aware cache for context files. A single chat turn calls read_file()
-# 4-6 times (skills + profile + studio + version notes ± migration), and every
+# 4-6 times (memo + Studio/dev + version notes ± migration), and every
 # turn re-reads from disk. The cache key is (path, mtime_ns), so any file edit
 # from the Settings page invalidates instantly without explicit busting.
 _READ_CACHE: dict[tuple[str, int], str] = {}
@@ -626,10 +614,10 @@ def _heading_for_locale(fr_heading: str, en_heading: str, locale: str) -> str:
     return en_heading if locale == "en" else fr_heading
 
 
-def _select_skills_context(prompt: str, perspective: Optional[str], locale: Optional[str] = None) -> str:
+def _select_consultant_memo_context(prompt: str, perspective: Optional[str], locale: Optional[str] = None) -> str:
     lang = normalize_locale(locale)
-    skills = read_file("skills.md", lang)
-    sections = _markdown_sections(skills)
+    memo = read_file("consultant-memo.md", lang)
+    sections = _markdown_sections(memo)
     by_heading = {heading: chunk for heading, chunk, _level in sections}
     selected: list[str] = []
 
@@ -1150,6 +1138,7 @@ def _select_skill_playbooks(
     creation: bool = False,
     disabled_tools: Optional[list[str]] = None,
     locale: Optional[str] = None,
+    perspective: Optional[str] = None,
 ) -> str:
     """Select short per-tool playbooks relevant to the current turn.
 
@@ -1191,6 +1180,8 @@ def _select_skill_playbooks(
                 if skill.name not in selected_skills:
                     selected_skills.append(skill.name)
                 return
+
+    _agent_def = _get_agent(perspective) if perspective else None
 
     # Mode-level defaults: tiny, high-value reminders for workflows where the
     # same mistakes are costly.
@@ -1270,6 +1261,37 @@ def _select_skill_playbooks(
         )):
             for name in ("repo_list_modules", "repo_search_code", "repo_read_file"):
                 add(name, 65, "custom-security-pattern")
+
+    # Agent-level preferences (applied after explicit and keyword scoring):
+    # the active response agent declares ``preferred_skills`` in its
+    # AGENT.md frontmatter. A small +20 boost is added ONLY to candidates
+    # whose existing score is below the threshold — the goal is to rescue
+    # weakly-matched, role-relevant skills, not to over-bias already-strong
+    # explicit invocations.
+    if _agent_def and _agent_def.preferred_skills:
+        for name in _agent_def.preferred_skills:
+            existing = route_candidates.get(name)
+            if existing is not None and existing["score"] >= _MIN_SKILL_SCORE:
+                continue
+            add(name, 20, f"agent-preferred:{_agent_def.name}")
+
+    # Symmetric −20 malus for skills the agent explicitly avoids. Applied
+    # only to candidates that exist (we never *introduce* a skill just to
+    # demote it) and never strong enough to flip an explicit invocation.
+    # Anything dropping below ``_MIN_SKILL_SCORE`` will be filtered by the
+    # downstream floor pass.
+    if _agent_def and _agent_def.avoided_skills:
+        for name in _agent_def.avoided_skills:
+            existing = route_candidates.get(name)
+            if existing is None:
+                continue
+            if _is_explicit_invocation_reason(existing["reason"]):
+                # Explicit user intent overrides agent preferences.
+                continue
+            existing["score"] -= 20
+            _append_route_reason(existing, f"agent-avoided:{_agent_def.name}")
+            if existing["score"] < _MIN_SKILL_SCORE:
+                existing["selected"] = False
 
     selected_skills = _prune_skill_routes(prompt_norm, selected_skills, route_candidates)
 
@@ -1631,6 +1653,7 @@ def load_context_for_prompt(
                 creation=creation,
                 disabled_tools=disabled_tools,
                 locale=locale,
+                perspective=perspective,
             )
         select_output_template_details(user_prompt or "", disabled_tools)
         _CONTEXT_CACHE.move_to_end(cache_key)
@@ -1702,17 +1725,16 @@ def _load_context_for_prompt_impl(
         for b in (priority_blocks or []) if b and b.strip()
     ]
     # Core-skill gating: the disabled list mixes tool and core skill names.
-    # Sub-contributors of the aggregator (release notes, skill dispatcher,
-    # perspective profile) honour their own flag and short-circuit cleanly.
+    # Sub-contributors of the aggregator (release notes, skill dispatcher)
+    # honour their own flag and short-circuit cleanly.
     _disabled_set = _canonical_disabled(disabled_tools)
-    _perspective_active = "runtime_perspective_router" not in _disabled_set
     _dispatcher_active = "runtime_skill_dispatcher" not in _disabled_set
     _release_notes_active = "runtime_release_notes_injector" not in _disabled_set
 
     sections = []
     _skills_title = titles["skills"]
     try:
-        _maybe_section(_skills_title, _select_skills_context(prompt, perspective, lang), sections)
+        _maybe_section(_skills_title, _select_consultant_memo_context(prompt, perspective, lang), sections)
     except FileNotFoundError:
         _skills_title = None  # type: ignore[assignment]
 
@@ -1723,6 +1745,7 @@ def _load_context_for_prompt_impl(
         creation=creation,
         disabled_tools=disabled_tools,
         locale=lang,
+        perspective=perspective,
     ) if _dispatcher_active else ""
     if not _dispatcher_active:
         _select_skill_playbooks._last_matched = []  # type: ignore[attr-defined]
@@ -1748,22 +1771,6 @@ def _load_context_for_prompt_impl(
     )
     if _examples_block:
         sections.append((titles.get("examples", "Exemples de tools en situation"), _examples_block))
-
-    # Role-specific profile file (support / BA / architect / developer).
-    # Treated as a core section so the role guidance is never crowded out.
-    # Skipped in Creator mode: the Creator profile (profile-creator.md, loaded
-    # below) is the locked authority — adding a second role profile underneath
-    # is both redundant and conceptually inconsistent with the locked badge.
-    _profile_title = None
-    if not creation and _perspective_active:
-        profile_filename = _PROFILE_FILES.get(perspective or "")
-        if profile_filename:
-            try:
-                _profile_content = read_file(profile_filename, lang)
-                _profile_title = titles["profile"]
-                sections.append((_profile_title, _profile_content))
-            except FileNotFoundError:
-                pass
 
     if not migration and _has_any(prompt, _MEETING_TERMS):
         try:
@@ -1847,11 +1854,11 @@ def _load_context_for_prompt_impl(
             sections.append((_creation_title, _creation_content))
         except FileNotFoundError:
             pass
-        # Studio conventions profile — editable by the consultant from
+        # Studio Creator conventions — editable by the consultant from
         # Settings, loaded as core so the Studio limits and naming rules
         # always reach the LLM in Creator mode.
         try:
-            _creator_profile_content = read_file("profile-creator.md", lang)
+            _creator_profile_content = read_file("creator-conventions.md", lang)
             _creator_profile_title = titles["creator_profile"]
             sections.append((_creator_profile_title, _creator_profile_content))
         except FileNotFoundError:
@@ -1865,14 +1872,12 @@ def _load_context_for_prompt_impl(
 
     if not sections and not blocks:
         return ""
-    # Skills, role profile and (in migration mode) the migration methodology are
+    # Skills and (in migration mode) the migration methodology are
     # core — injected first so they are never pushed out of the budget by
     # lower-priority content.
     core: set[str] = set()
     if _skills_title:
         core.add(_skills_title)
-    if _profile_title:
-        core.add(_profile_title)
     if _migration_title:
         core.add(_migration_title)
     for _title in _version_titles:
@@ -1909,8 +1914,8 @@ def _load_context_for_prompt_impl(
 def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
     lang = normalize_locale(locale)
     if lang == "en":
-        if name == "skills.md":
-            return _SKILLS_MD_EN
+        if name == "consultant-memo.md":
+            return _CONSULTANT_MEMO_MD_EN
         if name == "meeting-minute.md":
             return _MEETING_MINUTE_MD_EN
         if name == "migration.md":
@@ -1921,18 +1926,16 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
             return _DEV_MD_EN
         if name == "creation.md":
             return _CREATION_MD_EN
-        if name == "profile-creator.md":
-            return _PROFILE_CREATOR_MD_EN
-        if name in _PROFILE_DEFAULTS_EN:
-            return _PROFILE_DEFAULTS_EN[name]
+        if name == "creator-conventions.md":
+            return _CREATOR_CONVENTIONS_MD_EN
         m_en = re.match(r'^odoo-([\d\.]+)\.md$', name)
         if m_en:
             return _VERSION_NOTES_EN.get(m_en.group(1))
         m_l10n_en = _L10N_FILE_RE.match(name)
         if m_l10n_en:
             return _L10N_NOTES_EN.get(m_l10n_en.group(1))
-    if name == "skills.md":
-        return _SKILLS_MD
+    if name == "consultant-memo.md":
+        return _CONSULTANT_MEMO_MD
     if name == "meeting-minute.md":
         return _MEETING_MINUTE_MD
     if name == "migration.md":
@@ -1943,10 +1946,8 @@ def _default_content(name: str, locale: Optional[str] = None) -> Optional[str]:
         return _DEV_MD
     if name == "creation.md":
         return _CREATION_MD
-    if name == "profile-creator.md":
-        return _PROFILE_CREATOR_MD
-    if name in _PROFILE_DEFAULTS:
-        return _PROFILE_DEFAULTS[name]
+    if name == "creator-conventions.md":
+        return _CREATOR_CONVENTIONS_MD
     m = re.match(r'^odoo-([\d\.]+)\.md$', name)
     if m:
         return _VERSION_NOTES.get(m.group(1))

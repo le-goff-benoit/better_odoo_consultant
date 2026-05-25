@@ -12,8 +12,8 @@ from backend.services.technical_complexity_service import (
 )
 
 
-def test_default_skills_context_uses_dynamic_date_placeholder():
-    skills = read_file("skills.md")
+def test_default_consultant_memo_uses_dynamic_date_placeholder():
+    skills = read_file("consultant-memo.md")
 
     assert '"2025-01-01"' not in skills
     assert "<date_du_jour>" in skills
@@ -26,18 +26,18 @@ def test_perspective_blocks_have_distinct_response_contracts():
     architect = _perspective_block("architect")
     support = _perspective_block("support")
 
-    assert "BUSINESS ANALYST" in ba
-    assert "Point à valider techniquement" in ba
-    assert "Snippets de code" in ba
+    assert "Application Manager / Business Analyst Odoo" in ba
+    assert "points de validation" in ba
+    assert "Pas de snippet de code" in ba
 
-    assert "DÉVELOPPEUR" in developer
-    assert "fichier, ligne, modèle, champ" in developer
-    assert "Impact fonctionnel" in developer
+    assert "développeur Odoo senior" in developer
+    assert "chemin + numéro de ligne" in developer
+    assert "Impact migration / upgrade" in developer
 
-    assert "ARCHITECTE" in architect
-    assert "Décision recommandée" in architect
+    assert "architecte Odoo / tech lead" in architect
+    assert "recommandation finale" in architect
 
-    assert "SUPPORT" in support
+    assert "consultant support Odoo expérimenté" in support
     assert "Diagnostic probable" in support
 
     # Legacy aliases map to the right roles.
@@ -89,7 +89,7 @@ def test_context_router_treats_new_ba_perspective_as_functional():
 
     assert "Modèles transversaux essentiels" in context
     assert "Bonnes pratiques d'analyse client" in context
-    assert "Profil Business Analyst" in context
+    assert "Profil Business Analyst" not in context
 
 
 def test_context_router_avoids_short_keyword_false_positives():
@@ -194,7 +194,7 @@ def test_context_router_supports_english_context_defaults():
         locale="en",
     )
 
-    assert "Consultant skills" in context
+    assert "Odoo consultant memo" in context
     assert "Accounting & Finance" in context
     assert "Advanced diagnostic patterns" in context
     assert "Notes de version" not in context
@@ -242,7 +242,7 @@ def test_priority_blocks_are_injected_before_routed_context():
 
     assert "Bloc prioritaire test" in context
     # Priority blocks come before the routed skills section.
-    assert context.index("Bloc prioritaire test") < context.index("Compétences consultant")
+    assert context.index("Bloc prioritaire test") < context.index("Mémo consultant Odoo")
 
 
 def test_priority_blocks_returned_even_without_routed_sections():
@@ -653,7 +653,7 @@ def test_build_system_general_returns_tuple_with_stable_variable_split():
     stable, variable = build_system_general(
         "18.0",
         source_path="/tmp/sources/18.0",
-        context_md="## Compétences consultant\nDummy routed context",
+        context_md="## Mémo consultant Odoo\nDummy routed context",
         perspective="developer",
         response_language="fr",
         user_ctx="Consultant : Benoit",
@@ -665,8 +665,8 @@ def test_build_system_general_returns_tuple_with_stable_variable_split():
     assert "source_search_odoo" in stable
     # Variable part: language directive, perspective block, routed context.
     assert "Réponds toujours en français" in variable
-    assert "DÉVELOPPEUR" in variable
-    assert "Compétences consultant" in variable
+    assert "développeur Odoo senior" in variable
+    assert "Mémo consultant Odoo" in variable
     # Sources instructions must NOT leak into the variable half.
     assert "source_search_odoo" not in variable
 
@@ -684,12 +684,13 @@ def test_build_system_migration_returns_tuple_with_target_path_in_stable():
     assert "17.0" in stable and "18.0" in stable
     assert "/tmp/s/17.0" in stable
     assert "/tmp/s/18.0" in stable
-    assert "ARCHITECTE" in variable
+    assert "architecte Odoo / tech lead" in variable
     # Migration-specific addon should be present in architect mode.
     assert "Spécifique migration" in variable
     # Version-only migration (no profile) must not invent an instance block.
     assert "Instance source connectée" not in stable
     assert "Contexte projet" not in stable
+    assert "<source_context>" in stable
 
 
 def test_build_system_migration_injects_project_when_profile_set():
@@ -712,6 +713,7 @@ def test_build_system_migration_injects_project_when_profile_set():
     assert "Instance source connectée" in stable
     assert "acme.odoo.com" in stable
     assert "Contexte projet" in stable
+    assert "<project_context>" in stable
     assert "double validation" in stable
     assert "administrateur système" in stable
     # Live-instance method step exposes Studio inspection.
@@ -889,7 +891,7 @@ def test_context_assembly_order_is_stable_for_business_question():
     )
 
     expected_order = [
-        "Compétences consultant",
+        "Mémo consultant Odoo",
         "Comptabilité & Finance",
         "Localisation fiscale CH",
     ]
@@ -914,7 +916,7 @@ def test_context_assembly_priority_blocks_always_lead():
     )
 
     assert context.find("URGENT") >= 0
-    assert context.find("URGENT") < context.find("Compétences consultant")
+    assert context.find("URGENT") < context.find("Mémo consultant Odoo")
 
 
 def test_skill_playbook_is_routed_for_kpi_question():
