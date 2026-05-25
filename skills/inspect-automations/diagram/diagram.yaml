@@ -1,0 +1,24 @@
+inputs:
+  - Connexion Odoo active
+  - Type d'automatisme, module, modèle et filtre actif
+steps:
+  - Lire les modèles `ir.cron`, `base.automation`, `ir.actions.server`, `mail.template`
+  - Joindre `ir.model.data` pour l'origine module
+  - Tronquer les champs code ou HTML volumineux
+outputs:
+  - Sections par type d'automatisme
+  - Résumé de volumes
+  - Records prêts à transformer en tableau Markdown
+inputs_en:
+  - Active Odoo connection
+  - Automation type, module, model and active filter
+steps_en:
+  - Read `ir.cron`, `base.automation`, `ir.actions.server`, `mail.template`
+  - Join `ir.model.data` for module origin
+  - Truncate bulky code or HTML fields
+outputs_en:
+  - Sections by automation type
+  - Count summary
+  - Records ready for Markdown table rendering
+notes: Utilise la pagination bornée standard 500/5000.
+notes_en: Uses the standard bounded 500/5000 pagination.

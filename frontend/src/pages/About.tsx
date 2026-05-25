@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.93.1',
+    version: '0.94.0',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skills — 4 nouveaux skills IA self-contained : `compare_odoo_versions` (diff statique modèle/vue/module entre versions Odoo), `inspect_automations` (audit crons, base.automation, actions serveur et templates mail), `inspect_module_graph` (dépendances manifest + héritages modèles) et `generate_diagram` (diagrammes Mermaid flow/class/inheritance/module)',
+      'Routing — bundles et patterns dédiés pour comparaison de versions, automatismes, graphes de module et diagrammes, avec pruning `automation-focus`, `diagram-focus` et `module-graph-focus` pour éviter les fuites vers query/fields/view/read-file',
+      'Markdown — les fences `mermaid` sont rendues visuellement via un composant `MermaidBlock` lazy-loaded, avec fallback code brut en cas d\'erreur et bouton d\'agrandissement en modal',
+      'Frontend — ajout de la dépendance `mermaid` en chargement dynamique : le rendu diagramme est disponible sans l\'inclure dans le bundle initial principal',
+      'Qualité — couverture eval queries complète portée à 32/32 skills et dataset qualité routing enrichi avec version diff, automation audit, module graph et diagram generation',
+    ],
+  },
+  {
+    version: '0.93.1',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'UI Settings — onglets du détail de skill : suppression du suffixe `· N` (compteurs) sur Références / Exemples / Tests routing / Historique d\'utilisation. Les libellés s\'affichent seuls, l\'info de volume était bruyante et peu actionnable',
       'Skills — comblement des 2 vrais trous documentaires : `odoo_query_records` reçoit une référence lazy `query_pitfalls.md` (domaines polonais, `active_test`, contexte `lang`/`tz`/`company`/`bin_size`, pagination 500/5000, modèles courants `account.move` / `sale.order` / `stock.move`, erreurs XML-RPC fréquentes)',

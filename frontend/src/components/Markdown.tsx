@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Pencil, Send, X } from 'lucide-react'
 import { t } from '../theme'
+import MermaidBlock from './MermaidBlock'
 
 // Lets a parent renderer hand the Markdown subtree a callback so the
 // MarkdownTable "edit with AI" button can dispatch a contextualised prompt
@@ -345,13 +346,19 @@ export default function Markdown({ text }: { text: string }) {
     const line = lines[i]
 
     if (line.trimStart().startsWith('```')) {
+      const fence = line.trimStart()
+      const language = fence.slice(3).trim().split(/\s+/)[0]?.toLowerCase()
       const codeLines: string[] = []
       i++
       while (i < lines.length && !lines[i].trimStart().startsWith('```')) { codeLines.push(lines[i]); i++ }
-      result.push(
-        <pre key={i} style={{ background: 'var(--code-bg)', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
-          <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{codeLines.join('\n')}</code>
-        </pre>
+      const code = codeLines.join('\n')
+      result.push(language === 'mermaid'
+        ? <MermaidBlock key={i} code={code} />
+        : (
+          <pre key={i} style={{ background: 'var(--code-bg)', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
+            <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{code}</code>
+          </pre>
+        )
       )
       i++; continue
     }

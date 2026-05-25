@@ -140,5 +140,34 @@
     "category": "greeting",
     "expected_skills": [],
     "criteria": ["réponse conversationnelle", "aucun tool call inutile"]
+  },
+  {
+    "id": "q21-version-diff",
+    "prompt": "Qu'est-ce qui change sur sale.order entre Odoo 17 et 18 ?",
+    "category": "version_compare",
+    "expected_skills": ["compare_odoo_versions"],
+    "mode": "migration",
+    "criteria": ["compare deux versions locales", "ne lit pas seulement un fichier cible"]
+  },
+  {
+    "id": "q22-automation-audit",
+    "prompt": "Liste les crons actifs et actions serveur du module CRM",
+    "category": "automation_audit",
+    "expected_skills": ["inspect_automations"],
+    "criteria": ["mentionne ir.cron ou ir.actions.server", "ne fait pas une liste générique de records"]
+  },
+  {
+    "id": "q23-module-graph",
+    "prompt": "Graphe de dépendances du module sale_management",
+    "category": "module_graph",
+    "expected_skills": ["inspect_module_graph"],
+    "criteria": ["analyse manifest depends", "peut produire du Mermaid"]
+  },
+  {
+    "id": "q24-generate-diagram",
+    "prompt": "Dessine un flowchart Mermaid du workflow de validation des congés",
+    "category": "diagram",
+    "expected_skills": ["generate_diagram"],
+    "criteria": ["répond avec un bloc mermaid", "limite le diagramme aux étapes utiles"]
   }
 ]

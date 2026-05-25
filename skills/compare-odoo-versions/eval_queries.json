@@ -1,0 +1,42 @@
+[
+  {
+    "query": "Qu'est-ce qui change sur model:sale.order entre Odoo 17.0 et 18.0 ?",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "compare_odoo_versions",
+    "modes": ["migration"]
+  },
+  {
+    "query": "Compare le module hr_holidays entre 17.0 et 18.0 côté Enterprise",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "compare_odoo_versions",
+    "modes": ["assistant", "migration"]
+  },
+  {
+    "query": "Fais le diff de la vue sale.view_order_form entre Odoo 18 et 19",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "compare_odoo_versions",
+    "modes": ["migration"]
+  },
+  {
+    "query": "Lis le fichier addons/sale/models/sale_order.py dans les sources Odoo 18",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "source_read_odoo_file",
+    "notes": "Lecture ciblée, pas comparaison entre versions."
+  },
+  {
+    "query": "Cherche action_confirm dans la version cible de migration",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "migration_search_target_source"
+  },
+  {
+    "query": "Montre les factures migrées qui ont changé de statut",
+    "category": "negative",
+    "should_trigger": false,
+    "expected_skill": "odoo_query_records"
+  }
+]

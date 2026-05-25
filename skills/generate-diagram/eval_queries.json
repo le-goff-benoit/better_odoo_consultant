@@ -1,0 +1,33 @@
+[
+  {
+    "query": "Dessine le diagramme de classe de sale.order",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "generate_diagram"
+  },
+  {
+    "query": "Montre l'arbre d'héritage de res.partner en Mermaid",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "generate_diagram"
+  },
+  {
+    "query": "Fais-moi un flowchart du workflow de validation des congés",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "generate_diagram",
+    "modes": ["assistant", "creator"]
+  },
+  {
+    "query": "Liste les champs de sale.order avec leur type",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "odoo_inspect_fields"
+  },
+  {
+    "query": "Inspecte la vue formulaire de sale.order et ses attrs readonly",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "odoo_inspect_view"
+  }
+]

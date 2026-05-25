@@ -1,0 +1,26 @@
+inputs:
+  - Type de diagramme
+  - Cible, scope et limite de nœuds
+  - Description libre ou sources locales/live
+steps:
+  - Collecter les données minimales nécessaires
+  - Construire une syntaxe Mermaid déterministe
+  - Retourner résumé, nombre de nœuds et source Mermaid
+outputs:
+  - Bloc Mermaid
+  - Résumé et périmètre
+  - Données sources quand disponibles
+inputs_en:
+  - Diagram type
+  - Target, scope and node cap
+  - Free description or local/live sources
+steps_en:
+  - Collect minimal required data
+  - Build deterministic Mermaid syntax
+  - Return summary, node count and Mermaid source
+outputs_en:
+  - Mermaid block
+  - Summary and scope
+  - Source data when available
+notes: Le frontend rend les fences `mermaid` via lazy-load.
+notes_en: Frontend renders `mermaid` fences with lazy loading.

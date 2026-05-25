@@ -1535,6 +1535,81 @@ textarea:focus-visible {
   background: var(--brand-10);
 }
 
+.markdown-table-action-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.mermaid-block {
+  position: relative;
+  margin: 10px 0;
+  border: var(--neo-border-w) solid var(--th-border);
+  border-radius: var(--radius, 8px);
+  background: var(--th-bg-card);
+  overflow: hidden;
+}
+
+.mermaid-block-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: var(--neo-border-w) solid var(--th-border);
+  background: var(--th-bg-muted);
+}
+
+.mermaid-block-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--th-muted);
+  text-transform: uppercase;
+}
+
+.mermaid-render {
+  padding: 14px;
+  overflow: auto;
+}
+
+.mermaid-render svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.mermaid-render-large {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+}
+
+.mermaid-placeholder,
+.mermaid-error {
+  padding: 14px;
+  color: var(--th-muted);
+  font-size: 12px;
+}
+
+.mermaid-error pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--code-bg);
+  color: var(--code-fg);
+}
+
+.mermaid-modal {
+  max-width: min(1200px, calc(100vw - 40px));
+  width: 100%;
+  max-height: calc(100vh - 40px);
+}
+
+.mermaid-modal-body {
+  padding: 0;
+}
+
 /* « Propositions d'action » : chip strip displayed below an AI response when
    the model returned a « Prochaines actions / Action items / Todo » list.
    Mirrors the composer suggestion chips so the user sees ONE consistent

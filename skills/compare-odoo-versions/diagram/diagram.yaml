@@ -1,0 +1,26 @@
+inputs:
+  - "Cible `model:*`, `view:*` ou `module:*`"
+  - Version source et version cible locales
+  - Scope Community ou Enterprise
+steps:
+  - "Résoudre les dossiers sous `~/.odoo-consultant/sources`"
+  - Parser AST Python, XML ou manifest selon la cible
+  - Calculer ajouts/suppressions et preuves de chemins
+outputs:
+  - Diff structuré JSON
+  - Résumé migration en français
+  - Listes de champs, méthodes, dépendances ou fichiers modifiés
+inputs_en:
+  - "`model:*`, `view:*` or `module:*` target"
+  - Local source and target versions
+  - Community or Enterprise scope
+steps_en:
+  - "Resolve folders under `~/.odoo-consultant/sources`"
+  - Parse Python AST, XML or manifest according to target
+  - Compute additions/removals and path evidence
+outputs_en:
+  - Structured JSON diff
+  - French migration summary
+  - Changed fields, methods, dependencies or files
+notes: Comparaison statique bornée, sans appel réseau.
+notes_en: Bounded static comparison, no network call.

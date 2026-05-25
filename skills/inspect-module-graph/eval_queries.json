@@ -1,0 +1,32 @@
+[
+  {
+    "query": "Graphe de dépendances de sale_management avec profondeur 2",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "inspect_module_graph"
+  },
+  {
+    "query": "Qui hérite de res.partner dans le module CRM ?",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "inspect_module_graph"
+  },
+  {
+    "query": "Montre le module tree du module custom vertical_transport dans le repo projet",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "inspect_module_graph"
+  },
+  {
+    "query": "Lis le manifest du module sale dans les sources Odoo",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "source_read_odoo_file"
+  },
+  {
+    "query": "Liste tous les modules installables du dépôt client",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "repo_list_modules"
+  }
+]

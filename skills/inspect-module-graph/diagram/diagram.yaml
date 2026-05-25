@@ -1,0 +1,26 @@
+inputs:
+  - Nom de module
+  - Scope sources Odoo, Enterprise ou projet
+  - Profondeur et option héritage
+steps:
+  - Indexer les manifests disponibles
+  - Parcourir récursivement `depends`
+  - Parser les classes Python pour `_name`, `_inherit`, `_inherits`
+outputs:
+  - Nœuds et arcs de dépendances
+  - Héritages modèles
+  - Bloc Mermaid
+inputs_en:
+  - Module technical name
+  - Odoo, Enterprise or project scope
+  - Depth and inheritance option
+steps_en:
+  - Index available manifests
+  - Walk `depends` recursively
+  - Parse Python classes for `_name`, `_inherit`, `_inherits`
+outputs_en:
+  - Dependency nodes and edges
+  - Model inheritance
+  - Mermaid block
+notes: Le handler borne la profondeur à 6.
+notes_en: Handler caps depth at 6.

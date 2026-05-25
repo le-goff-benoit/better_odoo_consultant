@@ -1,0 +1,33 @@
+[
+  {
+    "query": "Quels crons actifs tournent sur sale.order ?",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "inspect_automations"
+  },
+  {
+    "query": "Affiche les server actions du module CRM avec leur modèle cible",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "inspect_automations"
+  },
+  {
+    "query": "Audit des base.automation avant migration sur account.move",
+    "category": "positive",
+    "should_trigger": true,
+    "expected_skill": "inspect_automations",
+    "modes": ["migration"]
+  },
+  {
+    "query": "Liste les utilisateurs administrateurs actifs",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "odoo_query_records"
+  },
+  {
+    "query": "Inventorie toutes les personnalisations Studio de cette base",
+    "category": "near_miss",
+    "should_trigger": false,
+    "expected_skill": "odoo_inspect_studio"
+  }
+]

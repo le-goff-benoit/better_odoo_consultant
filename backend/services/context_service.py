@@ -141,6 +141,7 @@ _BOUNDARY_TOKENS = frozenset({
     "hr", "vat", "mrp", "tax", "seo", "acl",
     "custom", "right", "group", "groupe", "groupes", "groups",
     "read", "view", "vue", "orm",
+    "cron", "flow", "flux", "graphe", "graph",
 })
 
 _SECTION_TITLES = {
@@ -245,6 +246,23 @@ _SKILL_INTENT_BUNDLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] 
         "automatisation", "automation", "base.automation", "action serveur",
         "server action", "modèle custom", "modele custom", "champ custom",
     ), ("odoo_inspect_studio", "odoo_inspect_fields", "odoo_inspect_view")),
+    ("automation_audit", (
+        "cron", "crons", "ir.cron", "automation", "automatisation",
+        "automatisations", "base.automation", "automated action",
+        "action serveur", "actions serveur", "server action",
+        "ir.actions.server", "mail template", "template mail",
+    ), ("inspect_automations",)),
+    ("diagram", (
+        "diagramme", "diagram", "schéma visuel", "flowchart",
+        "class diagram", "mermaid", "dessine", "dessiner", "draw",
+        "visualise", "visualize", "show graph", "montre le graphe",
+    ), ("generate_diagram",)),
+    ("module_graph", (
+        "graphe de dépendances", "graphe de dependances", "dependency graph",
+        "module graph", "module tree", "manifest depends",
+        "dépendances module", "dependances module", "qui hérite de",
+        "who inherits", "héritage module", "heritage module",
+    ), ("inspect_module_graph", "generate_diagram")),
     ("odoo_source", (
         "source odoo", "sources odoo", "standard odoo", "code odoo", "méthode", "methode",
         "method", "class", "_name", "_inherit", "orm", "api.", "@api",
@@ -260,6 +278,11 @@ _SKILL_INTENT_BUNDLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] 
         "compatibilité", "compatibilite", "renommé", "renomme", "supprimé",
         "supprime", "deprecated", "dépréci",
     ), ("odoo_inspect_modules", "odoo_inspect_studio", "repo_list_modules", "migration_search_target_source", "migration_read_target_file")),
+    ("version_compare", (
+        "comparer versions", "compare versions", "diff version",
+        "changement entre versions", "changements entre versions",
+        "change between", "what changed", "entre 17 et 18", "entre 18 et 19",
+    ), ("compare_odoo_versions",)),
     ("volume", (
         "volumétrie", "volumetrie", "loc", "lignes de code", "lines of code",
         "taille", "size", "effort", "combien de lignes",
@@ -772,6 +795,38 @@ def _prune_skill_routes(
             for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
                 deselect(name, "pruned:security-focus")
 
+    automation_terms = (
+        "cron", "crons", "ir.cron", "automation", "automatisation",
+        "automatisations", "base.automation", "automated action",
+        "action serveur", "actions serveur", "server action",
+        "ir.actions.server", "mail template", "template mail",
+    )
+    if selected("inspect_automations") and _has_any(prompt_norm, automation_terms):
+        for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
+            deselect(name, "pruned:automation-focus")
+        if lacks_any(("studio", "x_studio", "personnalisation", "customization", "customisation")):
+            deselect("odoo_inspect_studio", "pruned:automation-focus")
+
+    diagram_terms = (
+        "diagramme", "diagram", "schéma visuel", "flowchart",
+        "class diagram", "mermaid", "dessine", "dessiner", "draw",
+        "visualise", "visualize", "show graph", "montre le graphe",
+        "arbre d'héritage", "arbre heritage",
+    )
+    if selected("generate_diagram") and _has_any(prompt_norm, diagram_terms):
+        for name in ("odoo_inspect_view", "odoo_inspect_fields", "odoo_query_records", "odoo_count_records", "odoo_aggregate_records"):
+            deselect(name, "pruned:diagram-focus")
+
+    module_graph_terms = (
+        "graphe de dépendances", "graphe de dependances", "dependency graph",
+        "module graph", "module tree", "manifest depends",
+        "dépendances module", "dependances module", "qui hérite de", "who inherits",
+    )
+    if selected("inspect_module_graph") and _has_any(prompt_norm, module_graph_terms):
+        if lacks_any(("lis", "lire", "read the file", "ouvre", "open the file")):
+            for name in ("source_read_odoo_file", "repo_read_file", "repo_list_modules"):
+                deselect(name, "pruned:module-graph-focus")
+
     # Count-only intent dominates: when the user explicitly asks "combien"
     # / "how many", they want the number, not the rows. ``query_records``
     # would still match on business nouns ("factures", "commandes") and pull
@@ -1142,6 +1197,17 @@ def _select_skill_playbooks(
         prompt_norm, ("cible", "target", "version cible", "target version", "v18", "v19", "odoo 18", "odoo 19")
     ):
         add("migration_read_target_file", 75, "migration-compare-pattern")
+    if _has_any(prompt_norm, ("diff version", "compare versions", "comparer versions", "what changed", "change between", "changement entre versions")) or (
+        _has_any(prompt_norm, ("compare", "comparer", "diff", "qu'est-ce qui change", "what changes"))
+        and _has_any(prompt_norm, ("entre", "between", "17.0", "18.0", "19.0", "odoo 17", "odoo 18", "odoo 19"))
+    ):
+        add("compare_odoo_versions", 80, "compare-version-pattern")
+    if _has_any(prompt_norm, ("diagramme", "diagram", "schéma visuel", "flowchart", "class diagram", "mermaid", "dessine", "draw")):
+        add("generate_diagram", 80, "diagram-pattern")
+    if _has_any(prompt_norm, ("graphe de dépendances", "graphe de dependances", "dependency graph", "module graph", "module tree", "manifest depends")):
+        add("inspect_module_graph", 80, "module-graph-pattern")
+    if _has_any(prompt_norm, ("cron", "ir.cron", "base.automation", "action serveur", "server action", "ir.actions.server", "mail template", "template mail")):
+        add("inspect_automations", 80, "automation-pattern")
     if _has_any(prompt_norm, ("kpi", "par mois", "par statut", "read_group", "chiffre d'affaires", "ca par")):
         add("odoo_aggregate_records", 75, "kpi-pattern")
     if _has_any(prompt_norm, (

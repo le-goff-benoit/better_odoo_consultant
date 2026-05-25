@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import ActionProposals from './ActionProposals'
 import Markdown, { extractActionItems, parseMarkdownTable, splitMarkdownTableRow } from './Markdown'
 
+vi.mock('./MermaidBlock', () => ({
+  default: ({ code }: { code: string }) => <div data-testid="mermaid-block">{code}</div>,
+}))
+
 describe('Markdown table parsing', () => {
   it('keeps empty cells and escaped pipes', () => {
     expect(splitMarkdownTableRow('| Module | Note | Empty |')).toEqual(['Module', 'Note', 'Empty'])
@@ -39,6 +43,19 @@ describe('Markdown table parsing', () => {
     expect(container.querySelectorAll('table')).toHaveLength(1)
     expect(container.querySelector('strong')?.textContent).toBe('OK')
     expect(container.querySelector('code')?.textContent).toBe('sale.order')
+  })
+
+  it('renders Mermaid fences with MermaidBlock', () => {
+    render(
+      <Markdown text={[
+        '```mermaid',
+        'flowchart TD',
+        '  A --> B',
+        '```',
+      ].join('\n')} />,
+    )
+
+    expect(screen.getByTestId('mermaid-block').textContent).toContain('flowchart TD')
   })
 
   it('extracts action items from next-action and next-step headings', () => {

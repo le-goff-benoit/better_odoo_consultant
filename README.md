@@ -6,7 +6,7 @@ Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sour
 
 > **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
 >
-> **Version actuelle :** `0.93.1` — UI Settings : suppression des compteurs `· N` sur les onglets du détail de skill ; comblement des 2 vrais trous documentaires (références lazy `query_pitfalls.md` pour `odoo_query_records`, `module_taxonomy.md` pour `odoo_inspect_modules`). Voir le changelog complet dans la page **À propos** de l'app.
+> **Version actuelle :** `0.94.0` — 4 nouveaux skills IA (`compare_odoo_versions`, `inspect_automations`, `inspect_module_graph`, `generate_diagram`) et rendu Mermaid des blocs Markdown pour visualiser migrations, automatismes et architectures module. Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 
@@ -143,7 +143,7 @@ L'effet utilisateur : l'IA cite des chemins de fichiers exacts, lit le vrai code
 
 ## Architecture skills IA
 
-L'app fonctionne avec **28 skills self-contained** sous `skills/<slug>/`, chacun structuré ainsi :
+L'app fonctionne avec **32 skills self-contained** sous `skills/<slug>/`, chacun structuré ainsi :
 
 ```
 skills/<slug>/
@@ -161,9 +161,9 @@ skills/<slug>/
 
 | Famille | Skills | Rôle |
 |---|---|---|
-| **Live Odoo** (`live`) | `odoo-query-records`, `odoo-count-records`, `odoo-aggregate-records`, `odoo-inspect-fields`, `odoo-inspect-modules`, `odoo-inspect-navigation`, `odoo-inspect-report`, `odoo-inspect-security`, `odoo-inspect-studio`, `odoo-inspect-view` | Lecture XML-RPC bornée, schema, KPI, vues assemblées, droits |
-| **Source standard** (`src`) | `source-search-odoo`, `source-read-odoo-file`, `source-show-commit` | Grep / read / git show sur Odoo Community + Enterprise local |
-| **Dépôt client** (`repo`) | `repo-search-code`, `repo-read-file`, `repo-list-modules`, `repo-count-source-lines` | Idem mais sur le dépôt custom cloné |
+| **Live Odoo** (`live`) | `odoo-query-records`, `odoo-count-records`, `odoo-aggregate-records`, `odoo-inspect-fields`, `odoo-inspect-modules`, `odoo-inspect-navigation`, `odoo-inspect-report`, `odoo-inspect-security`, `odoo-inspect-studio`, `odoo-inspect-view`, `inspect-automations` | Lecture XML-RPC bornée, schema, KPI, vues assemblées, droits, automatismes serveur |
+| **Source standard** (`src`) | `source-search-odoo`, `source-read-odoo-file`, `source-show-commit`, `compare-odoo-versions`, `generate-diagram` | Grep / read / git show sur Odoo Community + Enterprise local, diff de versions, diagrammes Mermaid |
+| **Dépôt client** (`repo`) | `repo-search-code`, `repo-read-file`, `repo-list-modules`, `repo-count-source-lines`, `inspect-module-graph` | Idem mais sur le dépôt custom cloné, graphes manifest/héritage |
 | **Migration** (`target`) | `migration-search-target-source`, `migration-read-target-file` | Sources de la version cible pour comparaison source → cible |
 | **Output** | `output-report-writer` | Livrables structurés : revue technique, plan de migration, email client, cahier des charges |
 | **Multimodal** | `runtime-attachment-handler` | PDF (pypdf → pdf2image), images, comparaison de documents, routage provider |
@@ -185,14 +185,14 @@ Le `PolicyEngine` (`backend/services/policy_engine.py`) **enforce vraiment** ces
 
 ### Tests régressifs
 
-Toute modification de skill (description, keywords, règle de routage) est protégée par 592 tests :
+Toute modification de skill (description, keywords, règle de routage) est protégée par les suites régressives backend et frontend :
 
 | Suite | Couverture |
 |---|---|
 | `tests/test_skill_registry_integrity.py` | découverte, parsing manifest, aliases legacy |
 | `tests/test_skill_quality.py` | descriptions ≤ 1024 chars, pas de préfixe vague, permissions valides |
 | `tests/test_skill_path_traversal.py` | défense `../`, NUL injection, symlinks d'évasion |
-| `tests/test_trigger_routing.py` | 70 cas paramétrés sur les `eval_queries.json` de 10 skills à overlap |
+| `tests/test_trigger_routing.py` | cas paramétrés sur les `eval_queries.json` de tous les skills |
 | `tests/test_routing_provider_parity.py` | invariant : routing identique Claude / OpenAI / Gemini |
 | `tests/test_context_budget_overflow.py` | budget 32 k chars verrouillé bout-en-bout (hard cap 36 k) |
 | `tests/test_auto_load_references.py` | les 12 références auto-chargées paramétrées |
@@ -316,11 +316,11 @@ better_odoo_consultant/
 │       ├── api/client.ts          # wrapper axios (1 endpoint = 1 fonction)
 │       ├── utils/aiContext.ts     # extraction action items
 │       └── theme.css              # design system (CSS variables, neo-retro)
-├── skills/                        # 28 dossiers self-contained (voir section dédiée)
+├── skills/                        # 32 dossiers self-contained (voir section dédiée)
 ├── scripts/
 │   ├── install.sh                 # bootstrap complet
 │   └── start.sh                   # lancement local
-├── tests/                         # 592 tests pytest
+├── tests/                         # tests pytest backend/services/skills/routes
 └── docs/                          # notes techniques / audits
 ```
 
@@ -340,7 +340,7 @@ npm run dev
 ### Tests
 
 ```bash
-# Suite complète (592 tests, ~4 s)
+# Suite complète
 source .venv/bin/activate
 pytest -q
 

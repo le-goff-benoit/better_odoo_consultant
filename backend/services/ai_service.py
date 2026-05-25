@@ -317,6 +317,74 @@ _TOOL_INSPECT_REPORT = {
     ),
 }
 
+_TOOL_COMPARE_VERSIONS = {
+    "name": "compare_odoo_versions",
+    "description": (
+        "Comparer statiquement deux versions Odoo locales pour un modèle, une vue XML ou un module. "
+        "Utilise cet outil pour un cadrage migration quand l'utilisateur demande ce qui change entre versions "
+        "(ex 17.0 vers 18.0). Paramètres : target ('model:sale.order', 'view:xml_id', 'module:sale'), "
+        "from_version, to_version, scope ('odoo' ou 'enterprise')."
+    ),
+}
+
+_TOOL_INSPECT_AUTOMATIONS = {
+    "name": "inspect_automations",
+    "description": (
+        "Auditer les automatismes serveur de l'instance connectée : ir.cron, base.automation, "
+        "ir.actions.server et mail.template. Utilise cet outil pour lister crons, actions serveur, "
+        "automated actions et templates mail, avec filtres module, modèle et actif. Paramètres : "
+        "kind ('cron','automation','server_action','mail_template','all'), module, model, active_only."
+    ),
+}
+
+_TOOL_INSPECT_MODULE_GRAPH = {
+    "name": "inspect_module_graph",
+    "description": (
+        "Construire le graphe d'architecture d'un module Odoo : dépendances manifest depends, cycles, "
+        "classes modèles et héritages _inherit/_inherits, avec sortie Mermaid. Paramètres : module, "
+        "scope ('odoo','enterprise','project'), depth, include_inheritance."
+    ),
+}
+
+_TOOL_GENERATE_DIAGRAM = {
+    "name": "generate_diagram",
+    "description": (
+        "Générer un diagramme Mermaid affichable dans la réponse : flowchart, classDiagram, héritage "
+        "de modèle, héritage de vue live ou graphe de module. Utilise cet outil quand l'utilisateur "
+        "demande de dessiner, visualiser, montrer un schéma, flowchart ou graphe. Paramètres : kind, "
+        "target, scope, description, max_nodes."
+    ),
+}
+
+_COMPARE_VERSION_PROPS = {
+    "target": {"type": "string", "description": "model:sale.order, view:xml_id ou module:sale"},
+    "from_version": {"type": "string", "description": "Version source locale, ex 17.0"},
+    "to_version": {"type": "string", "description": "Version cible locale, ex 18.0"},
+    "scope": {"type": "string", "enum": ["odoo", "enterprise"], "default": "odoo"},
+}
+
+_AUTOMATION_PROPS = {
+    "kind": {"type": "string", "enum": ["cron", "automation", "server_action", "mail_template", "all"], "default": "all"},
+    "module": {"type": "string", "default": ""},
+    "model": {"type": "string", "default": ""},
+    "active_only": {"type": "boolean", "default": True},
+}
+
+_MODULE_GRAPH_PROPS = {
+    "module": {"type": "string"},
+    "scope": {"type": "string", "enum": ["odoo", "enterprise", "project"], "default": "odoo"},
+    "depth": {"type": "integer", "default": 2},
+    "include_inheritance": {"type": "boolean", "default": True},
+}
+
+_DIAGRAM_PROPS = {
+    "kind": {"type": "string", "enum": ["flow", "class", "model-inheritance", "view-inheritance", "module-graph"]},
+    "target": {"type": "string", "default": ""},
+    "scope": {"type": "string", "enum": ["odoo", "enterprise", "project", "live"], "default": "odoo"},
+    "description": {"type": "string", "default": ""},
+    "max_nodes": {"type": "integer", "default": 25},
+}
+
 # ── Claude tool schemas ───────────────────────────────────────────
 
 TOOLS_CLAUDE = [
@@ -386,6 +454,10 @@ TOOLS_CLAUDE = [
                        "description": "Repo cible : 'odoo' = Community courant, 'enterprise' = Enterprise courant, 'target' = version cible, 'project' = dépôt client."},
         "max_lines": {"type": "integer", "description": "Nombre max de lignes du diff (défaut 2000, max 10000).", "default": 2000},
     }}},
+    {**_TOOL_COMPARE_VERSIONS, "input_schema": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}},
+    {**_TOOL_INSPECT_AUTOMATIONS, "input_schema": {"type": "object", "properties": _AUTOMATION_PROPS}},
+    {**_TOOL_INSPECT_MODULE_GRAPH, "input_schema": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
+    {**_TOOL_GENERATE_DIAGRAM, "input_schema": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
     {**_TOOL_LOAD_REFERENCE, "input_schema": {"type": "object", "required": ["skill", "filename"], "properties": {
         "skill":    {"type": "string", "description": "Nom technique du skill (ex 'odoo_inspect_studio')"},
         "filename": {"type": "string", "description": "Nom de fichier de référence (ex 'studio_limits.md')"},
@@ -476,6 +548,10 @@ TOOLS_OPENAI = [
         "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
         "max_lines": {"type": "integer", "default": 2000},
     }}}},
+    {"type": "function", "function": {**_TOOL_COMPARE_VERSIONS, "parameters": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_AUTOMATIONS, "parameters": {"type": "object", "properties": _AUTOMATION_PROPS}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_MODULE_GRAPH, "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}}},
+    {"type": "function", "function": {**_TOOL_GENERATE_DIAGRAM, "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}}},
     {"type": "function", "function": {**_TOOL_LOAD_REFERENCE, "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
         "skill":    {"type": "string"},
         "filename": {"type": "string"},
@@ -567,6 +643,14 @@ TOOLS_GEMINI = [
                  "scope":     {"type": "string"},
                  "max_lines": {"type": "integer"},
              }}},
+            {"name": "compare_odoo_versions", "description": _TOOL_COMPARE_VERSIONS["description"],
+             "parameters": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}},
+            {"name": "inspect_automations", "description": _TOOL_INSPECT_AUTOMATIONS["description"],
+             "parameters": {"type": "object", "properties": _AUTOMATION_PROPS}},
+            {"name": "inspect_module_graph", "description": _TOOL_INSPECT_MODULE_GRAPH["description"],
+             "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
+            {"name": "generate_diagram", "description": _TOOL_GENERATE_DIAGRAM["description"],
+             "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
             {"name": "load_skill_reference", "description": _TOOL_LOAD_REFERENCE["description"],
              "parameters": {"type": "object", "required": ["skill", "filename"], "properties": {
                  "skill":    {"type": "string"},
@@ -619,6 +703,9 @@ TOOLS_CLAUDE_SRC = [
         "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
         "max_lines": {"type": "integer", "default": 2000},
     }}},
+    {**_TOOL_COMPARE_VERSIONS, "input_schema": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}},
+    {**_TOOL_INSPECT_MODULE_GRAPH, "input_schema": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
+    {**_TOOL_GENERATE_DIAGRAM, "input_schema": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
 ]
 
 TOOLS_OPENAI_SRC = [
@@ -640,6 +727,9 @@ TOOLS_OPENAI_SRC = [
         "scope":     {"type": "string", "enum": ["odoo", "enterprise", "target", "project"]},
         "max_lines": {"type": "integer", "default": 2000},
     }}}},
+    {"type": "function", "function": {**_TOOL_COMPARE_VERSIONS, "parameters": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_MODULE_GRAPH, "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}}},
+    {"type": "function", "function": {**_TOOL_GENERATE_DIAGRAM, "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}}},
 ]
 
 TOOLS_GEMINI_SRC = [
@@ -664,6 +754,12 @@ TOOLS_GEMINI_SRC = [
                  "scope":     {"type": "string"},
                  "max_lines": {"type": "integer"},
              }}},
+            {"name": "compare_odoo_versions", "description": _TOOL_COMPARE_VERSIONS["description"],
+             "parameters": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}},
+            {"name": "inspect_module_graph", "description": _TOOL_INSPECT_MODULE_GRAPH["description"],
+             "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
+            {"name": "generate_diagram", "description": _TOOL_GENERATE_DIAGRAM["description"],
+             "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
         ]
     }
 ]
@@ -692,6 +788,8 @@ REPO_TOOLS_CLAUDE = [
     {**_TOOL_SEARCH_REPO, "input_schema": _REPO_INPUT_SCHEMA_SEARCH},
     {**_TOOL_READ_REPO,   "input_schema": _REPO_INPUT_SCHEMA_READ},
     {**_TOOL_LIST_PROJECT_MODULES, "input_schema": _REPO_INPUT_SCHEMA_MODULES},
+    {**_TOOL_INSPECT_MODULE_GRAPH, "input_schema": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
+    {**_TOOL_GENERATE_DIAGRAM, "input_schema": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
 ]
 REPO_TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_SEARCH_REPO, "parameters": {"type": "object", "required": ["pattern"], "properties": {
@@ -708,6 +806,8 @@ REPO_TOOLS_OPENAI = [
         "include_invalid": {"type": "boolean", "default": True},
         "limit": {"type": "integer", "default": 300},
     }}}},
+    {"type": "function", "function": {**_TOOL_INSPECT_MODULE_GRAPH, "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}}},
+    {"type": "function", "function": {**_TOOL_GENERATE_DIAGRAM, "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}}},
 ]
 REPO_FUNCTION_DECLARATIONS = [
     {"name": "repo_search_code", "description": _TOOL_SEARCH_REPO["description"],
@@ -723,6 +823,10 @@ REPO_FUNCTION_DECLARATIONS = [
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string"}, "include_invalid": {"type": "boolean"}, "limit": {"type": "integer"},
      }}},
+    {"name": "inspect_module_graph", "description": _TOOL_INSPECT_MODULE_GRAPH["description"],
+     "parameters": {"type": "object", "required": ["module"], "properties": _MODULE_GRAPH_PROPS}},
+    {"name": "generate_diagram", "description": _TOOL_GENERATE_DIAGRAM["description"],
+     "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
 ]
 
 # ── Migration target tool schemas ─────────────────────────────────
@@ -760,6 +864,8 @@ TARGET_TOOLS_CLAUDE = [
         "end_line":   {"type": "integer", "default": 0},
         "max_lines":  {"type": "integer", "default": 1000},
     }}},
+    {**_TOOL_COMPARE_VERSIONS, "input_schema": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}},
+    {**_TOOL_GENERATE_DIAGRAM, "input_schema": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
 ]
 TARGET_TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_SEARCH_TARGET, "parameters": {"type": "object", "required": ["pattern"], "properties": {
@@ -771,6 +877,8 @@ TARGET_TOOLS_OPENAI = [
     {"type": "function", "function": {**_TOOL_READ_TARGET, "parameters": {"type": "object", "required": ["path"], "properties": {
         "path": {"type": "string"}, "start_line": {"type": "integer", "default": 1}, "end_line": {"type": "integer", "default": 0}, "max_lines": {"type": "integer", "default": 1000},
     }}}},
+    {"type": "function", "function": {**_TOOL_COMPARE_VERSIONS, "parameters": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}}},
+    {"type": "function", "function": {**_TOOL_GENERATE_DIAGRAM, "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}}},
 ]
 TARGET_FUNCTION_DECLARATIONS = [
     {"name": "migration_search_target_source", "description": _TOOL_SEARCH_TARGET["description"],
@@ -782,6 +890,10 @@ TARGET_FUNCTION_DECLARATIONS = [
      "parameters": {"type": "object", "required": ["path"], "properties": {
          "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}, "max_lines": {"type": "integer"},
      }}},
+    {"name": "compare_odoo_versions", "description": _TOOL_COMPARE_VERSIONS["description"],
+     "parameters": {"type": "object", "required": ["target", "from_version", "to_version"], "properties": _COMPARE_VERSION_PROPS}},
+    {"name": "generate_diagram", "description": _TOOL_GENERATE_DIAGRAM["description"],
+     "parameters": {"type": "object", "required": ["kind"], "properties": _DIAGRAM_PROPS}},
 ]
 
 # ── Count-lines tool schemas ─────────────────────────────────────
