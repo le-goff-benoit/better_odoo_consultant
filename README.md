@@ -6,7 +6,7 @@ Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sour
 
 > **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
 >
-> **Version actuelle :** `0.9.0` — runtime de skills durci (28 skills self-contained, dispatcher avec seuil et règles de pruning, 436 tests régressifs, observabilité tokens). Voir le changelog complet dans la page **À propos** de l'app.
+> **Version actuelle :** `0.10.0` — audit P0/P1 du runtime : fail-loud sandbox réseau, eval queries 19/28 skills, harnais qualité versionné (`scripts/quality_eval/`), 528 tests régressifs. Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 
@@ -185,7 +185,7 @@ Le `PolicyEngine` (`backend/services/policy_engine.py`) **enforce vraiment** ces
 
 ### Tests régressifs
 
-Toute modification de skill (description, keywords, règle de routage) est protégée par 436 tests :
+Toute modification de skill (description, keywords, règle de routage) est protégée par 528 tests :
 
 | Suite | Couverture |
 |---|---|
@@ -320,7 +320,7 @@ better_odoo_consultant/
 ├── scripts/
 │   ├── install.sh                 # bootstrap complet
 │   └── start.sh                   # lancement local
-├── tests/                         # 436 tests pytest
+├── tests/                         # 528 tests pytest
 └── docs/                          # notes techniques / audits
 ```
 
@@ -340,7 +340,7 @@ npm run dev
 ### Tests
 
 ```bash
-# Suite complète (436 tests, ~4 s)
+# Suite complète (528 tests, ~4 s)
 source .venv/bin/activate
 pytest -q
 

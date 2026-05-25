@@ -1,0 +1,144 @@
+[
+  {
+    "id": "q01-weather",
+    "prompt": "Quel temps fait-il aujourd'hui ?",
+    "category": "no_skill_expected",
+    "expected_skills": [],
+    "criteria": ["aucun skill métier sélectionné", "pas de PII Odoo dans la réponse"]
+  },
+  {
+    "id": "q02-invoices-list",
+    "prompt": "Liste-moi les 10 dernières factures clients impayées",
+    "category": "live_data_list",
+    "expected_skills": ["odoo_query_records"],
+    "criteria": ["mentionne search_read ou limit", "ne propose pas read_group"]
+  },
+  {
+    "id": "q03-kpi-monthly",
+    "prompt": "Quel est le chiffre d'affaires par mois sur 2025 ?",
+    "category": "live_data_aggregate",
+    "expected_skills": ["odoo_aggregate_records"],
+    "criteria": ["mentionne read_group ou groupby", "ne charge pas les lignes une par une"]
+  },
+  {
+    "id": "q04-count-only",
+    "prompt": "Combien de factures en brouillon dans la base ?",
+    "category": "live_data_count",
+    "expected_skills": ["odoo_count_records"],
+    "criteria": ["mentionne search_count ou count", "ne charge pas les enregistrements"]
+  },
+  {
+    "id": "q05-fields-schema",
+    "prompt": "Quels champs a le modèle sale.order ?",
+    "category": "schema",
+    "expected_skills": ["odoo_inspect_fields"],
+    "criteria": ["liste les champs avec leurs types", "mentionne fields_get ou ir.model.fields"]
+  },
+  {
+    "id": "q06-view-arch",
+    "prompt": "Peux-tu vérifier la vue form de sale.order et me dire si elle utilise encore attrs/states ?",
+    "category": "view_inspection",
+    "expected_skills": ["odoo_inspect_view"],
+    "criteria": ["mentionne attrs/states dépréciés Odoo 17+", "référence une vue form précise"]
+  },
+  {
+    "id": "q07-security-rule",
+    "prompt": "Pourquoi l'utilisateur Marc ne voit pas les factures de la société B ?",
+    "category": "security",
+    "expected_skills": ["odoo_inspect_security"],
+    "criteria": ["mentionne ir.rule ou record rule", "évoque multi-société ou group_id"]
+  },
+  {
+    "id": "q08-pdf-report",
+    "prompt": "Comment customiser le logo sur le rapport facture PDF d'Odoo ?",
+    "category": "qweb_report",
+    "expected_skills": ["odoo_inspect_report"],
+    "criteria": ["mentionne external_layout ou QWeb", "ne renvoie pas vers Studio"]
+  },
+  {
+    "id": "q09-menu-navigation",
+    "prompt": "Où cliquer dans Odoo pour accéder aux contrats de location ?",
+    "category": "navigation",
+    "expected_skills": ["odoo_inspect_navigation"],
+    "criteria": ["donne un chemin de menu concret", "mentionne ir.actions ou ir.ui.menu"]
+  },
+  {
+    "id": "q10-studio-audit",
+    "prompt": "Audit Studio du projet : quels modèles x_ sont custom ?",
+    "category": "studio_audit",
+    "expected_skills": ["odoo_inspect_studio"],
+    "criteria": ["liste les x_studio_ ou x_ models", "mentionne base.automation si pertinent"]
+  },
+  {
+    "id": "q11-followup-email",
+    "prompt": "Peux-tu écrire un email de suivi à un client Odoo après notre workshop ?",
+    "category": "near_miss_email",
+    "expected_skills": [],
+    "criteria": ["pas de skill technique Odoo sélectionné", "ton client-facing"]
+  },
+  {
+    "id": "q12-commit-sha",
+    "prompt": "Que change le commit a8c78a4 dans le repo ?",
+    "category": "git_commit",
+    "expected_skills": ["source_show_commit"],
+    "criteria": ["mentionne git show ou diff", "ne hallucine pas le contenu sans tool call"]
+  },
+  {
+    "id": "q13-migration-search",
+    "prompt": "Que devient action_confirm sur sale.order en version 18 ?",
+    "category": "migration",
+    "expected_skills": ["migration_search_target_source"],
+    "mode": "migration",
+    "criteria": ["cherche dans la version cible", "mentionne breaking changes possibles"]
+  },
+  {
+    "id": "q14-repo-search",
+    "prompt": "Cherche tous les _inherit de sale.order dans le repo custom du client",
+    "category": "repo_search",
+    "expected_skills": ["repo_search_code"],
+    "criteria": ["mentionne grep ou ripgrep", "ne renvoie pas vers les sources standard"]
+  },
+  {
+    "id": "q15-modules-installed",
+    "prompt": "Quel module installé répond au besoin de facturation récurrente sur la base de production ?",
+    "category": "installed_modules",
+    "expected_skills": ["odoo_inspect_modules"],
+    "criteria": ["interroge ir.module.module", "distingue installé vs disponible"]
+  },
+  {
+    "id": "q16-loc-volumetry",
+    "prompt": "Combien de lignes de code Python dans le module sale_custom du projet ?",
+    "category": "loc_count",
+    "expected_skills": ["repo_count_source_lines"],
+    "criteria": ["donne un chiffre LOC", "ne propose pas search_count Odoo"]
+  },
+  {
+    "id": "q17-pdf-attachment",
+    "prompt": "Extrais le texte de cette facture PDF en pièce jointe",
+    "category": "attachment_pdf",
+    "expected_skills": ["runtime_attachment_handler"],
+    "criteria": ["mentionne pypdf ou extract_pdf_text", "ne confond pas avec un rapport Odoo"]
+  },
+  {
+    "id": "q18-fields-creator",
+    "prompt": "Avant de créer un partenaire, vérifie ses champs obligatoires",
+    "category": "creator_prep",
+    "expected_skills": ["odoo_inspect_fields"],
+    "mode": "creator",
+    "criteria": ["liste les required fields", "n'écrit pas encore en base"]
+  },
+  {
+    "id": "q19-aggregate-by-status",
+    "prompt": "Montre la répartition des commandes par statut",
+    "category": "kpi_groupby",
+    "expected_skills": ["odoo_aggregate_records"],
+    "criteria": ["mentionne groupby state", "donne un tableau ou liste compacte"]
+  },
+  {
+    "id": "q20-no-skill-ambiguous",
+    "prompt": "Bonjour, peux-tu m'aider ?",
+    "category": "greeting",
+    "expected_skills": [],
+    "criteria": ["réponse conversationnelle", "aucun tool call inutile"]
+  }
+]

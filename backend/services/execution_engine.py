@@ -55,9 +55,36 @@ def _handler_requires(handler) -> tuple[str, ...]:
 
 
 async def run_skill_script_subprocess(script_path, script_args, skill) -> dict:
-    """Run a skill script in a restricted subprocess."""
+    """Run a skill script in a restricted subprocess.
+
+    When the skill manifest declares ``network: false``, the script must run
+    inside a network-isolated namespace (``unshare -r -n``). If ``unshare`` is
+    unavailable on the host, we refuse to execute rather than silently granting
+    network access — fail-loud over fail-open."""
+    sandbox_required = not skill.permissions.network
+    has_unshare = bool(shutil.which("unshare"))
     cmd = ["python3", str(script_path), *script_args]
-    if not skill.permissions.network and shutil.which("unshare"):
+    if sandbox_required:
+        if not has_unshare:
+            log_runtime_event(log, SkillRuntimeEvent(
+                type="policy_decision",
+                skill=skill.name,
+                filename=str(script_path.name) if hasattr(script_path, "name") else str(script_path),
+                action="run_script",
+                ok=False,
+                denied=True,
+                permission="network",
+                reason="network sandbox unavailable: 'unshare' binary missing — refusing to run script with network=false",
+            ))
+            return {
+                "ok": False,
+                "error": (
+                    "Sandbox réseau indisponible (binaire 'unshare' absent). "
+                    "Le skill déclare network=false : exécution refusée. "
+                    "Installer util-linux/unshare ou autoriser explicitement network=true dans le SKILL.md."
+                ),
+                "sandbox_unavailable": True,
+            }
         cmd = ["unshare", "-r", "-n", *cmd]
 
     env = {

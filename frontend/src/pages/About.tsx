@@ -7,10 +7,25 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.9.0',
+    version: '0.10.0',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Audit P0/P1 — implémentation des recommandations de l\'audit runtime de skills : fail-loud sur sandbox réseau absente, eval queries complétés sur 9 skills supplémentaires (19/28 couverts), test garde-fou no-implicit-core, harnais qualité versionné',
+      'Sandbox scripts — `run_skill_script_subprocess` refuse désormais l\'exécution quand un skill déclare `network: false` et que le binaire `unshare` est absent (fail-loud), avec event `policy_decision denied=True permission=network`. Plus de fail-open silencieux qui aurait laissé un script sans isolation réseau',
+      'Eval queries — +9 fichiers `eval_queries.json` (odoo-count-records, odoo-inspect-fields, odoo-inspect-modules, odoo-inspect-studio, repo-count-source-lines, repo-list-modules, repo-read-file, source-read-odoo-file, migration-read-target-file, runtime-attachment-handler). Couverture passe de 10 à 19/28 skills. Les faiblesses connues du dispatcher (overlaps `compare`, `version cible` ↔ `search target`, `repo` partagé) sont documentées via `xfail` plutôt que masquées',
+      'Tests — `test_no_implicit_core_invocation.py` : 28 prompts génériques et thématiques vérifient qu\'aucun runtime cœur ne fuit implicitement, même quand le prompt contient un mot des keywords (« profil », « complexité », « contexte », « dispatcher », « release notes »...)',
+      'Tests — `test_script_sandbox.py` : 2 cas sur la sandbox (refus quand `unshare` absent et `network=false` ; exécution normale quand `network=true`)',
+      'Harnais qualité — `scripts/quality_eval/` versionné : `dataset.json` (20 prompts représentatifs sur 10 catégories), `run_routing_eval.py` (phase 1 hors-ligne, vérifie le routing sans appel LLM, 100 % accuracy sur le dataset actuel), `README.md` détaillant la phase 2 LLM-as-judge (à activer ponctuellement avant les bumps majeurs)',
+      'Tests — suite : 436 → 528 passed (+92), 15 xfailed documentés (faiblesses dispatcher à travailler en 0.10.x)',
+    ],
+  },
+  {
+    version: '0.9.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skills — descriptions refondues sur les 28 SKILL.md selon les bonnes pratiques OpenAI / Anthropic / Agent Skills : mots-clés front-loadés, limites explicites « Ne pas utiliser pour… (skill_X) » pour neutraliser les overlaps majeurs (source ↔ repo ↔ migration, query ↔ count ↔ aggregate, inspect-view ↔ inspect-report ↔ inspect-navigation), versions FR + EN ≤ 1024 chars',
       'Skills — `allow_implicit_invocation: false` sur les 6 skills runtime cœur (context_aggregator, complexity_analyzer, localization_detector, perspective_router, release_notes_injector, skill_dispatcher) : impossibles à sélectionner via simple match keyword, ils restent des orchestrateurs internes',

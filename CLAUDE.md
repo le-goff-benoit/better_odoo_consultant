@@ -2,7 +2,7 @@
 
 Guide d'orientation pour Claude Code, GitHub Copilot et tout autre assistant IA qui intervient sur ce repository.
 
-Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.9.0` et les derniers commits `main`.
+Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.10.0` et les derniers commits `main`.
 
 ## Mission du produit
 
@@ -17,6 +17,7 @@ Principes produit à préserver :
 ## État récent à connaître
 
 Les derniers commits ont surtout transformé l'IA en architecture pilotée par skills :
+- `0.10.0` : implémentation des recommandations P0/P1 de l'audit runtime — fail-loud `unshare` absent (script refusé si `network=false`), +9 fichiers `eval_queries.json` (couverture 19/28 skills), nouveau test `test_no_implicit_core_invocation.py` (28 prompts × 6 runtime cœur), test `test_script_sandbox.py`, harnais `scripts/quality_eval/` (dataset 20 prompts + runner routing phase 1 100 % accuracy + README pour phase 2 LLM-as-judge). 528 tests passent, 15 xfailed documentent des faiblesses dispatcher connues.
 - `0.9.0` : refonte des descriptions des 28 SKILL.md (front-load keywords, limites explicites, FR+EN), durcissement du dispatcher (`_MIN_SKILL_SCORE=25`, 6 nouvelles règles `pruned:*-focus`, word-boundary FR/EN), `allow_implicit_invocation: false` sur les 6 runtime cœur, token counting dans `execution_done`, +64 tests régressifs (path traversal, trigger routing sur 10 skills via `eval_queries.json`, cross-provider parity, budget overflow, auto-load references). 436 tests passent.
 - `0.66.0` : propositions d'action extraites des réponses Markdown et affichées comme chips cliquables dans Assistant/Migration et le plein écran.
 - `0.65.0` : nouveau skill cœur `attachment-handler` pour PDF/images, fallback GitHub Models/Copilot via `pypdf` puis `pdf2image`, tools `extract_pdf_text`, `pdf_to_images`, `compare_documents`.
@@ -100,7 +101,9 @@ Règles importantes :
 - **Descriptions** (depuis 0.9.0) : front-load des mots-clés (pas `Utiliser ce skill quand…` en préfixe), limites explicites `Ne pas utiliser pour … (skill_X)` pour neutraliser les overlaps, FR + EN, 100–1024 chars. Test `test_skill_quality.test_all_skills_have_trigger_oriented_descriptions_and_permissions` verrouille la règle.
 - **Skills runtime cœur** (context_aggregator, complexity_analyzer, localization_detector, perspective_router, release_notes_injector, skill_dispatcher) ont `allow_implicit_invocation: false` — ne jamais les sélectionner via simple keyword.
 - **Dispatcher** (`backend/services/context_service.py::_select_skill_playbooks`) : scoring 5 niveaux (explicit 100, keywords 60, intent bundle 40, mode-default 25, pattern 75–90) + seuil minimum `_MIN_SKILL_SCORE = 25` + pruning post-scoring (`pruned:*-focus`). Toute nouvelle règle doit être couverte par un cas dans `tests/test_trigger_routing.py` via un `eval_queries.json`.
-- **Eval queries** : 10 skills ont un `eval_queries.json` (source-search-odoo, repo-search-code, migration-search-target-source, odoo-query-records, odoo-aggregate-records, odoo-inspect-view, odoo-inspect-report, odoo-inspect-security, odoo-inspect-navigation, source-show-commit). Convention : `expected_skill` informationnel, le test asserte sur le **owner** (dossier → underscore).
+- **Eval queries** : 19 skills ont un `eval_queries.json` (depuis 0.10.0, ajout de odoo-count-records, odoo-inspect-fields, odoo-inspect-modules, odoo-inspect-studio, repo-count-source-lines, repo-list-modules, repo-read-file, source-read-odoo-file, migration-read-target-file, runtime-attachment-handler). Convention : `expected_skill` informationnel, le test asserte sur le **owner** (dossier → underscore). Une entrée peut porter `"xfail": "raison..."` pour documenter une faiblesse dispatcher connue sans bloquer la CI.
+- **Sandbox scripts** (depuis 0.10.0) : `run_skill_script_subprocess` refuse l'exécution quand `permissions.network=false` ET `unshare` est absent. Émet un `policy_decision denied=True permission=network` et retourne `{"ok": false, "sandbox_unavailable": true}`. Fail-loud sur poste sans util-linux.
+- **Harnais qualité** : `scripts/quality_eval/` — `dataset.json` (20 prompts représentatifs), `run_routing_eval.py` (phase 1, déterministe, exit 0 si 100 % accuracy), `README.md` (phase 2 LLM-as-judge à activer manuellement).
 - **Substring matching** : `_BOUNDARY_TOKENS` (mots courts ambigus en FR/EN, ex. `group`, `groupe`, `view`, `custom`) utilise `(?<!\w)…(?!\w)` ; le reste utilise du substring rapide. Ajouter à `_BOUNDARY_TOKENS` tout token qui risque de matcher un mot plus long (FR↔EN).
 
 Skills présents au moment de cette mise à jour : `attachment-handler`, `complexity-analyzer`, `context-aggregator`, `count-odoo`, `count-source-lines`, `get-odoo-fields`, `git-show-commit`, `inspect-installed-modules`, `inspect-menus-actions`, `inspect-odoo-report`, `inspect-odoo-view`, `inspect-security`, `inspect-studio`, `list-project-modules`, `localization-detector`, `perspective-router`, `project-context-refresh`, `query-odoo`, `read-group-odoo`, `read-odoo-file`, `read-project-file`, `read-target-file`, `release-notes-injector`, `report-writer`, `search-odoo-source`, `search-project-source`, `search-target-source`, `skill-dispatcher`.

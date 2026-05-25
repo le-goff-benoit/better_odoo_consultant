@@ -1,0 +1,10 @@
+[
+  {"query": "Quel module installé répond à ce besoin sur la base de production ?", "expected_skill": "odoo_inspect_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Liste les applications installées et leur version", "expected_skill": "odoo_inspect_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Quelle est la stack technique installée sur cette instance Odoo ?", "expected_skill": "odoo_inspect_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Show me installed apps on the live database", "expected_skill": "odoo_inspect_modules", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "Quels apps sont activés sur la base ?", "expected_skill": "odoo_inspect_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Liste les modules custom dans le dépôt projet client", "expected_skill": "repo_list_modules", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "repo manifest, not live DB"},
+  {"query": "Cherche les modules sale dans les sources Odoo", "expected_skill": "source_search_odoo", "should_trigger": false, "category": "near_miss", "language": "fr"},
+  {"query": "Combien de partenaires dans la base ?", "expected_skill": "odoo_count_records", "should_trigger": false, "category": "negative", "language": "fr"}
+]

@@ -1,0 +1,10 @@
+[
+  {"query": "Lis sale/models/sale_order.py de la version cible 18 pour confirmer le rename", "expected_skill": "migration_read_target_file", "should_trigger": true, "category": "positive", "language": "fr", "modes": ["migration"]},
+  {"query": "Affiche le manifest cible du module account après migration", "expected_skill": "migration_read_target_file", "should_trigger": true, "category": "positive", "language": "fr", "modes": ["migration"]},
+  {"query": "Read the target-version implementation of account.move._post", "expected_skill": "migration_read_target_file", "should_trigger": true, "category": "positive", "language": "en", "modes": ["migration"]},
+  {"query": "Montre la nouvelle vue form de sale.order en version cible", "expected_skill": "migration_read_target_file", "should_trigger": true, "category": "positive", "language": "fr", "modes": ["migration"]},
+  {"query": "Compare le fichier source vs cible pour res_partner.py", "expected_skill": "migration_read_target_file", "should_trigger": true, "category": "positive", "language": "fr", "modes": ["migration"], "xfail": "'compare' not in keywords; comparison intent should add migration_read_target_file"},
+  {"query": "Cherche les renommages d'API dans la version cible", "expected_skill": "migration_search_target_source", "should_trigger": false, "category": "near_miss", "language": "fr", "modes": ["migration"], "notes": "search, not read", "xfail": "'version cible' shared between read and search target skills; need search-focus pruning"},
+  {"query": "Lis sale_order.py des sources de la version actuelle", "expected_skill": "source_read_odoo_file", "should_trigger": false, "category": "near_miss", "language": "fr", "modes": ["migration"]},
+  {"query": "Lis le custom override sale_order.py dans le repo projet", "expected_skill": "repo_read_file", "should_trigger": false, "category": "near_miss", "language": "fr", "modes": ["migration"]}
+]

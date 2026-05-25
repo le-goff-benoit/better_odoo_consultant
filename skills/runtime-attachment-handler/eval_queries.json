@@ -1,0 +1,9 @@
+[
+  {"query": "Extrais le texte de cette pièce jointe PDF", "expected_skill": "runtime_attachment_handler", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Compare ces deux PDF uploadés", "expected_skill": "runtime_attachment_handler", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Lis cette image jointe et résume-la", "expected_skill": "runtime_attachment_handler", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Extract text from this attached invoice PDF", "expected_skill": "runtime_attachment_handler", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "Que vois-tu sur cette capture écran ?", "expected_skill": "runtime_attachment_handler", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Diagnostique le rapport PDF de facture Odoo invoice_document", "expected_skill": "odoo_inspect_report", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "Odoo-side report, not user-uploaded PDF"},
+  {"query": "Quel est le layout du rapport QWeb facture ?", "expected_skill": "odoo_inspect_report", "should_trigger": false, "category": "near_miss", "language": "fr"}
+]

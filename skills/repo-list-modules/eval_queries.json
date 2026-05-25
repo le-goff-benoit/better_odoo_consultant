@@ -1,0 +1,10 @@
+[
+  {"query": "Liste les modules custom du dépôt projet client", "expected_skill": "repo_list_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Quels modules sont définis dans le repo ?", "expected_skill": "repo_list_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Parse les __manifest__.py du dépôt", "expected_skill": "repo_list_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Quelles sont les dépendances declared dans les manifests du projet ?", "expected_skill": "repo_list_modules", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "List custom modules in the cloned client repo", "expected_skill": "repo_list_modules", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "Quels modules sont installés sur la base Odoo ?", "expected_skill": "odoo_inspect_modules", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "live DB, not repo files"},
+  {"query": "Cherche un override de _inherit dans le code custom", "expected_skill": "repo_search_code", "should_trigger": false, "category": "near_miss", "language": "fr", "xfail": "shares 'repo'+'custom' keywords with repo_list_modules; need code-search-focus pruning"},
+  {"query": "Combien de lignes Python dans le repo ?", "expected_skill": "repo_count_source_lines", "should_trigger": false, "category": "near_miss", "language": "fr", "xfail": "'repo' keyword shared; need volumetry-focus pruning"}
+]

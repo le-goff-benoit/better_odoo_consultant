@@ -1,0 +1,9 @@
+[
+  {"query": "Combien de lignes de code dans le module sale_custom ?", "expected_skill": "repo_count_source_lines", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Mesure la volumétrie LOC des modules custom du projet", "expected_skill": "repo_count_source_lines", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Estime l'effort de migration en fonction de la taille du code", "expected_skill": "repo_count_source_lines", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "How many lines of Python in the project repo?", "expected_skill": "repo_count_source_lines", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "Compare la taille des modules custom", "expected_skill": "repo_count_source_lines", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "Combien d'enregistrements dans res.partner ?", "expected_skill": "odoo_count_records", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "DB count, not LOC"},
+  {"query": "Liste les modules custom du repo", "expected_skill": "repo_list_modules", "should_trigger": false, "category": "near_miss", "language": "fr"}
+]
