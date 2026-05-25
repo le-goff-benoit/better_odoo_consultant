@@ -209,6 +209,26 @@ async def get_skill_example(name: str, filename: str):
     return {"name": name, "filename": filename, "content": content}
 
 
+@router.get("/skills/{name}/eval-queries")
+async def get_skill_eval_queries(name: str):
+    """Return the ``eval_queries.json`` for a skill (used by the Settings
+    detail panel to surface routing regression cases)."""
+    skill = skill_by_name(name)
+    if skill is None or not skill.folder:
+        raise HTTPException(404, "Skill inconnu")
+    eval_path = Path(skill.folder) / "eval_queries.json"
+    if not eval_path.is_file():
+        return {"name": skill.name, "queries": [], "available": False}
+    try:
+        import json as _json
+        data = _json.loads(eval_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(500, f"eval_queries.json invalide : {exc}")
+    if not isinstance(data, list):
+        raise HTTPException(500, "eval_queries.json doit être une liste")
+    return {"name": skill.name, "queries": data, "available": True}
+
+
 @router.get("/runtime-traces/{run_id}")
 async def get_runtime_trace(run_id: str):
     summary = get_runtime_trace_summary(run_id)

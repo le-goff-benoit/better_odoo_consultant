@@ -1,10 +1,59 @@
 [
-  {"query": "Lis le fichier models/sale_order.py du module custom sale_extension", "expected_skill": "repo_read_file", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Montre-moi le contenu du manifest du module custom_invoicing", "expected_skill": "repo_read_file", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Ouvre security/ir.model.access.csv du repo projet", "expected_skill": "repo_read_file", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Read controllers/main.py from the project repo", "expected_skill": "repo_read_file", "should_trigger": true, "category": "positive", "language": "en"},
-  {"query": "Affiche l'override _inherit sale.order dans le module custom", "expected_skill": "repo_read_file", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Cherche tous les _inherit dans le repo custom", "expected_skill": "repo_search_code", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "search, not read a specific file", "xfail": "repo_read_file matches 'repo' and 'custom' keywords; need 'cherche/grep' pattern to dominate"},
-  {"query": "Lis le fichier sale_order.py des sources Odoo standard", "expected_skill": "source_read_odoo_file", "should_trigger": false, "category": "near_miss", "language": "fr"},
-  {"query": "Liste les modules du repo", "expected_skill": "repo_list_modules", "should_trigger": false, "category": "negative", "language": "fr", "xfail": "repo_read_file keyword 'repo' matches; need list-modules pruning to suppress repo_read_file"}
+  {
+    "query": "Lis le fichier models/sale_order.py du module custom sale_extension",
+    "expected_skill": "repo_read_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Montre-moi le contenu du manifest du module custom_invoicing",
+    "expected_skill": "repo_read_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Ouvre security/ir.model.access.csv du repo projet",
+    "expected_skill": "repo_read_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Read controllers/main.py from the project repo",
+    "expected_skill": "repo_read_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Affiche l'override _inherit sale.order dans le module custom",
+    "expected_skill": "repo_read_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Cherche tous les _inherit dans le repo custom",
+    "expected_skill": "repo_search_code",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "search, not read a specific file"
+  },
+  {
+    "query": "Lis le fichier sale_order.py des sources Odoo standard",
+    "expected_skill": "source_read_odoo_file",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr"
+  },
+  {
+    "query": "Liste les modules du repo",
+    "expected_skill": "repo_list_modules",
+    "should_trigger": false,
+    "category": "negative",
+    "language": "fr"
+  }
 ]

@@ -1,0 +1,7 @@
+[
+  {"query": "runtime_project_context_refresh", "expected_skill": "runtime_project_context_refresh", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name only — triggered by UI button"},
+  {"query": "Rafraîchis le contexte de mon projet", "expected_skill": "runtime_project_context_refresh", "should_trigger": false, "category": "negative", "language": "fr", "notes": "refresh must be UI-triggered, not implicit on a prompt"},
+  {"query": "Refresh project context please", "expected_skill": "runtime_project_context_refresh", "should_trigger": false, "category": "negative", "language": "en"},
+  {"query": "Re-pull le dépôt client", "expected_skill": "runtime_project_context_refresh", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Bonjour", "expected_skill": "runtime_project_context_refresh", "should_trigger": false, "category": "negative", "language": "fr"}
+]

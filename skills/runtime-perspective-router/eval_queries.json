@@ -1,0 +1,7 @@
+[
+  {"query": "runtime_perspective_router", "expected_skill": "runtime_perspective_router", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name only"},
+  {"query": "Choisis le bon profil de réponse pour ce sujet", "expected_skill": "runtime_perspective_router", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Donne-moi un avis support sur cet incident", "expected_skill": "runtime_perspective_router", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Architect overview please", "expected_skill": "runtime_perspective_router", "should_trigger": false, "category": "negative", "language": "en"},
+  {"query": "Could you provide a developer perspective?", "expected_skill": "runtime_perspective_router", "should_trigger": false, "category": "negative", "language": "en"}
+]

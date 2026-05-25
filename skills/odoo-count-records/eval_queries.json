@@ -1,10 +1,61 @@
 [
-  {"query": "Combien de factures en brouillon ?", "expected_skill": "odoo_count_records", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Quel est le nombre total de partenaires actifs ?", "expected_skill": "odoo_count_records", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Compte les commandes de vente confirmées du mois", "expected_skill": "odoo_count_records", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "How many invoices are still open?", "expected_skill": "odoo_count_records", "should_trigger": true, "category": "positive", "language": "en"},
-  {"query": "Quelle est la volumétrie de res.partner ?", "expected_skill": "odoo_count_records", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Liste-moi les 10 dernières factures", "expected_skill": "odoo_query_records", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "user wants rows, not a count", "xfail": "dispatcher matches 'total' synonyms too broadly — to refine via pruning when count and query intents collide"},
-  {"query": "Chiffre d'affaires par mois 2025", "expected_skill": "odoo_aggregate_records", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "grouped KPI", "xfail": "'ca par' triggers both aggregate and count keywords — needs aggregate-dominates pruning extension"},
-  {"query": "Combien de lignes de code dans le module sale_custom ?", "expected_skill": "repo_count_source_lines", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "LOC, not DB count", "xfail": "'combien' is a strong count keyword; need pattern to detect 'lignes de code' and route to repo_count_source_lines instead"}
+  {
+    "query": "Combien de factures en brouillon ?",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Quel est le nombre total de partenaires actifs ?",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Compte les commandes de vente confirmées du mois",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "How many invoices are still open?",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Quelle est la volumétrie de res.partner ?",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Liste-moi les 10 dernières factures",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "user wants rows, not a count"
+  },
+  {
+    "query": "Chiffre d'affaires par mois 2025",
+    "expected_skill": "odoo_aggregate_records",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "grouped KPI"
+  },
+  {
+    "query": "Combien de lignes de code dans le module sale_custom ?",
+    "expected_skill": "repo_count_source_lines",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "LOC, not DB count"
+  }
 ]

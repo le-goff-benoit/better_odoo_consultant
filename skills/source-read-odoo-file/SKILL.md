@@ -15,7 +15,7 @@ requirement_en: Downloaded Odoo sources
 version: "1.0.0"
 author: Le Goff Benoît - Camptocamp SA
 modes: [assistant, migration, creator]
-keywords: [fichier, file, implémentation, implementation, ligne, read]
+keywords: [fichier source, source file, sources odoo, odoo sources, from odoo sources, fichier standard odoo, standard odoo file, lis fichier, lis le fichier, lire le fichier, read the file, ouvre le fichier, open the file, contenu de, content of, implémentation standard, standard implementation, .py odoo, odoo/addons, report template, standard report]
 permissions:
   filesystem: read
   network: false

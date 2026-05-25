@@ -7,10 +7,26 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.10.0',
+    version: '0.92.0',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Routing — dispatcher durci : 5 nouvelles règles de pruning (`query-focus`, `volume-focus`, `search-focus`, `repo-focus`, `migration-search/read-focus`) qui éliminent les fuites bundle entre familles count/query/aggregate, repo/source, read/search/list-modules. Toutes les xfail précédentes du dispatcher (overlap `compare cible`, `repo` partagé, `lignes de code` vs `combien`) sont désormais vertes',
+      'Routing — nouveau pattern `migration-compare-pattern` : `compare`/`comparer` + `cible`/`target`/`v18` route explicitement vers `migration_read_target_file` (score 75). Bundle `migration_target` enrichi : inclut désormais `migration_read_target_file`. Bundle `odoo_source` enrichi avec pluriels et `odoo/addons`',
+      'Skills — `runtime_project_context_refresh` passe `allow_implicit_invocation: false` (action UI-only, ne devait jamais router sur un prompt). `source_read_odoo_file` enrichi avec 17 keywords ciblés (`fichier source`, `sources odoo`, `read the file`, `odoo/addons`...)',
+      'Eval queries — couverture **28/28 skills** (vs 19 en 0.10.0) : ajout des 8 cores manquants (`runtime-*`, `output-report-writer`) avec cases positifs explicites (invocation par nom uniquement) + négatifs (prompts qui mentionnent un mot-clé du skill mais ne doivent jamais déclencher implicitement)',
+      'Tests — 173 cas trigger routing tous verts, **0 xfailed** (vs 15 en 0.10.0). Régression sur le dispatcher impossible silencieusement',
+      'UI Settings — nouveau panneau **Tests routing** dans le détail d\'un skill : affiche le `eval_queries.json` séparé en positifs / pièges proches / négatifs avec badges catégorie, langue, modes, expected_skill et notes. Permet d\'auditer pourquoi un skill devrait ou ne devrait pas déclencher sur un prompt donné, et de partager les cas en revue avec l\'équipe',
+      'Backend — nouvelle route `GET /api/ai/skills/{name}/eval-queries` qui renvoie le payload JSON + flag `available`. Le panneau frontend s\'efface gracieusement si un skill n\'a pas d\'eval (cas qui n\'arrive plus aujourd\'hui)',
+      'Tests — suite : 530 → 586 passed (+56)',
+    ],
+  },
+  {
+    version: '0.10.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Audit P0/P1 — implémentation des recommandations de l\'audit runtime de skills : fail-loud sur sandbox réseau absente, eval queries complétés sur 9 skills supplémentaires (19/28 couverts), test garde-fou no-implicit-core, harnais qualité versionné',
       'Sandbox scripts — `run_skill_script_subprocess` refuse désormais l\'exécution quand un skill déclare `network: false` et que le binaire `unshare` est absent (fail-loud), avec event `policy_decision denied=True permission=network`. Plus de fail-open silencieux qui aurait laissé un script sans isolation réseau',

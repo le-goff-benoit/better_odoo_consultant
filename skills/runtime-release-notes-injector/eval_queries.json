@@ -1,0 +1,7 @@
+[
+  {"query": "runtime_release_notes_injector", "expected_skill": "runtime_release_notes_injector", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name only"},
+  {"query": "Quelles sont les nouveautés Odoo 18 sur la facturation ?", "expected_skill": "runtime_release_notes_injector", "should_trigger": false, "category": "negative", "language": "fr", "notes": "release notes are auto-injected by context aggregator"},
+  {"query": "Release notes 17 → 18", "expected_skill": "runtime_release_notes_injector", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "What changed in Odoo 18?", "expected_skill": "runtime_release_notes_injector", "should_trigger": false, "category": "negative", "language": "en"},
+  {"query": "Audit Studio du projet", "expected_skill": "runtime_release_notes_injector", "should_trigger": false, "category": "negative", "language": "fr"}
+]

@@ -90,6 +90,8 @@ export const getSkillTemplate = (name: string, filename: string) =>
   api.get(`/ai/skills/${encodeURIComponent(name)}/template/${encodeURIComponent(filename)}`)
 export const getSkillExample = (name: string, filename: string) =>
   api.get(`/ai/skills/${encodeURIComponent(name)}/example/${encodeURIComponent(filename)}`)
+export const getSkillEvalQueries = (name: string) =>
+  api.get(`/ai/skills/${encodeURIComponent(name)}/eval-queries`)
 
 // Context files
 export const listContextFiles = (locale = 'fr') => api.get(`/context/?locale=${encodeURIComponent(locale)}`)

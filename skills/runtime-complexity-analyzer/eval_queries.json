@@ -1,0 +1,7 @@
+[
+  {"query": "runtime_complexity_analyzer", "expected_skill": "runtime_complexity_analyzer", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name only"},
+  {"query": "Quelle est la complexité de ce projet ?", "expected_skill": "runtime_complexity_analyzer", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Évalue la complexité technique du dossier", "expected_skill": "runtime_complexity_analyzer", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Mon projet est Studio + dev, c'est complexe", "expected_skill": "runtime_complexity_analyzer", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "How complex is the migration?", "expected_skill": "runtime_complexity_analyzer", "should_trigger": false, "category": "negative", "language": "en"}
+]

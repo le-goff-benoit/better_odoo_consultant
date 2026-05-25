@@ -1,11 +1,67 @@
 [
-  {"query": "Quels sont les champs du modèle sale.order ?", "expected_skill": "odoo_inspect_fields", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Liste les relations many2one de res.partner", "expected_skill": "odoo_inspect_fields", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Quel est le type du champ partner_id sur account.move ?", "expected_skill": "odoo_inspect_fields", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Show me all x_studio_ fields on crm.lead", "expected_skill": "odoo_inspect_fields", "should_trigger": true, "category": "positive", "language": "en"},
-  {"query": "Quel est le schema du modèle product avec ses champs compute et store ?", "expected_skill": "odoo_inspect_fields", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Donne-moi le schema de account.move", "expected_skill": "odoo_inspect_fields", "should_trigger": true, "category": "positive", "language": "fr"},
-  {"query": "Montre les enregistrements de res.partner ID 7", "expected_skill": "odoo_query_records", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "user wants data, not schema", "xfail": "'relation' / 'champs' indirectly matched via stemming or substring — needs disambiguation when prompt mentions an ID"},
-  {"query": "Affiche la vue form de sale.order", "expected_skill": "odoo_inspect_view", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "XML arch, not field list"},
-  {"query": "Combien de partenaires sont actifs ?", "expected_skill": "odoo_count_records", "should_trigger": false, "category": "negative", "language": "fr"}
+  {
+    "query": "Quels sont les champs du modèle sale.order ?",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Liste les relations many2one de res.partner",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Quel est le type du champ partner_id sur account.move ?",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Show me all x_studio_ fields on crm.lead",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "Quel est le schema du modèle product avec ses champs compute et store ?",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Donne-moi le schema de account.move",
+    "expected_skill": "odoo_inspect_fields",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Montre les enregistrements de res.partner ID 7",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "user wants data, not schema"
+  },
+  {
+    "query": "Affiche la vue form de sale.order",
+    "expected_skill": "odoo_inspect_view",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "XML arch, not field list"
+  },
+  {
+    "query": "Combien de partenaires sont actifs ?",
+    "expected_skill": "odoo_count_records",
+    "should_trigger": false,
+    "category": "negative",
+    "language": "fr"
+  }
 ]

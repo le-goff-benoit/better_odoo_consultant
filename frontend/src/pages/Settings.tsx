@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowRight, Check, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, HardDrive, KeyRound, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Search, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getSkillDiagram, getSkillMarkdown, getSkillReference, getSkillTemplate, getSkillExample, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getSkillDiagram, getSkillMarkdown, getSkillReference, getSkillTemplate, getSkillExample, getSkillEvalQueries, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
 import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -286,6 +286,16 @@ type SkillScope = 'core' | 'project' | 'user' | 'organization' | 'experimental'
 type SkillStatus = 'active' | 'disabled' | 'error'
 type SkillHealthStatus = 'ok' | 'warning' | 'error' | 'unknown'
 type SkillContentKind = 'reference' | 'template' | 'example'
+
+interface SkillEvalQuery {
+  query: string
+  expected_skill?: string
+  should_trigger: boolean
+  category?: 'positive' | 'near_miss' | 'negative' | string
+  language?: string
+  notes?: string
+  modes?: string[]
+}
 
 interface SkillUsageItem {
   id: string
@@ -1142,7 +1152,15 @@ function SkillDetailModal({ open, name, meta, enabled, scope, health, providersS
   onClose: () => void
 }) {
   const lang = useUiLanguage()
-  const [tab, setTab] = useState<'overview' | 'skill' | 'diagram' | 'reference' | 'template' | 'example' | 'providers' | 'usage'>('overview')
+  const [tab, setTab] = useState<'overview' | 'skill' | 'diagram' | 'reference' | 'template' | 'example' | 'evalQueries' | 'providers' | 'usage'>('overview')
+  const evalQueriesQuery = useQuery({
+    queryKey: ['skill-eval-queries', name],
+    queryFn: () => getSkillEvalQueries(name).then(r => r.data as { name: string; queries: SkillEvalQuery[]; available: boolean }),
+    staleTime: 60_000,
+    enabled: open,
+  })
+  const evalQueries = evalQueriesQuery.data?.queries ?? []
+  const evalAvailable = evalQueriesQuery.data?.available ?? false
 
   useEffect(() => {
     if (!open) return
@@ -1165,6 +1183,7 @@ function SkillDetailModal({ open, name, meta, enabled, scope, health, providersS
     ...((meta.references?.length ?? 0) > 0 ? [{ id: 'reference' as const, label: labels.references, count: meta.references?.length }] : []),
     ...((meta.templates?.length ?? 0) > 0 ? [{ id: 'template' as const, label: labels.templates, count: meta.templates?.length }] : []),
     ...((meta.examples?.length ?? 0) > 0 ? [{ id: 'example' as const, label: labels.examples, count: meta.examples?.length }] : []),
+    ...(evalAvailable ? [{ id: 'evalQueries' as const, label: lang === 'en' ? 'Eval queries' : 'Tests routing', count: evalQueries.length }] : []),
     { id: 'providers', label: labels.providerCompatibility },
     { id: 'usage', label: labels.usageHistory, count: usageHistory.length },
   ]
@@ -1225,6 +1244,7 @@ function SkillDetailModal({ open, name, meta, enabled, scope, health, providersS
           {tab === 'reference' && <SkillFileViewer skillName={name} kind="reference" files={meta.references ?? []} />}
           {tab === 'template' && <SkillFileViewer skillName={name} kind="template" files={(meta.templates ?? []).map(tpl => `${tpl.name}.md`)} />}
           {tab === 'example' && <SkillFileViewer skillName={name} kind="example" files={meta.examples ?? []} />}
+          {tab === 'evalQueries' && <SkillEvalQueriesPanel skillName={name} queries={evalQueries} loading={evalQueriesQuery.isLoading} lang={lang} />}
           {tab === 'usage' && (
             <section style={detailPanelStyle}>
               <h3 style={detailTitleStyle}>{labels.usageHistory}</h3>
@@ -1436,6 +1456,90 @@ const SKILL_CONTENT_FETCHERS: Record<SkillContentKind, (skill: string, file: str
   reference: getSkillReference,
   template: getSkillTemplate,
   example: getSkillExample,
+}
+
+function SkillEvalQueriesPanel({ skillName, queries, loading, lang }: { skillName: string; queries: SkillEvalQuery[]; loading: boolean; lang: 'fr' | 'en' }) {
+  if (loading) {
+    return <p style={{ color: 'var(--th-muted)', fontSize: 13 }}>{lang === 'en' ? 'Loading eval queries…' : 'Chargement des tests routing…'}</p>
+  }
+  if (queries.length === 0) {
+    return (
+      <section style={detailPanelStyle}>
+        <h3 style={detailTitleStyle}>{lang === 'en' ? 'Eval queries' : 'Tests routing'}</h3>
+        <p style={detailTextStyle}>{lang === 'en'
+          ? 'No eval_queries.json declared for this skill yet.'
+          : 'Aucun eval_queries.json déclaré pour ce skill.'}</p>
+      </section>
+    )
+  }
+  const positives = queries.filter(q => q.should_trigger)
+  const negatives = queries.filter(q => !q.should_trigger)
+  const categoryColor = (cat?: string) => cat === 'positive' ? '#16A34A' : cat === 'near_miss' ? '#D97706' : '#DC2626'
+  const categoryLabel = (cat?: string) => {
+    if (cat === 'positive') return lang === 'en' ? 'positive' : 'positif'
+    if (cat === 'near_miss') return lang === 'en' ? 'near-miss' : 'piège proche'
+    if (cat === 'negative') return lang === 'en' ? 'negative' : 'négatif'
+    return cat ?? '—'
+  }
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <section style={detailPanelStyle}>
+        <h3 style={detailTitleStyle}>{lang === 'en' ? 'Routing regression tests' : 'Tests de régression routing'}</h3>
+        <p style={{ ...detailTextStyle, marginBottom: 10 }}>
+          {lang === 'en'
+            ? `These prompts are replayed against the dispatcher in CI. Owner skill = ${skillName}.`
+            : `Ces prompts sont rejoués contre le dispatcher en CI. Skill owner = ${skillName}.`}
+        </p>
+        <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--th-muted)' }}>
+          <span><strong style={{ color: '#16A34A' }}>{positives.length}</strong> {lang === 'en' ? 'should trigger' : 'doivent déclencher'}</span>
+          <span>·</span>
+          <span><strong style={{ color: '#DC2626' }}>{negatives.length}</strong> {lang === 'en' ? 'should NOT trigger' : 'ne doivent PAS déclencher'}</span>
+        </div>
+      </section>
+      <section style={detailPanelStyle}>
+        <h3 style={detailTitleStyle}>{lang === 'en' ? `${positives.length} positives` : `${positives.length} positifs`}</h3>
+        {positives.length === 0 ? (
+          <p style={detailTextStyle}>—</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+            {positives.map((q, i) => (
+              <li key={i} style={{ border: '1px solid var(--th-border)', borderRadius: 8, padding: '8px 10px', background: 'var(--th-bg-card)' }}>
+                <div style={{ fontSize: 13, color: 'var(--th-text)' }}>{q.query}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  <RegistryBadge color={categoryColor(q.category)}>{categoryLabel(q.category)}</RegistryBadge>
+                  {q.language && <RegistryBadge color="#64748B">{q.language}</RegistryBadge>}
+                  {q.modes && q.modes.map(m => <RegistryBadge key={m} color="#7C3AED">{m}</RegistryBadge>)}
+                </div>
+                {q.notes && <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--th-muted)', fontStyle: 'italic' }}>{q.notes}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section style={detailPanelStyle}>
+        <h3 style={detailTitleStyle}>{lang === 'en' ? `${negatives.length} near-misses / negatives` : `${negatives.length} pièges proches / négatifs`}</h3>
+        {negatives.length === 0 ? (
+          <p style={detailTextStyle}>—</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+            {negatives.map((q, i) => (
+              <li key={i} style={{ border: '1px solid var(--th-border)', borderRadius: 8, padding: '8px 10px', background: 'var(--th-bg-card)' }}>
+                <div style={{ fontSize: 13, color: 'var(--th-text)' }}>{q.query}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  <RegistryBadge color={categoryColor(q.category)}>{categoryLabel(q.category)}</RegistryBadge>
+                  {q.language && <RegistryBadge color="#64748B">{q.language}</RegistryBadge>}
+                  {q.expected_skill && q.expected_skill !== skillName && (
+                    <RegistryBadge color="#2563EB">→ {q.expected_skill}</RegistryBadge>
+                  )}
+                </div>
+                {q.notes && <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--th-muted)', fontStyle: 'italic' }}>{q.notes}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  )
 }
 
 function SkillFileViewer({ skillName, kind, files }: { skillName: string; kind: SkillContentKind; files: string[] }) {

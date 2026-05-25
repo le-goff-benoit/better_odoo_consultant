@@ -1,0 +1,8 @@
+[
+  {"query": "Rédige une revue technique du module sale_extension comme livrable", "expected_skill": "output_report_writer", "should_trigger": true, "category": "positive", "language": "fr", "notes": "template-driven selection (template:technical_review)"},
+  {"query": "Génère un plan de migration formel à remettre au client", "expected_skill": "output_report_writer", "should_trigger": true, "category": "positive", "language": "fr", "notes": "template:migration_plan"},
+  {"query": "Write a functional spec deliverable for this feature", "expected_skill": "output_report_writer", "should_trigger": true, "category": "positive", "language": "en", "notes": "template:functional_spec"},
+  {"query": "Combien de factures en brouillon ?", "expected_skill": "output_report_writer", "should_trigger": false, "category": "negative", "language": "fr", "notes": "short conversational answer, no formal report needed"},
+  {"query": "Bonjour, peux-tu m'aider ?", "expected_skill": "output_report_writer", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Quel temps fait-il aujourd'hui ?", "expected_skill": "output_report_writer", "should_trigger": false, "category": "negative", "language": "fr"}
+]

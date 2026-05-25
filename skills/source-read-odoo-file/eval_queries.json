@@ -1,10 +1,60 @@
 [
-  {"query": "Lis sale/models/sale_order.py des sources Odoo", "expected_skill": "source_read_odoo_file", "should_trigger": true, "category": "positive", "language": "fr", "xfail": "source_read_odoo_file frontmatter does not declare keywords; relies on explicit name match — to enrich"},
-  {"query": "Montre-moi le code standard de la méthode action_confirm sur sale.order", "expected_skill": "source_read_odoo_file", "should_trigger": true, "category": "positive", "language": "fr", "xfail": "no keywords declared on source_read_odoo_file"},
-  {"query": "Affiche le manifest du module account dans les sources Odoo", "expected_skill": "source_read_odoo_file", "should_trigger": true, "category": "positive", "language": "fr", "xfail": "no keywords declared on source_read_odoo_file"},
-  {"query": "Read the standard report template invoice_document from Odoo sources", "expected_skill": "source_read_odoo_file", "should_trigger": true, "category": "positive", "language": "en", "xfail": "no keywords declared on source_read_odoo_file"},
-  {"query": "source_read_odoo_file sale/models/sale_order.py", "expected_skill": "source_read_odoo_file", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name match works"},
-  {"query": "Cherche action_confirm dans les sources Odoo", "expected_skill": "source_search_odoo", "should_trigger": false, "category": "near_miss", "language": "fr", "notes": "search, not read one precise file"},
-  {"query": "Lis le fichier custom_sale.py du repo projet", "expected_skill": "repo_read_file", "should_trigger": false, "category": "near_miss", "language": "fr", "xfail": "no keywords declared on source_read_odoo_file but the prompt mentions 'fichier' which seems to map back; needs keyword enrichment + repo-focus pruning"},
-  {"query": "Que devient action_confirm en version 18 ?", "expected_skill": "migration_read_target_file", "should_trigger": false, "category": "near_miss", "language": "fr"}
+  {
+    "query": "Lis sale/models/sale_order.py des sources Odoo",
+    "expected_skill": "source_read_odoo_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Montre-moi le code standard de la méthode action_confirm sur sale.order",
+    "expected_skill": "source_read_odoo_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Affiche le manifest du module account dans les sources Odoo",
+    "expected_skill": "source_read_odoo_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr"
+  },
+  {
+    "query": "Read the standard report template invoice_document from Odoo sources",
+    "expected_skill": "source_read_odoo_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
+    "query": "source_read_odoo_file sale/models/sale_order.py",
+    "expected_skill": "source_read_odoo_file",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en",
+    "notes": "explicit name match works"
+  },
+  {
+    "query": "Cherche action_confirm dans les sources Odoo",
+    "expected_skill": "source_search_odoo",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr",
+    "notes": "search, not read one precise file"
+  },
+  {
+    "query": "Lis le fichier custom_sale.py du repo projet",
+    "expected_skill": "repo_read_file",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr"
+  },
+  {
+    "query": "Que devient action_confirm en version 18 ?",
+    "expected_skill": "migration_read_target_file",
+    "should_trigger": false,
+    "category": "near_miss",
+    "language": "fr"
+  }
 ]

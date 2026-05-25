@@ -1,0 +1,7 @@
+[
+  {"query": "runtime_localization_detector", "expected_skill": "runtime_localization_detector", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name only"},
+  {"query": "Quel est le code de localisation française dans Odoo ?", "expected_skill": "runtime_localization_detector", "should_trigger": false, "category": "negative", "language": "fr", "notes": "fiscal localization is auto-injected by context aggregator; user shouldn't see this orchestrator routed"},
+  {"query": "Comment configurer la TVA française ?", "expected_skill": "runtime_localization_detector", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Quelles sont les obligations e-invoicing en Italie ?", "expected_skill": "runtime_localization_detector", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Bonjour", "expected_skill": "runtime_localization_detector", "should_trigger": false, "category": "negative", "language": "fr"}
+]

@@ -8,6 +8,7 @@ group: core
 builtin: true
 read_only: true
 risk_level: low
+allow_implicit_invocation: false
 description: "Action UI de rafraîchissement projet déclenchée par le bouton « Rafraîchir » du panneau contexte de l'Assistant : git pull du dépôt, ping XML-RPC Odoo, recalcul de la localisation pays, recalcul de la complexité technique, régénération du contexte projet. Utiliser uniquement quand l'utilisateur déclenche ce bouton. Ne pas invoquer automatiquement à chaque tour ni pour un rafraîchissement implicite."
 description_en: "Project-refresh UI action triggered by the Assistant context panel 'Refresh' button: git pull of the repo, Odoo XML-RPC ping, country localization recompute, technical complexity recompute, project context regeneration. Use only when the user clicks that button. Do not invoke automatically each turn or for implicit refresh."
 requirement: Projet sélectionné

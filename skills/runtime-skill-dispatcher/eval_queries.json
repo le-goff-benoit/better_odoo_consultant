@@ -1,0 +1,7 @@
+[
+  {"query": "runtime_skill_dispatcher status", "expected_skill": "runtime_skill_dispatcher", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name invocation only — core skill with allow_implicit_invocation=false"},
+  {"query": "Peux-tu dispatcher cette demande aux bons skills ?", "expected_skill": "runtime_skill_dispatcher", "should_trigger": false, "category": "negative", "language": "fr", "notes": "user-facing word 'dispatcher' must not implicitly select the orchestrator"},
+  {"query": "Quel skill route ma question ?", "expected_skill": "runtime_skill_dispatcher", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Bonjour, peux-tu m'aider ?", "expected_skill": "runtime_skill_dispatcher", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Audit Studio du projet", "expected_skill": "runtime_skill_dispatcher", "should_trigger": false, "category": "negative", "language": "fr"}
+]

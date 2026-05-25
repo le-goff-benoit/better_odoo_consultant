@@ -1,0 +1,7 @@
+[
+  {"query": "runtime_context_aggregator", "expected_skill": "runtime_context_aggregator", "should_trigger": true, "category": "positive", "language": "en", "notes": "explicit name only"},
+  {"query": "Quel est le contexte de mon projet ?", "expected_skill": "runtime_context_aggregator", "should_trigger": false, "category": "negative", "language": "fr", "notes": "'contexte' must not implicitly select the orchestrator"},
+  {"query": "Aggregate the project context for me", "expected_skill": "runtime_context_aggregator", "should_trigger": false, "category": "negative", "language": "en"},
+  {"query": "Combien de factures en brouillon ?", "expected_skill": "runtime_context_aggregator", "should_trigger": false, "category": "negative", "language": "fr"},
+  {"query": "Liste les modules custom du repo", "expected_skill": "runtime_context_aggregator", "should_trigger": false, "category": "negative", "language": "fr"}
+]

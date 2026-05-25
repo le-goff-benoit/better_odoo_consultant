@@ -246,9 +246,9 @@ _SKILL_INTENT_BUNDLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] 
         "server action", "modèle custom", "modele custom", "champ custom",
     ), ("odoo_inspect_studio", "odoo_inspect_fields", "odoo_inspect_view")),
     ("odoo_source", (
-        "source odoo", "standard odoo", "code odoo", "méthode", "methode",
+        "source odoo", "sources odoo", "standard odoo", "code odoo", "méthode", "methode",
         "method", "class", "_name", "_inherit", "orm", "api.", "@api",
-        "comportement standard", "standard behavior",
+        "comportement standard", "standard behavior", "odoo/addons", ".py odoo",
     ), ("source_search_odoo", "source_read_odoo_file")),
     ("project_source", (
         "repo", "dépôt", "depot", "code custom", "module custom",
@@ -259,7 +259,7 @@ _SKILL_INTENT_BUNDLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] 
         "migration", "upgrade", "version cible", "target version", "breaking",
         "compatibilité", "compatibilite", "renommé", "renomme", "supprimé",
         "supprime", "deprecated", "dépréci",
-    ), ("odoo_inspect_modules", "odoo_inspect_studio", "repo_list_modules", "migration_search_target_source")),
+    ), ("odoo_inspect_modules", "odoo_inspect_studio", "repo_list_modules", "migration_search_target_source", "migration_read_target_file")),
     ("volume", (
         "volumétrie", "volumetrie", "loc", "lignes de code", "lines of code",
         "taille", "size", "effort", "combien de lignes",
@@ -803,6 +803,13 @@ def _prune_skill_routes(
         # redundant: the aggregate already returns the per-group totals.
         if _has_any(prompt_norm, aggregate_intent_terms) and selected("odoo_aggregate_records"):
             deselect("odoo_count_records", "pruned:aggregate-dominates")
+    # Even when the count never carries its own intent terms, the ``kpi``
+    # bundle pulls it in whenever aggregate fires. Drop count whenever the
+    # prompt clearly carries an aggregate signal AND no explicit count term.
+    elif (selected("odoo_count_records")
+            and selected("odoo_aggregate_records")
+            and _has_any(prompt_norm, aggregate_intent_terms)):
+        deselect("odoo_count_records", "pruned:aggregate-dominates")
 
     # Schema-inspection intent: "quels champs", "what fields", "structure du
     # modèle" — the user wants the model metadata, not the records. Business
@@ -824,9 +831,10 @@ def _prune_skill_routes(
     # mentions an override / inherit / explicit code search.
     list_modules_intent_terms = (
         "__manifest__", "manifest.py", "liste des modules", "lister les modules",
-        "list modules", "list of modules", "liste modules", "lister modules",
-        "modules du dépôt", "modules du depot", "périmètre installable",
-        "perimetre installable", "modules installables",
+        "liste les modules", "lister modules", "liste modules",
+        "list modules", "list of modules", "list the modules", "list all modules",
+        "modules du dépôt", "modules du depot", "modules du repo",
+        "périmètre installable", "perimetre installable", "modules installables",
     )
     code_search_terms = (
         "override", "_inherit", "surcharge", "cherche dans", "search in",
@@ -889,6 +897,128 @@ def _prune_skill_routes(
         if lacks_any(data_action_terms):
             for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
                 deselect(name, "pruned:navigation-focus")
+
+    # Query-dominates: when the user explicitly asks to LIST / SHOW records
+    # of a model ("liste-moi les factures", "montre les enregistrements"),
+    # the count + fields siblings that were added by the ``record_analysis`` /
+    # ``live_data`` bundles are not what the user wants. They survive only if
+    # the prompt also carries a count or schema signal.
+    explicit_list_terms = (
+        "liste-moi", "liste moi", "lister", "list me", "montre-moi", "montre moi",
+        "montre les", "montrer les", "show me", "show the", "show all",
+        "affiche-moi", "affiche les", "afficher les", "display me", "display the",
+        "donne-moi les", "donne moi les", "give me the", "give me all",
+        "voir les", "see the", "fiche du", "fiche de la", "fiche des",
+        "détail de", "detail de", "details of", "détails de", "details du",
+    )
+    fields_signal_terms = (
+        "champ", "champs", "field", "fields", "relation", "many2one",
+        "one2many", "many2many", "x_", "x_studio", "schema", "schéma",
+        "structure du modèle", "structure du modele",
+    )
+    if (selected("odoo_query_records")
+            and _has_any(prompt_norm, explicit_list_terms)
+            and lacks_any(count_intent_terms)
+            and lacks_any(aggregate_intent_terms)
+            and lacks_any(schema_intent_terms)):
+        deselect("odoo_count_records", "pruned:query-focus")
+        # Keep ``odoo_inspect_fields`` when the prompt carries an explicit
+        # schema/fields signal (plain "fields"/"champs"/"x_*"). Otherwise the
+        # bundle leak from ``record_analysis`` is just noise.
+        if lacks_any(fields_signal_terms):
+            deselect("odoo_inspect_fields", "pruned:query-focus")
+
+    # Volume-focus: "lignes de code", "lines of code", "LOC", "lignes python"
+    # — the user wants source-code volumetry. ``odoo_count_records`` is the
+    # wrong tool (DB rows, not LOC). Same for ``repo_read_file`` and
+    # ``repo_search_code`` (read or grep, not measure).
+    volume_focus_terms = (
+        "ligne de code", "lignes de code", "line of code", "lines of code",
+        " loc ", "loc total", "loc par", "loc dans",
+        "ligne python", "lignes python", "line python", "lines python",
+        "volumétrie code", "volumetrie code", "size of the codebase",
+    )
+    # Pad with spaces to make " loc " catch the bare token without matching
+    # words like "block" or "blockchain".
+    if selected("repo_count_source_lines") and _has_any(f" {prompt_norm} ", volume_focus_terms):
+        deselect("odoo_count_records", "pruned:volume-focus")
+        deselect("odoo_query_records", "pruned:volume-focus")
+        deselect("odoo_inspect_fields", "pruned:volume-focus")
+        deselect("repo_read_file", "pruned:volume-focus")
+        deselect("repo_search_code", "pruned:volume-focus")
+        # Suppress list-modules unless the user also mentions modules — the
+        # ``project_source`` bundle adds list-modules whenever "repo" is present.
+        if lacks_any(("module ", "modules ", "manifest", "__manifest__")):
+            deselect("repo_list_modules", "pruned:volume-focus")
+
+    # Search-focus: "cherche", "search", "grep", "rechercher" — the user
+    # wants ad-hoc lookup, not a single-file read or a manifest catalog.
+    # Applies in BOTH repo and source contexts.
+    code_search_intent_terms = (
+        "cherche", "chercher", "rechercher", "recherche dans",
+        "grep ", " grep", "search for", "find all", "find the",
+        "find any", "find every", "trouve tous", "trouve toutes",
+        "trouve les ", "trouve la ", "trouve le ",
+    )
+    if (_has_any(prompt_norm, code_search_intent_terms)
+            and (selected("repo_search_code") or selected("source_search_odoo"))):
+        if not _has_any(prompt_norm, single_file_read_terms):
+            deselect("repo_read_file", "pruned:search-focus")
+            deselect("source_read_odoo_file", "pruned:search-focus")
+        # Catalog listing also unwanted when the user explicitly searches.
+        deselect("repo_list_modules", "pruned:search-focus")
+
+    # Repo-context-focus: prompt clearly anchors to the client project repo
+    # ("repo", "dépôt projet", "code custom", "module custom"). The two
+    # ``source_*`` skills (Odoo standard sources) are wrong unless the user
+    # ALSO references Odoo source code.
+    repo_anchor_terms = (
+        "dépôt projet", "depot projet", "dépôt client", "depot client",
+        "repo projet", "repo client", "project repo", "client repo",
+        "module custom", "modules custom", "code custom", "custom module",
+        "custom modules", "module client", "modules sur mesure",
+    )
+    odoo_source_anchor_terms = (
+        "source odoo", "sources odoo", "standard odoo", "code standard odoo",
+        "community", "enterprise", "odoo standard",
+        "dans les sources", "in odoo sources",
+    )
+    if (_has_any(prompt_norm, repo_anchor_terms)
+            and not _has_any(prompt_norm, odoo_source_anchor_terms)):
+        deselect("source_read_odoo_file", "pruned:repo-focus")
+        deselect("source_search_odoo", "pruned:repo-focus")
+
+    # List-modules cleanup pass: when the user explicitly asks for module
+    # catalog ("liste les modules"), the live-data bundle leaks
+    # (odoo_inspect_view, odoo_query_records, ...) on the noun "modules" are
+    # noise. Drop them unless they have an independent strong signal.
+    if (selected("repo_list_modules")
+            and _has_any(prompt_norm, ("liste les modules", "lister les modules", "list modules", "list of modules", "liste des modules"))):
+        for name in (
+            "odoo_inspect_view", "odoo_inspect_fields", "odoo_inspect_navigation",
+            "odoo_inspect_security", "odoo_query_records", "odoo_count_records",
+            "odoo_aggregate_records",
+        ):
+            deselect(name, "pruned:list-modules-focus")
+
+    # Migration-search vs migration-read disambiguation. Both skills are
+    # routed by the same ``migration_target`` bundle / "version cible"
+    # keyword. When the user clearly searches (cherche / search), suppress
+    # the read sibling; when the user clearly reads/compares one file,
+    # suppress the search sibling.
+    if (selected("migration_search_target_source")
+            and _has_any(prompt_norm, code_search_intent_terms)
+            and not _has_any(prompt_norm, single_file_read_terms)):
+        deselect("migration_read_target_file", "pruned:migration-search-focus")
+    migration_read_intent_terms = single_file_read_terms + (
+        "compare", "comparer", "comparison", "comparaison",
+        "source vs cible", "source→cible", "source -> cible",
+        "before/after", "avant/après", "avant apres",
+    )
+    if (selected("migration_read_target_file")
+            and _has_any(prompt_norm, migration_read_intent_terms)
+            and not _has_any(prompt_norm, code_search_intent_terms)):
+        deselect("migration_search_target_source", "pruned:migration-read-focus")
 
     # A SHA is a very strong source/commit intent. Avoid live-data playbooks
     # caused by generic words like "analyse" unless another explicit live-data
@@ -990,6 +1120,10 @@ def _select_skill_playbooks(
         add("source_show_commit", 90, "sha-pattern")
     if _has_any(prompt_norm, ("où cliquer", "ou cliquer", "where click", "menu", "navigation")):
         add("odoo_inspect_navigation", 75, "navigation-pattern")
+    if _has_any(prompt_norm, ("compare", "comparer", "comparaison")) and _has_any(
+        prompt_norm, ("cible", "target", "version cible", "target version", "v18", "v19", "odoo 18", "odoo 19")
+    ):
+        add("migration_read_target_file", 75, "migration-compare-pattern")
     if _has_any(prompt_norm, ("kpi", "par mois", "par statut", "read_group", "chiffre d'affaires", "ca par")):
         add("odoo_aggregate_records", 75, "kpi-pattern")
     if _has_any(prompt_norm, (
