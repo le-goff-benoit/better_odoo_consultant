@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.97.1',
+    version: '0.97.2',
     date: '2026-05-26',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skill dispatcher — désambiguïsation des paires de skills sémantiquement proches. Script de génération des voisins via le `_SemanticIndex` existant : top-20 paires avec cosine ≥0.20, dominées par read/search/modules entre source/repo/migration et par count/query/aggregate sur les live data. 27 cas de désambiguïsation écrits manuellement dans `scripts/quality_eval/disambiguation_cases.jsonl` (3 cas par paire haute-criticité, avec champ nouveau `forbidden_skills` qui force une assertion stricte : « tel skill DOIT gagner ET tels autres NE DOIVENT PAS être sélectionnés »)',
+      'Harnais — `run_skill_dispatcher_eval.py` étendu : nouveau loader `_load_disambiguation` pour le fichier JSONL, support du champ `forbidden_skills` côté curated/disambiguation, rapport markdown qui sépare « Real failures » de « Known weaknesses (xfail) » pour que le statut soit lisible d\'un coup d\'œil',
+      'Skills — `odoo_inspect_modules` enrichi de `installé en base`, `installé en bdd`, `installé sur l\'instance`, `installed on the database`, `actuellement installé`, `module présent en base`. Corrige le cas de désambiguïsation p03c qui partait vers `inspect_module_graph` via le semantic fallback (cos=0.16)',
+      'Diagnostic — 4 vraies faiblesses dispatcher identifiées par les nouveaux cas et documentées en `xfail` avec leur cause précise et la classe de fix nécessaire : (1) bundle `intent:record_analysis` trop large quand query_records domine (p04b), (2) pattern `verbe+__manifest__.py` non câblé (p06b), (3) over-selection des skills source frères quand une SHA est présente (p10a), (4) `odoo_inspect_report` co-sélectionné avec `inspect_financial_reports` sur TVA/journal/balance (p11a). Chaque xfail porte le wording exact du fix à appliquer',
+      'Résultats vs 0.97.1 (offline, 307 cas) : accuracy 100 %, positive 100 %, negative 100 %, paraphrase 100 % (24), train/dev/test tous à 100 %. 4 known weaknesses listées séparément, suite 807 passed',
+    ],
+  },
+  {
+    version: '0.97.1',
+    date: '2026-05-26',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skill dispatcher — nouveau harnais d\'éval unifié `scripts/quality_eval/run_skill_dispatcher_eval.py` qui ingère les 28 prompts curated de `dataset.json` + les 256 queries des `skills/*/eval_queries.json` (284 cas au total). Mesure positive accuracy / negative accuracy / paraphrase accuracy avec split stable train/dev/test 70/15/15 (hash sha1 de l\'id), matrice de confusion skill-to-skill et exclusion des cas `xfail` du scoring. Mirror exact de `run_agent_response_eval.py` pour la couche dispatcher',
       'Skills — paraphrases ajoutées sur 12 skills pivots (24 reformulations sur `odoo_query_records`, `odoo_count_records`, `odoo_aggregate_records`, `odoo_inspect_view`, `odoo_inspect_security`, `odoo_inspect_report`, `odoo_inspect_studio`, `source_search_odoo`, `source_show_commit`, `repo_search_code`, `triage_odoo_error`, `compare_odoo_versions`). 2 trous détectés à la mesure et corrigés : `odoo_aggregate_records` enrichi avec `ca mensuel`/`mensuel`/`annuel`/`trimestriel`/`monthly`/`yearly`/`réalisé`/`tendance` (paraphrase "Quel CA mensuel a-t-on réalisé sur 2025 ?" ne matchait plus), `triage_odoo_error` enrichi avec `exception python`/`exception remonte`/`cause racine`/`does not exist`/`peux-tu la classer` (paraphrase "Cette exception Python remonte d\'Odoo en prod, peux-tu la classer ?" partait vers `source_search_odoo`)',

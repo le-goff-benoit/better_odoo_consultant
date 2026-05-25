@@ -44,6 +44,7 @@ from backend.skills.registry import SKILL_DEFINITIONS  # noqa: E402
 
 
 CURATED_DATASET = ROOT / "scripts" / "quality_eval" / "dataset.json"
+DISAMBIGUATION_DATASET = ROOT / "scripts" / "quality_eval" / "disambiguation_cases.jsonl"
 SKILLS_DIR = ROOT / "skills"
 
 # Skills that are never reported as "selected" in confusion analysis because
@@ -60,10 +61,11 @@ _INFRASTRUCTURE_SKILLS = {
 @dataclass(frozen=True)
 class EvalCase:
     id: str
-    source: str          # "curated" | folder name
+    source: str          # "curated" | "disambiguation" | folder name
     prompt: str
     owner_skill: str | None   # for per-skill eval_queries: the folder's skill
     expected_skills: tuple[str, ...]  # for curated: the explicit list
+    forbidden_skills: tuple[str, ...] # skills that MUST NOT be selected
     should_trigger: bool      # for per-skill: from the JSON; curated: True if expected non-empty
     category: str
     language: str
@@ -102,12 +104,47 @@ def _load_curated(path: Path) -> list[EvalCase]:
             prompt=entry["prompt"],
             owner_skill=None,
             expected_skills=expected,
+            forbidden_skills=tuple(entry.get("forbidden_skills") or ()),
             should_trigger=bool(expected),
             category=entry.get("category", "curated"),
             language="fr",
             modes=modes,
             paraphrases=tuple(entry.get("paraphrases") or ()),
             split=_stable_split(f"curated::{cid}"),
+            xfail=entry.get("xfail"),
+        ))
+    return out
+
+
+def _load_disambiguation(path: Path) -> list[EvalCase]:
+    if not path.is_file():
+        return []
+    known = {s.name for s in SKILL_DEFINITIONS}
+    out: list[EvalCase] = []
+    for line_no, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not raw.strip():
+            continue
+        entry = json.loads(raw)
+        cid = entry["id"]
+        expected = tuple(entry.get("expected_skills") or [])
+        forbidden = tuple(entry.get("forbidden_skills") or [])
+        unknown = (set(expected) | set(forbidden)) - known
+        if unknown:
+            raise SystemExit(f"{path}:{line_no} unknown skill(s): {sorted(unknown)}")
+        modes = tuple(entry.get("modes") or [entry.get("mode", "assistant")])
+        out.append(EvalCase(
+            id=f"disambig::{cid}",
+            source="disambiguation",
+            prompt=entry["prompt"],
+            owner_skill=None,
+            expected_skills=expected,
+            forbidden_skills=forbidden,
+            should_trigger=bool(expected),
+            category=entry.get("category", "disambiguation"),
+            language=entry.get("language", "fr"),
+            modes=modes,
+            paraphrases=tuple(entry.get("paraphrases") or ()),
+            split=_stable_split(f"disambig::{cid}"),
             xfail=entry.get("xfail"),
         ))
     return out
@@ -131,6 +168,7 @@ def _load_per_skill(dir_: Path) -> list[EvalCase]:
                 prompt=entry["query"],
                 owner_skill=owner,
                 expected_skills=(owner,) if entry.get("should_trigger") else (),
+                forbidden_skills=tuple(entry.get("forbidden_skills") or ()),
                 should_trigger=bool(entry.get("should_trigger")),
                 category=entry.get("category", "?"),
                 language=entry.get("language", "fr"),
@@ -143,7 +181,11 @@ def _load_per_skill(dir_: Path) -> list[EvalCase]:
 
 
 def load_dataset() -> list[EvalCase]:
-    cases = _load_curated(CURATED_DATASET) + _load_per_skill(SKILLS_DIR)
+    cases = (
+        _load_curated(CURATED_DATASET)
+        + _load_disambiguation(DISAMBIGUATION_DATASET)
+        + _load_per_skill(SKILLS_DIR)
+    )
     if not cases:
         raise SystemExit("No cases loaded — check dataset paths.")
     return cases
@@ -175,14 +217,17 @@ def _evaluate_one(prompt: str, modes: tuple[str, ...], case: EvalCase) -> dict[s
         m, c = _route(prompt, mode)
         all_matched |= m
         all_candidates.extend(c)
+    forbidden_hit: list[str] = []
     if case.should_trigger:
         owner_or_expected = set(case.expected_skills)
         missing = sorted(owner_or_expected - all_matched)
-        ok = not missing
+        forbidden_hit = sorted(set(case.forbidden_skills) & all_matched)
+        ok = (not missing) and (not forbidden_hit)
     else:
         owner_or_expected = {case.owner_skill} if case.owner_skill else set()
         owner_hit = bool(owner_or_expected & all_matched)
-        ok = not owner_hit
+        forbidden_hit = sorted(set(case.forbidden_skills) & all_matched)
+        ok = (not owner_hit) and (not forbidden_hit)
         missing = []
     selected_business = sorted({
         c["name"] for c in all_candidates
@@ -192,6 +237,7 @@ def _evaluate_one(prompt: str, modes: tuple[str, ...], case: EvalCase) -> dict[s
         "ok": ok,
         "matched": sorted(all_matched),
         "missing": missing,
+        "forbidden_hit": forbidden_hit,
         "selected_business": selected_business,
         "top_candidates": [
             {"name": c["name"], "score": c["score"], "selected": c["selected"], "reason": c["reason"]}
@@ -216,10 +262,12 @@ def evaluate_case(case: EvalCase) -> dict[str, Any]:
         "prompt": case.prompt,
         "owner_skill": case.owner_skill,
         "expected_skills": list(case.expected_skills),
+        "forbidden_skills": list(case.forbidden_skills),
         "should_trigger": case.should_trigger,
         "matched_skills": primary["matched"],
         "selected_business": primary["selected_business"],
         "missing": primary["missing"],
+        "forbidden_hit": primary["forbidden_hit"],
         "ok": primary["ok"],
         "top_candidates": primary["top_candidates"],
         "paraphrase_total": len(paraphrase_runs),
@@ -361,16 +409,25 @@ def build_report(summary: dict[str, Any], results: list[dict[str, Any]]) -> str:
             f"- expected `{cell['expected']}` → selected `{cell['selected_instead']}` : {cell['count']}"
         )
 
-    failing = [r for r in results if not r["ok"]]
-    lines.extend(["", f"## Failing cases ({len(failing)})", ""])
-    for r in failing[:30]:
+    failing_real = [r for r in results if not r["ok"] and not r.get("xfail")]
+    failing_xfail = [r for r in results if not r["ok"] and r.get("xfail")]
+    lines.extend(["", f"## Real failures ({len(failing_real)})", ""])
+    if not failing_real:
+        lines.append("- None")
+    for r in failing_real[:30]:
         marker = "positive" if r["should_trigger"] else "negative"
         lines.append(
             f"- [{r['split']}/{marker}] `{r['id']}` — expected `{r['expected_skills'] or r['owner_skill']}`, "
             f"matched_business=`{r['selected_business']}`"
         )
-    if len(failing) > 30:
-        lines.append(f"- … and {len(failing) - 30} more")
+
+    lines.extend(["", f"## Known weaknesses (xfail, excluded from scoring) — {len(failing_xfail)}", ""])
+    if not failing_xfail:
+        lines.append("- None")
+    for r in failing_xfail[:30]:
+        lines.append(
+            f"- `{r['id']}` — {r['xfail']}"
+        )
 
     return "\n".join(lines) + "\n"
 

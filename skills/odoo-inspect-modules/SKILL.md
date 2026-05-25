@@ -15,7 +15,7 @@ requirement_en: Active Odoo connection
 version: "1.0.0"
 author: Le Goff Benoît - Camptocamp SA
 modes: [assistant, migration, creator]
-keywords: [module installé, installed module, apps, application, dépendance, stack]
+keywords: [module installé, installed module, apps, application, dépendance, stack, installé en base, installé en bdd, installé sur l'instance, installed on the database, actuellement installé, module présent en base, présent en base, présent en bdd]
 permissions:
   filesystem: read
   network: false
