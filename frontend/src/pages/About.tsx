@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.97.2',
+    version: '0.97.3',
     date: '2026-05-26',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skill dispatcher — résolution des 4 faiblesses identifiées en 0.97.2. Chaque xfail portait le wording exact du fix à appliquer : (1) `list` ajouté aux `_BOUNDARY_TOKENS` pour que le keyword anglais "list" de `odoo_inspect_view` ne match plus le verbe français "liste" (cause racine de la sur-sélection sur les prompts de listing) ; (2) extension d\'`explicit_list_terms` et nouvelle prune de `odoo_inspect_view/navigation/security` quand des marqueurs list-detail (`avec nom`, `avec montant`, `avec date`, `liste des`) accompagnent une intention query (p04b) ; (3) nouveau pattern `manifest-read-pattern` au scoring (score 100) qui détecte `verbe lecture + __manifest__.py` et route vers `source_read_odoo_file` (ou `repo_read_file` selon un signal projet/custom), couplé à une prune de `repo_list_modules` / `inspect_module_graph` / `odoo_inspect_modules` (p06b) ; (4) nouvelle rule `pruned:sha-focus` qui élimine les skills source frères quand `source_show_commit` est sélectionné via SHA (\\b[0-9a-f]{7,40}\\b), tout en préservant `repo_*` quand le prompt mentionne un override/projet client — sinon les tests goldens commit-analysis cassaient (p10a) ; (5) `financial_terms` enrichi de `rapport tva`, `vat report`, `rapport balance`, `rapport bilan`, `rapport grand livre`, `trial balance` pour que la pruning rule `financial-report-focus` déjà en place se déclenche sur les vrais phrasings (p11a)',
+      'Résultats : Skill dispatcher 311 cas, 100 % accuracy / 100 % positive / 100 % negative / 100 % paraphrase, 0 known weakness restante. Agent response eval inchangé à 90.5 % / 98.5 % / 4 golden failures (pas de régression côté agents). Suite 807 passed',
+      'Leçon — les xfails avec wording exact du fix sont un excellent levier de mémoire d\'équipe : on ne devine pas la classe de patch nécessaire au moment de la régression, on l\'a écrite dès la mesure. Méthode à appliquer chaque fois qu\'un cas hard est ajouté au harnais',
+    ],
+  },
+  {
+    version: '0.97.2',
+    date: '2026-05-26',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skill dispatcher — désambiguïsation des paires de skills sémantiquement proches. Script de génération des voisins via le `_SemanticIndex` existant : top-20 paires avec cosine ≥0.20, dominées par read/search/modules entre source/repo/migration et par count/query/aggregate sur les live data. 27 cas de désambiguïsation écrits manuellement dans `scripts/quality_eval/disambiguation_cases.jsonl` (3 cas par paire haute-criticité, avec champ nouveau `forbidden_skills` qui force une assertion stricte : « tel skill DOIT gagner ET tels autres NE DOIVENT PAS être sélectionnés »)',
       'Harnais — `run_skill_dispatcher_eval.py` étendu : nouveau loader `_load_disambiguation` pour le fichier JSONL, support du champ `forbidden_skills` côté curated/disambiguation, rapport markdown qui sépare « Real failures » de « Known weaknesses (xfail) » pour que le statut soit lisible d\'un coup d\'œil',

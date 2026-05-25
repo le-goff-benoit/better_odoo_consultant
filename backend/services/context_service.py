@@ -145,6 +145,11 @@ _BOUNDARY_TOKENS = frozenset({
     "read", "view", "vue", "orm",
     "cron", "flow", "flux", "graphe", "graph",
     "bilan", "gl",
+    # ``list`` as a keyword of ``odoo_inspect_view`` legitimately means
+    # "list view" (UI mode). It must NOT match the French verb "liste"
+    # ("liste-moi les factures") which is a query intent. Without the
+    # boundary, every prompt containing "liste" wrongly fires inspect_view.
+    "list",
 })
 
 _SECTION_TITLES = {
@@ -887,6 +892,16 @@ def _prune_skill_routes(
         "tax report", "déclaration tva", "declaration tva", "état financier",
         "etat financier", "financial report", "account.report",
         "rapport comptable", "situation client", "résultat projet", "resultat projet",
+        # Additional VAT / financial-report phrasings that didn't appear in
+        # the dataset that originally tuned this rule. These keep the
+        # ``inspect_financial_reports`` skill dominant when the prompt is
+        # clearly about a regulated accounting deliverable, instead of
+        # letting ``odoo_inspect_report`` (a generic QWeb-template skill)
+        # creep in via the bare "rapport" token.
+        "rapport tva", "rapport de tva", "rapport t.v.a", "vat report",
+        "déclaration de tva", "declaration de tva", "rapport balance",
+        "rapport bilan", "rapport grand livre", "rapport résultat",
+        "rapport resultat", "trial balance", "rapport de balance",
     )
     if selected("inspect_financial_reports") and _has_any(prompt_norm, financial_terms):
         keep_supporting_lines = _has_any(prompt_norm, (
@@ -898,6 +913,44 @@ def _prune_skill_routes(
         if not keep_supporting_lines:
             deselect("odoo_query_records", "pruned:financial-report-focus")
         deselect("odoo_inspect_report", "pruned:financial-report-focus")
+
+    # SHA-focus: when ``source_show_commit`` was rightly selected because the
+    # prompt names a git SHA (7-40 hex chars), the *source* siblings creep
+    # in via shared tokens like "code Odoo standard" or "fichier". The user
+    # wants the commit explained, not its surrounding source listed or
+    # grepped. Keep ``repo_*`` skills when the prompt also names a project
+    # / custom / override concern — a real commit triage often needs to
+    # cross-check the client code (see test_agent_response_eval golden
+    # ``developer-014-commit-analysis``).
+    if selected("source_show_commit") and re.search(r"\b[0-9a-f]{7,40}\b", prompt_norm):
+        for name in ("source_search_odoo", "source_read_odoo_file",
+                     "migration_search_target_source", "migration_read_target_file"):
+            deselect(name, "pruned:sha-focus")
+        if not _has_any(prompt_norm, (
+            "override", "surcharge", "surcharger", "module custom", "client",
+            "projet", "notre override", "notre code", "dépôt", "depot",
+            "repo ", "repository", "impact", "compatibilité", "compatibilite",
+        )):
+            for name in ("repo_search_code", "repo_read_file"):
+                deselect(name, "pruned:sha-focus")
+
+    # Manifest-read pattern follow-up: when the manifest-read pattern fires
+    # (added at scoring time as source_read_odoo_file / repo_read_file with
+    # score 100), we still need to prune the module-listing skills that
+    # would otherwise win on the bare "manifest" keyword.
+    if "__manifest__.py" in prompt_norm and _has_any(prompt_norm, (
+        "lis ", "lire ", "read ", "ouvre ", "ouvrir ", "show ", "montre ", "montrer ",
+        "affiche ", "afficher ", "cat ",
+    )):
+        deselect("repo_list_modules", "pruned:manifest-read-focus")
+        deselect("inspect_module_graph", "pruned:manifest-read-focus")
+        deselect("odoo_inspect_modules", "pruned:manifest-read-focus")
+        # The frères repo_search_code / repo_read_file are also pulled by the
+        # ``intent:project_source`` bundle; when the prompt clearly points
+        # at standard source (no project indicator), prune them.
+        if not _has_any(prompt_norm, ("client", "projet", "custom", "dépôt", "depot", "repo ", "repository")):
+            deselect("repo_read_file", "pruned:manifest-read-focus")
+            deselect("repo_search_code", "pruned:manifest-read-focus")
 
     spreadsheet_terms = (
         "spreadsheet", "tableur odoo", "odoo spreadsheet", "dashboard spreadsheet",
@@ -1097,9 +1150,11 @@ def _prune_skill_routes(
         "liste-moi", "liste moi", "lister", "list me", "montre-moi", "montre moi",
         "montre les", "montrer les", "show me", "show the", "show all",
         "affiche-moi", "affiche les", "afficher les", "display me", "display the",
-        "donne-moi les", "donne moi les", "give me the", "give me all",
+        "donne-moi les", "donne moi les", "donne-moi la liste", "donne moi la liste",
+        "give me the", "give me all", "give me the list",
         "voir les", "see the", "fiche du", "fiche de la", "fiche des",
         "détail de", "detail de", "details of", "détails de", "details du",
+        "liste des", "the list of", "la liste de", "la liste des",
     )
     fields_signal_terms = (
         "champ", "champs", "field", "fields", "relation", "many2one",
@@ -1117,6 +1172,19 @@ def _prune_skill_routes(
         # bundle leak from ``record_analysis`` is just noise.
         if lacks_any(fields_signal_terms):
             deselect("odoo_inspect_fields", "pruned:query-focus")
+        # List-detail vocabulary ("avec nom, montant et date", "avec colonnes",
+        # "sors les champs") is a query intent, not a view/navigation/security
+        # one. The view_screen bundle frequently creeps in via short tokens
+        # like "form" or "tree" being substrings of unrelated words; we prune
+        # it here because the user has already named the records they want.
+        list_detail_markers = (
+            "avec nom", "avec montant", "avec date", "avec colonne",
+            "avec les colonnes", "avec les champs", "with name", "with amount",
+            "with columns", "with fields", "with the columns",
+        )
+        if _has_any(prompt_norm, list_detail_markers) or _has_any(prompt_norm, ("liste des", "la liste de", "donne-moi la liste", "donne moi la liste")):
+            for name in ("odoo_inspect_view", "odoo_inspect_navigation", "odoo_inspect_security"):
+                deselect(name, "pruned:query-focus")
 
     # Volume-focus: "lignes de code", "lines of code", "LOC", "lignes python"
     # — the user wants source-code volumetry. ``odoo_count_records`` is the
@@ -1367,6 +1435,22 @@ def _select_skill_playbooks(
     # Explicit trigger patterns that are stronger than generic domain keywords.
     if re.search(r"\b[0-9a-f]{7,40}\b", prompt_norm):
         add("source_show_commit", 90, "sha-pattern")
+    # Manifest-read pattern: "Lis ... __manifest__.py" / "read ... __manifest__.py"
+    # names a specific Odoo manifest file. The intent is to **read** that
+    # file, not to list modules. Without this rule, ``repo_list_modules``
+    # wins on the bare "manifest" keyword. Route to project repo or to the
+    # standard source tree based on whether the prompt mentions a project
+    # indicator.
+    if "__manifest__.py" in prompt_norm and _has_any(prompt_norm, (
+        "lis ", "lire ", "read ", "ouvre ", "ouvrir ", "show ", "montre ", "montrer ",
+        "affiche ", "afficher ", "cat ",
+    )):
+        if _has_any(prompt_norm, (
+            "client", "projet", "custom", "dépôt", "depot", "repo ", "repository",
+        )):
+            add("repo_read_file", 100, "manifest-read-pattern")
+        else:
+            add("source_read_odoo_file", 100, "manifest-read-pattern")
     if _has_any(prompt_norm, ("où cliquer", "ou cliquer", "where click", "menu", "navigation")):
         add("odoo_inspect_navigation", 75, "navigation-pattern")
     if _has_any(prompt_norm, ("compare", "comparer", "comparaison")) and _has_any(
