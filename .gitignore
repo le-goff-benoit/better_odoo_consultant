@@ -18,6 +18,7 @@ odoo-sources/
 # Local working / prep documents (not part of the repo)
 /AUDIT.MD
 /BETTER_SKILLS.MD
+/NEW_SKILLS.MD
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
