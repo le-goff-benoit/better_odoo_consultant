@@ -7,10 +7,47 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.95.2',
+    version: '0.96.2',
     date: '2026-05-25',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Skills — nouveau skill `triage_odoo_error` (mode assistant + migration) : prend un traceback / log Odoo en entrée, parse la stack (frame innermost, classe d\'exception, module) et classe la cause racine entre 5 familles — `migration`, `studio`, `data`, `custom_dev`, `source_code`. Sort un verdict + niveau de confiance + évidence + prochaine action recommandée (un seul skill). Inclus dans `preferred_skills` des agents `support` et `business_analyst`. 2 références auto-loadables (arbre de décision + patterns d\'erreur migration)',
+      'Système — correction de 4 bugs de pinning version/locale dans le system prompt : (1) le bloc `## Instance connectée` lisait `profile.odoo_version` même quand un environnement non-primaire (staging/test) imposait une version différente, créant un décalage silencieux avec les sources et les requêtes XML-RPC ; (2) idem en mode migration ; (3) le pays/localisation fiscale n\'apparaissait que dans le priority block routé, vulnérable à la pression budgétaire — désormais épinglé directement sous l\'Instance ; (4) en mode général, le `country_code` choisi dans l\'UI n\'était jamais répété en tête de prompt, l\'IA était aveugle au pays. `stream_chat` propage maintenant `country_code` et `country_name`. +8 tests dédiés (`test_system_prompt_pinning.py`)',
+      'Tests — +13 cas backend (`test_triage_odoo_error.py` 14 cas, `test_system_prompt_pinning.py` 8 cas). Suite backend : 802 passed',
+    ],
+  },
+  {
+    version: '0.96.1',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Assistant IA — nouveau strip de chips « Avis complémentaire » sous chaque réponse, à côté des propositions d\'action : 1 à 2 chips filtrées par les `handoff_can_handoff_to` de l\'agent courant. Click → relance un tour avec **override de perspective** vers l\'agent invité et un préfixe structuré qui injecte la réponse précédente (capée à 4000 chars) puis demande un avis qui **complète** sans réécrire',
+      'Frontend — `sendWithText` accepte désormais un 4e argument `perspectiveOverride` (utilisé uniquement par les chips d\'avis complémentaire) ; chaque message assistant persiste sa perspective au moment de la création pour que la reprise de session reste cohérente',
+      'Cas d\'usage couverts en standard : dev → architect (validation trajectoire, perfs, multi-société), BA → developer (estimation effort/risque), architect → support (impact run/oncall), support → BA (vérif règle de gestion), et symétriques',
+      'Tests — +3 cas frontend (`buildSecondOpinionPrompt` FR/EN + cap 4 k). Suite Vitest 53 passed',
+    ],
+  },
+  {
+    version: '0.96.0',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
+    items: [
+      'Routing — semantic fallback TF-IDF cosinus en pur Python sur le catalogue de skills : se déclenche uniquement quand aucun signal lexical ne dépasse 60, contribue au plus 1 skill au score 50 (sous keywords, au-dessus de mode-default). Récupère les paraphrases que les keywords manquent sans dépendance externe (`backend/services/semantic_router.py`)',
+      'Routing — niveau de confiance (`high` ≥80, `medium` ≥40, `low` sinon) exposé via `last_skill_route_confidence()` et SSE `routing_confidence` envoyé avant le streaming, prêt à être consommé côté frontend pour offrir une chip de clarification',
+      'Agents — détection de drift sur les 2 derniers tours utilisateur : si l\'agent inféré (confiance haute) diverge 2 fois consécutives de l\'agent actif, émission SSE `agent_drift` proposant la bascule (opt-in côté UI, jamais silencieuse). Lecture de `handoff_can_handoff_to` activée',
+      'Observabilité — log JSONL local de feedback de routage sous `~/.odoo-consultant/routing-feedback.jsonl` (rotation 5000 lignes). Détection automatique des reformulations utilisateur (« non », « plutôt », « actually », « rather ») pour marquer le routage précédent comme imparfait',
+      'Skills — 3 nouveaux méta-skills : `routing_explain` (restitue les candidats scorés du dernier tour avec leurs raisons et le niveau de confiance), `agent_handoff_propose` (propose un changement d\'agent à frontière de phase, validé contre `handoff_can_handoff_to`), `routing_self_audit` (rapport agrégé sur le log : taux de reformulation, confiance basse, skills problématiques)',
+      'Tests — +20 cas (semantic router, feedback log, méta-skills, eval queries routing). Suite : 767 passed, 0 xfailed',
+    ],
+  },
+  {
+    version: '0.95.2',
+    date: '2026-05-25',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Assistant IA / Migration — reprise de page fiabilisée : une génération quittée puis retrouvée ne produit plus de fausse erreur « Session interrompue »',
       'Assistant IA — persistance active renforcée pendant les streams hors page : les messages sont écrits immédiatement en localStorage et resynchronisés depuis le buffer mémoire au retour',

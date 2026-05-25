@@ -1822,6 +1822,15 @@ def build_system(
     user_ctx: str = "",
     active_company_name: Optional[str] = None,
     project_context: Optional[str] = None,
+    # v0.96.2 — fix version/locale drift. When the user has switched to a
+    # non-primary environment (test/staging) with a different Odoo version,
+    # ``profile.odoo_version`` would otherwise mismatch the version we
+    # actually query against. ``country_code``/``country_name`` are pinned
+    # at the top of the stable block so they survive any context-budget
+    # pressure on the priority blocks below.
+    version_override: Optional[str] = None,
+    country_code: Optional[str] = None,
+    country_name: Optional[str] = None,
 ) -> tuple[str, str]:
     """Build the system prompt for project mode.
 
@@ -1843,13 +1852,24 @@ def build_system(
         "Tu es un assistant expert Odoo qui aide les consultants à analyser les données "
         "et le code source de leurs clients."
     )
+    _effective_version = version_override or profile.odoo_version or "inconnue"
     instance_block = (
         f"## Instance connectée\n"
         f"- URL : {profile.db_url}\n"
-        f"- Version : {profile.odoo_version or 'inconnue'}\n"
+        f"- Version : {_effective_version}\n"
         f"- Base : {profile.db_name}\n"
         f"{society_line}"
     )
+    # Pin the fiscal country at the top of the stable prompt — the routed
+    # localization block (priority_blocks) covers the modules/template
+    # details, but a single source of truth at the header lets the model
+    # answer "where is this base set up" without paging through the routed
+    # context.
+    if country_code or country_name:
+        label = country_name or "?"
+        if country_code:
+            label = f"{label} ({country_code.upper()})" if country_name else country_code.upper()
+        instance_block += f"\n- Pays fiscal : {label}"
     access_line = _format_access_context(getattr(profile, "user_access_info", None))
     if access_line:
         instance_block += f"\n{access_line}"
@@ -1919,6 +1939,8 @@ def build_system_migration(
     profile=None,
     active_company_name: Optional[str] = None,
     project_context: Optional[str] = None,
+    country_code: Optional[str] = None,
+    country_name: Optional[str] = None,
 ) -> tuple[str, str]:
     """Build the migration system prompt.
 
@@ -1945,13 +1967,23 @@ def build_system_migration(
         society_line = f"- Société : {profile.company_name or 'inconnue'}"
         if active_company_name:
             society_line += f"\n- Société active (filtre) : {active_company_name}"
+        # Migration mode: `source_version` is the version we explicitly
+        # work against (resolved from the active environment). Prefer it
+        # over the profile's primary `odoo_version`, which may belong to a
+        # different env (production vs staging).
+        _effective_source = source_version or profile.odoo_version or "inconnue"
         instance_block = (
             f"## Instance source connectée\n"
             f"- URL : {profile.db_url}\n"
-            f"- Version : {profile.odoo_version or source_version}\n"
+            f"- Version : {_effective_source}\n"
             f"- Base : {profile.db_name}\n"
             f"{society_line}"
         )
+        if country_code or country_name:
+            label = country_name or "?"
+            if country_code:
+                label = f"{label} ({country_code.upper()})" if country_name else country_code.upper()
+            instance_block += f"\n- Pays fiscal : {label}"
         access_line = _format_access_context(getattr(profile, "user_access_info", None))
         if access_line:
             instance_block += f"\n{access_line}"
@@ -2012,6 +2044,8 @@ def build_system_general(
     response_language: str = "auto",
     *,
     user_ctx: str = "",
+    country_code: Optional[str] = None,
+    country_name: Optional[str] = None,
 ) -> tuple[str, str]:
     stable_parts: list[str] = []
     if user_ctx:
@@ -2020,7 +2054,17 @@ def build_system_general(
         "Tu es un expert Odoo qui répond à des questions générales sur l'ERP, "
         "indépendamment de tout projet client."
     )
-    stable_parts.append(f"## Version Odoo de référence\n{version}")
+    # Always pin the version. Pin the country too when the user has
+    # selected one — this is the single source of truth for the AI even
+    # if the routed l10n_<cc>.md reference doesn't fire because the prompt
+    # doesn't mention fiscal terms.
+    ref_block = f"## Version Odoo de référence\n{version}"
+    if country_code or country_name:
+        label = country_name or "?"
+        if country_code:
+            label = f"{label} ({country_code.upper()})" if country_name else country_code.upper()
+        ref_block += f"\n\n## Pays / localisation fiscale\n{label}"
+    stable_parts.append(ref_block)
     stable_parts.append(_source_instructions(source_path=source_path, repo_path=repo_path))
     stable_parts.append(
         "## Instructions\n"
@@ -2349,6 +2393,11 @@ async def stream_chat(
     response_language: str = "auto",
     disabled_tools: Optional[list] = None,
     run_id: Optional[str] = None,
+    # v0.96.2 — propagated by ai.py so the system prompt header reflects
+    # the *active environment's* version (not the profile primary) and
+    # the *active company's* country.
+    country_code: Optional[str] = None,
+    country_name: Optional[str] = None,
 ) -> AsyncIterator[dict]:
     model = model_id or DEFAULT_MODELS.get(provider, "")
     adapter = get_provider_adapter(provider)
@@ -2390,10 +2439,76 @@ async def stream_chat(
         ))
     # If client sent "auto", infer server-side from the last user message
     # (mirrors the frontend resolver — useful for CLI / mobile clients).
+    _last_user = _last_user_text(messages)
     if perspective == "auto" or perspective is None:
-        perspective = _infer_perspective(_last_user_text(messages))
+        perspective = _infer_perspective(_last_user)
     perspective = _normalize_perspective(perspective)
     response_language = _normalize_response_language(response_language)
+
+    # P1.3 — Reformulation detection: when the user explicitly disagrees
+    # with the previous answer's direction, mark the most recent routing
+    # log entry as ``reformulated=True`` so the self-audit skill can
+    # surface the weak routing pattern. Never raises.
+    try:
+        from . import routing_feedback as _rfb
+        if _rfb.is_reformulation(_last_user):
+            _rfb.mark_previous_as_reformulated()
+    except Exception:
+        pass
+
+    # P1.4 — Agent drift detection across the last two user turns. We
+    # compare the inferred agent for the current and the previous user
+    # message; if both point to a different role than the active agent
+    # AND the inference confidence is high, surface an ``agent_drift``
+    # SSE event so the frontend can offer a switch chip. Never silently
+    # changes the active perspective — opt-in only.
+    _drift_suggestion: Optional[dict] = None
+    try:
+        cur_inferred = _infer_perspective(_last_user, fallback=perspective)
+        prev_user_text = ""
+        # Walk history backwards: skip the most recent user message, find
+        # the previous one.
+        seen_user = 0
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                seen_user += 1
+                if seen_user == 2:
+                    content = msg.get("content")
+                    if isinstance(content, str):
+                        prev_user_text = content
+                    elif isinstance(content, list):
+                        for blk in content:
+                            if isinstance(blk, dict) and blk.get("type") == "text":
+                                prev_user_text = str(blk.get("text") or "")
+                                break
+                    break
+        if (
+            cur_inferred
+            and cur_inferred != perspective
+            and prev_user_text
+        ):
+            prev_inferred = _infer_perspective(prev_user_text, fallback=perspective)
+            cur_conf = getattr(_infer_perspective, "last_result", {})
+            # Reading last_result twice is racy in concurrent calls but the
+            # stream_chat path is single-task; safe enough for a hint.
+            if (
+                prev_inferred == cur_inferred
+                and prev_inferred != perspective
+                and cur_conf.get("confidence") == "high"
+            ):
+                try:
+                    from ..agents import get_agent as _get_drift_agent
+                    target_def = _get_drift_agent(cur_inferred)
+                except Exception:
+                    target_def = None
+                _drift_suggestion = {
+                    "from": perspective,
+                    "to": cur_inferred,
+                    "to_label": getattr(target_def, "label", cur_inferred) if target_def else cur_inferred,
+                    "reason": cur_conf.get("reason", "auto-inferred drift"),
+                }
+    except Exception:
+        _drift_suggestion = None
 
     # Merge agent-level ``denied_skills`` into the per-request disabled_tools
     # list. This is the only real backend gate on which skills are exposed
@@ -2452,6 +2567,8 @@ async def stream_chat(
             profile=profile,
             active_company_name=active_company_name,
             project_context=getattr(profile, "project_context", None) if profile else None,
+            country_code=country_code,
+            country_name=country_name,
         )
         if profile is not None:
             base_tools = (TOOLS_CLAUDE, TOOLS_OPENAI, TOOLS_GEMINI)
@@ -2463,12 +2580,17 @@ async def stream_chat(
             user_ctx=user_ctx,
             active_company_name=active_company_name,
             project_context=getattr(profile, "project_context", None),
+            version_override=version,
+            country_code=country_code,
+            country_name=country_name,
         )
         base_tools = (TOOLS_CLAUDE, TOOLS_OPENAI, TOOLS_GEMINI)
     else:
         stable, variable = build_system_general(
             version or "?", source_path, context_md, repo_path, perspective, response_language,
             user_ctx=user_ctx,
+            country_code=country_code,
+            country_name=country_name,
         )
         base_tools = (TOOLS_CLAUDE_SRC, TOOLS_OPENAI_SRC, TOOLS_GEMINI_SRC)
 
@@ -2505,6 +2627,44 @@ async def stream_chat(
             system = (system[0], system[1] + _hint)
         else:
             system = system + _hint
+
+    # P1.2 / P1.4 — surface routing-quality signals to the frontend BEFORE
+    # streaming starts so the chip layer can render in parallel with the
+    # first tokens. Both events are best-effort and never block streaming.
+    try:
+        from .context_service import (
+            last_selected_skill_names as _last_skills,
+            last_skill_route_confidence as _last_conf,
+            last_skill_route_candidates as _last_cands,
+        )
+        _conf = _last_conf()
+        _skills_now = _last_skills()
+        if _conf:
+            yield {
+                "type": "routing_confidence",
+                "level": _conf.get("level"),
+                "top_score": _conf.get("top_score"),
+                "skills": _skills_now,
+            }
+        if _drift_suggestion:
+            yield {"type": "agent_drift", **_drift_suggestion}
+        # P1.3 — persist the routing decision for offline self-audit.
+        try:
+            from . import routing_feedback as _rfb
+            _rfb.log_turn(
+                prompt=_last_user,
+                agent=perspective,
+                mode=("creator" if False else ("migration" if migration_mode else "assistant")),
+                locale=response_language,
+                skills=_skills_now,
+                confidence=_conf,
+                candidates=_last_cands(),
+                extra={"drift": _drift_suggestion} if _drift_suggestion else None,
+            )
+        except Exception:
+            pass
+    except Exception:
+        pass
 
     try:
         for runtime_evt in _runtime_events():

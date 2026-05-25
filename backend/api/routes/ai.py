@@ -727,11 +727,12 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
                         None, None, _gen_target_path, req.migration_mode, _gen_target_ver,
                         _orchestration.sequence[0].agent, _response_language,
                         disabled_tools=_disabled_tools_cleaned, run_id=f"{_run_id}-step1",
+                        country_code=req.country_code,
                     )
                     yield _sse(_orchestration_step_payload(_orchestration, step=1, status="done", run_id=_run_id, chars=len(intermediate_text)))
                     yield _sse(_orchestration_step_payload(_orchestration, step=2, status="running", run_id=_run_id))
                     final_messages = _messages_for_final_step(messages, _orchestration, intermediate_text)
-                async for evt in stream_chat(req.provider, api_key, req.model, None, None, final_messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id):
+                async for evt in stream_chat(req.provider, api_key, req.model, None, None, final_messages, source_path, context_md, version, _user_profile, None, None, _gen_target_path, req.migration_mode, _gen_target_ver, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id, country_code=req.country_code):
                     yield _sse(evt)
                 if _orchestration.mode == "sequential_agents":
                     yield _sse(_orchestration_step_payload(_orchestration, step=2, status="done", run_id=_run_id))
@@ -918,11 +919,13 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
                     _active_company_name, repo_path, target_path, req.migration_mode,
                     _target_version, _orchestration.sequence[0].agent, _response_language,
                     disabled_tools=_disabled_tools_cleaned, run_id=f"{_run_id}-step1",
+                    country_code=(_active_company.get("country_code") if _active_company else None),
+                    country_name=(_active_company.get("country_name") if _active_company else None),
                 )
                 yield _sse(_orchestration_step_payload(_orchestration, step=1, status="done", run_id=_run_id, chars=len(intermediate_text)))
                 yield _sse(_orchestration_step_payload(_orchestration, step=2, status="running", run_id=_run_id))
                 final_messages = _messages_for_final_step(messages, _orchestration, intermediate_text)
-            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, final_messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id):
+            async for evt in stream_chat(req.provider, api_key, req.model, odoo, profile, final_messages, source_path, context_md, _version_to_use, _user_profile, _active_company_name, repo_path, target_path, req.migration_mode, _target_version, _effective_perspective, _response_language, disabled_tools=_disabled_tools_cleaned, run_id=_run_id, country_code=(_active_company.get("country_code") if _active_company else None), country_name=(_active_company.get("country_name") if _active_company else None)):
                 yield _sse(evt)
             if _orchestration.mode == "sequential_agents":
                 yield _sse(_orchestration_step_payload(_orchestration, step=2, status="done", run_id=_run_id))

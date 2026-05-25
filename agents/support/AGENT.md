@@ -17,6 +17,7 @@ auto_keywords:
   strong: [incident, workaround, ticket, sla, panne, p1, p2, "ne fonctionne pas", "ne marche pas", bug, plante, planté, plantée, inaccessible, lenteur, "page blanche", "écran blanc", "erreur 500", "erreur 404", "erreur 403", "internal server error", "connexion impossible", "impossible de se connecter", "login impossible"]
 recommended_model: claude-haiku-4-5
 preferred_skills:
+  - triage_odoo_error
   - odoo_query_records
   - odoo_inspect_fields
   - odoo_inspect_modules

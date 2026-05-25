@@ -6,7 +6,7 @@ Better Odoo Assistant centralise tout ce dont vous avez besoin en mission : sour
 
 > **Local-first.** L'app tourne entièrement sur votre poste. Seuls les appels aux providers IA (Claude / OpenAI / Gemini / GitHub Models / Copilot) transitent par internet — vers le provider que vous choisissez.
 >
-> **Version actuelle :** `0.95.2` — reprise de page fiabilisée dans Assistant IA et Migration : les navigations pendant une génération ne créent plus de fausse erreur « Session interrompue ». Voir le changelog complet dans la page **À propos** de l'app.
+> **Version actuelle :** `0.96.2` — skill `triage_odoo_error` qui classe un traceback / log Odoo entre `migration` / `studio` / `data` / `custom_dev` / `source_code` avec verdict + confiance + prochaine action (utilisé par support et business_analyst). Correction de 4 bugs de pinning version/locale dans le system prompt. Voir le changelog complet dans la page **À propos** de l'app.
 
 ---
 

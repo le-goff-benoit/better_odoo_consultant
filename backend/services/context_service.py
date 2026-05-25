@@ -1293,6 +1293,26 @@ def _select_skill_playbooks(
             if existing["score"] < _MIN_SKILL_SCORE:
                 existing["selected"] = False
 
+    # Semantic fallback (P1.1) — only fires when *no* lexical signal cleared
+    # the keyword threshold. The router contributes a moderate score
+    # (``_FALLBACK_SCORE``=50) so it sits below explicit/keyword matches but
+    # above mode-defaults; this rescues paraphrased prompts the keyword
+    # lists missed without overruling strong lexical signals.
+    try:
+        from .semantic_router import semantic_fallback, should_run_semantic
+        top_lexical = max((c["score"] for c in route_candidates.values()), default=0)
+        if should_run_semantic(top_lexical):
+            # Limit semantic fallback to the single strongest hit. Top-k>1
+            # risks dragging in adjacent siblings (e.g. repo_list_modules
+            # alongside odoo_inspect_modules) when the lexical layer is
+            # silent — a regression compared to keyword-only routing.
+            for hit in semantic_fallback(prompt_norm, top_k=1):
+                if hit.name in disabled:
+                    continue
+                add(hit.name, hit.score, f"semantic-fallback:cos={hit.cosine}")
+    except Exception as exc:  # pragma: no cover — semantic layer is best-effort
+        _logger.debug("Semantic fallback unavailable: %s", exc)
+
     selected_skills = _prune_skill_routes(prompt_norm, selected_skills, route_candidates)
 
     # Apply minimum-score floor. Explicit invocations (named skill / mode
@@ -1337,6 +1357,28 @@ def _select_skill_playbooks(
         route_candidates.values(),
         key=lambda item: (-item["score"], item["name"]),
     )
+
+    # P1.2 — Confidence gate. The top selected candidate's score classifies
+    # the routing decision so callers (SSE layer, frontend chips) can react.
+    # Thresholds are aligned with the scoring scale:
+    #   * high   : explicit name / strong pattern (≥80) — trust the route
+    #   * medium : keyword/intent/agent-preferred match (≥40)
+    #   * low    : only weak signals fired — surface a clarification chip
+    top_selected_score = max(
+        (c["score"] for c in route_candidates.values() if c["selected"]),
+        default=0,
+    )
+    if top_selected_score >= 80:
+        confidence = "high"
+    elif top_selected_score >= 40:
+        confidence = "medium"
+    else:
+        confidence = "low"
+    _select_skill_playbooks._last_confidence = {  # type: ignore[attr-defined]
+        "level": confidence,
+        "top_score": top_selected_score,
+        "selected": list(matched_skill_names),
+    }
     return "\n\n".join(dict.fromkeys(chunks)).strip()
 
 
@@ -1684,6 +1726,12 @@ def last_selected_skill_names() -> list[str]:
 def last_skill_route_candidates() -> list[SkillRouteCandidate]:
     """Return scored skill-route candidates from the last context build."""
     return list(getattr(_select_skill_playbooks, "_last_candidates", []))
+
+
+def last_skill_route_confidence() -> dict:
+    """Return the confidence summary {level, top_score, selected} produced
+    by the last dispatcher run. Returns an empty dict when no run yet."""
+    return dict(getattr(_select_skill_playbooks, "_last_confidence", {}) or {})
 
 
 def last_output_template_selection() -> Optional[dict]:

@@ -1,0 +1,8 @@
+[
+  {"query": "audite la qualité de ton routage IA", "expected_skill": "routing_self_audit", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "audit routing quality across recent turns", "expected_skill": "routing_self_audit", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "quels skills sont mal routés ces derniers temps ?", "expected_skill": "routing_self_audit", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "donne-moi le taux de reformulation", "expected_skill": "routing_self_audit", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "compter les commandes en draft", "expected_skill": "routing_self_audit", "should_trigger": false, "category": "near_miss", "language": "fr"},
+  {"query": "lis res_partner.py", "expected_skill": "routing_self_audit", "should_trigger": false, "category": "near_miss", "language": "fr"}
+]

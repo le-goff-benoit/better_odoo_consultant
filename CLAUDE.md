@@ -2,7 +2,7 @@
 
 Guide d'orientation pour Claude Code, GitHub Copilot et tout autre assistant IA qui intervient sur ce repository.
 
-Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.95.2` et les derniers commits `main`.
+Dernière mise à jour contextuelle : 2026-05-25, alignée sur l'app `0.96.2` et les derniers commits `main`.
 
 ## Mission du produit
 
@@ -17,6 +17,9 @@ Principes produit à préserver :
 ## État récent à connaître
 
 Les derniers commits ont surtout transformé l'IA en architecture pilotée par skills :
+- `0.96.2` : **skill `triage_odoo_error`** (group=core, modes assistant+migration, preferred par `support` et `business_analyst`) — parse un traceback / log Odoo, classe la cause racine entre `migration` / `studio` / `data` / `custom_dev` / `source_code`, retourne un verdict + confiance + évidence + 1 prochaine action. Handler déterministe (regex + parsing structuré), 2 références auto-loadables. **Correction de 4 bugs de pinning** dans `build_system` / `build_system_migration` / `build_system_general` (`ai_service.py`) : la version affichée dans le bloc `## Instance connectée` lisait `profile.odoo_version` au lieu de la version de l'environnement actif (drift silencieux avec les sources/queries) ; le pays fiscal n'était présent que dans le priority block routé (vulnérable au budget) ; le mode général n'épinglait pas du tout le `country_code`. `stream_chat` propage maintenant `country_code` et `country_name`. +22 tests régressifs. Suite 802 passed.
+- `0.96.1` : **avis complémentaire inter-agents** sous chaque réponse Assistant. Nouveau composant `frontend/src/components/SecondOpinionChips.tsx` : 1-2 chips filtrées par `handoff_can_handoff_to` de l'agent courant. Click → `sendWithText(prompt, undefined, [], targetAgent)` (4e arg `perspectiveOverride` ajouté). Le prompt construit (`buildSecondOpinionPrompt`) cape la réponse précédente à 4000 chars et demande un avis qui **complète** sans réécrire. Chaque message assistant porte désormais `perspective` à la création pour cohérence reprise de session. Différence avec `agent_handoff_propose` : ce dernier **bascule** d'agent ; les chips d'avis enrichissent sans changer l'agent persistant.
+- `0.96.0` : phase 1 d'amélioration du routing IA. **Semantic fallback** TF-IDF cosinus en pur Python (`backend/services/semantic_router.py`) — déclenche uniquement quand aucun signal lexical ne dépasse 60, top-1, score 50 ; pas de dépendance externe, désactivable via `BETTER_SEMANTIC_ROUTER=0`. **Confidence gate** : niveau exposé par `last_skill_route_confidence()` (`high` ≥80, `medium` ≥40, `low`) et émis en SSE `routing_confidence` avant le streaming. **Détection de drift d'agent** : sur les 2 derniers tours utilisateur, si l'agent inféré (confiance haute) diverge 2 fois de l'agent actif, émission SSE `agent_drift` (opt-in côté UI). **Feedback log** JSONL local sous `~/.odoo-consultant/routing-feedback.jsonl` avec détection automatique des reformulations utilisateur (« non », « plutôt », « actually », « rather ») marquant le routage précédent comme imparfait. **3 nouveaux méta-skills** : `routing_explain`, `agent_handoff_propose`, `routing_self_audit`. Eval queries 37/37 skills. Suite 767 passed.
 - `0.95.2` : fiabilisation de la reprise Assistant IA / Migration après navigation. Les conversations actives ne synthétisent plus une fausse erreur « Session interrompue » quand un message `loading` est retrouvé sans stream live ; les bulles assistant vides sont supprimées, les sorties partielles et résultats d'outils sont conservés. Côté Assistant, `setMessages` persiste aussi immédiatement les conversations actives dans `localStorage` et resynchronise depuis le buffer mémoire au retour de page.
 - `0.95.1` : amélioration qualité Mermaid — `MermaidBlock` ajoute copier le Mermaid brut, téléchargement `.mmd`, plein écran et feedback copie ; rendu flowchart configuré `curve: linear` avec styles CSS plus nets. Skill `generate_diagram` durci : cartes titrées (`<b>Titre</b>` + détail), templates avec `classDef`, consignes anti-spaghetti, helper `mermaid_flowchart` partagé enrichi pour produire des nœuds titrés et des classes visuelles par défaut.
 - `0.95.0` : ajout de 2 skills IA self-contained — `inspect_financial_reports` (rapports financiers Enterprise `account.report` : list/recommend/describe/run/export, options période/partner/analytique/société/journaux) et `inspect_spreadsheet` (Odoo Spreadsheets et dashboards : list/inspect/explain_formula/suggest_formula, payload JSON/XLSX, inventaire `ODOO.*`). Nouveaux services `financial_report_service.py` et `spreadsheet_service.py`. Dispatcher enrichi avec bundles/patterns `financial_audit`, `spreadsheet_audit`, `financial-report-pattern`, `spreadsheet-formula-pattern` et pruning `financial-report-focus`, `spreadsheet-focus`. Eval queries 34/34 skills.
@@ -113,7 +116,36 @@ Règles importantes :
 - **Harnais qualité** : `scripts/quality_eval/` — `dataset.json` (28 prompts représentatifs), `run_routing_eval.py` (phase 1, déterministe, exit 0 si 100 % accuracy), `README.md` (phase 2 LLM-as-judge à activer manuellement).
 - **Substring matching** : `_BOUNDARY_TOKENS` (mots courts ambigus en FR/EN, ex. `group`, `groupe`, `view`, `custom`) utilise `(?<!\w)…(?!\w)` ; le reste utilise du substring rapide. Ajouter à `_BOUNDARY_TOKENS` tout token qui risque de matcher un mot plus long (FR↔EN).
 
-Skills présents au moment de cette mise à jour : `attachment-handler`, `compare-odoo-versions`, `complexity-analyzer`, `context-aggregator`, `count-odoo`, `count-source-lines`, `generate-diagram`, `get-odoo-fields`, `git-show-commit`, `inspect-automations`, `inspect-financial-reports`, `inspect-installed-modules`, `inspect-menus-actions`, `inspect-module-graph`, `inspect-odoo-report`, `inspect-odoo-view`, `inspect-security`, `inspect-spreadsheet`, `inspect-studio`, `list-project-modules`, `localization-detector`, `perspective-router`, `project-context-refresh`, `query-odoo`, `read-group-odoo`, `read-odoo-file`, `read-project-file`, `read-target-file`, `release-notes-injector`, `report-writer`, `search-odoo-source`, `search-project-source`, `search-target-source`, `skill-dispatcher`.
+Skills présents au moment de cette mise à jour : `agent-handoff-propose`, `attachment-handler`, `compare-odoo-versions`, `complexity-analyzer`, `context-aggregator`, `count-odoo`, `count-source-lines`, `generate-diagram`, `get-odoo-fields`, `git-show-commit`, `inspect-automations`, `inspect-financial-reports`, `inspect-installed-modules`, `inspect-menus-actions`, `inspect-module-graph`, `inspect-odoo-report`, `inspect-odoo-view`, `inspect-security`, `inspect-spreadsheet`, `inspect-studio`, `list-project-modules`, `localization-detector`, `perspective-router`, `project-context-refresh`, `query-odoo`, `read-group-odoo`, `read-odoo-file`, `read-project-file`, `read-target-file`, `release-notes-injector`, `report-writer`, `routing-explain`, `routing-self-audit`, `search-odoo-source`, `search-project-source`, `search-target-source`, `skill-dispatcher`, `triage-odoo-error`.
+
+## Convention de nommage des skills
+
+**Format dossier ↔ name** : tous les skills sont kebab-case sur le disque (`odoo-count-records/`) et snake_case dans le frontmatter `name:` (`odoo_count_records`). Vérifié 37/37 ✓.
+
+**Préfixes (consistance partielle, par design)** :
+
+| Préfixe | Sens | Exemples |
+|---|---|---|
+| `odoo-*` | Skills XML-RPC sur instance Odoo live | `odoo-count-records`, `odoo-inspect-view`, `odoo-query-records` |
+| `source-*` | Lecture du code source Odoo standard sur disque | `source-read-odoo-file`, `source-show-commit`, `source-search-odoo` |
+| `repo-*` | Opérations sur le dépôt client custom | `repo-read-file`, `repo-search-code`, `repo-list-modules` |
+| `migration-*` | Spécifique mode migration (sources cible) | `migration-read-target-file`, `migration-search-target-source` |
+| `runtime-*` | Orchestrateurs internes (non user-facing, `allow_implicit_invocation: false`) | `runtime-context-aggregator`, `runtime-skill-dispatcher` |
+| `routing-*` | Méta-skills sur le dispatcher (depuis 0.96.0) | `routing-explain`, `routing-self-audit` |
+| `agent-*` | Méta-skills sur les agents | `agent-handoff-propose` |
+| Pas de préfixe | Skills transverses qui lisent plusieurs sources OU analyses out-of-band | `inspect-financial-reports`, `inspect-spreadsheet`, `inspect-automations`, `inspect-module-graph` (mixe live + source), `compare-odoo-versions` (deux sources), `generate-diagram` (analyse), `output-report-writer` (rendu), `triage-odoo-error` (analyse pure de texte) |
+
+**Règle** : un skill qui lit **une seule** source de données utilise son préfixe (`odoo-`, `source-`, `repo-`, `migration-`). Un skill qui mixe les sources ou produit une analyse out-of-band reste sans préfixe et utilise un verbe (`inspect-`, `compare-`, `generate-`, `triage-`, `routing-`, `agent-`).
+
+Ne pas renommer les skills existants pour cohérence cosmétique : leurs noms sont référencés dans les bundles, patterns, agent metadata, tests et eval_queries — un rename est invasif et n'apporte rien fonctionnellement.
+
+## Boucle de feedback routage (depuis 0.96.0)
+
+Le dispatcher écrit une ligne JSONL par tour dans `~/.odoo-consultant/routing-feedback.jsonl` (cap 5000) : `{ts, prompt, agent, mode, locale, skills, confidence, candidates, reformulated, drift}`. La détection « reformulation » utilise des marqueurs en début de message (« non », « plutôt », « actually », « rather »…) et marque le **tour précédent** comme `reformulated=True`. Le skill `routing_self_audit` agrège ce log (taux reformulation, confiance basse, top skills douteux). Désactivable via `BETTER_ROUTING_FEEDBACK=0`.
+
+## Semantic router (depuis 0.96.0)
+
+`backend/services/semantic_router.py` construit en mémoire un index TF-IDF (pur Python, ~5 ms pour ~40 skills) sur `description + description_en + keywords + name` de chaque skill. Le hook dans `_select_skill_playbooks` ne se déclenche que si **aucun** candidat lexical n'atteint 60, et n'ajoute qu'**un seul** skill (le top-1 cosine, score 50). Désactivable via `BETTER_SEMANTIC_ROUTER=0`. Le but est de rattraper les paraphrases inhabituelles sans biaiser les routes lexicales bien établies — pas de remplacement, juste un filet.
 
 ## Architecture agents (personnages de réponse)
 

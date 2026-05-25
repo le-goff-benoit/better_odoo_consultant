@@ -18,6 +18,7 @@ auto_keywords:
   strong: [métier, fonctionnel, "as-is", "to-be", "cas d'usage", "règle de gestion", "compte-rendu", recette, uat, "parcours utilisateur", facture, factures, invoice, invoices, comptabilité, accounting, "rapprochement bancaire", "plan comptable"]
 recommended_model: claude-sonnet-4-6
 preferred_skills:
+  - triage_odoo_error
   - odoo_inspect_modules
   - odoo_inspect_navigation
   - odoo_inspect_view

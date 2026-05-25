@@ -1,0 +1,15 @@
+inputs:
+  - Tour précédent (déjà routé en mémoire)
+inputs_en:
+  - Previous turn (already routed in memory)
+steps:
+  - "Lire _select_skill_playbooks._last_candidates / _last_confidence"
+  - "Trier par score, formater en Markdown"
+steps_en:
+  - "Read _select_skill_playbooks._last_candidates / _last_confidence"
+  - "Sort by score and render as Markdown"
+outputs:
+  - Tableau scoré des candidats + niveau de confiance
+outputs_en:
+  - Scored candidate table + confidence level
+notes: "Méta-skill d'observabilité. Pas d'I/O réseau, pas d'I/O Odoo."

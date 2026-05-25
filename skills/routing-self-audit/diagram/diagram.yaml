@@ -1,0 +1,17 @@
+inputs:
+  - Log JSONL local ~/.odoo-consultant/routing-feedback.jsonl
+inputs_en:
+  - Local JSONL log ~/.odoo-consultant/routing-feedback.jsonl
+steps:
+  - "Charger les N derniers tours"
+  - "Agréger : reformulations, confiance, agents, top skills"
+  - "Formater un rapport Markdown"
+steps_en:
+  - "Load the last N turns"
+  - "Aggregate: reformulations, confidence, agents, top skills"
+  - "Render a Markdown report"
+outputs:
+  - Rapport agrégé en Markdown + objet structuré
+outputs_en:
+  - Aggregated Markdown report + structured object
+notes: "Lecture seule — aucune mutation du log ou du dispatcher."

@@ -1,0 +1,21 @@
+inputs:
+  - Agent courant (perspective)
+  - Agent cible souhaité
+  - Raison textuelle
+inputs_en:
+  - Current agent (perspective)
+  - Target agent
+  - Free-text reason
+steps:
+  - "Valider l'existence de la cible dans le registre"
+  - "Vérifier handoff_can_handoff_to si déclaré"
+  - "Construire la proposition markdown + objet structuré"
+steps_en:
+  - "Validate the target exists in the registry"
+  - "Check handoff_can_handoff_to if declared"
+  - "Build a markdown + structured proposal"
+outputs:
+  - Suggestion structurée + texte FR/EN
+outputs_en:
+  - Structured suggestion + FR/EN text
+notes: "Pas de switch silencieux : c'est une proposition, jamais une action exécutée côté serveur."

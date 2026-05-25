@@ -1,0 +1,10 @@
+[
+  {"query": "pourquoi tu as utilisé ce skill ?", "expected_skill": "routing_explain", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "explique ton routage de skills", "expected_skill": "routing_explain", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "pourquoi cet outil a été choisi ?", "expected_skill": "routing_explain", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "why did you choose this tool", "expected_skill": "routing_explain", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "explain routing decision", "expected_skill": "routing_explain", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "montre tes candidats de routage", "expected_skill": "routing_explain", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "compter les factures en brouillon", "expected_skill": "routing_explain", "should_trigger": false, "category": "near_miss", "language": "fr"},
+  {"query": "lis le fichier sale_order.py", "expected_skill": "routing_explain", "should_trigger": false, "category": "near_miss", "language": "fr"}
+]

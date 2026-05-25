@@ -41,6 +41,7 @@ import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
 import Markdown, { MarkdownActionsProvider, extractActionItems } from '../components/Markdown'
 import ActionProposals from '../components/ActionProposals'
+import SecondOpinionChips, { buildSecondOpinionPrompt } from '../components/SecondOpinionChips'
 
 // Module-level buffer: message arrays survive component unmount so streams
 // that finish after navigation are captured and shown on remount.
@@ -64,7 +65,7 @@ interface CompanyOption {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'orchestration_selected' | 'orchestration_step' | 'text' | 'error' | 'warning' | 'done' | 'end'
+  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'orchestration_selected' | 'orchestration_step' | 'text' | 'error' | 'warning' | 'done' | 'end' | 'routing_confidence' | 'agent_drift'
   name?: string
   args?: Record<string, unknown>
   skills?: string[]
@@ -90,6 +91,14 @@ interface AiEvent {
   output_tokens?: number
   cache_creation_input_tokens?: number
   cache_read_input_tokens?: number
+  // P1.2 — routing confidence summary surfaced before streaming.
+  level?: 'high' | 'medium' | 'low'
+  top_score?: number
+  // P1.4 — agent drift suggestion.
+  from?: string
+  to?: string
+  to_label?: string
+  reason?: string
 }
 
 interface AgentOrchestrationStepLike {
@@ -121,6 +130,10 @@ interface Message {
   startTime?: number
   inputTokens?: number
   outputTokens?: number
+  // Perspective active at message creation time. Only set on assistant
+  // messages and only since v0.96.x — older saved conversations leave it
+  // undefined; consumers must fall back to the current page perspective.
+  perspective?: Perspective
 }
 
 interface SavedConv {
@@ -1024,13 +1037,19 @@ export default function Assistant() {
     } finally { setStreaming(false) }
   }
 
-  const sendWithText = async (text: string, overrideVersion?: string, attached: AttachmentDraft[] = []) => {
+  const sendWithText = async (
+    text: string,
+    overrideVersion?: string,
+    attached: AttachmentDraft[] = [],
+    perspectiveOverride?: Perspective,
+  ) => {
     if ((!text.trim() && attached.length === 0) || streaming || profileId === null || !provider) return
 
     const now = Date.now()
     const attachedMeta = attached.map(attachmentMeta)
+    const effectivePerspective = perspectiveOverride ?? perspective
     const userMsg: Message      = { id: String(now), role: 'user', text, attachments: attachedMeta, timestamp: now }
-    const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true, startTime: now }
+    const assistantMsg: Message = { id: String(now + 1), role: 'assistant', events: [], loading: true, startTime: now, perspective: effectivePerspective }
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
@@ -1060,8 +1079,8 @@ export default function Assistant() {
     try {
       const cleanAttachments = attached.map(attachmentPayload)
       const body = useGeneral
-        ? { provider, profile_id: null, version: useVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective, disabled_tools: disabledTools }
-        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective, disabled_tools: disabledTools }
+        ? { provider, profile_id: null, version: useVersion, country_code: generalCountryCode || undefined, messages: history, model: modelId, perspective: effectivePerspective, disabled_tools: disabledTools }
+        : { provider, profile_id: profileId, company_id: selectedCompanyId ?? undefined, active_env_id: activeEnvId ?? undefined, messages: history, model: modelId, perspective: effectivePerspective, disabled_tools: disabledTools }
       if (cleanAttachments.length > 0) {
         Object.assign(body, { attachments: cleanAttachments })
       }
@@ -1534,10 +1553,13 @@ export default function Assistant() {
                   inputTokens={msg.inputTokens}
                   outputTokens={msg.outputTokens}
                   projectName={isGeneralMode ? undefined : selectedProfile?.name}
-                  perspective={perspective}
+                  perspective={msg.perspective ?? perspective}
                   onAskMore={askMoreOnSelection}
                   onEditTable={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
                   onPromptAction={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
+                  onSecondOpinion={(prompt: string, targetAgent: Perspective) => {
+                    if (!streaming) sendWithText(prompt, undefined, [], targetAgent)
+                  }}
                 />
               </div>
             )
@@ -2034,7 +2056,7 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, perspective, onAskMore, onEditTable, onPromptAction }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, perspective, onAskMore, onEditTable, onPromptAction, onSecondOpinion }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
@@ -2042,6 +2064,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
   onAskMore?: (selectedText: string) => void
   onEditTable?: (prompt: string) => void
   onPromptAction?: (prompt: string) => void
+  onSecondOpinion?: (prompt: string, targetAgent: Perspective) => void
 }) {
   const lang = useUiLanguage()
   const c = assistantCopy[lang]
@@ -2137,6 +2160,21 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
                 onPromptAction={onPromptAction}
                 disabled={loading}
               />
+              <SecondOpinionChips
+                currentAgent={effectiveAgent}
+                lang={lang}
+                disabled={loading}
+                onSecondOpinion={(targetAgent) => {
+                  if (!onSecondOpinion || !textEvt?.content) return
+                  const prompt = buildSecondOpinionPrompt({
+                    previousAgentLabel: effectiveAgent ?? 'developer',
+                    previousAnswer: textEvt.content,
+                    invitedAgentLabel: (lang === 'en' ? targetAgent.label_en : targetAgent.label) || targetAgent.name,
+                    lang,
+                  })
+                  onSecondOpinion(prompt, targetAgent.name as Perspective)
+                }}
+              />
             </div>
           </div>
         )}
@@ -2166,6 +2204,22 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               onPromptAction={prompt => {
                 setExpanded(false)
                 onPromptAction?.(prompt)
+              }}
+            />
+            <SecondOpinionChips
+              currentAgent={effectiveAgent}
+              lang={lang}
+              disabled={loading}
+              onSecondOpinion={(targetAgent) => {
+                if (!onSecondOpinion || !textEvt?.content) return
+                const prompt = buildSecondOpinionPrompt({
+                  previousAgentLabel: effectiveAgent ?? 'developer',
+                  previousAnswer: textEvt.content,
+                  invitedAgentLabel: (lang === 'en' ? targetAgent.label_en : targetAgent.label) || targetAgent.name,
+                  lang,
+                })
+                setExpanded(false)
+                onSecondOpinion(prompt, targetAgent.name as Perspective)
               }}
             />
           </ResponseModal>

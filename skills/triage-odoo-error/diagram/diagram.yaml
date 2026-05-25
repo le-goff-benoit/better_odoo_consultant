@@ -1,0 +1,38 @@
+inputs:
+  - Traceback Python ou log d'erreur Odoo (texte brut)
+  - Optionnel : version Odoo et indication migration en cours
+inputs_en:
+  - Python traceback or Odoo error log (raw text)
+  - Optional: Odoo version and migration-in-progress hint
+steps:
+  - "Parser le traceback : exception class, message, frame innermost (file:line), module"
+  - "Détecter les signaux migration (priorité 1) : Field X does not exist on model, column does not exist, scripts d'upgrade"
+  - "Détecter les signaux Studio (priorité 2) : web_studio/, x_studio_, studio_customization"
+  - "Détecter les signaux data (priorité 3) : ValidationError, UserError, IntegrityError, contraintes _check_*"
+  - "Détecter le chemin du frame innermost : standard Odoo → source_code ; chemin custom/repo → custom_dev"
+  - "Calculer la confiance (high / medium / low) selon le nombre et la qualité des signaux"
+  - "Proposer la prochaine action (un seul skill cible) et la pertinence migration"
+steps_en:
+  - "Parse the traceback: exception class, message, innermost frame (file:line), module"
+  - "Detect migration signals (priority 1): Field X does not exist on model, column does not exist, upgrade scripts"
+  - "Detect Studio signals (priority 2): web_studio/, x_studio_, studio_customization"
+  - "Detect data signals (priority 3): ValidationError, UserError, IntegrityError, _check_* constraints"
+  - "Detect innermost frame path: standard Odoo → source_code ; custom/repo path → custom_dev"
+  - "Compute confidence (high / medium / low) from signal count and quality"
+  - "Propose the next action (one target skill) and migration relevance"
+outputs:
+  - "verdict (migration | studio | custom_dev | source_code | data | unknown)"
+  - "confidence (high | medium | low)"
+  - "evidence (lignes du log + règles déclenchées)"
+  - "parsed (exception_class, exception_message, innermost_file, innermost_line, module)"
+  - "next_steps (1 skill recommandé + 1 phrase)"
+  - "migration_relevance (high | medium | low | none)"
+outputs_en:
+  - "verdict (migration | studio | custom_dev | source_code | data | unknown)"
+  - "confidence (high | medium | low)"
+  - "evidence (log lines + triggered rules)"
+  - "parsed (exception_class, exception_message, innermost_file, innermost_line, module)"
+  - "next_steps (1 recommended skill + 1 sentence)"
+  - "migration_relevance (high | medium | low | none)"
+notes: "Skill déterministe (regex + parsing structuré). Aucun appel LLM, aucun appel réseau, aucun accès Odoo. La sortie est consommée par le LLM qui formate la réponse selon le contrat du SKILL.md."
+notes_en: "Deterministic skill (regex + structured parsing). No LLM call, no network, no Odoo access. Output is consumed by the LLM which formats the answer per the SKILL.md contract."

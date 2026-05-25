@@ -1,0 +1,8 @@
+[
+  {"query": "tu peux passer la main à l'architecte ?", "expected_skill": "agent_handoff_propose", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "propose un handoff vers le développeur", "expected_skill": "agent_handoff_propose", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "switch agent for the next phase", "expected_skill": "agent_handoff_propose", "should_trigger": true, "category": "positive", "language": "en"},
+  {"query": "déléguer cette partie à un autre agent", "expected_skill": "agent_handoff_propose", "should_trigger": true, "category": "positive", "language": "fr"},
+  {"query": "compter les factures", "expected_skill": "agent_handoff_propose", "should_trigger": false, "category": "near_miss", "language": "fr"},
+  {"query": "lis sale_order.py", "expected_skill": "agent_handoff_propose", "should_trigger": false, "category": "near_miss", "language": "fr"}
+]
