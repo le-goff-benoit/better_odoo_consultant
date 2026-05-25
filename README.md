@@ -199,6 +199,15 @@ Toute modification de skill (description, keywords, règle de routage) est prot�
 | `tests/test_skill_runtime_events.py` | events runtime (policy, reference, script, provider, tokens) |
 | `tests/test_policy_engine.py` | enforcement des 4 axes de permission |
 | `tests/test_toolset_builder.py` | assemblage des toolsets per-provider |
+| `tests/test_agent_response_eval.py` | dataset 200 cas agents + dry-run du banc d'amélioration `AGENT.md` |
+
+Le banc `scripts/quality_eval/run_agent_response_eval.py` complète les tests
+de routing avec une baseline qualité centrée agents : 200 prompts Odoo
+répartis sur Support / Business Analyst / Architecte / Développeur, scoring
+déterministe agent + tool-use, sorties JSONL et rapport Markdown. Les dimensions
+qualitatives (`odoo_accuracy`, `answer_quality`, `handoff_quality`) sont
+alimentables par traces de réponses et revue LLM/humaine, mais restent hors CI
+pour éviter coût API et non-déterminisme.
 
 ---
 

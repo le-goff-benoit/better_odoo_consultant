@@ -712,6 +712,79 @@ def _prune_skill_routes(
     def lacks_any(terms: tuple[str, ...]) -> bool:
         return not _has_any(prompt_norm, terms)
 
+    functional_planning_terms = (
+        "plan de recette", "recette uat", "scénarios uat", "scenarios uat",
+        "aide à décider", "aide a decider", "comment décider", "comment decider",
+        "priorise ce backlog", "prioriser ce backlog", "prépare un plan",
+        "prepare un plan", "rédige un email", "redige un email",
+        "compte-rendu", "compte rendu", "workshop", "kpi proposer",
+        "quels kpi proposer", "plan de formation", "processus cible",
+        "politique de", "cartographie le parcours", "critères d'acceptation",
+        "criteres d'acceptation", "critères d acceptation", "criteres d acceptation",
+        "cartographie le processus", "cadrer le to-be", "cadrer le processus",
+        "user stories", "dashboard métier", "dashboard metier",
+        "plan de conduite du changement", "conduite du changement",
+        "script de démo", "script de demo", "processus cible",
+        "politique de validation", "atelier comptable",
+    )
+    if _has_any(prompt_norm, functional_planning_terms):
+        for name in (
+            "odoo_query_records", "odoo_count_records", "odoo_aggregate_records",
+            "odoo_inspect_fields", "odoo_inspect_view", "odoo_inspect_navigation",
+            "odoo_inspect_security", "odoo_inspect_report", "source_search_odoo", "source_read_odoo_file",
+            "source_show_commit",
+            "repo_search_code", "repo_read_file", "repo_list_modules",
+            "repo_count_source_lines",
+            "compare_odoo_versions", "migration_read_target_file",
+            "migration_search_target_source", "odoo_inspect_studio",
+            "odoo_inspect_modules",
+        ):
+            if name == "odoo_inspect_studio" and _has_any(prompt_norm, ("studio ou custom", "standard, studio", "studio/custom")):
+                continue
+            deselect(name, "pruned:functional-planning-focus")
+
+    architecture_no_data_terms = (
+        "architecture d'intégration", "architecture d'integration",
+        "architecture integration", "recommander entre odoo",
+        "ownership des référentiels", "ownership des referentiels",
+        "stratégie backup", "strategie backup", "backup/restore",
+        "registre des risques", "contrat api", "stratégie edi",
+        "strategie edi", "clients publics français", "clients publics francais",
+        "qr-bill", "architecture d intégration", "architecture integration",
+        "architecture d integration",
+        "reporting consolidé", "reporting consolide", "rédige adr",
+        "redige adr", "rédige un adr", "redige un adr",
+    )
+    if _has_any(prompt_norm, architecture_no_data_terms):
+        for name in (
+            "odoo_query_records", "odoo_count_records", "odoo_aggregate_records",
+            "odoo_inspect_fields", "odoo_inspect_navigation",
+            "migration_read_target_file", "migration_search_target_source",
+            "odoo_inspect_studio", "repo_list_modules", "repo_read_file",
+            "repo_search_code",
+        ):
+            deselect(name, "pruned:architecture-decision-focus")
+        if _has_any(prompt_norm, (
+            "architecture d'intégration", "architecture d'integration",
+            "architecture integration", "ownership des référentiels",
+            "ownership des referentiels",
+        )):
+            deselect("compare_odoo_versions", "pruned:architecture-decision-focus")
+        if _has_any(prompt_norm, ("registre des risques",)) and not _has_any(prompt_norm, ("risques migration", "upgrade", "edi", "blueprint")):
+            deselect("odoo_inspect_modules", "pruned:architecture-decision-focus")
+
+    support_ticket_triage_terms = (
+        "priorise ces trois tickets", "priorise ces tickets",
+        "prioriser ces trois tickets", "prioriser ces tickets",
+    )
+    if _has_any(prompt_norm, support_ticket_triage_terms):
+        for name in (
+            "odoo_query_records", "odoo_count_records", "odoo_aggregate_records",
+            "odoo_inspect_fields", "odoo_inspect_view", "odoo_inspect_navigation",
+            "odoo_inspect_security",
+        ):
+            deselect(name, "pruned:support-ticket-triage-focus")
+
     data_action_terms = (
         "combien", "count", "nombre", "liste", "lister", "list",
         "montre", "montre-moi", "show", "show me",
@@ -745,7 +818,11 @@ def _prune_skill_routes(
     # QWeb/report questions often contain business nouns such as "facture" and
     # the generic verb "analyse". Those should not imply live record reading.
     if selected("odoo_inspect_report"):
-        if lacks_any(data_action_terms):
+        keep_supporting_records = _has_any(prompt_norm, (
+            "ne reprend pas", "certaines factures", "factures fournisseurs",
+            "lignes de taxes", "move lines",
+        ))
+        if lacks_any(data_action_terms) and not keep_supporting_records:
             for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
                 deselect(name, "pruned:report-focus")
         if lacks_any(attachment_action_terms):
@@ -760,6 +837,11 @@ def _prune_skill_routes(
         )
         if lacks_any(view_arch_terms):
             deselect("odoo_inspect_view", "pruned:report-focus")
+
+    if selected("odoo_count_records") and _has_any(prompt_norm, ("50m", "50 m", "stock.move", "base odoo de 8 ans")):
+        deselect("odoo_inspect_view", "pruned:volume-risk-focus")
+    if selected("odoo_count_records") and _has_any(prompt_norm, ("architecture performance", "imports massifs stock")):
+        deselect("odoo_inspect_view", "pruned:architecture-volume-focus")
 
     # Pure XML/view-architecture prompts should stay focused on the assembled
     # view unless the user also asks where to click or describes an access issue.
@@ -783,7 +865,8 @@ def _prune_skill_routes(
             "source odoo", "standard odoo", "code odoo",
             "méthode", "methode", "method", "class", "_name", "_inherit", "orm", "@api",
             "community", "enterprise", "dans les sources", "in sources",
-            "xml id", "xmlid", "external id",
+            "xml id", "xmlid", "external id", "qweb", "xpath",
+            "modifiers", "attrs", "states", "attrs/states",
         )):
             for name in ("source_search_odoo", "source_read_odoo_file"):
                 deselect(name, "pruned:view-focus")
@@ -804,8 +887,14 @@ def _prune_skill_routes(
         "ir.actions.server", "mail template", "template mail",
     )
     if selected("inspect_automations") and _has_any(prompt_norm, automation_terms):
-        for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
+        keep_supporting_records = _has_any(prompt_norm, (
+            "relance les factures en boucle", "sature la file email",
+            "commande reste en devis", "emails non envoyés", "emails non envoyes",
+        ))
+        for name in ("odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
             deselect(name, "pruned:automation-focus")
+        if not keep_supporting_records:
+            deselect("odoo_query_records", "pruned:automation-focus")
         if lacks_any(("studio", "x_studio", "personnalisation", "customization", "customisation")):
             deselect("odoo_inspect_studio", "pruned:automation-focus")
 
@@ -817,8 +906,14 @@ def _prune_skill_routes(
         "rapport comptable", "situation client", "résultat projet", "resultat projet",
     )
     if selected("inspect_financial_reports") and _has_any(prompt_norm, financial_terms):
-        for name in ("odoo_query_records", "odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
+        keep_supporting_lines = _has_any(prompt_norm, (
+            "ne reprend pas", "ne reprend", "certaines factures",
+            "factures fournisseurs", "lignes de taxes", "move lines",
+        ))
+        for name in ("odoo_count_records", "odoo_aggregate_records", "odoo_inspect_fields"):
             deselect(name, "pruned:financial-report-focus")
+        if not keep_supporting_lines:
+            deselect("odoo_query_records", "pruned:financial-report-focus")
         deselect("odoo_inspect_report", "pruned:financial-report-focus")
 
     spreadsheet_terms = (
@@ -844,11 +939,26 @@ def _prune_skill_routes(
         "graphe de dépendances", "graphe de dependances", "dependency graph",
         "module graph", "module tree", "manifest depends",
         "dépendances module", "dependances module", "qui hérite de", "who inherits",
+        "depends mettre", "hériter sale.order", "heriter sale.order",
     )
     if selected("inspect_module_graph") and _has_any(prompt_norm, module_graph_terms):
         if lacks_any(("lis", "lire", "read the file", "ouvre", "open the file")):
-            for name in ("source_read_odoo_file", "repo_read_file", "repo_list_modules"):
+            for name in ("source_read_odoo_file", "repo_read_file"):
                 deselect(name, "pruned:module-graph-focus")
+        for name in (
+            "odoo_query_records", "odoo_count_records", "odoo_aggregate_records",
+            "odoo_inspect_fields",
+        ):
+            deselect(name, "pruned:module-graph-focus")
+
+    if _has_any(prompt_norm, (
+        "community ou enterprise", "community vs enterprise", "recommander community",
+        "recommander entre odoo", "reporting consolidé", "reporting consolide",
+        "stack reporting", "choisir stack reporting",
+        "frontière studio/custom", "frontiere studio/custom",
+    )):
+        for name in ("repo_list_modules", "repo_read_file", "repo_search_code", "source_search_odoo", "odoo_inspect_report"):
+            deselect(name, "pruned:architecture-option-focus")
 
     # Count-only intent dominates: when the user explicitly asks "combien"
     # / "how many", they want the number, not the rows. ``query_records``
@@ -987,6 +1097,7 @@ def _prune_skill_routes(
             "acl", "ir.model.access", "record rule", "ir.rule", "security rule",
             "audit security", "audit sécurité", "audit securite",
             "access denied", "accès refusé", "acces refuse", "ne voit pas",
+            "403", "erreur 403",
         )
         if lacks_any(explicit_security_audit):
             deselect("odoo_inspect_security", "pruned:navigation-focus")
@@ -1080,7 +1191,8 @@ def _prune_skill_routes(
         "dans les sources", "in odoo sources",
     )
     if (_has_any(prompt_norm, repo_anchor_terms)
-            and not _has_any(prompt_norm, odoo_source_anchor_terms)):
+            and not _has_any(prompt_norm, odoo_source_anchor_terms)
+            and not _has_any(prompt_norm, ("post_init_hook", "hook idempotent", "queue_job"))):
         deselect("source_read_odoo_file", "pruned:repo-focus")
         deselect("source_search_odoo", "pruned:repo-focus")
 
@@ -1106,6 +1218,20 @@ def _prune_skill_routes(
             and _has_any(prompt_norm, code_search_intent_terms)
             and not _has_any(prompt_norm, single_file_read_terms)):
         deselect("migration_read_target_file", "pruned:migration-search-focus")
+    if selected("migration_search_target_source") and _has_any(prompt_norm, ("par rapport à", "par rapport a")):
+        deselect("source_search_odoo", "pruned:migration-target-focus")
+        deselect("source_read_odoo_file", "pruned:migration-target-focus")
+        deselect("repo_search_code", "pruned:migration-target-focus")
+        deselect("odoo_inspect_report", "pruned:migration-target-focus")
+    if selected("migration_search_target_source") and _has_any(prompt_norm, ("que devient", "_compute_amount", "action_confirm")):
+        deselect("odoo_query_records", "pruned:migration-method-focus")
+        deselect("odoo_count_records", "pruned:migration-method-focus")
+        deselect("odoo_inspect_fields", "pruned:migration-method-focus")
+        if selected("source_search_odoo"):
+            deselect("migration_read_target_file", "pruned:migration-method-focus")
+            deselect("odoo_inspect_modules", "pruned:migration-method-focus")
+            deselect("odoo_inspect_studio", "pruned:migration-method-focus")
+            deselect("repo_list_modules", "pruned:migration-method-focus")
     migration_read_intent_terms = single_file_read_terms + (
         "compare", "comparer", "comparison", "comparaison",
         "source vs cible", "source→cible", "source -> cible",
@@ -1115,6 +1241,47 @@ def _prune_skill_routes(
             and _has_any(prompt_norm, migration_read_intent_terms)
             and not _has_any(prompt_norm, code_search_intent_terms)):
         deselect("migration_search_target_source", "pruned:migration-read-focus")
+
+    source_method_focus_terms = (
+        "action_confirm", "méthode action_", "methode action_",
+        "with_company", "allowed_company_ids", "sudo",
+    )
+    if selected("source_search_odoo") and _has_any(prompt_norm, source_method_focus_terms):
+        for name in (
+            "odoo_query_records", "odoo_count_records", "odoo_aggregate_records",
+            "odoo_inspect_fields", "odoo_inspect_navigation",
+        ):
+            deselect(name, "pruned:source-method-focus")
+
+    code_implementation_terms = (
+        "@api.depends", "controller", "post_init_hook", "prefetch",
+        "ir.model.access.csv", "xmlid", "external id not found",
+    )
+    if (selected("repo_search_code") or selected("source_search_odoo")) and _has_any(prompt_norm, code_implementation_terms):
+        for name in (
+            "odoo_query_records", "odoo_count_records", "odoo_aggregate_records",
+            "odoo_inspect_fields", "odoo_inspect_navigation",
+        ):
+            deselect(name, "pruned:code-implementation-focus")
+
+    if selected("source_show_commit") and not re.search(r"\b[0-9a-f]{7,40}\b", prompt_norm):
+        deselect("source_show_commit", "pruned:no-sha-focus")
+
+    if selected("odoo_inspect_navigation") and _has_any(prompt_norm, (
+        "comment faire un avoir", "faire un avoir", "parcours utilisateur",
+        "faire un inventaire",
+    )):
+        for name in ("routing_explain", "odoo_query_records", "odoo_count_records", "odoo_inspect_fields"):
+            deselect(name, "pruned:navigation-howto-focus")
+
+    if selected("inspect_spreadsheet"):
+        deselect("odoo_inspect_view", "pruned:spreadsheet-focus")
+
+    if selected("odoo_aggregate_records") and _has_any(prompt_norm, ("read_group", "groupby", "group by", "analytic_account_id")):
+        deselect("odoo_count_records", "pruned:aggregate-dominates")
+
+    if _has_any(prompt_norm, ("prépare une stratégie", "prepare une strategie", "nettoyage des contacts")):
+        deselect("migration_read_target_file", "pruned:migration-strategy-focus")
 
     # A SHA is a very strong source/commit intent. Avoid live-data playbooks
     # caused by generic words like "analyse" unless another explicit live-data
@@ -1223,11 +1390,29 @@ def _select_skill_playbooks(
         prompt_norm, ("cible", "target", "version cible", "target version", "v18", "v19", "odoo 18", "odoo 19")
     ):
         add("migration_read_target_file", 75, "migration-compare-pattern")
+    if _has_any(prompt_norm, ("odoo 18 par rapport", "v18 par rapport", "par rapport à la 16", "par rapport a la 16")):
+        add("migration_search_target_source", 80, "migration-target-search-pattern")
+    if (
+        _has_any(prompt_norm, ("migration", "upgrade", "cutover", "reprise de données", "reprise de donnees"))
+        and (
+            re.search(r"\bodoo\s*\d{2}\s+(?:vers|to|->)\s*\d{2}\b", prompt_norm)
+            or re.search(r"\bv\d{2}\s+(?:vers|to|->)\s*v?\d{2}\b", prompt_norm)
+            or _has_any(prompt_norm, ("source vers cible", "source to target", "plan de cutover"))
+        )
+    ):
+        add("compare_odoo_versions", 85, "migration-version-trajectory-pattern")
     if _has_any(prompt_norm, ("diff version", "compare versions", "comparer versions", "what changed", "change between", "changement entre versions")) or (
         _has_any(prompt_norm, ("compare", "comparer", "diff", "qu'est-ce qui change", "what changes"))
         and _has_any(prompt_norm, ("entre", "between", "17.0", "18.0", "19.0", "odoo 17", "odoo 18", "odoo 19"))
     ):
         add("compare_odoo_versions", 80, "compare-version-pattern")
+    if _has_any(prompt_norm, (
+        "community ou enterprise", "community vs enterprise", "community ou passer enterprise",
+        "rester en community", "passer enterprise", "modules enterprise",
+        "localisation comptable", "localisations comptables", "comptabilités locales",
+        "comptabilites locales", "rollout odoo",
+    )):
+        add("odoo_inspect_modules", 80, "module-fit-pattern")
     if _has_any(prompt_norm, ("diagramme", "diagram", "schéma visuel", "flowchart", "class diagram", "mermaid", "dessine", "draw")):
         add("generate_diagram", 80, "diagram-pattern")
     if _has_any(prompt_norm, ("graphe de dépendances", "graphe de dependances", "dependency graph", "module graph", "module tree", "manifest depends")):
@@ -1239,8 +1424,125 @@ def _select_skill_playbooks(
         "p&l", "profit and loss", "grand livre", "general ledger",
         "tax report", "déclaration tva", "declaration tva", "état financier",
         "etat financier", "financial report", "account.report",
+        "rapport tva", "consolidation financière", "consolidation financiere",
     )):
         add("inspect_financial_reports", 85, "financial-report-pattern")
+    if _has_any(prompt_norm, ("rapprochement bancaire", "écriture déjà lettrée", "ecriture deja lettree")):
+        add("odoo_query_records", 80, "accounting-data-anomaly-pattern")
+    if _has_any(prompt_norm, ("with_company", "allowed_company_ids", "sudo")):
+        add("source_search_odoo", 80, "odoo-framework-api-pattern")
+    if _has_any(prompt_norm, ("action_confirm", "méthode action_", "methode action_")):
+        add("source_search_odoo", 80, "odoo-method-pattern")
+    if _has_any(prompt_norm, ("record rule", "ir.rule")) and _has_any(prompt_norm, ("implémenter", "implementer", "module", "xml")):
+        add("repo_search_code", 80, "repo-security-implementation-pattern")
+    if _has_any(prompt_norm, ("endpoint fastapi", "endpoint", "fastapi")) and _has_any(prompt_norm, ("implémenter", "implementer", "backend")):
+        add("repo_search_code", 80, "repo-backend-implementation-pattern")
+    if _has_any(prompt_norm, (
+        "plante", "ticket urgent", "erreur de capture", "external id not found",
+        "erreur sur l'app mobile", "repassés en anglais", "repasses en anglais",
+        "synchronisation bancaire", "erreur sur un champ", "page blanche",
+        "pos freeze", "freeze au paiement", "banque ne synchronise",
+        "paiement accepté", "paiement accepte", "commande reste en devis",
+        "écarts de caisse", "ecarts de caisse", "erreur sur app mobile",
+        "x_studio_code", "formulaire produit affiche une erreur",
+    )):
+        add("triage_odoo_error", 80, "support-triage-pattern")
+    if _has_any(prompt_norm, (
+        "file d'attente", "relances client automatiques", "abonnements ne se renouvellent",
+        "template mail", "action serveur", "safe_eval", "file d attente",
+        "emails restent", "cron de relance", "modèles emails", "modeles emails",
+        "sature la file email", "emails non envoyés", "emails non envoyes",
+    )):
+        add("inspect_automations", 80, "automation-operational-pattern")
+    if _has_any(prompt_norm, (
+        "tombent sur une 404", "404 en ouvrant", "portal", "portail",
+        "reçoit une erreur 403", "recoit une erreur 403", "404 puis 403",
+    )):
+        add("odoo_inspect_navigation", 80, "portal-navigation-pattern")
+    if _has_any(prompt_norm, (
+        "quantités négatives", "quantites negatives", "ordre de fabrication",
+        "prix de vente sont faux", "feuilles de temps", "n'apparaissent pas",
+        "doublons clients", "notes de frais restent bloquées", "notes de frais restent bloquees",
+        "abonnements ne se renouvellent", "synchronisation bancaire",
+        "stock disponible est faux", "stock négatif", "stock negatif",
+        "valorisation comptable incohérente", "valorisation comptable incoherente",
+        "commande reste en devis", "écarts de caisse", "ecarts de caisse",
+        "coût réel absent", "cout reel absent", "inventaire avec code-barres",
+        "action serveur relance",
+    )):
+        add("odoo_query_records", 80, "live-data-anomaly-pattern")
+    if _has_any(prompt_norm, ("bouton grisé", "bouton grise", "attente manager", "manager a validé", "manager a valide")):
+        add("odoo_inspect_security", 80, "user-access-state-pattern")
+    if _has_any(prompt_norm, (
+        "403", "comptables ch voient", "voient les factures fr",
+        "multi-devises déjà lettrées", "multi-devises deja lettrees",
+        "client portal reçoit une erreur 403", "client portal recoit une erreur 403",
+        "organisation multi-société", "organisation multi-societe",
+    )):
+        add("odoo_inspect_security", 80, "support-access-security-pattern")
+    if _has_any(prompt_norm, ("x_studio", "modification studio", "champ x_studio")):
+        add("odoo_inspect_studio", 80, "studio-error-pattern")
+    if _has_any(prompt_norm, ("standard helpdesk", "helpdesk odoo", "localisation comptable", "edi factures", "entrepôts", "entrepots", "archivage légal", "archivage legal")):
+        add("odoo_inspect_modules", 80, "module-capability-pattern")
+    if _has_any(prompt_norm, ("stock.move", "50m", "50 m", "50m stock.move", "base odoo de 8 ans")):
+        add("odoo_count_records", 80, "volume-risk-pattern")
+    if _has_any(prompt_norm, ("nettoyage doublons", "nettoyage des doublons", "doublons clients avant go-live")):
+        add("odoo_count_records", 80, "data-cleaning-volume-pattern")
+    if _has_any(prompt_norm, ("corrige un domain", "corrige ce domain", "domain odoo")):
+        add("odoo_query_records", 80, "domain-debug-query-pattern")
+    if _has_any(prompt_norm, (
+        "comment faire un avoir", "faire un avoir", "parcours utilisateur",
+        "faire un inventaire",
+    )):
+        add("odoo_inspect_navigation", 80, "functional-navigation-pattern")
+    if _has_any(prompt_norm, ("workshop", "studio ou custom", "standard, studio ou custom")):
+        add("odoo_inspect_studio", 80, "functional-studio-pattern")
+    if _has_any(prompt_norm, ("blueprint odoo", "reporting consolidé", "reporting consolide", "facturation électronique", "facturation electronique")):
+        add("odoo_inspect_modules", 80, "architecture-module-capability-pattern")
+    if _has_any(prompt_norm, ("architecture performance", "stratégie performance", "strategie performance", "imports massifs stock")):
+        add("odoo_count_records", 80, "architecture-volume-pattern")
+    if _has_any(prompt_norm, ("abandonner un custom", "profit oca", "risques migration")):
+        add("compare_odoo_versions", 80, "architecture-migration-risk-pattern")
+    if _has_any(prompt_norm, ("graphe de dépendances", "graphe de dependances", "module custom")):
+        add("repo_list_modules", 80, "repo-module-graph-pattern")
+    if _has_any(prompt_norm, ("repo custom de 40 modules", "40 modules")):
+        add("repo_count_source_lines", 80, "repo-debt-volumetry-pattern")
+    if _has_any(prompt_norm, ("validations achats", "dépenses pour", "depenses pour")):
+        add("odoo_inspect_security", 80, "approval-governance-security-pattern")
+    if _has_any(prompt_norm, ("orchestrer ba", "handoff", "cadrage métier puis design technique")):
+        add("agent_handoff_propose", 80, "handoff-pattern")
+    if _has_any(prompt_norm, ("coûts provider", "couts provider", "réponses odoo fiables", "reponses odoo fiables")):
+        add("routing_self_audit", 80, "routing-audit-pattern")
+    if _has_any(prompt_norm, ("@api.depends", "controller portal", "post_init_hook", "prefetch", "ir.model.access.csv", "queue_job")):
+        add("repo_search_code", 80, "repo-code-implementation-pattern")
+        add("source_search_odoo", 80, "source-code-implementation-pattern")
+    if _has_any(prompt_norm, ("code pour", "module custom", "implémenter", "implementer")) and _has_any(prompt_norm, ("hériter", "heriter", "_inherit", "action_confirm")):
+        add("repo_search_code", 80, "repo-inheritance-implementation-pattern")
+    if _has_any(prompt_norm, ("post_init_hook", "hook idempotent")):
+        add("source_search_odoo", 80, "source-hook-pattern")
+    if _has_any(prompt_norm, ("with_company", "sudo au lieu de with_company", "queue_job")):
+        add("repo_search_code", 80, "repo-framework-implementation-pattern")
+    if _has_any(prompt_norm, ("attrs/states", "modifiers", "odoo 17 sans attrs")):
+        add("source_search_odoo", 80, "source-view-modifiers-pattern")
+    if _has_any(prompt_norm, ("optimiser une boucle", "search dans chaque ligne", "search dans chaque", "boucle qui fait search")):
+        add("repo_search_code", 80, "repo-performance-implementation-pattern")
+        add("source_search_odoo", 80, "source-performance-implementation-pattern")
+    if _has_any(prompt_norm, ("depends mettre", "hériter sale.order", "heriter sale.order")):
+        add("inspect_module_graph", 80, "manifest-dependency-pattern")
+    if _has_any(prompt_norm, ("ordre data", "depends manifest", "xml sécurité", "xml securite")):
+        add("repo_search_code", 80, "repo-manifest-data-pattern")
+        add("inspect_module_graph", 80, "module-manifest-data-pattern")
+    if _has_any(prompt_norm, ("qweb", "xpath")):
+        add("source_search_odoo", 80, "qweb-source-pattern")
+    if _has_any(prompt_norm, ("onchange ou compute", "read_group", "analytic_account_id")):
+        add("source_search_odoo", 80, "orm-source-pattern")
+    if _has_any(prompt_norm, ("que devient _compute_amount", "odoo 18, que devient", "migration odoo 16 vers 18")):
+        if not _has_any(prompt_norm, ("par rapport à", "par rapport a")):
+            add("source_search_odoo", 80, "source-migration-method-pattern")
+        add("migration_search_target_source", 80, "migration-method-pattern")
+    if _has_any(prompt_norm, ("data xml de sécurité", "data xml de securite", "xmlid")):
+        add("repo_search_code", 80, "repo-xmlid-debug-pattern")
+        add("triage_odoo_error", 80, "xmlid-error-pattern")
     if re.search(r"\bodoo\.[a-z0-9_.]+\s*\(", prompt_norm) or _has_any(prompt_norm, (
         "spreadsheet", "tableur odoo", "odoo spreadsheet", "spreadsheet.dashboard",
         "odoo.pivot", "odoo.list", "odoo.filter.value", "formule odoo",
@@ -1301,7 +1603,11 @@ def _select_skill_playbooks(
     try:
         from .semantic_router import semantic_fallback, should_run_semantic
         top_lexical = max((c["score"] for c in route_candidates.values()), default=0)
-        if should_run_semantic(top_lexical):
+        greeting_only = (
+            _has_any(prompt_norm, ("bonjour", "salut", "hello", "hi ", "peux-tu m'aider", "peux tu m aider"))
+            and len(prompt_norm.split()) <= 8
+        )
+        if should_run_semantic(top_lexical) and not greeting_only:
             # Limit semantic fallback to the single strongest hit. Top-k>1
             # risks dragging in adjacent siblings (e.g. repo_list_modules
             # alongside odoo_inspect_modules) when the lexical layer is

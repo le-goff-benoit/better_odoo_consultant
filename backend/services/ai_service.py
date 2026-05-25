@@ -1340,8 +1340,14 @@ def _infer_perspective(text: str, fallback: str = PERSPECTIVE_BA) -> str:
         _record(explicit, "explicit_prompt", "high", f"matched explicit pattern for '{explicit}'")
         return explicit
 
-    # 2) Heuristic strong dev signals.
-    if "```" in t or "_inherit" in t or "@api." in t or "self.env" in t or "traceback" in t:
+    # 2) Heuristic strong dev signals. A bare traceback can be a support
+    # triage request; only force developer when code/debug vocabulary is also
+    # present.
+    traceback_dev = "traceback" in t and any(term in t for term in (
+        "debug", "self.env", "_inherit", "@api.", "browse", "recordset",
+        "méthode", "methode", "method", "python", "orm",
+    ))
+    if "```" in t or "_inherit" in t or "@api." in t or "self.env" in t or traceback_dev:
         _record(PERSPECTIVE_DEVELOPER, "auto_scored", "high", "strong-dev-signal (code/orm/traceback)")
         return PERSPECTIVE_DEVELOPER
 
@@ -1390,6 +1396,7 @@ def _infer_perspective(text: str, fallback: str = PERSPECTIVE_BA) -> str:
         # confidence (informational; routing still returns the best agent).
         _record(best, "auto_scored", "medium",
                 f"top score {best_score} but margin {best_score - second_score} < 2; fallback used")
+        return best
     else:
         _record(fallback, "fallback", "low",
                 f"best score {best_score} below threshold (>=3)")
