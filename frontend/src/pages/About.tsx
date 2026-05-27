@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.98.2',
+    version: '0.99.0',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Refonte UX Settings → API & Modèles. Avant : deux blocs disjoints (cartes Configurés en haut + grille Modèles disponibles en bas) reliés uniquement visuellement, un bouton Enregistrer global tout en bas, chips compactes sans contexte (label seul, ni description ni tags ni indicateur de recommandation). Après : une carte unifiée par provider — la clé API et la sélection de modèles vivent dans la même carte, plus de duplication',
+      'Sélecteur de modèles in-card — collapsible (chevron), compteur N/M activés en header, badge `live`/`liste statique` quand applicable, bouton refresh à droite. Actions bulk : Tout cocher / Recommandés seulement (★ avec compteur) / Tout décocher, en chips de tête. Lignes riches : checkbox dédiée (accent color du provider), ★ doré sur les modèles recommandés, label + description courte + jusqu\'à 2 tags, fond légèrement teinté quand activé. Pour GitHub Models et Copilot, regroupement par famille (OpenAI / Anthropic / Google / Mistral / Meta Llama / Microsoft Phi / DeepSeek / xAI Grok / Cohere / AI21 / Autres) avec mini en-têtes et compteur par famille. Les providers mono-vendor (Claude, OpenAI, Gemini) n\'affichent pas de sous-en-tête (un seul groupe)',
+      'Autosave optimiste — chaque toggle modifie l\'état local immédiatement et programme une sauvegarde debounce 500ms. Indicateur intégré dans le header du sélecteur : `⏳ enregistrement…` pendant le POST, puis `✓ enregistré` qui s\'estompe au bout de 1,8s. Plus de bouton Sauvegarder à actionner manuellement, plus de risque d\'oubli. Les écritures concurrentes (toggles dans plusieurs providers en moins de 500ms) sont mergées en un seul POST avec le snapshot complet du config local',
+      'Helper `inferFamily(id)` dans `frontend/src/constants/providers.ts` — devine la famille (vendor) d\'un modèle à partir de son id, utile pour grouper les IDs live-only que GitHub Models / Copilot retournent et qui ne figurent pas dans la liste statique (`Mistral-Large-2411`, `gpt-4o-2024-11-20`, `DeepSeek-R1-0528`…). Préfixes/marqueurs larges, ordre des tests du plus spécifique au plus général. Nouveau champ optionnel `family?: ModelFamily` sur `ModelDef`. Au rendu : `m.family ?? inferFamily(m.id)` — pas besoin d\'annoter tous les modèles statiques. Suite frontend 84 verts (24 nouveaux cas sur `inferFamily`), backend 809 verts',
+    ],
+  },
+  {
+    version: '0.98.2',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Bugfix critique — régression introduite par 0.98.1 : les pages Assistant, Migration et Creator affichaient « Aucun fournisseur IA configuré — ajouter une clé API → » alors que la clé GitHub/Copilot était bien stockée. Cause racine : 0.98.1 a ajouté les modèles **live** dans Settings (ex. `gpt-4o-2024-11-20`, `Mistral-Large-2411`) que l\'utilisateur peut cocher et qui sont persistés dans `model-config`. Les 3 pages filtraient ensuite via `PROVIDERS[provider].models.filter(m => enabled.includes(m.id))` — qui intersecte avec la **liste statique** codée en dur. Les IDs live-only n\'y figurant pas, le filtre retournait `[]`, le provider était drop par `.filter(p => p.models.length > 0)`, et le sélecteur devenait vide',
       'Fix — nouveau helper `buildConfiguredProviders(allProviders, modelConfig)` dans `frontend/src/constants/providers.ts` : quand un ID coché n\'existe pas dans la liste statique, il est synthétisé en entrée `{id, label: id, desc: \'\'}` au lieu d\'être jeté. Les 3 pages (`Assistant.tsx`, `Migration.tsx`, `Creator.tsx`) utilisent désormais ce helper au lieu de leur filtre inline. 7 nouveaux tests Vitest dans `providers.test.ts` verrouillent le comportement (provider sans clé exclu ; liste vide = statique préservée ; intersection statique-only ; synthèse live-only ; mix des deux ; cas régression 0.98.2 reproduit). Suite frontend 60 verts, backend 809 verts',

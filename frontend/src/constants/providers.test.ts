@@ -1,5 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { buildConfiguredProviders, PROVIDERS } from './providers'
+import { buildConfiguredProviders, inferFamily, PROVIDERS } from './providers'
+
+describe('inferFamily', () => {
+  it.each([
+    ['gpt-4o-2024-11-20', 'OpenAI'],
+    ['gpt-5-mini', 'OpenAI'],
+    ['o1-preview', 'OpenAI'],
+    ['o3-mini', 'OpenAI'],
+    ['o4-mini', 'OpenAI'],
+    ['claude-sonnet-4-6', 'Anthropic'],
+    ['Claude-Opus-4-7', 'Anthropic'],
+    ['gemini-2.5-pro', 'Google'],
+    ['Mistral-Large-2411', 'Mistral'],
+    ['mistral-small', 'Mistral'],
+    ['Mixtral-8x22B', 'Mistral'],
+    ['Codestral-22B', 'Mistral'],
+    ['Llama-3-70b', 'Meta Llama'],
+    ['meta-llama-3.1', 'Meta Llama'],
+    ['Phi-4', 'Microsoft Phi'],
+    ['Phi-3.5-mini-instruct', 'Microsoft Phi'],
+    ['DeepSeek-R1', 'DeepSeek'],
+    ['DeepSeek-R1-0528', 'DeepSeek'],
+    ['grok-code-fast-1', 'xAI Grok'],
+    ['command-r-plus', 'Cohere'],
+    ['Cohere-Embed', 'Cohere'],
+    ['AI21-Jamba-Instruct', 'AI21'],
+    ['jamba-1.5-large', 'AI21'],
+    ['unknown-vendor-x42', 'Autres'],
+  ])('classifies %s as %s', (id, expected) => {
+    expect(inferFamily(id)).toBe(expected)
+  })
+})
 
 describe('buildConfiguredProviders', () => {
   it('excludes providers without an API key', () => {

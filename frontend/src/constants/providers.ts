@@ -4,6 +4,49 @@ export interface ModelDef {
   desc: string
   tags?: string[]
   recommended?: boolean
+  /** Famille d'origine (vendor) du modèle. Utile pour grouper les listes
+   * GitHub Models / Copilot qui agrègent OpenAI + Anthropic + Mistral + …
+   * Pour les providers mono-vendor (Claude/OpenAI/Gemini), laisser
+   * undefined : la carte du provider n'affichera pas de sous-en-tête. */
+  family?: ModelFamily
+}
+
+export type ModelFamily =
+  | 'OpenAI'
+  | 'Anthropic'
+  | 'Google'
+  | 'Mistral'
+  | 'Meta Llama'
+  | 'Microsoft Phi'
+  | 'DeepSeek'
+  | 'xAI Grok'
+  | 'Cohere'
+  | 'AI21'
+  | 'Autres'
+
+/**
+ * Devine la famille d'un modèle à partir de son id. Sert au grouping UI
+ * pour les IDs **live-only** que GitHub Models ou Copilot retournent et
+ * qui ne figurent pas dans la liste statique.
+ *
+ * Les préfixes/marqueurs sont volontairement larges pour rattraper les
+ * variantes (`Mistral-Large-2411`, `mistral-large-2407`, `mistral_small`).
+ * Ordre des tests : on commence par les plus spécifiques (o-series et
+ * gpt-* renvoient `OpenAI`, claude-* renvoie `Anthropic`, etc.).
+ */
+export function inferFamily(id: string): ModelFamily {
+  const lo = id.toLowerCase()
+  if (lo.startsWith('gpt-') || /^o\d/.test(lo) || lo.includes('openai') || lo.startsWith('text-embedding-')) return 'OpenAI'
+  if (lo.startsWith('claude') || lo.includes('anthropic')) return 'Anthropic'
+  if (lo.startsWith('gemini') || lo.startsWith('text-bison') || lo.startsWith('palm')) return 'Google'
+  if (lo.startsWith('mistral') || lo.startsWith('mixtral') || lo.startsWith('ministral') || lo.startsWith('codestral')) return 'Mistral'
+  if (lo.startsWith('llama') || lo.startsWith('meta-llama') || lo.includes('llama-')) return 'Meta Llama'
+  if (lo.startsWith('phi-') || lo.startsWith('phi3') || lo.startsWith('phi4')) return 'Microsoft Phi'
+  if (lo.startsWith('deepseek')) return 'DeepSeek'
+  if (lo.startsWith('grok')) return 'xAI Grok'
+  if (lo.startsWith('cohere') || lo.startsWith('command-')) return 'Cohere'
+  if (lo.startsWith('ai21') || lo.startsWith('jamba')) return 'AI21'
+  return 'Autres'
 }
 
 export type ProviderDef = { id: string; label: string; color: string; models: ModelDef[] }
@@ -40,7 +83,7 @@ export function buildConfiguredProviders(
       const knownIds = new Set(p.models.map(m => m.id))
       const synthetic: ModelDef[] = enabled
         .filter(id => !knownIds.has(id))
-        .map(id => ({ id, label: id, desc: '' }))
+        .map(id => ({ id, label: id, desc: '', family: inferFamily(id) }))
       return { ...p, models: [...known, ...synthetic] }
     })
     .filter(p => p.models.length > 0)

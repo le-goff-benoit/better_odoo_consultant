@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowRight, Bot, Check, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, HardDrive, KeyRound, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Search, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
 import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getSkillDiagram, getSkillMarkdown, getSkillReference, getSkillTemplate, getSkillExample, getSkillEvalQueries, getUserProfile, saveUserProfile, getDataDir, openDataFolder, getGithubLiveModels, getCopilotLiveModels } from '../api/client'
-import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
+import { PROVIDERS as AI_PROVIDERS, inferFamily } from '../constants/providers'
+import type { ModelDef } from '../constants/providers'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
 import Markdown from '../components/Markdown'
@@ -1808,7 +1809,82 @@ function ApiSection() {
     }
   const qc = useQueryClient()
   const { data: provData } = useQuery({ queryKey: ['ai-providers'], queryFn: getAiProviders })
+  const { data: modelCfgData } = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
   const configured: Record<string, boolean> = provData?.data ?? {}
+
+  // Live models lists — fetched once per session per provider that supports it.
+  const githubConfigured = !!configured['github']
+  const copilotConfigured = !!configured['copilot']
+  const ghLive  = useQuery({ queryKey: ['live-models-github'],  queryFn: getGithubLiveModels,  enabled: githubConfigured,  staleTime: 5 * 60_000, retry: false })
+  const cpLive  = useQuery({ queryKey: ['live-models-copilot'], queryFn: getCopilotLiveModels, enabled: copilotConfigured, staleTime: 5 * 60_000, retry: false })
+
+  // Local model-config state with optimistic autosave (debounce 500ms).
+  // Initial state = server config. Each toggle updates local immediately and
+  // schedules a debounced POST. A per-provider `saveStatus` flag drives the
+  // tiny "✓ enregistré" indicator inside each card.
+  const [modelLocal, setModelLocal] = useState<Record<string, string[]>>({})
+  const [modelSaveStatus, setModelSaveStatus] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({})
+  const modelDirtyRef = useRef<Set<string>>(new Set())
+  const modelSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedFlashTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  useEffect(() => {
+    if (modelCfgData?.data) setModelLocal(prev => Object.keys(prev).length === 0 ? modelCfgData.data : prev)
+  }, [modelCfgData])
+
+  const flushModelSave = useCallback(async (snapshot: Record<string, string[]>, dirtyProviders: string[]) => {
+    dirtyProviders.forEach(p => setModelSaveStatus(s => ({ ...s, [p]: 'saving' })))
+    try {
+      await saveModelConfig(snapshot)
+      qc.invalidateQueries({ queryKey: ['model-config'] })
+      dirtyProviders.forEach(p => {
+        setModelSaveStatus(s => ({ ...s, [p]: 'saved' }))
+        if (savedFlashTimers.current[p]) clearTimeout(savedFlashTimers.current[p])
+        savedFlashTimers.current[p] = setTimeout(() => {
+          setModelSaveStatus(s => ({ ...s, [p]: 'idle' }))
+        }, 1800)
+      })
+    } catch {
+      dirtyProviders.forEach(p => setModelSaveStatus(s => ({ ...s, [p]: 'idle' })))
+    }
+  }, [qc])
+
+  const scheduleModelSave = useCallback(() => {
+    if (modelSaveTimer.current) clearTimeout(modelSaveTimer.current)
+    modelSaveTimer.current = setTimeout(() => {
+      const dirty = Array.from(modelDirtyRef.current)
+      modelDirtyRef.current.clear()
+      // Pull the latest local snapshot via functional setState so we don't
+      // capture a stale closure value.
+      setModelLocal(snapshot => {
+        flushModelSave(snapshot, dirty)
+        return snapshot
+      })
+    }, 500)
+  }, [flushModelSave])
+
+  const toggleModel = useCallback((provider: string, modelId: string, allIds: string[]) => {
+    setModelLocal(prev => {
+      const current = prev[provider] ?? allIds
+      const next = current.includes(modelId)
+        ? current.filter(id => id !== modelId)
+        : [...current, modelId]
+      return { ...prev, [provider]: next }
+    })
+    modelDirtyRef.current.add(provider)
+    scheduleModelSave()
+  }, [scheduleModelSave])
+
+  const setProviderModels = useCallback((provider: string, ids: string[]) => {
+    setModelLocal(prev => ({ ...prev, [provider]: ids }))
+    modelDirtyRef.current.add(provider)
+    scheduleModelSave()
+  }, [scheduleModelSave])
+
+  useEffect(() => () => {
+    if (modelSaveTimer.current) clearTimeout(modelSaveTimer.current)
+    Object.values(savedFlashTimers.current).forEach(clearTimeout)
+  }, [])
 
   const [keys,       setKeys]       = useState<Record<string, string>>({})
   const [editing,    setEditing]    = useState<Record<string, boolean>>({})
@@ -1817,6 +1893,7 @@ function ApiSection() {
   const [testing,    setTesting]    = useState<Record<string, boolean>>({})
   const [copilotFlow, setCopilotFlow] = useState<CopilotFlowState | null>(null)
   const [copilotLoading, setCopilotLoading] = useState(false)
+  const [modelsExpanded, setModelsExpanded] = useState<Record<string, boolean>>({})
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
@@ -1883,6 +1960,28 @@ function ApiSection() {
   const configuredList = PROVIDERS.filter(p => configured[p.id])
   const unconfiguredList = PROVIDERS.filter(p => !configured[p.id])
 
+  // Merge static models with live model list for github/copilot (live-only IDs
+  // become synthetic ModelDef entries with family inferred from the id).
+  const resolveProviderModels = (providerId: string): ModelDef[] => {
+    const staticP = AI_PROVIDERS.find(p => p.id === providerId)
+    if (!staticP) return []
+    const live = providerId === 'github' ? ghLive.data?.data?.models
+               : providerId === 'copilot' ? cpLive.data?.data?.models
+               : null
+    if (!live) return staticP.models
+    const byId = new Map(staticP.models.map(m => [m.id, m]))
+    return live.map((id: string) => byId.get(id) ?? { id, label: id, desc: '', family: inferFamily(id) })
+  }
+
+  const isModelEnabled = (providerId: string, modelId: string, allIds: string[]) =>
+    (modelLocal[providerId] ?? allIds).includes(modelId)
+
+  const liveInfo = (providerId: string) => {
+    if (providerId === 'github')  return { supported: true, query: ghLive }
+    if (providerId === 'copilot') return { supported: true, query: cpLive }
+    return { supported: false, query: null as null }
+  }
+
   return (
     <div>
       <p style={{ fontSize: 13, color: t.muted, marginBottom: 20 }}>
@@ -1909,19 +2008,183 @@ function ApiSection() {
         </div>
       </div>
 
-      {configuredList.length > 0 && (
-        <div style={{ marginTop: 36 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: t.textSub, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            {c.modelsTitle}
-          </div>
-          <p style={{ fontSize: 13, color: t.muted, marginBottom: 16 }}>
-            {c.modelsIntro}
-          </p>
-          <ModelConfigEditor configuredProviderIds={configuredList.map(p => p.id)} />
-        </div>
-      )}
     </div>
   )
+
+  function renderInlineModelPicker(p: ProviderDef) {
+    const aiP = AI_PROVIDERS.find(x => x.id === p.id)
+    if (!aiP) return null
+    const models = resolveProviderModels(p.id)
+    if (models.length === 0) return null
+    const allIds = models.map(m => m.id)
+    const enabledIds = modelLocal[p.id] ?? allIds
+    const enabledCount = enabledIds.filter(id => allIds.includes(id)).length
+    const isExpanded = modelsExpanded[p.id] ?? true
+    const status = modelSaveStatus[p.id] ?? 'idle'
+
+    const live = liveInfo(p.id)
+    const liveData = live.supported && live.query?.data?.data?.models
+    const liveLoading = !!live.query?.isLoading
+    const liveError = !!live.query?.isError
+
+    // Group models by family. When a provider has 1 family only, we skip the
+    // sub-headers and render a flat list (Claude / OpenAI / Gemini).
+    const byFamily = new Map<string, ModelDef[]>()
+    for (const m of models) {
+      const fam = m.family ?? inferFamily(m.id)
+      const list = byFamily.get(fam) ?? []
+      list.push(m)
+      byFamily.set(fam, list)
+    }
+    // Stable family ordering: declared FAMILY_ORDER first, others alphabetical.
+    const FAMILY_ORDER: string[] = [
+      'OpenAI', 'Anthropic', 'Google', 'Mistral', 'Meta Llama',
+      'Microsoft Phi', 'DeepSeek', 'xAI Grok', 'Cohere', 'AI21', 'Autres',
+    ]
+    const families = Array.from(byFamily.keys()).sort((a, b) => {
+      const ia = FAMILY_ORDER.indexOf(a), ib = FAMILY_ORDER.indexOf(b)
+      if (ia === -1 && ib === -1) return a.localeCompare(b)
+      if (ia === -1) return 1
+      if (ib === -1) return -1
+      return ia - ib
+    })
+    const showFamilyHeaders = families.length > 1
+
+    const recommendedIds = models.filter(m => m.recommended).map(m => m.id)
+    const selectAll       = () => setProviderModels(p.id, allIds)
+    const selectRecommended = () => setProviderModels(p.id, recommendedIds.length > 0 ? recommendedIds : allIds)
+    const selectNone      = () => setProviderModels(p.id, [])
+
+    return (
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${t.border}` }}>
+        <button
+          onClick={() => setModelsExpanded(s => ({ ...s, [p.id]: !isExpanded }))}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            color: t.text, textAlign: 'left',
+          }}>
+          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{lang === 'en' ? 'Available models' : 'Modèles disponibles'}</span>
+          <span style={{ fontSize: 12, color: t.muted }}>
+            {enabledCount}/{allIds.length} {lang === 'en' ? 'enabled' : 'activés'}
+          </span>
+          {liveData && !liveError && (
+            <span style={{ fontSize: 10, color: t.success, background: `${t.success}18`, border: `1px solid ${t.success}40`, borderRadius: 4, padding: '1px 5px' }}>
+              live
+            </span>
+          )}
+          {liveError && (
+            <span style={{ fontSize: 10, color: t.warning }}>
+              {lang === 'en' ? 'static list' : 'liste statique'}
+            </span>
+          )}
+          {liveLoading && (
+            <Loader2 size={12} style={{ color: t.muted, animation: 'spin .9s linear infinite' }} />
+          )}
+          <span style={{ flex: 1 }} />
+          {status === 'saving' && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: t.muted }}>
+              <Loader2 size={11} style={{ animation: 'spin .9s linear infinite' }} />
+              {lang === 'en' ? 'saving…' : 'enregistrement…'}
+            </span>
+          )}
+          {status === 'saved' && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: t.success, transition: 'opacity .3s' }}>
+              <Check size={11} /> {lang === 'en' ? 'saved' : 'enregistré'}
+            </span>
+          )}
+        </button>
+
+        {isExpanded && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              <button onClick={selectAll}
+                style={{ fontSize: 11, padding: '3px 9px', borderRadius: 999, border: `1px solid ${t.border}`, background: 'transparent', color: t.text, cursor: 'pointer' }}>
+                {lang === 'en' ? 'Select all' : 'Tout cocher'}
+              </button>
+              {recommendedIds.length > 0 && (
+                <button onClick={selectRecommended}
+                  style={{ fontSize: 11, padding: '3px 9px', borderRadius: 999, border: `1px solid ${p.color}50`, background: `${p.color}10`, color: p.color, cursor: 'pointer', fontWeight: 600 }}>
+                  ★ {lang === 'en' ? 'Recommended only' : 'Recommandés seulement'} ({recommendedIds.length})
+                </button>
+              )}
+              <button onClick={selectNone}
+                style={{ fontSize: 11, padding: '3px 9px', borderRadius: 999, border: `1px solid ${t.border}`, background: 'transparent', color: t.muted, cursor: 'pointer' }}>
+                {lang === 'en' ? 'Deselect all' : 'Tout décocher'}
+              </button>
+              {live.supported && (
+                <button onClick={() => live.query?.refetch()} disabled={liveLoading}
+                  title={lang === 'en' ? 'Refresh live model list' : 'Actualiser la liste live'}
+                  style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 9px', borderRadius: 999, border: `1px solid ${t.border}`, background: 'transparent', color: t.muted, cursor: liveLoading ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <RefreshCw size={11} style={{ opacity: liveLoading ? 0.4 : 1 }} />
+                  {lang === 'en' ? 'Refresh' : 'Rafraîchir'}
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {families.map(fam => (
+                <div key={fam}>
+                  {showFamilyHeaders && (
+                    <div style={{
+                      fontSize: 10, fontWeight: 700, color: t.muted, textTransform: 'uppercase',
+                      letterSpacing: '0.06em', marginTop: 10, marginBottom: 4, paddingLeft: 4,
+                    }}>
+                      {fam} <span style={{ opacity: 0.6 }}>· {byFamily.get(fam)!.length}</span>
+                    </div>
+                  )}
+                  {byFamily.get(fam)!.map(m => {
+                    const on = isModelEnabled(p.id, m.id, allIds)
+                    const isLiveOnly = !aiP.models.some(sm => sm.id === m.id)
+                    return (
+                      <label
+                        key={m.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '20px auto 1fr auto',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '6px 8px',
+                          borderRadius: t.radius,
+                          cursor: 'pointer',
+                          background: on ? `${p.color}08` : 'transparent',
+                          border: `1px solid ${on ? `${p.color}35` : 'transparent'}`,
+                          transition: 'background .12s',
+                        }}>
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => toggleModel(p.id, m.id, allIds)}
+                          style={{ accentColor: p.color, cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: on ? p.color : t.text, whiteSpace: 'nowrap' }}>
+                          {m.recommended && <span style={{ color: '#f59e0b', marginRight: 4 }} title={lang === 'en' ? 'Recommended' : 'Recommandé'}>★</span>}
+                          {m.label}
+                          {isLiveOnly && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 4 }}>·new</span>}
+                        </span>
+                        <span style={{ fontSize: 12, color: t.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {m.desc}
+                        </span>
+                        <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          {(m.tags ?? []).slice(0, 2).map(tag => (
+                            <span key={tag} style={{
+                              fontSize: 10, color: t.muted, background: t.bgCard,
+                              border: `1px solid ${t.border}`, borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap',
+                            }}>{tag}</span>
+                          ))}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   function renderProvider(p: ProviderDef, isConfigured: boolean) {
     const isEditing = editing[p.id] ?? false
@@ -1996,6 +2259,7 @@ function ApiSection() {
                           {testResult[p.id]!.ok ? <Check size={13} /> : <X size={13} />} {testResult[p.id]!.msg}
                         </div>
                       )}
+                      {renderInlineModelPicker(p)}
                     </div>
 
                   ) : p.oauthFlow ? (
@@ -2109,165 +2373,6 @@ function ApiSection() {
   } // end renderProvider
 } // end ApiSection
 
-// ── Model config editor ──────────────────────────────────────────
-
-const STATIC_PROVIDER_MODELS = AI_PROVIDERS.map(p => ({
-  provider: p.id,
-  label: `${p.label} (${p.id === 'claude' ? 'Anthropic' : p.id === 'openai' ? 'OpenAI' : p.id === 'gemini' ? 'Google' : p.id === 'copilot' ? 'GitHub' : p.id === 'github' ? 'GitHub Models' : p.id})`,
-  color: p.color,
-  models: p.models.map((m: { id: string; label: string }) => ({ id: m.id, label: m.label })),
-}))
-
-// Static label lookup for merging live model ids with known descriptions
-const STATIC_LABEL: Record<string, Record<string, string>> = Object.fromEntries(
-  AI_PROVIDERS.map(p => [p.id, Object.fromEntries(p.models.map((m: { id: string; label: string }) => [m.id, m.label]))])
-)
-
-function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: string[] }) {
-  const lang = useUiLanguage()
-  const qc = useQueryClient()
-  const { data } = useQuery({ queryKey: ['model-config'], queryFn: getModelConfig })
-  const [local, setLocal] = useState<Record<string, string[]>>({})
-  const [saved, setSaved] = useState(false)
-
-  const githubConfigured = configuredProviderIds.includes('github')
-  const copilotConfigured = configuredProviderIds.includes('copilot')
-
-  // Live model lists — only fetched when the provider is connected
-  const { data: ghLive, isLoading: ghLoading, isError: ghError, refetch: refetchGh } = useQuery({
-    queryKey: ['live-models-github'],
-    queryFn: getGithubLiveModels,
-    enabled: githubConfigured,
-    staleTime: 5 * 60_000,
-    retry: false,
-  })
-  const { data: cpLive, isLoading: cpLoading, isError: cpError, refetch: refetchCp } = useQuery({
-    queryKey: ['live-models-copilot'],
-    queryFn: getCopilotLiveModels,
-    enabled: copilotConfigured,
-    staleTime: 5 * 60_000,
-    retry: false,
-  })
-
-  useEffect(() => { setLocal(data?.data ?? {}) }, [data])
-
-  // Merge live ids with static metadata; fall back to static list on error/loading
-  function resolveModels(providerId: string): { id: string; label: string; isNew?: boolean }[] {
-    const meta = STATIC_LABEL[providerId] ?? {}
-    const staticList = STATIC_PROVIDER_MODELS.find(p => p.provider === providerId)?.models ?? []
-    if (providerId === 'github' && ghLive?.data?.models) {
-      return ghLive.data.models.map(id => ({ id, label: meta[id] ?? id, isNew: !meta[id] }))
-    }
-    if (providerId === 'copilot' && cpLive?.data?.models) {
-      return cpLive.data.models.map(id => ({ id, label: meta[id] ?? id, isNew: !meta[id] }))
-    }
-    return staticList
-  }
-
-  const visibleProviders = STATIC_PROVIDER_MODELS.filter(p => configuredProviderIds.includes(p.provider))
-
-  const toggle = (provider: string, modelId: string, allIds: string[]) => {
-    setLocal(prev => {
-      const current: string[] = prev[provider] ?? allIds
-      const next = current.includes(modelId) ? current.filter(id => id !== modelId) : [...current, modelId]
-      return { ...prev, [provider]: next }
-    })
-    setSaved(false)
-  }
-
-  const isEnabled = (provider: string, modelId: string, allIds: string[]) =>
-    (local[provider] ?? allIds).includes(modelId)
-
-  const handleSave = async () => {
-    await saveModelConfig(local)
-    qc.invalidateQueries({ queryKey: ['model-config'] })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  if (visibleProviders.length === 0) return null
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {visibleProviders.map(prov => {
-        const isLive = prov.provider === 'github' || prov.provider === 'copilot'
-        const isLoading = (prov.provider === 'github' && ghLoading) || (prov.provider === 'copilot' && cpLoading)
-        const hasError = (prov.provider === 'github' && ghError) || (prov.provider === 'copilot' && cpError)
-        const refetch = prov.provider === 'github' ? refetchGh : prov.provider === 'copilot' ? refetchCp : undefined
-        const hasLiveData = isLive && (
-          (prov.provider === 'github' && !!ghLive?.data?.models) ||
-          (prov.provider === 'copilot' && !!cpLive?.data?.models)
-        )
-        const models = resolveModels(prov.provider)
-        const allIds = models.map(m => m.id)
-
-        return (
-          <div key={prov.provider} style={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, padding: '12px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: prov.color, flex: 1 }}>{prov.label}</div>
-              {isLive && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {hasLiveData && !hasError && (
-                    <span style={{ fontSize: 10, color: t.success, background: `${t.success}18`, border: `1px solid ${t.success}40`, borderRadius: 4, padding: '1px 5px' }}>
-                      live
-                    </span>
-                  )}
-                  {hasError && (
-                    <span style={{ fontSize: 10, color: t.warning }}>
-                      {lang === 'en' ? 'static list' : 'liste statique'}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => refetch?.()}
-                    disabled={isLoading}
-                    title={lang === 'en' ? 'Refresh live model list' : 'Actualiser la liste live'}
-                    style={{ background: 'none', border: 'none', cursor: isLoading ? 'default' : 'pointer', color: t.muted, padding: 2, display: 'flex', alignItems: 'center' }}
-                  >
-                    <RefreshCw size={12} style={{ opacity: isLoading ? 0.4 : 1 }} />
-                  </button>
-                </div>
-              )}
-            </div>
-            {isLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.muted, marginBottom: 8 }}>
-                <Loader2 size={12} />
-                {lang === 'en' ? 'Fetching available models…' : 'Récupération des modèles disponibles…'}
-              </div>
-            )}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {models.map(m => {
-                const on = isEnabled(prov.provider, m.id, allIds)
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => toggle(prov.provider, m.id, allIds)}
-                    className={`ui-chip-button${on ? ' is-active' : ''}`}
-                    title={m.isNew ? m.id : undefined}
-                    style={{
-                      background: on ? `${prov.color}15` : undefined,
-                      borderColor: on ? prov.color : undefined,
-                      color: on ? prov.color : undefined,
-                    }}
-                  >
-                    <span style={{ fontSize: 10 }}>{on ? <Check size={11} /> : null}</span>
-                    {m.label}
-                    {m.isNew && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 3 }}>·new</span>}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
-      <div>
-        <button onClick={handleSave} className="btn btn-primary btn-sm">
-          {saved ? <Check size={13} /> : null}
-          {saved ? (lang === 'en' ? 'Saved' : 'Enregistré') : (lang === 'en' ? 'Save' : 'Enregistrer')}
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ── Context files editor ─────────────────────────────────────────
 
