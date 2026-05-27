@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.4',
+    version: '0.100.5',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Pondération d\'importance — 7e directive transverse ajoutée aux 4 agents (FR + EN). Règle : avant de structurer la réponse, identifier ce qui est project-specific (modules custom listés dans le `## Contexte projet`, Studio détecté, `dev_and_studio`, localisation atypique) vs vanilla Odoo. Mettre en avant ce qui est spécifique — c\'est ce que la doc générale ne donne pas. Cible : 60-70 % du volume sur le project-specific, 30-40 % sur le standard utile à comprendre. Sur les questions explicitement orientées custom (« y a-t-il des Studio actions », « quels crons custom »), le standard tombe à 1-2 lignes contextuelles, le reste va sur les personnalisations. Tri obligatoire dans les listes mixtes : custom/Studio d\'abord, standard en fin',
+      'Densité d\'exemples client × 2 — quota passe de 1-3 à **2-4 enregistrements concrets** par réponse non triviale pour BA et Support (limit ≤ 4 sur `odoo_query_records`). Deux placements complémentaires : (a) **inline dans le corps** dès qu\'un point d\'explication est illustré par un cas réel (« le champ X est utilisé sur les contrats actifs [SO12345](odoo://sale.order/12345), [SO12356](odoo://sale.order/12356) pour calculer Y »), (b) **dans la section finale « Exemples concrets sur cette base »** (callout) qui reste obligatoire. Support a une instruction dédiée pour citer 2-3 enregistrements touchés quand le problème est de la donnée (facture coincée, commande bloquée). Architect et Developer ne sont pas concernés — leur preuve est le code source, pas la donnée live',
+    ],
+  },
+  {
+    version: '0.100.4',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Bugfix chips d\'actions — quand le LLM écrivait une liste numérotée dont chaque item contenait des sous-bullets indentés détaillant l\'action (« 1. Inspecter X pour voir : \\n  - condition 1 \\n  - condition 2 »), l\'extracteur `extractActionItems` poussait les sous-bullets comme des chips séparées. Résultat utilisateur : 8 chips fragmentaires (« conditions de déclenchement, », « champs copiés, »…) au lieu des 3 actions réelles. Fix dans `Markdown.tsx` : filtrer sur la profondeur d\'indentation (`listMatch[1].length === 0`) — seuls les bullets top-level comptent comme actions. `ORDERED_LIST_RE` aligné sur la même structure. +1 test régressif qui reproduit le scénario exact du bug, 100 tests verts',
     ],
