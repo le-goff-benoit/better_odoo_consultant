@@ -146,6 +146,13 @@ describe('Markdown table parsing', () => {
     expect(container.textContent).not.toMatch(/-\s+Deep child/)
   })
 
+  it('renders inline markdown inside headings', () => {
+    const { container } = render(<Markdown text="### 1. **Champs personnalisés (Studio)**" />)
+    expect(container.querySelector('strong')?.textContent).toBe('Champs personnalisés (Studio)')
+    expect(container.textContent).toBe('1. Champs personnalisés (Studio)')
+    expect(container.textContent).not.toContain('**')
+  })
+
   // ── v0.100.0 — séparateurs HR, liens odoo://, exemples concrets ─────
 
   it('v0.100.0 — renders `---` as a horizontal rule', () => {

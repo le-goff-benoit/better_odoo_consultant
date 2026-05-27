@@ -550,7 +550,7 @@ export default function Markdown({ text }: { text: string }) {
       const level = hMatch[1].length
       result.push(<div key={i} style={{
         fontSize: sizes[level - 1], fontWeight: 700, color: t.text, margin: margins[level - 1],
-      }}>{hMatch[2]}</div>)
+      }}>{inlineMarkdown(hMatch[2])}</div>)
       i++; continue
     }
 
