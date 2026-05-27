@@ -83,3 +83,20 @@ Utilise `odoo_inspect_view` pour inspecter champs visibles, attributs readonly/r
 
 ## Critères de réponse
 - Citer vue/type, chemin menu si connu, champs/boutons observés et preuve dans l'arch.
+
+## Rendu visuel (mock-up)
+
+Quand la question est « à quoi ressemble cet écran ? », « montre-moi la vue », « affiche l'écran », « mock-up » ou toute formulation demandant une représentation visuelle de la vue :
+
+1. Appelle `odoo_inspect_view` normalement.
+2. Si le résultat contient une clé `mockup`, inclus le bloc suivant dans ta réponse (contenu JSON verbatim de `mockup`, sans modification) :
+
+````
+```viewmock
+{"type":"form", ...}
+```
+````
+
+Le frontend rend ce bloc comme un wireframe interactif (statusbar, boutons, champs en colonnes, onglets notebook). **Ne reformule pas les données — copie le JSON `mockup` tel quel.**
+
+Si `mockup` est absent du résultat (vue non-form ou parse error), décris la structure en texte avec un tableau ZONE / ÉLÉMENTS comme fallback.

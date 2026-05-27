@@ -4,6 +4,7 @@ import { Check, Copy, ExternalLink, Lightbulb, Pencil, Send, X } from 'lucide-re
 import { t } from '../theme'
 import MermaidBlock from './MermaidBlock'
 import VoletBlock, { parseVoletType } from './VoletBlock'
+import ViewMockupBlock from './ViewMockupBlock'
 
 // v0.100.2 — fenced code block with language badge + copy button.
 // Replaces the bare <pre><code> rendering. The label and copy affordance
@@ -572,9 +573,12 @@ export default function Markdown({ text }: { text: string }) {
       i++
       while (i < lines.length && !lines[i].trimStart().startsWith('```')) { codeLines.push(lines[i]); i++ }
       const code = codeLines.join('\n')
-      result.push(language === 'mermaid'
-        ? <MermaidBlock key={i} code={code} />
-        : <CodeBlock key={i} code={code} language={language} />
+      result.push(
+        language === 'mermaid'
+          ? <MermaidBlock key={i} code={code} />
+          : language === 'viewmock'
+            ? <ViewMockupBlock key={i} code={code} />
+            : <CodeBlock key={i} code={code} language={language} />
       )
       i++; continue
     }

@@ -170,6 +170,187 @@ def _local_tag(tag: str) -> str:
     return tag.rsplit("}", 1)[-1] if "}" in tag else tag
 
 
+# ── View mock-up builder ────────────────────────────────────────────────────
+# Produces a structured descriptor used by the frontend ViewMockupBlock to
+# render a wire-frame preview of the view without exposing raw XML.
+
+def _field_label_from_meta(name: str, fields_meta: dict) -> str:
+    """Human-readable label from the fields metadata dict (returned by get_view)."""
+    meta = fields_meta.get(name, {})
+    if isinstance(meta, dict) and meta.get("string"):
+        return meta["string"]
+    return name.replace("_", " ").title()
+
+
+def _extract_field_item(el: ET.Element, fields_meta: dict) -> Optional[dict]:
+    """Build a field item dict from a <field> element; returns None for invisible fields."""
+    name = el.get("name")
+    if not name:
+        return None
+    if el.get("invisible") in ("1", "True"):
+        return None
+    meta = fields_meta.get(name, {}) if isinstance(fields_meta, dict) else {}
+    return {
+        "name": name,
+        "label": el.get("string") or _field_label_from_meta(name, fields_meta),
+        "type": meta.get("type", "") if isinstance(meta, dict) else "",
+        "widget": el.get("widget") or None,
+        "required": True if el.get("required") == "1" else None,
+        "readonly": True if el.get("readonly") == "1" else None,
+    }
+
+
+def _extract_group_fields(group_el: ET.Element, fields_meta: dict, _budget: int = 12) -> list:
+    """Recursively collect fields from a <group> element (handles nested column groups)."""
+    fields = []
+    for child in group_el:
+        if len(fields) >= _budget:
+            break
+        tag = _local_tag(child.tag) if isinstance(child.tag, str) else ""
+        if tag == "field":
+            item = _extract_field_item(child, fields_meta)
+            if item:
+                fields.append(item)
+        elif tag == "group":
+            fields.extend(_extract_group_fields(child, fields_meta, _budget - len(fields)))
+    return fields
+
+
+def _build_mockup(arch: str, view_type: str, fields_meta: dict) -> dict:
+    """Build a structured mockup descriptor for frontend ViewMockupBlock rendering.
+
+    Handles form (header/groups/notebook), list (columns), and kanban (key fields).
+    Returns empty dict on parse error so the caller can skip the key silently.
+    """
+    try:
+        root = ET.fromstring(arch)
+    except ET.ParseError:
+        return {}
+
+    vt = (view_type or "").lower()
+
+    if vt in ("list", "tree"):
+        cols = []
+        for el in root.iter("field"):
+            name = el.get("name")
+            if not name:
+                continue
+            if el.get("column_invisible") in ("1", "True") or el.get("invisible") in ("1", "True"):
+                continue
+            cols.append({
+                "name": name,
+                "label": el.get("string") or _field_label_from_meta(name, fields_meta),
+                "optional": el.get("optional") or None,
+            })
+            if len(cols) >= 14:
+                break
+        return {"type": "list", "columns": cols}
+
+    if vt == "kanban":
+        kf = []
+        for el in root.iter("field"):
+            name = el.get("name")
+            if name:
+                kf.append({"name": name, "label": el.get("string") or _field_label_from_meta(name, fields_meta)})
+            if len(kf) >= 8:
+                break
+        return {"type": "kanban", "fields": kf}
+
+    if vt != "form":
+        return {}
+
+    result: dict = {"type": "form"}
+
+    # ── 1. Header: statusbar + action buttons ──────────────────────────────
+    statusbar = None
+    header_buttons = []
+    header_el = root.find(".//header")
+    if header_el is not None:
+        for child in header_el:
+            tag = _local_tag(child.tag) if isinstance(child.tag, str) else ""
+            if tag == "field" and child.get("widget") == "statusbar":
+                statusbar = {
+                    "name": child.get("name", "state"),
+                    "label": child.get("string") or _field_label_from_meta(child.get("name", "state"), fields_meta),
+                    "visible": child.get("statusbar_visible", ""),
+                }
+            elif tag == "button":
+                lbl = child.get("string") or child.get("name", "")
+                if lbl and child.get("invisible") not in ("1", "True"):
+                    header_buttons.append({"label": lbl, "type": child.get("type", "object")})
+    result["statusbar"] = statusbar
+    result["header_buttons"] = header_buttons[:5]
+
+    # ── 2. Smart / stat buttons ────────────────────────────────────────────
+    smart_buttons = []
+    for div_el in root.iter("div"):
+        cls = div_el.get("class", "")
+        if "button_box" not in cls and "oe_button_box" not in cls and "o_button_box" not in cls:
+            continue
+        for btn_el in div_el:
+            btn_tag = _local_tag(btn_el.tag) if isinstance(btn_el.tag, str) else ""
+            if btn_tag != "button":
+                continue
+            lbl = btn_el.get("string") or ""
+            if not lbl:
+                for child_el in btn_el.iter("field"):
+                    cname = child_el.get("name", "")
+                    lbl = child_el.get("string") or _field_label_from_meta(cname, fields_meta)
+                    break
+            if lbl:
+                smart_buttons.append({"label": lbl.strip()})
+            if len(smart_buttons) >= 6:
+                break
+        break
+    result["smart_buttons"] = smart_buttons
+
+    # ── 3. Sheet groups (before notebook) ─────────────────────────────────
+    sheet_el = root.find(".//sheet") or root
+    groups = []
+    for child in sheet_el:
+        tag = _local_tag(child.tag) if isinstance(child.tag, str) else ""
+        if tag == "group":
+            fields = _extract_group_fields(child, fields_meta)
+            if fields:
+                groups.append({"col": int(child.get("col", 2)), "fields": fields})
+        elif tag == "notebook":
+            break
+    result["groups"] = groups
+
+    # ── 4. Notebook pages ──────────────────────────────────────────────────
+    pages = []
+    nb_el = sheet_el.find("notebook") if sheet_el is not root else root.find(".//notebook")
+    if nb_el is None and sheet_el is not root:
+        nb_el = sheet_el.find(".//notebook")
+    if nb_el is not None:
+        for page_el in nb_el.findall("page"):
+            if page_el.get("invisible") in ("1", "True"):
+                continue
+            page_name = page_el.get("string") or page_el.get("name") or "Page"
+            page_groups = []
+            for child in page_el:
+                tag = _local_tag(child.tag) if isinstance(child.tag, str) else ""
+                if tag == "group":
+                    fields = _extract_group_fields(child, fields_meta)
+                    if fields:
+                        page_groups.append({"col": int(child.get("col", 2)), "fields": fields})
+            if not page_groups:
+                direct_fields = [
+                    item for child in page_el
+                    if _local_tag(child.tag) == "field"
+                    for item in [_extract_field_item(child, fields_meta)]
+                    if item
+                ]
+                if direct_fields:
+                    page_groups.append({"col": 1, "fields": direct_fields})
+            if page_groups:
+                pages.append({"name": page_name, "groups": page_groups})
+            if len(pages) >= 8:
+                break
+    result["pages"] = pages
+    return result
+
+
 def _clean_text(value: Optional[str]) -> str:
     text = " ".join((value or "").split())
     if len(text) > _QWEB_TEXT_VALUE_CAP:
@@ -340,15 +521,20 @@ async def inspect_odoo_view(
 
     view_meta: dict[str, Any] = {}
     arch_summary: dict[str, Any] = {}
+    mockup: dict[str, Any] = {}
     raw = await _assembled_view(odoo, model, vt, view_id)
     if raw:
         view_meta = {"name": raw.get("name"), "view_db_id": raw.get("id"), "type": vt}
         arch = raw.get("arch") or ""
+        fields_meta = raw.get("fields") or {}
         if arch:
             arch_summary = _summarize_arch(arch)
             skeleton = _build_skeleton(arch)
             if skeleton:
                 arch_summary["structural_skeleton"] = skeleton
+            built = _build_mockup(arch, vt, fields_meta)
+            if built:
+                mockup = built
     else:
         view_meta = {"type": vt, "error": f"Vue de type '{vt}' indisponible pour ce modèle."}
 
@@ -390,7 +576,7 @@ async def inspect_odoo_view(
     except Exception:
         pass
 
-    return {
+    result: dict[str, Any] = {
         "ok": True,
         "model": model,
         "requested_view_type": vt,
@@ -401,6 +587,9 @@ async def inspect_odoo_view(
         "access_meta": access_meta,
         "access_paths": access_paths,
     }
+    if mockup:
+        result["mockup"] = mockup
+    return result
 
 
 async def _collect_qweb_archs(odoo, seed_keys: list[str]) -> tuple[dict[str, str], dict[str, Any], dict[str, Any]]:

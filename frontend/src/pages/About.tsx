@@ -7,9 +7,18 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.10',
+    version: '0.100.11',
     date: '2026-05-28',
     badge: 'Actuel',
+    badgeColor: t.brand,
+    items: [
+      'Wireframe de vue Odoo dans les réponses IA. Le skill `odoo_inspect_view` retourne désormais une clé `mockup` structurée (statusbar, boutons header, smart buttons, groupes de champs, onglets notebook) extraite de l\'arch XML et enrichie par les métadonnées de champs (`fields` retourné par `get_view`). Le LLM produit un fence `viewmock` avec le JSON verbatim. Nouveau composant `ViewMockupBlock.tsx` : rendu fil-de-fer interactif (thème Odoo blanc, statusbar breadcrumbs, champs en grille 2 colonnes, tabs notebook cliquables, mock-up liste avec colonnes et lignes fantômes). `Markdown.tsx` reconnait le fence `viewmock` comme il reconnaît `mermaid`. `odoo_inspect_view/SKILL.md` : instruction explicite pour produire le bloc quand la question est « à quoi ressemble cet écran ». +18 tests pytest.',
+    ],
+  },
+  {
+    version: '0.100.10',
+    date: '2026-05-28',
+    badge: '',
     badgeColor: t.brand,
     items: [
       'BA agent — qualité des réponses : 5 renforcements coordonnés. (1) Distinction input/output explicite dans « Tu n\'es pas un inventaire technique » : liste concrète de ce qui doit rester dans l\'analyse (noms de méthodes Python, champs custom bruts, tableaux MODÈLE/HÉRITAGE/PREUVE) avec la reformulation business attendue en sortie. (2) Section Standard/Config/Studio/Dev limitée à 3-4 bullets, un verdict + une phrase par catégorie, sans sous-bullets ni liste de preuves. (3) TL;DR rendu obligatoire pour toute réponse listant des personnalisations ou des faits techniques (plus conditionné à 600 mots). (4) Triggers volets ajoutés : scope risk/limite → warning, conseil/workshop → tip, info contextuelle → info. (5) Lien odoo:// obligatoire dans les tableaux et listes, pas seulement dans le corps courant.',
