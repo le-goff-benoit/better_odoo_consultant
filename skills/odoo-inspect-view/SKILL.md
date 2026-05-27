@@ -31,6 +31,18 @@ references_auto_load:
 - Skill en lecture seule : il lit la vue réelle après héritage.
 - La vue assemblée prime sur les suppositions et sur les snippets génériques.
 
+## Choisir entre odoo_inspect_view et les skills voisins
+
+| Question | Skill à appeler |
+|---|---|
+| « À quoi ressemble cet écran ? Quels champs y sont ? » | `odoo_inspect_view` |
+| « Y a-t-il des champs x_studio_* ajoutés via Studio ? » | `odoo_inspect_studio` |
+| « Quels menus mènent à cet écran ? » | `odoo_inspect_navigation` |
+| « Comment est défini ce champ dans le modèle ? » | `odoo_inspect_fields` |
+| « Quels droits contrôlent la visibilité de ce champ ? » | `odoo_inspect_security` |
+| « Comment est codée cette vue dans les sources standard ? » | `source_search_odoo` |
+| « Comment est codée cette vue dans le module custom ? » | `repo_search_code` |
+
 ## odoo_inspect_view
 Utilise `odoo_inspect_view` pour inspecter champs visibles, attributs readonly/required/invisible, widgets, menus et arch XML assemblée.
 

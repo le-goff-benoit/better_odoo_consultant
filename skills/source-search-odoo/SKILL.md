@@ -31,6 +31,18 @@ references_auto_load:
 - Skill en lecture seule : il cherche dans les sources Odoo locales.
 - Le code source local prime sur les souvenirs de version.
 
+## Choisir entre source_search_odoo et les skills voisins
+
+| Question | Skill à appeler |
+|---|---|
+| « Comment Odoo standard implémente cette méthode / ce modèle ? » | `source_search_odoo` |
+| « Y a-t-il un override dans le module custom client ? » | `repo_search_code` |
+| « Lire un fichier source Odoo précis » | `source_read_odoo_file` |
+| « Chercher dans la version cible d'une migration » | `migration_search_target_source` |
+| « Comparer le même fichier entre deux versions Odoo » | `compare_odoo_versions` |
+
+Règle : si la question concerne le code standard Odoo SA (« comment Odoo fait X »), c'est ce skill. Si la question concerne le code écrit par le client ou un partenaire, c'est `repo_search_code`.
+
 ## source_search_odoo
 Utilise `source_search_odoo` pour vérifier modèles, champs, méthodes, vues, controllers et comportements standard.
 

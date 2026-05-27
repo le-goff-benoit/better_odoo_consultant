@@ -31,6 +31,18 @@ code_path: skills/odoo-query-records/scripts/handler.py
 - Les données live Odoo priment sur le contexte Markdown et les hypothèses.
 - Si les droits utilisateur ou la société active limitent le résultat, signale-le.
 
+## Choisir entre odoo_query_records et les skills voisins
+
+| Besoin | Skill à appeler |
+|---|---|
+| Lire les données d'enregistrements concrets (valeurs de champs, détail d'une fiche) | `odoo_query_records` |
+| Compter le nombre de résultats sans charger les lignes | `odoo_count_records` |
+| Agréger en KPI groupé (CA par mois, nombre par statut) | `odoo_aggregate_records` |
+| Connaître la structure d'un modèle (quels champs existent) | `odoo_inspect_fields` |
+| Vérifier ce qu'une vue affiche à l'écran | `odoo_inspect_view` |
+
+Règle pratique : si tu t'apprêtes à répondre sans lire de données réelles sur une question qui porte sur « combien / lesquels / à quel état », appelle d'abord ce skill.
+
 ## odoo_query_records
 Utilise `odoo_query_records` pour lire des enregistrements concrets via `search_read`.
 

@@ -28,6 +28,18 @@ code_path: skills/repo-search-code/scripts/handler.py
 - Skill en lecture seule : il cherche dans le dépôt custom client.
 - Le code projet prime sur les suppositions fonctionnelles.
 
+## Choisir entre repo_search_code et les skills voisins
+
+| Question | Skill à appeler |
+|---|---|
+| « Y a-t-il un override `_inherit` dans le module custom ? » | `repo_search_code` |
+| « Comment Odoo standard implémente ce même modèle ? » | `source_search_odoo` |
+| « Lire un fichier custom précis » | `repo_read_file` |
+| « Lister les modules custom du dépôt » | `repo_list_modules` |
+| « Le comportement vient-il de Studio ou du code custom ? » | `odoo_inspect_studio` + `repo_search_code` |
+
+Règle : si le code est écrit par le client ou le partenaire, c'est ce skill. Si c'est le code Odoo SA officiel, c'est `source_search_odoo`.
+
 ## repo_search_code
 Utilise `repo_search_code` pour trouver overrides, modèles custom, vues XML, sécurité, data files et logique métier.
 

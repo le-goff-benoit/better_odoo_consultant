@@ -32,6 +32,16 @@ references_auto_load:
 - Skill en lecture seule : il inventorie les personnalisations Studio de l'instance réelle.
 - Distingue toujours standard Odoo, Studio et code custom.
 
+## Choisir entre odoo_inspect_studio et les skills voisins
+
+| Question | Skill à appeler |
+|---|---|
+| « Y a-t-il des champs x_studio_* ou des automatisations Studio ? » | `odoo_inspect_studio` |
+| « À quoi ressemble la vue assemblée finalement ? » | `odoo_inspect_view` |
+| « Y a-t-il un override Python dans le module custom ? » | `repo_search_code` |
+| « Quels champs métier le modèle expose-t-il ? » | `odoo_inspect_fields` |
+| « L'automatisation vient-elle du standard Odoo ou de Studio ? » | `odoo_inspect_studio` puis `source_search_odoo` pour confirmer |
+
 ## odoo_inspect_studio
 Utilise `odoo_inspect_studio` pour lister modèles `x_*`, champs `x_*`, vues, menus, actions serveur, crons, automatisations et règles.
 

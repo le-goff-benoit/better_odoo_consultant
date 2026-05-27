@@ -7,9 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.7',
+    version: '0.100.8',
     date: '2026-05-27',
     badge: 'Actuel',
+    badgeColor: t.brand,
+    items: [
+      'Tool-first enforcement — renforcement systématique sur les 4 agents. Section « Catégories tool-obligatoires » ajoutée (tableau par type de question + outil forcé + cas mémoire autorisés labellistés).',
+      'Règle « Résultat outil = source de vérité » ajoutée dans les consignes transverses des 4 agents : verbatim obligatoire, interdiction d\'ajuster silencieusement les données retournées.',
+      'Architect : gate « D\'abord vérifier, ensuite recommander » aligné sur Support/BA ; source_read_odoo_file et odoo_inspect_modules ajoutés dans preferred_skills.',
+      'Developer : gate vérification étendu aux questions conceptuelles (pas seulement aux patches) — source_search_odoo obligatoire avant d\'affirmer un comportement standard.',
+      'Disambiguation tables « Choisir entre X et les skills voisins » ajoutées dans odoo_inspect_view, odoo_inspect_studio, odoo_query_records, source_search_odoo, repo_search_code.',
+      '10 cas d\'éval tool_required ajoutés dans agent_response_eval.jsonl (architect, developer, support, BA) — vérifient que le bon skill est sélectionné pour les questions qui semblent simples.',
+    ],
+  },
+  {
+    version: '0.100.7',
+    date: '2026-05-27',
+    badge: '',
     badgeColor: t.brand,
     items: [
       'UX sélection de texte : bouton « Citer » ajouté à côté de « Plus de détails » dans le flottant SelectionAskMore. Click → insère un bloc blockquote `> texte sélectionné` dans le prompt input que l’utilisateur peut compléter avant d’envoyer.',
