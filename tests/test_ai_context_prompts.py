@@ -28,7 +28,11 @@ def test_perspective_blocks_have_distinct_response_contracts():
 
     assert "Application Manager / Business Analyst Odoo" in ba
     assert "points de validation" in ba
-    assert "Pas de snippet de code" in ba
+    # v0.100.2 — BA may now quote short code snippets ONLY as the exception
+    # for automated actions (ir.cron, base.automation, server action, mail
+    # template). Verify the exception contract is wired in.
+    assert "Exception code court pour les actions techniques automatisées" in ba
+    assert "handoff explicite à `agent_developer`" in ba
 
     assert "développeur Odoo senior" in developer
     assert "chemin + numéro de ligne" in developer

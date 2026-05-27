@@ -7,10 +7,19 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.5',
+    version: '0.100.6',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Détecteur de complexité — modules vendorés. Cause traitée : un client qui vendre des submodules OCA / community dans son repo (via `git submodule`) était silencieusement ignoré par `_manifest_is_custom` (filtre auteur OCA/Camptocamp/etc.) → 0 manifest custom détecté → mode tombait sur `standard` → bloc Contexte projet vide, alors que le client maintient et déploie 5, 20 ou 50 modules. Désormais, `_repo_summary` retourne aussi `vendored_manifest_count` + `vendored_modules` (échantillon 30), surfacés dans le bloc Contexte projet sous la ligne « Modules vendorés dans le repo client (submodules OCA/community déployés et maintenus par le client) ». À partir de 3 manifests vendorés, `dev_detected` passe à `True` même sans manifests client-authored — la responsabilité de déploiement/upgrade compte comme dev, pas seulement l\'écriture. Les modules OCA installés sans être dans le repo (ex. `pip install`) restent classés en community, pas dev — la frontière est « est-ce que le client est responsable de ce code ». Sample size custom + community passé de 10 à 15 dans le bloc. +4 tests régressifs, suite 829 verts',
+    ],
+  },
+  {
+    version: '0.100.5',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Pondération d\'importance — 7e directive transverse ajoutée aux 4 agents (FR + EN). Règle : avant de structurer la réponse, identifier ce qui est project-specific (modules custom listés dans le `## Contexte projet`, Studio détecté, `dev_and_studio`, localisation atypique) vs vanilla Odoo. Mettre en avant ce qui est spécifique — c\'est ce que la doc générale ne donne pas. Cible : 60-70 % du volume sur le project-specific, 30-40 % sur le standard utile à comprendre. Sur les questions explicitement orientées custom (« y a-t-il des Studio actions », « quels crons custom »), le standard tombe à 1-2 lignes contextuelles, le reste va sur les personnalisations. Tri obligatoire dans les listes mixtes : custom/Studio d\'abord, standard en fin',
       'Densité d\'exemples client × 2 — quota passe de 1-3 à **2-4 enregistrements concrets** par réponse non triviale pour BA et Support (limit ≤ 4 sur `odoo_query_records`). Deux placements complémentaires : (a) **inline dans le corps** dès qu\'un point d\'explication est illustré par un cas réel (« le champ X est utilisé sur les contrats actifs [SO12345](odoo://sale.order/12345), [SO12356](odoo://sale.order/12356) pour calculer Y »), (b) **dans la section finale « Exemples concrets sur cette base »** (callout) qui reste obligatoire. Support a une instruction dédiée pour citer 2-3 enregistrements touchés quand le problème est de la donnée (facture coincée, commande bloquée). Architect et Developer ne sont pas concernés — leur preuve est le code source, pas la donnée live',

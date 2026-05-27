@@ -196,6 +196,12 @@ def _repo_summary(profile_name: str, envs: list[dict[str, Any]], fallback_github
             if not _is_excluded_repo_path(path.relative_to(repo_path))
         ] if cloned else []
         custom_manifests = [path for path in manifests if _manifest_is_custom(path)]
+        # v0.100.6 — manifests présents dans le repo client mais classés comme
+        # OCA / community / l10n_ par `_manifest_is_custom`. Le client les vendre
+        # via submodules (et porte donc la responsabilité de maintenance,
+        # déploiement, upgrade) même s'il n'en est pas l'auteur — on les remonte
+        # comme catégorie distincte plutôt que de les ignorer silencieusement.
+        vendored_manifests = [path for path in manifests if path not in set(custom_manifests)]
         custom_dirs = [path.parent for path in custom_manifests]
         py_count = sum(1 for module_dir in custom_dirs for path in module_dir.rglob("*.py") if not _is_excluded_repo_path(path.relative_to(repo_path))) if cloned else 0
         xml_count = sum(1 for module_dir in custom_dirs for path in module_dir.rglob("*.xml") if not _is_excluded_repo_path(path.relative_to(repo_path))) if cloned else 0
@@ -211,17 +217,30 @@ def _repo_summary(profile_name: str, envs: list[dict[str, Any]], fallback_github
             "all_manifest_count": len(manifests),
             "ignored_manifest_count": len(manifests) - len(custom_manifests),
             "custom_modules": [path.parent.name for path in custom_manifests[:30]],
+            "vendored_manifest_count": len(vendored_manifests),
+            "vendored_modules": [path.parent.name for path in vendored_manifests[:30]],
             "python_files": py_count,
             "xml_files": xml_count,
             "local_path": str(repo_path) if cloned else None,
         })
+    total_vendored = sum(repo.get("vendored_manifest_count") or 0 for repo in repos)
+    vendored_modules_flat: list[str] = []
+    for repo in repos:
+        vendored_modules_flat.extend(repo.get("vendored_modules") or [])
+    # v0.100.6 — `detected` reflète aussi les modules vendorés (submodules
+    # OCA/community dans le repo client) : seuil 3 pour éviter qu'un seul
+    # submodule isolé suffise mais que 3+ déclenchent le signal dev.
+    VENDORED_DEV_THRESHOLD = 3
     return {
-        "detected": total_manifests > 0,
+        "detected": total_manifests > 0 or total_vendored >= VENDORED_DEV_THRESHOLD,
         "configured": bool(repos),
         "repositories": repos,
         "manifest_count": total_manifests,
         "python_files": total_python,
         "xml_files": total_xml,
+        # v0.100.6 — surface au niveau racine pour usage direct dans le context block
+        "vendored_manifest_count": total_vendored,
+        "vendored_modules": sorted(set(vendored_modules_flat))[:30],
     }
 
 
@@ -340,6 +359,8 @@ async def analyze_technical_complexity(profile_name: str, environments: Optional
 
     studio_total = sum(studio_counts.values())
     custom_module_count = installed_modules.get("custom_module_count") or 0
+    community_module_count = installed_modules.get("community_module_count") or 0
+    vendored_manifest_count = repo.get("vendored_manifest_count") or 0
     odoo_connected = installed_modules.get("available", False)
     studio_module_used = bool(installed_modules.get("studio_customization_installed"))
     # A single genuine studio_customization record — or the studio_customization
@@ -348,10 +369,23 @@ async def analyze_technical_complexity(profile_name: str, environments: Optional
     # When Odoo is reachable, the installed-modules list is authoritative:
     # a repo with manifests that aren't installed should not flag the project as "Dev".
     # When Odoo is not reachable, fall back to the repo scan as a best-effort signal.
+    # v0.100.6 — vendored OCA / community modules in the client repo also count
+    # as a dev signal: even if the client did not author them, they own the
+    # deployment, upgrade and maintenance of those submodules. A repo with 3+
+    # vendored modules represents a real custom layer the agent must consider.
+    # Note: we only flip on VENDORED count (modules present in the client
+    # repo), not on the general community_module_count from XML-RPC. A project
+    # that pip-installs OCA modules without vendoring them in its repo stays
+    # 'standard' — the line is "is the client responsible for maintaining /
+    # deploying this code?".
+    VENDORED_DEV_THRESHOLD = 3
     if odoo_connected:
-        dev_detected = custom_module_count >= CUSTOM_MODULE_THRESHOLD
+        dev_detected = (
+            custom_module_count >= CUSTOM_MODULE_THRESHOLD
+            or vendored_manifest_count >= VENDORED_DEV_THRESHOLD
+        )
     else:
-        dev_detected = bool(repo["detected"])
+        dev_detected = bool(repo["detected"]) or vendored_manifest_count >= VENDORED_DEV_THRESHOLD
     mode = _mode(studio_detected, dev_detected)
     return {
         "mode": mode,
@@ -490,13 +524,26 @@ def _build_complexity_body(value: dict[str, Any]) -> list[str]:
     if ignored_manifests:
         lines.append(f"- Manifests ignorés car non custom/Odoo/OCA/l10n : {ignored_manifests}")
     if custom_module_count:
-        sample = ", ".join(custom_modules[:10])
-        suffix = f" : {sample}" if sample else ""
+        sample = ", ".join(custom_modules[:15])
+        more = "…" if len(custom_modules) > 15 else ""
+        suffix = f" : {sample}{more}" if sample else ""
         lines.append(f"- Modules custom installés : {custom_module_count}{suffix}")
     if community_module_count:
-        sample = ", ".join(community_modules[:10])
-        suffix = f" : {sample}" if sample else ""
-        lines.append(f"- Modules communautaires (OCA / etc.) : {community_module_count}{suffix}")
+        sample = ", ".join(community_modules[:15])
+        more = "…" if len(community_modules) > 15 else ""
+        suffix = f" : {sample}{more}" if sample else ""
+        lines.append(f"- Modules communautaires installés (OCA / etc.) : {community_module_count}{suffix}")
+    # v0.100.6 — modules vendorés dans le repo client (submodules OCA/community)
+    # que le client déploie et maintient même s'il n'en est pas l'auteur.
+    vendored_count = dev.get("vendored_manifest_count") or 0
+    vendored_modules = dev.get("vendored_modules") or []
+    if vendored_count:
+        sample = ", ".join(vendored_modules[:15])
+        more = "…" if len(vendored_modules) > 15 else ""
+        suffix = f" : {sample}{more}" if sample else ""
+        lines.append(
+            f"- Modules vendorés dans le repo client (submodules OCA/community déployés et maintenus par le client) : {vendored_count}{suffix}"
+        )
     if installed_apps:
         sample = ", ".join(installed_apps[:30])
         more = "…" if len(installed_apps) > 30 else ""
