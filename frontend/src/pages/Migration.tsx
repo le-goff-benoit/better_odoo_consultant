@@ -18,7 +18,7 @@ import Markdown, { MarkdownActionsProvider, extractActionItems } from '../compon
 import ActionProposals from '../components/ActionProposals'
 import AiSelector from '../components/AiSelector'
 import { useWorkspaceContext } from '../components/Layout'
-import { PROVIDERS } from '../constants/providers'
+import { PROVIDERS, buildConfiguredProviders } from '../constants/providers'
 import { useUiLanguage } from '../i18n'
 import {
   ATTACHMENT_ACCEPT,
@@ -1080,14 +1080,8 @@ export default function Migration() {
   const modelConfig: Record<string, string[]> = modelCfg?.data ?? {}
   const srcStatus: Record<string, { installed: boolean }> = sourcesData?.data ?? {}
 
-  const configuredProviders = PROVIDERS
-    .filter(p => allProviders[p.id])
-    .map(p => {
-      const enabled = modelConfig[p.id]
-      if (!enabled || enabled.length === 0) return p
-      return { ...p, models: p.models.filter(m => enabled.includes(m.id)) }
-    })
-    .filter(p => p.models.length > 0)
+  // Helper handles live-only IDs (GitHub Models / Copilot) added since 0.98.1.
+  const configuredProviders = buildConfiguredProviders(allProviders, modelConfig)
 
   const versions = installedVersions(sourcesData?.data)
 

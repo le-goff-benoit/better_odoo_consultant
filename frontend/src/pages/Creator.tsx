@@ -12,7 +12,7 @@ import {
   previewCreatorOperation, getToolConfig,
 } from '../api/client'
 import { useUiLanguage } from '../i18n'
-import { PROVIDERS } from '../constants/providers'
+import { buildConfiguredProviders } from '../constants/providers'
 import { makeChallenge } from '../constants/creatorWords'
 import PageHeader from '../components/PageHeader'
 import AiProviderRequiredModal, { useAiProvidersConfigured } from '../components/AiProviderRequiredModal'
@@ -337,14 +337,8 @@ export default function Creator() {
   const configuredProviders = useMemo(() => {
     const map = (providersData?.data ?? {}) as Record<string, boolean>
     const config = (modelCfg?.data ?? {}) as Record<string, string[]>
-    return PROVIDERS
-      .filter(p => map[p.id])
-      .map(p => {
-        const enabled = config[p.id]
-        if (!enabled || enabled.length === 0) return p
-        return { ...p, models: p.models.filter(m => enabled.includes(m.id)) }
-      })
-      .filter(p => p.models.length > 0)
+    // Helper handles live-only IDs (GitHub Models / Copilot) added since 0.98.1.
+    return buildConfiguredProviders(map, config)
   }, [providersData, modelCfg])
 
   const activeProvider = provider || configuredProviders[0]?.id || ''

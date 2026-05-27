@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.98.1',
+    version: '0.98.2',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bugfix critique — régression introduite par 0.98.1 : les pages Assistant, Migration et Creator affichaient « Aucun fournisseur IA configuré — ajouter une clé API → » alors que la clé GitHub/Copilot était bien stockée. Cause racine : 0.98.1 a ajouté les modèles **live** dans Settings (ex. `gpt-4o-2024-11-20`, `Mistral-Large-2411`) que l\'utilisateur peut cocher et qui sont persistés dans `model-config`. Les 3 pages filtraient ensuite via `PROVIDERS[provider].models.filter(m => enabled.includes(m.id))` — qui intersecte avec la **liste statique** codée en dur. Les IDs live-only n\'y figurant pas, le filtre retournait `[]`, le provider était drop par `.filter(p => p.models.length > 0)`, et le sélecteur devenait vide',
+      'Fix — nouveau helper `buildConfiguredProviders(allProviders, modelConfig)` dans `frontend/src/constants/providers.ts` : quand un ID coché n\'existe pas dans la liste statique, il est synthétisé en entrée `{id, label: id, desc: \'\'}` au lieu d\'être jeté. Les 3 pages (`Assistant.tsx`, `Migration.tsx`, `Creator.tsx`) utilisent désormais ce helper au lieu de leur filtre inline. 7 nouveaux tests Vitest dans `providers.test.ts` verrouillent le comportement (provider sans clé exclu ; liste vide = statique préservée ; intersection statique-only ; synthèse live-only ; mix des deux ; cas régression 0.98.2 reproduit). Suite frontend 60 verts, backend 809 verts',
+      '**Règle dégagée :** quand on étend ce que l\'utilisateur peut cocher dans une UI de config, toujours vérifier les lecteurs en aval : un filtre `enabled.includes(m.id)` paraît robuste mais il intersecte silencieusement avec un catalogue statique. À la moindre divergence statique↔live, la totalité de la sélection peut disparaître sans message. Le test régressif suit le pattern : input réaliste (ID live qui n\'existe pas en statique) → assert que le provider survit',
+    ],
+  },
+  {
+    version: '0.98.1',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Settings — modèles GitHub Models et GitHub Copilot désormais chargés en live depuis les APIs respectives au lieu d\'une liste codée en dur. Deux nouveaux endpoints backend : `GET /api/ai/github/models` (appelle `models.inference.ai.azure.com/v1/models` avec le token stocké) et `GET /api/ai/copilot/models` (échange OAuth → token Copilot, appelle `api.githubcopilot.com/models`). `ModelConfigEditor` mis à jour côté frontend : fetch live avec `staleTime` 5 min, fusion avec les métadonnées statiques (labels, descriptions) pour les modèles connus, id brut + marqueur `·new` pour les modèles inconnus du catalogue. Badge `live` quand les données viennent de l\'API, mention `liste statique` en cas d\'erreur réseau ou de plan insuffisant. Bouton refresh sans rechargement de page. Résultat : la liste reflète ce qui est réellement accessible pour l\'abonnement de l\'utilisateur — Copilot Free voit moins que Copilot Enterprise, les nouveaux modèles ajoutés par GitHub apparaissent automatiquement',
     ],

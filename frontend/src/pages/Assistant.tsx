@@ -14,7 +14,7 @@ import ConversationHistoryPanel from '../components/ConversationHistoryPanel'
 import WorkspaceShell from '../components/WorkspaceShell'
 import { useWorkspaceContext } from '../components/Layout'
 
-import { PROVIDERS } from '../constants/providers'
+import { PROVIDERS, buildConfiguredProviders } from '../constants/providers'
 import { useUiLanguage } from '../i18n'
 import {
   ATTACHMENT_ACCEPT,
@@ -601,15 +601,9 @@ export default function Assistant() {
 
   const modelConfig: Record<string, string[]> = modelCfg?.data ?? {}
 
-  // Only show configured providers, with models filtered by user preferences
-  const configuredProviders = PROVIDERS
-    .filter(p => allProviders[p.id])
-    .map(p => {
-      const enabled = modelConfig[p.id]
-      if (!enabled || enabled.length === 0) return p
-      return { ...p, models: p.models.filter(m => enabled.includes(m.id)) }
-    })
-    .filter(p => p.models.length > 0)
+  // Only show configured providers, with models filtered by user preferences.
+  // Helper handles live-only IDs (GitHub Models / Copilot) added since 0.98.1.
+  const configuredProviders = buildConfiguredProviders(allProviders, modelConfig)
 
   const [provider,  setProvider]  = useState('')
   const [modelId,   setModelId]   = useState('')

@@ -6,6 +6,46 @@ export interface ModelDef {
   recommended?: boolean
 }
 
+export type ProviderDef = { id: string; label: string; color: string; models: ModelDef[] }
+
+/**
+ * Compute the list of providers visible in Assistant / Migration / Creator,
+ * filtered by configured API keys AND by the user's enabled-model selection.
+ *
+ * IMPORTANT — handles live-only model IDs : depuis 0.98.1, Settings affiche
+ * les modèles GitHub / Copilot retournés par l'API (ex. `gpt-4o-2024-11-20`,
+ * `Mistral-Large-2411`) qui ne figurent pas dans la liste statique ci-dessous.
+ * Sans ce helper, intersecter `modelConfig` avec `PROVIDERS[provider].models`
+ * jetait ces IDs live-only et vidait `p.models`, faisant disparaître le
+ * provider du sélecteur (« Aucun fournisseur IA configuré »).
+ *
+ * Comportement :
+ * - Provider absent de `allProviders` ou avec valeur falsy → exclu.
+ * - Pas de `modelConfig` sauvegardé pour ce provider, ou liste vide → on
+ *   garde la liste statique complète (compatibilité historique).
+ * - Sinon : `models = ∪(modèles statiques cochés, IDs live cochés sans
+ *   métadonnée statique synthétisés en {id, label: id, desc: ''})`.
+ * - Provider final avec `models.length === 0` → exclu.
+ */
+export function buildConfiguredProviders(
+  allProviders: Record<string, boolean>,
+  modelConfig: Record<string, string[]>,
+): ProviderDef[] {
+  return PROVIDERS
+    .filter(p => allProviders[p.id])
+    .map(p => {
+      const enabled = modelConfig[p.id]
+      if (!enabled || enabled.length === 0) return p
+      const known = p.models.filter(m => enabled.includes(m.id))
+      const knownIds = new Set(p.models.map(m => m.id))
+      const synthetic: ModelDef[] = enabled
+        .filter(id => !knownIds.has(id))
+        .map(id => ({ id, label: id, desc: '' }))
+      return { ...p, models: [...known, ...synthetic] }
+    })
+    .filter(p => p.models.length > 0)
+}
+
 export const PROVIDERS: { id: string; label: string; color: string; models: ModelDef[] }[] = [
   {
     id: 'claude', label: 'Claude', color: '#D97706',
