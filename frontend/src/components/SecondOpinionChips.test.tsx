@@ -36,7 +36,7 @@ describe('buildSecondOpinionPrompt', () => {
       invitedAgentLabel: 'Architect',
       lang: 'fr',
     })
-    expect(out).toContain('[...réponse tronquée pour rester dans le budget...]')
+    expect(out).toContain('[...réponse tronquée')
     expect(out.length).toBeLessThan(huge.length)
   })
 })

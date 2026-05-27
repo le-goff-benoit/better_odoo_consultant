@@ -87,9 +87,10 @@ export function buildSecondOpinionPrompt({
   lang: 'fr' | 'en'
 }): string {
   // Cap the previous answer so a very long response doesn't blow the
-  // turn-level token budget — 4000 chars is enough to carry the gist.
-  const body = previousAnswer.length > 4000
-    ? previousAnswer.slice(0, 4000) + '\n[...réponse tronquée pour rester dans le budget...]'
+  // turn-level token budget — 800 chars gives the gist without flooding
+  // the UI conversation history that the user sees repeated in full.
+  const body = previousAnswer.length > 800
+    ? previousAnswer.slice(0, 800) + '\n[...réponse tronquée — demander un avis sur les grandes lignes ci-dessus...]'
     : previousAnswer
   if (lang === 'en') {
     return [

@@ -1,5 +1,5 @@
 import { RefObject, useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Quote, Sparkles } from 'lucide-react'
 
 interface Anchor { text: string; top: number; left: number }
 
@@ -9,12 +9,16 @@ function nodeInside(container: HTMLElement, node: Node | null) {
   return !!candidate && container.contains(candidate)
 }
 
-/** Floating "more detail" action shown when the user selects text inside a
- *  response. Clicking it builds a follow-up prompt and submits it. */
-export default function SelectionAskMore({ containerRef, onAsk, label, disabled }: {
+/** Floating action strip shown when the user selects text inside a response.
+ *  - "Plus de détails" submits a follow-up prompt automatically.
+ *  - "Citer" inserts a blockquote citation block into the prompt input so the
+ *    user can manually complete their question. */
+export default function SelectionAskMore({ containerRef, onAsk, onCite, label, citeLabel, disabled }: {
   containerRef: RefObject<HTMLElement | null>
   onAsk: (selectedText: string) => void
+  onCite?: (selectedText: string) => void
   label: string
+  citeLabel?: string
   disabled?: boolean
 }) {
   const [anchor, setAnchor] = useState<Anchor | null>(null)
@@ -63,19 +67,38 @@ export default function SelectionAskMore({ containerRef, onAsk, label, disabled 
   if (disabled || !anchor) return null
 
   return (
-    <button
-      type="button"
-      className="selection-ask-more"
-      style={{ position: 'fixed', top: anchor.top, left: anchor.left }}
-      // Keep the text selection alive through the click.
-      onMouseDown={e => e.preventDefault()}
-      onClick={() => {
-        onAsk(anchor.text)
-        window.getSelection()?.removeAllRanges()
-        setAnchor(null)
-      }}
+    <div
+      className="selection-ask-more-strip"
+      style={{ position: 'fixed', top: anchor.top, left: anchor.left, display: 'flex', gap: 4 }}
     >
-      <Sparkles size={13} /> {label}
-    </button>
+      <button
+        type="button"
+        className="selection-ask-more"
+        style={{ position: 'static' }}
+        onMouseDown={e => e.preventDefault()}
+        onClick={() => {
+          onAsk(anchor.text)
+          window.getSelection()?.removeAllRanges()
+          setAnchor(null)
+        }}
+      >
+        <Sparkles size={13} /> {label}
+      </button>
+      {onCite && (
+        <button
+          type="button"
+          className="selection-ask-more"
+          style={{ position: 'static' }}
+          onMouseDown={e => e.preventDefault()}
+          onClick={() => {
+            onCite(anchor.text)
+            window.getSelection()?.removeAllRanges()
+            setAnchor(null)
+          }}
+        >
+          <Quote size={13} /> {citeLabel ?? 'Citer'}
+        </button>
+      )}
+    </div>
   )
 }

@@ -49,10 +49,73 @@ def split_source_prefix(sub_path: str) -> tuple[Optional[str], str]:
     return None, clean
 
 
+_MODULE_LOCATION_CACHE: dict[tuple[str, str], Optional[str]] = {}
+_REPO_EXCLUDED_DIRS = {".git", "__pycache__", ".venv", "venv", "node_modules", "dist", "build", ".mypy_cache", ".pytest_cache"}
+
+
+def _locate_module_in_repo(repo_root: str, module_name: str) -> Optional[str]:
+    """v0.100.7 — locate a module by name anywhere in the client repo.
+
+    Returns the path of the module's parent directory (relative to repo_root)
+    so callers can prepend it to nested paths. Used to make `repo_read_file`
+    and `repo_search_code` resilient to the LLM not knowing the exact
+    submodule subdirectory where a vendored module lives — e.g. the LLM
+    asks for `auditlog/models/foo.py` but the actual location is
+    `submodules/oca-server-tools/auditlog/models/foo.py`.
+
+    Module identification = a directory named `module_name` that contains a
+    `__manifest__.py`. First match wins; results are cached per (repo, name)
+    since a single conversation often touches the same module repeatedly.
+    """
+    if not module_name or "/" in module_name or module_name in {".", ".."}:
+        return None
+    repo_real = os.path.realpath(repo_root)
+    key = (repo_real, module_name)
+    if key in _MODULE_LOCATION_CACHE:
+        return _MODULE_LOCATION_CACHE[key]
+    found: Optional[str] = None
+    for current, dirs, files in os.walk(repo_real):
+        # Prune common noise; do not descend into them.
+        dirs[:] = [d for d in dirs if d not in _REPO_EXCLUDED_DIRS]
+        if os.path.basename(current) == module_name and (
+            "__manifest__.py" in files or "__openerp__.py" in files
+        ):
+            # Return parent dir so callers prepend it: parent/module_name/...
+            parent_rel = os.path.relpath(os.path.dirname(current), repo_real)
+            found = "" if parent_rel == "." else parent_rel
+            break
+    _MODULE_LOCATION_CACHE[key] = found
+    return found
+
+
 def safe_source_path(source_path: str, sub_path: str, include_enterprise: bool = True) -> Optional[str]:
     """Return an absolute path only if it stays within a known source root."""
     if not include_enterprise:
-        return safe_join(source_path, sub_path)
+        # v0.100.7 — fallback lookup for client repos where modules are nested
+        # in submodule subdirectories. If the literal path does not exist,
+        # try to locate the first path segment as a module name elsewhere in
+        # the repo and rewrite the path accordingly.
+        direct = safe_join(source_path, sub_path)
+        if direct and os.path.exists(direct):
+            return direct
+        clean = (sub_path or "").strip().strip("/")
+        if clean and "/" in clean:
+            first, _, rest = clean.partition("/")
+            parent_rel = _locate_module_in_repo(source_path, first)
+            if parent_rel is not None:
+                rewritten = os.path.join(parent_rel, clean) if parent_rel else clean
+                resolved = safe_join(source_path, rewritten)
+                if resolved and os.path.exists(resolved):
+                    return resolved
+        elif clean:
+            # Single segment — maybe a module dir itself ("auditlog" → directory).
+            parent_rel = _locate_module_in_repo(source_path, clean)
+            if parent_rel is not None:
+                rewritten = os.path.join(parent_rel, clean) if parent_rel else clean
+                resolved = safe_join(source_path, rewritten)
+                if resolved and os.path.exists(resolved):
+                    return resolved
+        return direct
     prefix, clean_path = split_source_prefix(sub_path)
     for label, root in source_roots(source_path):
         if prefix and label != prefix:
@@ -75,8 +138,21 @@ def safe_source_path(source_path: str, sub_path: str, include_enterprise: bool =
 
 def source_search_dirs(source_path: str, sub_path: str, include_enterprise: bool = True) -> list[str]:
     if not include_enterprise:
+        # v0.100.7 — when the LLM passes a module name as path, fall back to
+        # the resolver so vendored submodules are searchable too.
         full = safe_join(source_path, sub_path)
-        return [full] if full and os.path.isdir(full) else []
+        if full and os.path.isdir(full):
+            return [full]
+        clean = (sub_path or "").strip().strip("/")
+        if clean:
+            first = clean.split("/", 1)[0]
+            parent_rel = _locate_module_in_repo(source_path, first)
+            if parent_rel is not None:
+                rewritten = os.path.join(parent_rel, clean) if parent_rel else clean
+                alt = safe_join(source_path, rewritten)
+                if alt and os.path.isdir(alt):
+                    return [alt]
+        return []
 
     prefix, clean_path = split_source_prefix(sub_path)
     dirs: list[str] = []

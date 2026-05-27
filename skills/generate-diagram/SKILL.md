@@ -38,6 +38,21 @@ references_auto_load:
 - Borner le nombre de nœuds pour garder un diagramme lisible.
 - Standard qualité attendu : diagramme propre, cartes titrées, flux orthogonal/linéaire, labels courts, styles Mermaid cohérents.
 
+## Diagramme de flux avec impact module custom
+
+Quand l'utilisateur demande un flux standard Odoo **avec l'impact d'un module custom**, **procéder étape par étape** :
+
+1. **Établir d'abord le flux standard** : flowchart TD avec les étapes clés du processus standard Odoo (sans custom). Chaque nœud = une étape métier avec titre court `<b>Étape</b>` + ligne de détail.
+2. **Inspecter le module custom** via `repo_read_file` / `repo_search_code` / `odoo_inspect_view` pour identifier précisément les points d'injection (nouveaux champs, vues surchargées, automatisations ajoutées, modèles étendus).
+3. **Produire le diagramme enrichi** : repartir du flux standard et **mettre en évidence les modifications** avec :
+   - `classDef standard fill:#EFF6FF,stroke:#93C5FD` pour les étapes Odoo standard (bleu clair)
+   - `classDef custom fill:#FEF3C7,stroke:#F59E0B` pour les étapes/ajouts du module custom (ambre)
+   - `classDef impact fill:#ECFDF5,stroke:#34D399` pour les étapes affectées (modifiées par le custom mais pas ajoutées)
+   - Chaque nœud custom doit avoir un label qui mentionne le module : `["<b>Ajout Custom</b><br/>swiss_grape_harvesting_management<br/>- Variété raisin<br/>- Parcelle"]`
+4. **Ne jamais utiliser `\n` dans les labels Mermaid** : utiliser `<br/>` pour les sauts de ligne dans les labels entre guillemets.
+5. **Ne pas dépasser 15 nœuds** pour un diagramme d'impact : si le flux est plus long, découper par sous-domaine (ex. Réception, Qualité, Facturation).
+6. **Après le diagramme**, rédiger un résumé en texte des 3-5 points d'impact clés du module, avec référence aux fichiers/modèles inspectés.
+
 ## generate_diagram
 Utilise `generate_diagram` pour produire un diagramme Mermaid à partir d'une description, de sources locales ou de l'instance live.
 

@@ -7,9 +7,24 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.6',
+    version: '0.100.7',
     date: '2026-05-27',
     badge: 'Actuel',
+    badgeColor: t.brand,
+    items: [
+      'UX sélection de texte : bouton « Citer » ajouté à côté de « Plus de détails » dans le flottant SelectionAskMore. Click → insère un bloc blockquote `> texte sélectionné` dans le prompt input que l’utilisateur peut compléter avant d’envoyer.',
+      'Avis complémentaire : cap de la réponse précédente réduit de 4 000 à 800 chars pour éviter que le texte complet de la réponse précédente n’alourdisse l’historique visible.',
+      'Boutons d’action « Étapes suivantes » : correction de ACTION_HEADING_RE pour les caractères non-ASCII (É, é) via lookbehind ASCII-safe au lieu de \\b, et ajout du caractère • dans UNORDERED_LIST_RE pour détecter les listes bullets en caractère spécial.',
+      'Mermaid : sanitiseur pré-rendu ajouté dans MermaidBlock — remplace `\\n` littéral dans les labels par `<br/>`, supprime le texte hors-syntaxe après un noeud `]`, élimine les caractères CJK/emoji hors des labels (causes fréquentes d’échec du parser Mermaid sur du Markdown généré par LLM).',
+      'BA agent : ajout d’une classification obligatoire Standard / Custom / Mix en tête de réponse (badge coloré vert/orange/bleu), définition explicite de « module custom = dépôt client, pas forcément application », section « Étapes suivantes » rendue obligatoire en format de sortie pour générer des chips d’action cliquables.',
+      'generate-diagram : nouvelles instructions pour les diagrammes flux + impact module custom — processus en étapes : (1) flux standard d’abord, (2) inspection du module via repo, (3) diagramme enrichi avec classDef colorés (standard bleu, custom ambre, impact vert). Interdiction explicite de `\\n` dans les labels.',
+      'module_taxonomy.md : clarification « module custom ≠ application », ajout de la notion « modules issus du dépôt client » identifiables via repo_list_modules.',
+    ],
+  },
+  {
+    version: '0.100.6',
+    date: '2026-05-27',
+    badge: '',
     badgeColor: t.brand,
     items: [
       'Détecteur de complexité — modules vendorés. Cause traitée : un client qui vendre des submodules OCA / community dans son repo (via `git submodule`) était silencieusement ignoré par `_manifest_is_custom` (filtre auteur OCA/Camptocamp/etc.) → 0 manifest custom détecté → mode tombait sur `standard` → bloc Contexte projet vide, alors que le client maintient et déploie 5, 20 ou 50 modules. Désormais, `_repo_summary` retourne aussi `vendored_manifest_count` + `vendored_modules` (échantillon 30), surfacés dans le bloc Contexte projet sous la ligne « Modules vendorés dans le repo client (submodules OCA/community déployés et maintenus par le client) ». À partir de 3 manifests vendorés, `dev_detected` passe à `True` même sans manifests client-authored — la responsabilité de déploiement/upgrade compte comme dev, pas seulement l\'écriture. Les modules OCA installés sans être dans le repo (ex. `pip install`) restent classés en community, pas dev — la frontière est « est-ce que le client est responsable de ce code ». Sample size custom + community passé de 10 à 15 dans le bloc. +4 tests régressifs, suite 829 verts',

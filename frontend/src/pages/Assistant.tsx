@@ -1151,6 +1151,16 @@ export default function Assistant() {
     sendWithText(prompt)
   }
 
+  // Selection → "Citer": inserts a blockquote in the prompt input so the user
+  // can manually complete their question before sending.
+  const citeOnSelection = (selected: string) => {
+    const lines = selected.split('\n').map(l => `> ${l}`).join('\n')
+    setInput(prev => {
+      const sep = prev.trim() ? '\n\n' : ''
+      return prev + sep + lines + '\n\n'
+    })
+  }
+
   const appendEvent = (msgId: string, evt: AiEvent) => {
     setMessages(prev => prev.map(m =>
       m.id === msgId ? { ...m, events: [...(m.events ?? []), evt] } : m
@@ -1242,7 +1252,9 @@ export default function Assistant() {
     <SelectionAskMore
       containerRef={messageListRef}
       onAsk={askMoreOnSelection}
+      onCite={citeOnSelection}
       label={c.askMore}
+      citeLabel={lang === 'en' ? 'Quote' : 'Citer'}
       disabled={streaming}
     />
 

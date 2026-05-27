@@ -373,7 +373,7 @@ function MarkdownLink({ label, href }: { label: string; href: string }) {
   )
 }
 
-const ACTION_HEADING_RE = /\b(prochaines?\s+(?:actions?|[eé]tapes?)|[eé]tapes?\s+suivantes?|points?\s+d['’]actions?|actions?\s+(?:à\s+faire|recommand[ée]es?)|next\s+(?:actions?|steps?)|recommended\s+actions?|action\s+items?|todo)\b/i
+const ACTION_HEADING_RE = /(?<![a-zA-Z])(prochaines?\s+(?:actions?|[EeéÉ]tapes?)|[EeéÉ]tapes?\s+suivantes?|[Pp]oints?\s+d[''\']actions?|[Aa]ctions?\s+(?:à\s+faire|recommand[ée]es?)|[Nn]ext\s+(?:actions?|steps?)|[Rr]ecommended\s+actions?|[Aa]ction\s+items?|todo)(?![a-zA-Z])/i
 
 // Section heading that triggers the « Exemples concrets » callout. Matches
 // both FR and EN variants the LLM is encouraged to produce in the BA
@@ -441,7 +441,7 @@ function actionPrompt(actionText: string): string {
  * the output. We now allow any amount of leading whitespace and report it
  * back so the renderer can apply a nesting indent.
  */
-const UNORDERED_LIST_RE = /^(\s*)[-*]\s+(.+)/
+const UNORDERED_LIST_RE = /^(\s*)[-*•]\s+(.+)/
 const ORDERED_LIST_RE = /^(\s*)(\d+)\.\s+(.+)/
 
 function isListLine(line: string): boolean {

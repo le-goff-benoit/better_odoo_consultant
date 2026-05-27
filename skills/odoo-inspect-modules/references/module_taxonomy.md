@@ -34,12 +34,15 @@ Référence chargée à la demande quand le prompt évoque le scoping d'une stac
 
 ### 3. Modules **custom** (client, partenaire, OCA, marketplace)
 
+> **Définition importante** : un module **custom** est tout module qui ne provient pas du dépôt officiel Odoo SA — qu'il vienne du **dépôt git du client**, d'un partenaire intégrateur, de l'OCA, ou du marketplace. Ce n'est **pas forcément une application** (`application=False` est la norme). La majorité des modules custom sont des extensions techniques (ajout de champs, surcharge de vues, automatisations métier) qui ne se déclarent pas comme « app » dans le menu Apps mais qui modifient profondément les flux. Ne pas confondre avec le champ `application=True` qui indique seulement une entrée dans le menu Apps Odoo — un module custom peut avoir `application=False` et être critique.
+
 Pas de signal unique — combinaison à inspecter :
 
 - `author` ≠ `Odoo S.A.` (ex. `Camptocamp`, `Akretion`, `Odoo Community Association (OCA)`, un partenaire local, le client lui-même).
 - `license` libre (LGPL-3, AGPL-3, OPL-1, autre).
 - `name` souvent préfixé : `oca_`, `l10n_<pays>_<partenaire>`, ou un acronyme client (`acme_sale_extension`).
 - `latest_version` parfois pas alignée sur la version Odoo (ex. `1.0.0` au lieu de `17.0.1.0.0`) — signal d'un module artisanal.
+- **Modules issus du dépôt client** : identifiables via `repo_list_modules` sur le repo git client — c'est la source de vérité pour distinguer ce qui est vraiment « maison ». Ces modules peuvent avoir `application=True` (rares) ou `application=False` (très courant).
 - **OCA** : `author` contient `Odoo Community Association` ou `OCA` ; nombreux modules `account_*`, `partner_*`, `sale_*`, `stock_*` enrichis.
 
 ## Patterns de nommage utiles
