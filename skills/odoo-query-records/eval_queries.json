@@ -32,6 +32,29 @@
     "language": "en"
   },
   {
+    "query": "Analyse la commande SO0042 et ses lignes",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "notes": "doit déclencher pour parent + chaînage lignes"
+  },
+  {
+    "query": "Liste les tâches du projet Apollo avec leur état",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "fr",
+    "notes": "parent project.project + chaînage project.task"
+  },
+  {
+    "query": "Show me delivery WH/OUT/00012 with its stock moves",
+    "expected_skill": "odoo_query_records",
+    "should_trigger": true,
+    "category": "positive",
+    "language": "en"
+  },
+  {
     "query": "Combien de factures en brouillon ?",
     "expected_skill": "odoo_count_records",
     "should_trigger": false,

@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.0',
+    version: '0.100.1',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'IA — suivi systématique des objets liés Odoo. Une fiche Odoo n\'a de sens que reliée à ses enfants (commande → lignes, facture → écritures, projet → tâches, BL → mouvements). Avant : l\'IA s\'arrêtait souvent à l\'entête, parce que les champs `one2many` ramenés par `search_read` ne contiennent que des ids et qu\'aucune instruction n\'imposait au LLM la seconde query. Désormais, le skill `odoo_query_records` SKILL.md ajoute une section « Suivre les relations » avec un tableau de recettes prêtes (10 modèles parent → enfant + champ relationnel) et le pattern explicite à appliquer ; le BA `AGENT.md` (FR + EN) gagne une consigne « Charge systématiquement les objets liés ». +3 eval queries qui verrouillent le déclenchement sur « commande + lignes », « projet + tâches », « delivery + stock moves »',
+      'Bugfix UX critique — perte de conversation après reprise depuis l\'historique puis navigation. Cause racine : le buffer en mémoire `_msgBuffer` (qui sert à survivre aux unmounts React pendant le streaming) n\'était pas synchronisé quand `resumeConv` ou `resetCurrentConversation` modifiaient l\'état via `setConversations` directement (et non via `setMessages` qui, lui, écrit dans le buffer). Au mount suivant, l\'effet de fusion buffer→état (l. 628 de `Assistant.tsx`) voyait que le buffer contenait des messages différents et écrasait le contenu repris par l\'ancien. Résultat utilisateur : on reprend une vieille conv, on bascule sur Sources / Projets / une autre conv, on revient et la conv reprise a disparu. Fix : nouveau helper `overwriteCurrentConversation(next)` qui met simultanément à jour `_msgBuffer`, LocalStorage et `setConversations` ; utilisé par les deux call sites concernés. Side effects sortis du callback de `setConversations` (sûr en mode strict React)',
+      'Agents Support et BA — consigne « tool-first » explicite ajoutée en tête de la section Comportement (FR + EN). Avant : les agents pouvaient lire « si tu ne peux pas vérifier, dis-le explicitement » comme une porte de sortie facile et répondre à l\'aveugle au lieu d\'appeler `odoo_inspect_*` / `odoo_query_records` / `triage_odoo_error` / `source_read_odoo_file`. Désormais, **« d\'abord vérifier, ensuite répondre »** est posé comme principe : ne jamais répondre de mémoire ce qu\'un outil peut confirmer en une seconde ; « je ne peux pas vérifier » n\'est pas un repli par défaut mais un constat après tentative explicite. Pour le BA spécifiquement, ajout d\'une garde anti-paradoxe : « tu n\'es pas un inventaire technique » ne libère pas de l\'obligation d\'inspecter — les détails techniques restent ton input de travail, juste pas ton format de sortie',
+    ],
+  },
+  {
+    version: '0.100.0',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Séparateurs horizontaux — `---` (ainsi que `***` et `___`) seuls sur une ligne sont désormais rendus comme `<hr>` stylé (filet fin couleur muted, marges 14px). Avant : ces marqueurs tombaient dans le rendu `<p>` et apparaissaient comme texte brut « --- » au milieu de la réponse',
       'Liens cliquables vers Odoo — nouveau scheme custom `odoo://<model>/<id>` que le LLM peut produire en Markdown standard `[libellé](odoo://sale.order/12345)`. Le composant `Markdown.tsx` détecte ce scheme et le résout en URL cliquable `https://<db_url>/web#id=12345&model=sale.order&view_type=form` (forme universelle qui marche d\'Odoo 15 à 19, pas de dépendance sur l\'action id). Le lien ouvre dans un nouvel onglet avec une petite icône externe (`↗`) pour signaler la sortie. En mode général (sans projet actif), le label reste visible mais grisé avec un tooltip explicatif',

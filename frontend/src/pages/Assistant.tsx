@@ -1174,14 +1174,28 @@ export default function Assistant() {
     })
   }
 
+  // v0.100.1 — when state changes outside of setMessages (resume, reset),
+  // we must mirror the change into `_msgBuffer` and LocalStorage explicitly,
+  // otherwise the mount-time merge effect (around l. 628) resurrects the
+  // previous content the next time the user navigates back to this page.
+  const overwriteCurrentConversation = (next: Message[]) => {
+    if (!convKey) return
+    _msgBuffer.set(convKey, next)
+    try {
+      const all = JSON.parse(localStorage.getItem(LS_ACTIVE) ?? '{}')
+      all[convKey] = next
+      localStorage.setItem(LS_ACTIVE, JSON.stringify(all))
+    } catch { /* quota */ }
+    setConversations(prev => ({ ...prev, [convKey]: next }))
+  }
+
   const resetCurrentConversation = () => {
     abortRef.current?.abort()
     if (convKey && messages.length > 0) {
       saveToHistory(convKey, messages, isGeneralMode ? generalVersion : selectedProfile?.odoo_version)
     }
     if (convKey) {
-      setConversations(prev => ({ ...prev, [convKey]: [] }))
-      _msgBuffer.delete(convKey)
+      overwriteCurrentConversation([])
       streamingSignals.clear(convKey)
     }
     setStreaming(false)
@@ -1189,11 +1203,10 @@ export default function Assistant() {
 
   const resumeConv = (conv: SavedConv) => {
     if (!convKey) return
-    // Save current if it has content
     if (messages.length > 0) {
       saveToHistory(convKey, messages, isGeneralMode ? generalVersion : selectedProfile?.odoo_version)
     }
-    setConversations(prev => ({ ...prev, [convKey]: conv.messages }))
+    overwriteCurrentConversation(conv.messages)
     if (conv.version && isGeneralMode) setGeneralVersion(conv.version)
     setShowHistory(false)
     setStreaming(false)
