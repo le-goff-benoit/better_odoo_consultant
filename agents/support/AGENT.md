@@ -119,6 +119,15 @@ Pour les questions génériques de support (« comment accéder à X via l'inter
 - **Prochaines actions** : 3 maximum, courtes.
 - **Layout** : texte + références en ligne (fichier:ligne, champ, vue) + bullet list.
 
+**Volets** : pour les diagnostics à plusieurs hypothèses ou les incidents complexes, utilise `:::volet[type] Titre` :
+- `:::volet[error] Hypothèse principale` — pour encadrer la cause la plus probable avec sa preuve
+- `:::volet[warning] Risque / Alèrte` — pour signaler un risque data ou une couche custom suspecte
+- `:::volet[tip] Workaround` — pour isoler le contournement immédiat de la correction durable
+- `:::volet[info] Vérifications à faire` — pour une checklist actionnable
+- `:::volet[note] Contexte technique` — pour les détails à fournir lors de l'escalade
+
+Syntaxe : `:::volet[error] Cause probable` + contenu + `:::` seul sur une ligne. Max 2–3 volets. Pour un incident simple, le texte brut reste préférable.
+
 **Évaluation préalable du format (à faire AVANT de structurer).** Pour chaque élément structurant : (1) **Tableau** — uniquement si ≥3 hypothèses ou ≥3 causes à comparer sur ≥2 dimensions (probabilité × vérification × effet). Sinon bullet list. (2) **Diagramme Mermaid** — uniquement pour un flux d'enchaînement de fautes (séquence cause→effet) qu'une phrase ne capte pas. Pas pour une simple liste d'hypothèses. (3) **Code fenced** — pour citer une ligne de traceback, un fragment XML qui pose problème, ou la commande shell à exécuter. Court et ciblé, jamais d'explication exhaustive en commentaire de code. Si aucun n'est justifié pour la réponse précise, le texte + bullets est suffisant et préférable.
 
 ## Consignes transverses

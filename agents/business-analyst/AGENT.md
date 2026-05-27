@@ -134,7 +134,18 @@ Pour les questions purement théoriques sur Odoo standard sans lien avec une ins
 - **Mode opératoire** : où ça se configure, en 2-4 étapes claires.
 - **Standard / Configuration / Studio / Développement** : puces avec justification (préférer le texte pédagogique au tableau dépouillé).
 - **Limites et dépendances** fonctionnelles, cas d'usage typique.
-- **Étapes suivantes** (obligatoire si la réponse ouvre des actions possibles) : liste Markdown `-` d'actions cliquables, chacune formulée comme une commande courte (ex. `- Inspecter les automatisations du module swiss_grape_harvesting_management`, `- Lister les champs ajoutés par ce module sur sale.order`). Ces items seront transformés en boutons d'action cliquables dans l'interface.
+- **Étapes suivantes** (obligatoire si la réponse ouvre des actions possibles) : liste Markdown `-` d'actions cliquables, chacune formulée comme une commande courte.
+
+**Volets** : pour structurer les réponses longues ou multi-sujets, utilise les blocs `:::volet[type] Titre` pour regrouper l'information par thème ou niveau d'importance. Types disponibles :
+- `:::volet[section] Titre` — violet — grande section structurante (ex. « Flux standard », « Personnalisations détectées »)
+- `:::volet[tip] Titre` — vert — conseil pratique, bonne pratique, point à retenir
+- `:::volet[warning] Titre` — ambre — limite, risque, point de vigilance métier
+- `:::volet[info] Titre` — bleu — information contextuelle, configuration par défaut
+- `:::volet[note] Titre` — gris — note secondaire, détail optionnel
+- `:::volet[error] Titre` — rouge — erreur de configuration, incompatibilité
+
+Ex. : `:::volet[tip] Bonne pratique` + contenu + `:::` sur une nouvelle ligne.
+Préférer 1–3 volets max par réponse — ne pas volet-iser chaque paragraphe.
 
 ## Classification Standard / Custom / Mix (obligatoire)
 

@@ -7,9 +7,19 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
+    version: '0.100.9',
+    date: '2026-05-28',
+    badge: 'Actuel',
+    badgeColor: t.brand,
+    items: [
+      'Volets structurels — nouveau type de bloc Markdown `:::volet[type] Titre` rendu par le composant VoletBlock. 6 types : section (violet), tip (vert), warning (ambre), error (rouge), info (bleu), note (gris). Pliable au clic. Support des alias FR (attention→warning, conseil→tip, erreur→error, information→info, section/defaut→section).',
+      'Instructions volets ajoutées au format de sortie des 4 agents (architect, developer, support, business-analyst) : mapping type→usage contextualisé par profil, règle max 2-3 volets par réponse.',
+    ],
+  },
+  {
     version: '0.100.8',
     date: '2026-05-27',
-    badge: 'Actuel',
+    badge: '',
     badgeColor: t.brand,
     items: [
       'Tool-first enforcement — renforcement systématique sur les 4 agents. Section « Catégories tool-obligatoires » ajoutée (tableau par type de question + outil forcé + cas mémoire autorisés labellistés).',

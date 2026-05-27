@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Check, Copy, ExternalLink, Lightbulb, Pencil, Send, X } from 'lucide-react'
 import { t } from '../theme'
 import MermaidBlock from './MermaidBlock'
+import VoletBlock, { parseVoletType } from './VoletBlock'
 
 // v0.100.2 — fenced code block with language badge + copy button.
 // Replaces the bare <pre><code> rendering. The label and copy affordance
@@ -536,6 +537,33 @@ export default function Markdown({ text }: { text: string }) {
 
   while (i < lines.length) {
     const line = lines[i]
+
+    // v0.100.9 — volet directive: :::volet[type] Title
+    // The LLM produces `:::volet[info] Mon titre` … `:::` to wrap structured
+    // sections in a collapsible colored panel. Parsed before code fences so
+    // `::: ` lines are never mistaken for content.
+    if (line.trimStart().startsWith(':::')) {
+      const directiveMatch = line.trimStart().match(/^:::volet(?:\[(\w+)\])?\s*(.*)/i)
+      if (directiveMatch) {
+        const rawType = directiveMatch[1] ?? 'note'
+        const title = directiveMatch[2]?.trim() ?? ''
+        const bodyLines: string[] = []
+        i++
+        while (i < lines.length && !lines[i].trimStart().startsWith(':::')) {
+          bodyLines.push(lines[i])
+          i++
+        }
+        const body = bodyLines.join('\n').trim()
+        const type = parseVoletType(rawType)
+        result.push(
+          <VoletBlock key={i} type={type} title={title}>
+            {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
+            {body ? <Markdown text={body} /> : null}
+          </VoletBlock>
+        )
+        i++; continue
+      }
+    }
 
     if (line.trimStart().startsWith('```')) {
       const fence = line.trimStart()

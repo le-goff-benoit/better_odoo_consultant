@@ -4103,3 +4103,69 @@ input::placeholder, textarea::placeholder {
 .markdown-code-block:focus-within .markdown-code-copy {
   opacity: 1;
 }
+
+/* ── v0.100.9 — Volet (collapsible disclosure panel) ─────────────────────── */
+
+.volet-block {
+  margin: 10px 0;
+  border: 1px solid;
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.volet-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: filter 80ms;
+}
+.volet-header:hover { filter: brightness(1.12); }
+/* Non-interactive headers (no body) shouldn't show pointer */
+.volet-header:not([role]) { cursor: default; }
+.volet-header:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+.volet-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.volet-title {
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
+  letter-spacing: 0.01em;
+}
+
+.volet-chevron {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: transform 120ms;
+}
+
+.volet-body {
+  padding: 12px 14px 10px;
+  line-height: 1.55;
+  border-top: none;
+}
+
+/* Light-mode overrides — slightly lighter backgrounds */
+:root .volet-block {
+  /* Backgrounds are set inline via style; only border-radius and margin here */
+}
+
+/* Dark-mode: nothing to override, backgrounds are already dark by default */

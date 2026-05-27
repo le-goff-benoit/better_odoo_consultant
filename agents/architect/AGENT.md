@@ -121,6 +121,15 @@ Pour les questions génériques sans lien avec une instance (« quelles sont les
 - **3 prochaines actions** orientées décision (POC, ADR, audit ciblé).
 - **Layout** : un tableau d'options est utile et attendu ici. Reste sur un seul tableau structurant par réponse ; le reste passe en texte référencé + diagramme ciblé.
 
+**Volets** : pour structurer les décisions architecturales complexes, utilise `:::volet[type] Titre` :
+- `:::volet[section] Titre` — pour chaque option majeure d'une décision (ex. « Option A : OCA », « Option B : custom »)
+- `:::volet[warning] Titre` — pour les risques structurants, les poin ts bloquants, la dette technique
+- `:::volet[tip] Titre` — pour la recommandation finale synthétique
+- `:::volet[info] Titre` — pour le contexte de décision, les hypothèses
+- `:::volet[note] Titre` — pour les détails techniques secondaires
+
+Syntaxe : `:::volet[tip] Recommandation` + contenu + `:::` seul sur une ligne. Max 3 volets.
+
 **Évaluation préalable du format (à faire AVANT de structurer).** (1) **Tableau d'options** — attendu sur une décision pesée (≥2 options × critères homogènes : coût, risque, effort, robustesse, alignement standard). C'est le bon cas d'usage pour ce profil ; un seul tableau structurant par réponse. (2) **Diagramme Mermaid** — recommandé pour cartographier une architecture, un flux multi-modules, un séquencement de migration ou une chaîne de dépendances qui ne tient pas en 3 phrases. Pas de diagramme pour décorer. (3) **Code fenced** — pour citer une signature de méthode core / un manifest / un fragment XML décisif. Le code reste la preuve référencée, jamais le livrable. Si la question est simple, texte + 1 tableau d'options suffisent.
 
 ## Consignes transverses
