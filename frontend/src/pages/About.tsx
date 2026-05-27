@@ -7,10 +7,20 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.99.3',
+    version: '0.99.4',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Validation backend défensive des IDs de modèle — même après le nettoyage du catalogue front en 0.99.1 (retrait de `gpt-5.5` halluciné), les navigateurs servant un bundle en cache continuaient à POSTer `gpt-5.5` au chat endpoint, déclenchant un `400 unsupported_api_for_model` côté OpenAI. Nouvelle constante `KNOWN_MODELS` dans `backend/services/ai_service.py` qui mirror le catalogue front pour openai / claude / gemini. Helper `_validate_or_fallback_model(provider, requested)` appelé en tête de `stream_chat` : si l\'ID est inconnu pour un provider statique, on retombe sur `DEFAULT_MODELS[provider]` et on émet un event SSE `model_fallback` (+ warning log) avec la raison « id périmé en cache navigateur, vide le cache ou réenregistre tes modèles ». GitHub Models et Copilot passent sans validation (catalogue live côté API du provider)',
+      'Effet utilisateur — au lieu de recevoir un 400 cryptique, l\'utilisateur reçoit une vraie réponse (sur le modèle par défaut du provider) avec une notification claire que sa sélection était périmée. +7 tests régressifs (`tests/test_model_validation.py`) qui pinent : acceptation des IDs connus, fallback sur les hallucinés, no-op sur empty, pass-through github/copilot, gemini-1.5-pro deprecated tombe sur 2.5-pro, et sync entre `KNOWN_MODELS` et `DEFAULT_MODELS`. Suite backend 822 verts',
+    ],
+  },
+  {
+    version: '0.99.3',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Bugfix Markdown — les sous-bullets indentés (`  - sub item`) n\'étaient pas reconnus par le renderer custom. La regex `^[-*]\\s+` exigeait le tiret en début de ligne sans tolérance pour l\'indentation ; les lignes indentées tombaient dans le rendu `<p>` et le tiret apparaissait comme texte brut, le contenu décollé du parent visuel',
       'Fix dans `frontend/src/components/Markdown.tsx` — nouvelles regex `UNORDERED_LIST_RE = /^(\\s*)[-*]\\s+(.+)/` et `ORDERED_LIST_RE = /^(\\s*)(\\d+)\\.\\s+(.+)/` qui capturent l\'indentation. Helper `indentDepth(indent)` qui convertit l\'indentation en profondeur de nidification (2 espaces ou 1 tabulation = 1 niveau, cap à 3 niveaux). Rendu : `paddingLeft: depth * 18px` + marqueur creux `◦` aux niveaux ≥1 pour visuellement distinguer les sous-bullets. Ordonnées idem',

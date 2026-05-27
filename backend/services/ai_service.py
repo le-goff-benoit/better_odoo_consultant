@@ -1019,6 +1019,66 @@ DEFAULT_MODELS = {
     "copilot":  "gpt-4o",
 }
 
+# Server-side allowlist of model IDs per provider. Defensive layer added in
+# v0.99.4 after `gpt-5.5` (jamais valide, retiré du catalogue front en
+# 0.99.1) continuait à remonter au backend depuis des bundles utilisateurs
+# en cache, causant des `400 unsupported_api_for_model` côté OpenAI.
+#
+# Quand `stream_chat` reçoit un `model_id` absent de l'allowlist du
+# provider, on retombe sur `DEFAULT_MODELS[provider]` et on émet un event
+# SSE `model_fallback` pour que l'UI informe l'utilisateur du remplacement
+# silencieux (et qu'il sache que sa sélection en cache était périmée).
+#
+# Github/Copilot ont du live fetch côté frontend — leur catalogue change
+# vite et la source de vérité est l'API du provider, pas un fichier
+# Python. On les laisse passer sans validation.
+KNOWN_MODELS: dict[str, set[str]] = {
+    "openai": {
+        # Mirror exact du catalogue statique de
+        # frontend/src/constants/providers.ts (provider id `openai`). Tenir
+        # synchro lors d'un ajout/retrait OpenAI.
+        "gpt-5", "gpt-5-mini",
+        "gpt-4o", "gpt-4o-mini",
+        "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+        "o3", "o3-mini", "o4-mini",
+    },
+    "claude": {
+        "claude-sonnet-4-6",
+        "claude-opus-4-7",
+        "claude-haiku-4-5-20251001",
+    },
+    "gemini": {
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+    },
+}
+
+
+def _validate_or_fallback_model(provider: str, requested: str) -> tuple[str, Optional[str]]:
+    """Return ``(effective_model, fallback_reason)``.
+
+    ``fallback_reason`` is None when the requested id is accepted; otherwise
+    a short string describing why we fell back to the provider default (for
+    SSE/log emission).
+    """
+    if not requested:
+        return DEFAULT_MODELS.get(provider, ""), None
+    allowed = KNOWN_MODELS.get(provider)
+    if allowed is None:
+        # github/copilot — live catalogue, no static allowlist
+        return requested, None
+    if requested in allowed:
+        return requested, None
+    fallback = DEFAULT_MODELS.get(provider, "")
+    return fallback, (
+        f"model `{requested}` n'est plus dans le catalogue {provider} "
+        f"(probablement un id périmé en cache navigateur). Bascule sur "
+        f"`{fallback}`. Vide le cache du navigateur ou réenregistre tes "
+        f"modèles dans Paramètres → API & Modèles."
+    )
+
 GITHUB_MODELS_BASE_URL  = "https://models.inference.ai.azure.com"
 COPILOT_BASE_URL        = "https://api.githubcopilot.com"
 COPILOT_HEADERS         = {
@@ -2548,7 +2608,12 @@ async def stream_chat(
     country_code: Optional[str] = None,
     country_name: Optional[str] = None,
 ) -> AsyncIterator[dict]:
-    model = model_id or DEFAULT_MODELS.get(provider, "")
+    model, _model_fallback_reason = _validate_or_fallback_model(provider, model_id or "")
+    if _model_fallback_reason:
+        log.warning(
+            "Stale model id rejected: provider=%s requested=%r fallback=%r reason=%s",
+            provider, model_id, model, _model_fallback_reason,
+        )
     adapter = get_provider_adapter(provider)
     execution_mode = adapter.execution_mode if adapter else "backend_emulated"
     _chat_started_ms = monotonic_ms()
@@ -2586,6 +2651,13 @@ async def stream_chat(
             execution_mode=execution_mode,
             extra={"tool_format": adapter.tool_format},
         ))
+    if _model_fallback_reason:
+        yield {
+            "type": "model_fallback",
+            "requested_model": model_id or "",
+            "effective_model": model,
+            "reason": _model_fallback_reason,
+        }
     # If client sent "auto", infer server-side from the last user message
     # (mirrors the frontend resolver — useful for CLI / mobile clients).
     _last_user = _last_user_text(messages)
