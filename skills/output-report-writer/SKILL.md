@@ -25,9 +25,16 @@ permissions:
   scripts: false
   odoo: none
 templates:
+  - name: business_impact_review
+    label: Revue d'impact métier
+    triggers: [impact métier, impact metier, revue d'impact, revue d impact, audit, revue, audit studio, audit fonctionnel, business impact, audit personnalisations, modifs studio, modifications studio, ce qui est customisé, ce qui est custom]
+    preferred_agents: [business_analyst]
+    forbidden_agents: [developer]
   - name: technical_review
     label: Revue technique
-    triggers: [revue technique, code review, audit, audit de code, review module]
+    triggers: [revue technique, code review, audit de code, audit code, review module, technical review, revue de code, audit, revue]
+    preferred_agents: [developer, architect]
+    forbidden_agents: [business_analyst]
   - name: migration_plan
     label: Plan de migration
     triggers: [plan de migration, migration plan, plan migration, upgrade plan]
@@ -37,6 +44,7 @@ templates:
   - name: functional_spec
     label: Cahier des charges fonctionnel
     triggers: [cahier des charges, spec fonctionnelle, functional spec, spécification fonctionnelle]
+    preferred_agents: [business_analyst]
 references_on_demand: true
 code_path: backend/services/context_service.py
 ---

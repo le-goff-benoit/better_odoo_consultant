@@ -64,6 +64,17 @@ class SkillTemplate:
     name: str           # filename without extension (e.g. "technical_review")
     label: str          # human label (e.g. "Revue technique")
     triggers: tuple[str, ...] = ()  # prompt keywords that auto-select this template
+    # Agents (perspectives) for which this template is the natural choice.
+    # When a prompt matches triggers from several templates and one of them
+    # lists the active agent, that template wins. Empty tuple = no agent
+    # preference (legacy default, matches any agent).
+    preferred_agents: tuple[str, ...] = ()
+    # Agents for which this template is NOT appropriate even when a trigger
+    # matches — e.g. a `technical_review` template forced on a BA prompt
+    # would dump file:line and Python patches when the BA wants business
+    # framing. Listed agents will skip this template (selection falls back
+    # to other templates or to no template at all).
+    forbidden_agents: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -202,6 +213,8 @@ def _coerce_templates(raw: Any, available: tuple[str, ...]) -> tuple[SkillTempla
                     name=nm,
                     label=str(item.get("label", nm.replace("_", " ").capitalize())),
                     triggers=tuple(item.get("triggers") or ()),
+                    preferred_agents=tuple(str(a) for a in (item.get("preferred_agents") or ())),
+                    forbidden_agents=tuple(str(a) for a in (item.get("forbidden_agents") or ())),
                 )
             elif isinstance(item, str):
                 declared[item] = SkillTemplate(

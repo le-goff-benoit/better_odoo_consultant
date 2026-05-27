@@ -2028,7 +2028,7 @@ def build_system(
         "- Si le contexte Markdown contredit les données live ou le code source, les données live et le code source gagnent.\n"
         "- Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées quand le sujet est ambigu.\n"
         "- **Cite la preuve de toute affirmation technique** : fichier:ligne, nom de champ/modèle (`sale.order`, `x_studio_*`, `_compute_*`), ID/nom de vue, SHA de commit, ligne de traceback. Si la preuve n'est pas vérifiable avec les tools, dis-le explicitement plutôt qu'affirmer.\n"
-        "- **Layout** : préférer un texte fluide avec citations en ligne et bullet lists. Utiliser un tableau **uniquement** quand il y a ≥3 éléments comparables sur ≥2 dimensions. Ne pas chaîner plusieurs tableaux dans une même réponse — structurer en sections texte avec sous-titres quand la matière déborde. Un diagramme Mermaid est bienvenu pour un flux ou une dépendance, pas pour ce qu'une phrase suffirait à dire.\n"
+        "- **Layout** : alterner texte fluide, bullet lists et 1-2 tableaux structurants quand le sujet croise deux dimensions (flux × impact, version source × cible, module × type de personnalisation, option × pro/con). Le tableau aide à comparer, le texte aide à comprendre — utilise les deux. Évite seulement le chaînage de tableaux uniformes ou redondants. Soigne titres, sous-titres et bullets : une réponse bien hiérarchisée est plus lisible qu'un mur de texte. Un diagramme Mermaid est bienvenu pour un flux ou une dépendance, pas pour ce qu'une phrase suffirait à dire.\n"
         "- Si tu ne connais pas les champs d'un modèle, utilise `odoo_inspect_fields` d'abord.\n"
         "- Pour une question sur un écran ou une vue (champs visibles, lecture seule, accès), utilise `odoo_inspect_view` ; "
         "pour un rapport PDF, utilise `odoo_inspect_report`.\n"
@@ -2220,7 +2220,7 @@ def build_system_general(
         "- Utilise le code source pour illustrer ou vérifier tes réponses quand c'est pertinent.\n"
         "- Si le contexte Markdown contredit le code source local, le code source local gagne.\n"
         "- **Cite la preuve de toute affirmation technique** : fichier:ligne du code source, nom de modèle/champ, ID de vue, SHA de commit. Si la preuve n'est pas vérifiable, dis-le explicitement.\n"
-        "- **Layout** : texte fluide avec citations en ligne et bullet lists. Tableau Markdown **uniquement** quand il y a ≥3 éléments comparables sur ≥2 dimensions ; pas de chaînage de tableaux dans la même réponse.\n"
+        "- **Layout** : alterner texte fluide, bullet lists et 1-2 tableaux structurants quand le sujet croise deux dimensions (flux × impact, version × écran, module × statut). Soigne titres et sous-titres. Évite uniquement le chaînage de tableaux uniformes.\n"
         "- Sois précis, pédagogique, orienté consultant.\n"
         "- Tu n'as pas accès aux données d'une instance Odoo (mode général sans connexion client)."
     )

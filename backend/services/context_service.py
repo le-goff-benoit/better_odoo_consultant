@@ -1371,7 +1371,7 @@ def _select_skill_playbooks(
     prompt_norm = _normalize_text(prompt)
     selected_skills: list[str] = []
     route_candidates: dict[str, SkillRouteCandidate] = {}
-    output_selection = DEFAULT_OUTPUT_RENDERER.select_template(prompt, disabled_tools)
+    output_selection = DEFAULT_OUTPUT_RENDERER.select_template(prompt, disabled_tools, agent=perspective)
 
     def add_candidate(name: str, score: int, reason: str, *, selected: bool = True) -> None:
         existing = route_candidates.get(name)
@@ -1927,19 +1927,32 @@ def select_auto_load_refs(
 def select_output_template_details(
     prompt: str,
     disabled_tools: Optional[list[str]] = None,
+    *,
+    agent: Optional[str] = None,
 ) -> Optional[OutputTemplateSelection]:
-    """Pick a structured output template selection for observability."""
-    selection = DEFAULT_OUTPUT_RENDERER.select_template(prompt, disabled_tools)
+    """Pick a structured output template selection for observability.
+
+    Passing ``agent`` lets the renderer skip templates marked
+    ``forbidden_agents`` and boost those that declare the active agent in
+    ``preferred_agents`` — e.g. a BA asking for an "audit Studio" should get
+    ``business_impact_review`` rather than ``technical_review``.
+    """
+    selection = DEFAULT_OUTPUT_RENDERER.select_template(prompt, disabled_tools, agent=agent)
     select_output_template_details._last_selection = selection  # type: ignore[attr-defined]
     return selection
 
 
-def select_output_template(prompt: str, disabled_tools: Optional[list[str]] = None) -> Optional[tuple[str, str]]:
+def select_output_template(
+    prompt: str,
+    disabled_tools: Optional[list[str]] = None,
+    *,
+    agent: Optional[str] = None,
+) -> Optional[tuple[str, str]]:
     """Backward-compatible output-template selector.
 
     Returns ``(skill_name, template_body)`` or None.
     """
-    selection = select_output_template_details(prompt, disabled_tools)
+    selection = select_output_template_details(prompt, disabled_tools, agent=agent)
     if selection is None:
         return None
     return selection.skill_name, selection.body
@@ -2070,7 +2083,7 @@ def load_context_for_prompt(
                 locale=locale,
                 perspective=perspective,
             )
-        select_output_template_details(user_prompt or "", disabled_tools)
+        select_output_template_details(user_prompt or "", disabled_tools, agent=perspective)
         _CONTEXT_CACHE.move_to_end(cache_key)
         return cached
     result = _load_context_for_prompt_impl(
@@ -2287,7 +2300,7 @@ def _load_context_for_prompt_impl(
     # Output template selection — picks one template (deliverable format) if a
     # trigger matches the prompt. Stored as a priority block so it's NEVER
     # trimmed by budget logic and lands at the very end of the system prompt.
-    template_choice = select_output_template_details(prompt, disabled_tools)
+    template_choice = select_output_template_details(prompt, disabled_tools, agent=perspective)
     if template_choice is not None:
         blocks.append(_truncate_priority_block(DEFAULT_OUTPUT_RENDERER.render_priority_block(template_choice)))
 

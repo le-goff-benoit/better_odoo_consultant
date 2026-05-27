@@ -7,10 +7,24 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.99.1',
+    version: '0.99.2',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bugfix BA — un BA qui demandait « y a-t-il des modifications Studio sur cette instance » récupérait le template `technical_review` (orienté developer / architect : file:line, slots `Correction proposée` avec Python, blockquotes scaffolding « > Ce qui empêche la mise en prod. Vide si rien. » recopiées telles quelles dans la sortie). Deux problèmes corrigés : (1) le template scaffolding fuyait littéralement, (2) le mauvais template était sélectionné pour le persona BA',
+      'Template `technical_review.md` nettoyé — toutes les blockquotes d\'instruction supprimées (`> Ce qui empêche…`, `> Pas bloquants mais…`, `> Améliorations qualitatives…`). Bloc directives en `<!-- … -->` HTML comment ajouté en tête pour expliciter ce qui est consigne auteur vs livrable. Slot « Correction proposée » devient conditionnel (seulement si un patch concret existe). Sections optionnelles : si vide, supprimer plutôt qu\'écrire « Aucun »',
+      'Nouveau template `business_impact_review.md` — pour les BA / AM, structuré autour des **flux métier impactés** (Ventes, Achats, SAV, Stock, Facturation…). Tableau structurant en tête « Flux × Modules concernés × Type de personnalisation × Impact utilisateur ». Pas de Python, pas de file:ligne, pas de slots « Bloquants » qui sont des concepts d\'ingé. Frame les faits techniques en impact métier réel — « les flux Ventes et SAV ont été personnalisés, voici ce qui change pour les utilisateurs » plutôt que « 84 champs Studio sur sale.order, helpdesk.ticket »',
+      'Sélection de template agent-aware — `OutputRenderer.select_template` accepte désormais un paramètre `agent` ; nouveaux champs `preferred_agents` et `forbidden_agents` sur `SkillTemplate`. `business_impact_review` est preferred pour `business_analyst`, forbidden pour `developer`. `technical_review` est preferred pour `developer` / `architect`, forbidden pour `business_analyst`. Trigger « audit » présent sur les deux templates — l\'agent actif décide via score boosté (`+50` quand preferred). Câblage depuis `context_service.py` qui propage `perspective` à toutes les call sites',
+      'BA AGENT.md (FR + EN) renforcé — section Comportement explicite : « tu n\'es pas un inventaire technique », traduis systématiquement les faits techniques en impact métier, redirige vers `agent_developer` / `agent_architect` si l\'utilisateur veut vraiment du tech. Citation de preuve recentrée sur les éléments business (nom de menu, intitulé d\'automation, label de champ vu en UI) plutôt que sur les noms techniques (`sale.order`, `x_studio_*`)',
+      'Recalibrage de la règle tableaux — 0.98.0 avait été un peu trop restrictif (« uniquement ≥3 éléments × ≥2 dimensions »). Nouvelle règle dans `ai_service.py` et dans les `AGENT.md` : alterner texte fluide, bullet lists et **1-2 tableaux structurants** par réponse quand le sujet croise deux dimensions (flux × impact, version × écran, option × pro/con). Le tableau aide à comparer, le texte aide à comprendre. Évite seulement le chaînage de tableaux uniformes. Soigne titres et sous-titres. +6 tests régressifs (sélection agent-aware, anti-leak scaffolding, BA template existence), suite backend 815 verts',
+    ],
+  },
+  {
+    version: '0.99.1',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Bugfix critique — le catalogue statique OpenAI contenait des IDs **hallucinés** (`gpt-5.5`, `gpt-5.5-pro`, `gpt-5.4`, `gpt-5.4-pro`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.3-codex`) qui n\'existent pas dans le catalogue réel exposé par `/v1/models`. `gpt-5.5` était marqué `recommended: true`, donc les utilisateurs qui suivaient le défaut ou cliquaient « Recommandés seulement » tombaient sur `400 unsupported_api_for_model` au premier prompt. Nettoyage du catalogue : ne reste que des IDs vérifiés accessibles via `/v1/chat/completions` — gpt-5, gpt-5-mini, gpt-4o (nouveau recommandé), gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, o3, o3-mini, o4-mini',
       'Catalogue Gemini idem nettoyé — sunset officiel de gemini-1.5-* côté Google début 2026. Liste à jour : gemini-2.5-pro (nouveau recommandé), gemini-2.5-flash, gemini-2.0-flash, gemini-2.0-flash-lite',
