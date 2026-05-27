@@ -501,15 +501,23 @@ export function extractActionItems(text: string): string[] {
     }
     const listMatch = line.match(UNORDERED_LIST_RE)
     if (listMatch) {
-      if (inActionList) out.push(stripMarkdownInline(listMatch[2]))
+      // v0.100.4 — only top-level bullets count as actions. Sub-bullets
+      // (indented) are detail of the parent action ("Inspecter X pour
+      // voir : \n  - condition 1 \n  - condition 2") and would create
+      // fragmentary chips like "condition 1," that aren't standalone
+      // actions to launch.
+      if (inActionList && listMatch[1].length === 0) out.push(stripMarkdownInline(listMatch[2]))
       continue
     }
-    const olMatch = line.match(/^(\d+)\.\s+(.+)/)
+    const olMatch = line.match(ORDERED_LIST_RE)
     if (olMatch) {
-      if (inActionList) out.push(stripMarkdownInline(olMatch[2]))
+      // Same rule for numbered items: only top-level ones are actions.
+      if (inActionList && olMatch[1].length === 0) out.push(stripMarkdownInline(olMatch[3]))
       continue
     }
-    // Non-list non-empty line ends an action list section.
+    // Non-list non-empty line ends an action list section. But a blank line
+    // between an action and its sub-bullets must NOT end the section, so we
+    // only break on real content (already filtered via `line.trim()` below).
     if (line.trim()) inActionList = false
   }
   // De-dupe while preserving order.

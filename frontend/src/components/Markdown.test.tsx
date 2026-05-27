@@ -239,6 +239,34 @@ describe('Markdown table parsing', () => {
     expect(anchors[0].getAttribute('href')).toContain('id=12345')
   })
 
+  it('v0.100.4 — sub-bullets under a numbered action are NOT extracted as separate chips', () => {
+    // Reproduces the bug from the screenshot: each top-level numbered
+    // action ends with « : » and is followed by indented sub-bullets that
+    // detail the action. The extractor must only return the 3 top-level
+    // items, not the 5+ fragmentary sub-bullets.
+    const md = [
+      '## 3 prochaines actions',
+      '',
+      '1. **Inspecter le détail** de `Copie infos séminaire` pour voir :',
+      '   - conditions de déclenchement,',
+      '   - champs copiés,',
+      '   - éventuel code Python / action liée.',
+      '2. **Trier les 42 crons** entre :',
+      '   - standard Odoo,',
+      '   - activés par modules optionnels,',
+      '   - réellement utilisés par le client.',
+      '3. **Vérifier l\'impact métier** sur `sale.order` / `project.project` avant migration.',
+    ].join('\n')
+    const items = extractActionItems(md)
+    expect(items).toHaveLength(3)
+    expect(items[0]).toContain('Inspecter le détail')
+    expect(items[1]).toContain('Trier les 42 crons')
+    expect(items[2]).toContain('Vérifier l\'impact métier')
+    // Sub-bullet fragments must NOT appear as standalone actions.
+    expect(items.some(x => x.startsWith('conditions de déclenchement'))).toBe(false)
+    expect(items.some(x => x.startsWith('standard Odoo'))).toBe(false)
+  })
+
   it('v0.100.0 — callout heading matches FR and EN variants', () => {
     const fr = render(<Markdown text="## Exemples concrets\n- x" />).container
     const en = render(<Markdown text="## Concrete examples in this database\n- x" />).container

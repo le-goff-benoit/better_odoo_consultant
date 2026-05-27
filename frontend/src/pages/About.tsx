@@ -7,10 +7,19 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.3',
+    version: '0.100.4',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bugfix chips d\'actions — quand le LLM écrivait une liste numérotée dont chaque item contenait des sous-bullets indentés détaillant l\'action (« 1. Inspecter X pour voir : \\n  - condition 1 \\n  - condition 2 »), l\'extracteur `extractActionItems` poussait les sous-bullets comme des chips séparées. Résultat utilisateur : 8 chips fragmentaires (« conditions de déclenchement, », « champs copiés, »…) au lieu des 3 actions réelles. Fix dans `Markdown.tsx` : filtrer sur la profondeur d\'indentation (`listMatch[1].length === 0`) — seuls les bullets top-level comptent comme actions. `ORDERED_LIST_RE` aligné sur la même structure. +1 test régressif qui reproduit le scénario exact du bug, 100 tests verts',
+    ],
+  },
+  {
+    version: '0.100.3',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Section transverse « Consignes transverses » ajoutée aux 4 agents (Support / BA / Architect / Developer, FR + EN). 6 directives qui s\'appliquent universellement quel que soit le sujet : (1) **Mémoire conversation** — avant d\'appeler un outil, vérifier si un tour précédent a déjà ramené l\'info ; (2) **Confiance affichée** — quand la réponse repose sur une seule lecture ou rien de vérifié, le dire (« je m\'appuie sur la seule lecture de X — à valider sur 2-3 autres ») ; (3) **Curiosité proactive sur le custom** — si le bloc Contexte projet flag Studio / custom / `dev_and_studio`, échantillonner 1-2 enregistrements concrets via `odoo_query_records` AVANT de répondre, citer en `odoo://` ; (4) **Handoff prononcé** — quand >30 % de la réponse touche un autre profil, le dire textuellement et pas juste compter sur les chips d\'avis complémentaire ; (5) **Actions non-redondantes** — les « prochaines actions » doivent être à faire APRÈS la réponse, pas réembarquer ce qui vient d\'être fait ; (6) **TL;DR sur réponses longues** — au-delà de ~600 mots, ouvrir par « En bref : … » en 1-2 phrases verdict + action principale',
     ],
