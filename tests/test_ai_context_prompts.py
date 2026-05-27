@@ -712,7 +712,7 @@ def test_build_system_migration_injects_project_when_profile_set():
     )
     assert "Instance source connectée" in stable
     assert "acme.odoo.com" in stable
-    assert "Contexte projet" in stable
+    assert "Notes projet (consultant)" in stable
     assert "<project_context>" in stable
     assert "double validation" in stable
     assert "administrateur système" in stable

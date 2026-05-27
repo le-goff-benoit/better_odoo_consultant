@@ -31,7 +31,7 @@ from ...services.context_service import (
     last_context_trace,
 )
 from ...services.localization_service import active_company_from_cache, build_localization_context
-from ...services.technical_complexity_service import build_technical_complexity_context, complexity_mode_from_raw
+from ...services.technical_complexity_service import build_project_context_block, complexity_mode_from_raw
 from ...services.attachment_service import ChatAttachment, inject_attachments
 from ...services.runtime_trace_store import get_runtime_trace_summary, persist_runtime_trace_summary
 from ...skills.registry import (
@@ -857,9 +857,18 @@ async def chat(req: ChatRequest, session: AsyncSession = Depends(get_session)):
         user_prompt,
         _effective_perspective,
     ) if _localization_active else ""
-    complexity_md = build_technical_complexity_context(profile.technical_complexity) if _complexity_active else ""
     _complexity_mode = complexity_mode_from_raw(profile.technical_complexity) if _complexity_active else None
     profile_tuning = complexity_profile_block(_complexity_mode, locale=_context_locale) if _complexity_active else ""
+    # Bloc « Contexte projet » prioritaire (non tronqué) : qui est le client,
+    # où il est, et quel est le profil technique. Toujours injecté pour ne
+    # jamais laisser l'IA répondre comme si la base était vanilla par défaut.
+    complexity_md = build_project_context_block(
+        profile.technical_complexity if _complexity_active else None,
+        company_name=profile.company_name,
+        company_city=profile.company_city,
+        country_code=(_active_company.get("country_code") if _active_company else None),
+        country_name=(_active_company.get("country_name") if _active_company else None),
+    )
     context_md = "" if not _aggregator_active else load_context_for_prompt(
         _version_to_use,
         target_version=_target_version,

@@ -2027,7 +2027,8 @@ def build_system(
         "- Quand un modèle n'existe pas sur l'instance, cherche son nom correct dans le code source avant d'abandonner.\n"
         "- Si le contexte Markdown contredit les données live ou le code source, les données live et le code source gagnent.\n"
         "- Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées quand le sujet est ambigu.\n"
-        "- Présente les listes sous forme de tableaux Markdown.\n"
+        "- **Cite la preuve de toute affirmation technique** : fichier:ligne, nom de champ/modèle (`sale.order`, `x_studio_*`, `_compute_*`), ID/nom de vue, SHA de commit, ligne de traceback. Si la preuve n'est pas vérifiable avec les tools, dis-le explicitement plutôt qu'affirmer.\n"
+        "- **Layout** : préférer un texte fluide avec citations en ligne et bullet lists. Utiliser un tableau **uniquement** quand il y a ≥3 éléments comparables sur ≥2 dimensions. Ne pas chaîner plusieurs tableaux dans une même réponse — structurer en sections texte avec sous-titres quand la matière déborde. Un diagramme Mermaid est bienvenu pour un flux ou une dépendance, pas pour ce qu'une phrase suffirait à dire.\n"
         "- Si tu ne connais pas les champs d'un modèle, utilise `odoo_inspect_fields` d'abord.\n"
         "- Pour une question sur un écran ou une vue (champs visibles, lecture seule, accès), utilise `odoo_inspect_view` ; "
         "pour un rapport PDF, utilise `odoo_inspect_report`.\n"
@@ -2037,7 +2038,7 @@ def build_system(
     if project_context:
         stable_parts.append(
             "<project_context>\n"
-            f"## Contexte projet\n{_trim_project_context(project_context.strip())}\n"
+            f"## Notes projet (consultant)\n{_trim_project_context(project_context.strip())}\n"
             "</project_context>"
         )
 
@@ -2159,7 +2160,8 @@ def build_system_migration(
         "- Utilise SYSTÉMATIQUEMENT les outils de recherche avant de répondre — ne suppose jamais un comportement.\n"
         "- Si le contexte Markdown contredit le code source ou les données client, le code source et les données client gagnent.\n"
         "- Sépare clairement les faits vérifiés, les hypothèses et les actions recommandées.\n"
-        "- Présente les comparaisons sous forme de tableaux (Source | Cible | Impact).\n"
+        "- **Cite la preuve** pour chaque différence : fichier:ligne dans la version source ET dans la cible, SHA de commit du breaking change si tu le connais.\n"
+        "- Pour les comparaisons version source vs cible, un tableau (Source | Cible | Impact) est le bon format — c'est précisément le cas où le tableau est utile. Garde-le à un seul tableau structurant par réponse, pas une cascade.\n"
         "- Signale clairement les breaking changes avec ⚠️."
     )
     if has_instance:
@@ -2167,7 +2169,7 @@ def build_system_migration(
     if project_context:
         stable_parts.append(
             "<project_context>\n"
-            f"## Contexte projet\n{_trim_project_context(project_context.strip())}\n"
+            f"## Notes projet (consultant)\n{_trim_project_context(project_context.strip())}\n"
             "</project_context>"
         )
 
@@ -2217,7 +2219,8 @@ def build_system_general(
         "- Réponds à toutes questions sur l'architecture Odoo, les modèles de données, les modules, les migrations.\n"
         "- Utilise le code source pour illustrer ou vérifier tes réponses quand c'est pertinent.\n"
         "- Si le contexte Markdown contredit le code source local, le code source local gagne.\n"
-        "- Présente les listes sous forme de tableaux Markdown.\n"
+        "- **Cite la preuve de toute affirmation technique** : fichier:ligne du code source, nom de modèle/champ, ID de vue, SHA de commit. Si la preuve n'est pas vérifiable, dis-le explicitement.\n"
+        "- **Layout** : texte fluide avec citations en ligne et bullet lists. Tableau Markdown **uniquement** quand il y a ≥3 éléments comparables sur ≥2 dimensions ; pas de chaînage de tableaux dans la même réponse.\n"
         "- Sois précis, pédagogique, orienté consultant.\n"
         "- Tu n'as pas accès aux données d'une instance Odoo (mode général sans connexion client)."
     )

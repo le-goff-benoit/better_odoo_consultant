@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -213,6 +214,77 @@ def _score_tool_use(expected: set[str], forbidden: set[str], matched: set[str]) 
     return max(0, 20 - penalty), issues
 
 
+_CRITERIA_PATTERNS: dict[str, re.Pattern[str]] = {
+    "cite:file_line": re.compile(r"\b[\w./-]+\.(?:py|xml|js|ts|csv|yaml|yml|md):\d+", re.IGNORECASE),
+    "cite:field_name": re.compile(r"\b(?:x_studio_\w+|_compute_\w+|_inherit\b|_name\s*=|api\.depends\b|\b[a-z][a-z_0-9]+\.[a-z][a-z_0-9.]+\b)"),
+    "cite:view_id": re.compile(r"\b(?:[a-z][a-z0-9_]+\.view_[a-z0-9_]+|view_[a-z0-9_]+_(?:form|tree|list|kanban|search))\b"),
+    "cite:sha": re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE),
+    "cite:menu": re.compile(r"(?i)\b(?:Menu(?:s)?|Configuration\s*[>›→/])\s*[A-Z]"),
+    "step:howto": re.compile(r"(?im)^[ \t]*(?:[-*]|\d+\.)\s+.+(?:\n[ \t]*(?:[-*]|\d+\.)\s+.+){1,}"),
+    "step:limits": re.compile(r"(?i)\b(?:limit(?:e|ation)|ne pas|attention|impossible|requires?|prérequis|dépend\w*)\b"),
+    "context:mentions_custom_layer": re.compile(r"(?i)\b(?:studio|dev\s+custom|module\s+custom|couche\s+custom|x_studio|_inherit|override)\b"),
+    "context:flags_not_computed": re.compile(r"(?i)complexit[ée]\s*(?:projet|technique)\s*(?:[:\s-]*non\s*calcul|absente|inconnue)|lancer\s+le\s+diagnostic"),
+}
+
+_TABLE_LINE_RE = re.compile(r"^\s*\|.*\|\s*$")
+
+
+def _extract_response_body(trace: dict[str, Any] | None) -> str | None:
+    if not trace:
+        return None
+    for key in ("body", "response", "answer", "text", "content"):
+        val = trace.get(key)
+        if isinstance(val, str) and val.strip():
+            return val
+    return None
+
+
+def _count_tables(body: str) -> int:
+    """Count distinct Markdown tables (consecutive pipe-rows of ≥2 lines)."""
+    count = 0
+    in_table = False
+    for line in body.splitlines():
+        if _TABLE_LINE_RE.match(line):
+            if not in_table:
+                in_table = True
+                count += 1
+        else:
+            in_table = False
+    return count
+
+
+def _score_criteria_hits(criteria: tuple[str, ...], body: str | None) -> dict[str, Any]:
+    """Match prefixed criteria tokens (`cite:*`, `step:*`, `context:*`) against
+    the response body. Returns per-token hit/miss plus aggregate count.
+
+    When body is None (no response trace supplied), every token is marked
+    `pending`. Tokens without a known pattern are silently skipped — they're
+    descriptive, scored elsewhere by human/LLM judge.
+    """
+    tokens = [c for c in criteria if ":" in c and c.split(":", 1)[0] in {"cite", "step", "context"}]
+    if not tokens:
+        return {"tokens": [], "hits": 0, "total": 0, "status": "no_tokens"}
+    if body is None:
+        return {
+            "tokens": [{"token": t, "status": "pending"} for t in tokens],
+            "hits": 0,
+            "total": len(tokens),
+            "status": "pending",
+        }
+    items = []
+    hits = 0
+    for token in tokens:
+        pattern = _CRITERIA_PATTERNS.get(token)
+        if pattern is None:
+            items.append({"token": token, "status": "no_pattern"})
+            continue
+        matched = bool(pattern.search(body))
+        items.append({"token": token, "status": "hit" if matched else "miss"})
+        if matched:
+            hits += 1
+    return {"tokens": items, "hits": hits, "total": sum(1 for i in items if i["status"] in {"hit", "miss"}), "status": "graded"}
+
+
 def _qualitative_scores(trace: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     if not trace:
         return {
@@ -296,6 +368,10 @@ def evaluate_case(case: EvalCase, response_trace: dict[str, Any] | None = None) 
         **_qualitative_scores(response_trace),
     }
 
+    response_body = _extract_response_body(response_trace)
+    criteria_hits = _score_criteria_hits(case.criteria, response_body)
+    table_count = _count_tables(response_body) if response_body is not None else None
+
     numeric_scores = [
         dim["score"] for dim in dimensions.values()
         if isinstance(dim.get("score"), int)
@@ -352,6 +428,8 @@ def evaluate_case(case: EvalCase, response_trace: dict[str, Any] | None = None) 
         "total_score": total_score,
         "pending_dimensions": pending,
         "failure_reasons": failure_reasons,
+        "criteria_hits": criteria_hits,
+        "table_count": table_count,
         "response_trace": response_trace or None,
     }
 
@@ -359,12 +437,17 @@ def evaluate_case(case: EvalCase, response_trace: dict[str, Any] | None = None) 
 def _stats(items: list[dict[str, Any]]) -> dict[str, Any]:
     n = len(items)
     if not n:
-        return {"total": 0, "agent_accuracy": 0, "tool_accuracy": 0, "paraphrase_total": 0, "paraphrase_agent_accuracy": 0, "paraphrase_tool_accuracy": 0}
+        return {"total": 0, "agent_accuracy": 0, "tool_accuracy": 0, "paraphrase_total": 0, "paraphrase_agent_accuracy": 0, "paraphrase_tool_accuracy": 0, "criteria_hit_rate": None, "criteria_total": 0, "avg_table_count": None}
     agent_ok = sum(1 for r in items if r["selected_agent"] == r["expected_agent"])
     tool_ok = sum(1 for r in items if not r["missing_skills"] and not r["forbidden_skills_selected"])
     p_total = sum(r["paraphrase_total"] for r in items)
     p_agent = sum(r["paraphrase_agent_ok"] for r in items)
     p_tool = sum(r["paraphrase_tool_ok"] for r in items)
+    # Criteria hits: only count tokens that were graded (response trace present)
+    graded_criteria = [r["criteria_hits"] for r in items if r.get("criteria_hits", {}).get("status") == "graded"]
+    crit_total = sum(c["total"] for c in graded_criteria)
+    crit_hits = sum(c["hits"] for c in graded_criteria)
+    table_counts = [r["table_count"] for r in items if isinstance(r.get("table_count"), int)]
     return {
         "total": n,
         "agent_accuracy": round(agent_ok / n, 3),
@@ -372,6 +455,9 @@ def _stats(items: list[dict[str, Any]]) -> dict[str, Any]:
         "paraphrase_total": p_total,
         "paraphrase_agent_accuracy": round(p_agent / p_total, 3) if p_total else None,
         "paraphrase_tool_accuracy": round(p_tool / p_total, 3) if p_total else None,
+        "criteria_hit_rate": round(crit_hits / crit_total, 3) if crit_total else None,
+        "criteria_total": crit_total,
+        "avg_table_count": round(sum(table_counts) / len(table_counts), 2) if table_counts else None,
     }
 
 
@@ -447,6 +533,8 @@ def build_report(summary: dict[str, Any], results: list[dict[str, Any]]) -> str:
         f"- Tool expectation accuracy: {_fmt_pct(summary['tool_accuracy'])}",
         f"- Paraphrase agent accuracy: {_fmt_pct(summary.get('paraphrase_agent_accuracy'))} (n={summary.get('paraphrase_total', 0)})",
         f"- Paraphrase tool accuracy: {_fmt_pct(summary.get('paraphrase_tool_accuracy'))}",
+        f"- Criteria hit rate: {_fmt_pct(summary.get('criteria_hit_rate'))} (n={summary.get('criteria_total', 0)} tokens — cite:/step:/context:)",
+        f"- Avg tables per response: {summary.get('avg_table_count') if summary.get('avg_table_count') is not None else '—'} (target support/BA <1, architect/dev <1.5)",
         f"- Golden failures: {summary['golden_failures']}",
         "",
         "## By Split",

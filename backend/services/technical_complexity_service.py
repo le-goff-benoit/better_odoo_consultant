@@ -395,10 +395,64 @@ def complexity_mode_from_raw(raw: Optional[str]) -> Optional[str]:
     return mode if isinstance(mode, str) else None
 
 
+def build_project_context_block(
+    raw: Optional[str],
+    *,
+    company_name: Optional[str] = None,
+    company_city: Optional[str] = None,
+    country_code: Optional[str] = None,
+    country_name: Optional[str] = None,
+) -> str:
+    """Construit le bloc prioritaire « Contexte projet » qui conditionne la
+    réflexion de l'IA à chaque tour : qui est le client, où il est, et quel
+    est son profil technique (vanilla / Studio / dev / mixte + modules).
+
+    Garanti non-tronqué (priority block, cap 6_000 chars).
+
+    Si la complexité technique n'a jamais été calculée, le bloc le signale
+    explicitement et invite à lancer le diagnostic — l'IA ne doit pas
+    répondre comme si le projet était vanilla par défaut.
+    """
+    header: list[str] = ["## Contexte projet"]
+    if company_name:
+        line = f"- Client : **{company_name}**"
+        if company_city:
+            line += f" ({company_city})"
+        header.append(line)
+    if country_code or country_name:
+        loc = country_name or country_code
+        if country_code and country_name:
+            loc = f"{country_name} ({country_code})"
+        header.append(f"- Localisation fiscale : {loc}")
+    value = parse_technical_complexity(raw)
+    if not value:
+        header.append(
+            "- Complexité technique : **non calculée** — lancer le diagnostic "
+            "depuis l'onglet Projet avant de raisonner sur les flux. "
+            "En attendant, ne pas supposer que la base est vanilla : "
+            "demander à l'utilisateur si Studio ou des modules custom "
+            "sont présents avant de répondre sur un comportement métier."
+        )
+        return "\n".join(header)
+    body = _build_complexity_body(value)
+    return "\n".join(header + [""] + body)
+
+
 def build_technical_complexity_context(raw: Optional[str]) -> str:
+    """Variante legacy qui retourne uniquement la section Complexité avec son
+    propre heading `## Complexité technique du projet`. Conservée pour les
+    callers qui n'ont pas besoin du wrapper « Contexte projet » (Creator).
+    """
     value = parse_technical_complexity(raw)
     if not value:
         return ""
+    return "\n".join(["## Complexité technique du projet"] + _build_complexity_body(value))
+
+
+def _build_complexity_body(value: dict[str, Any]) -> list[str]:
+    """Retourne les bullet points du profil technique, **sans heading**.
+    Le caller décide d'imbriquer ou de préfixer un titre.
+    """
     mode = value.get("mode") or "standard"
     label = value.get("label") or MODE_LABELS.get(mode, mode)
     confidence = value.get("confidence") or "unknown"
@@ -423,8 +477,7 @@ def build_technical_complexity_context(raw: Optional[str]) -> str:
             "ne pas conclure à l'absence de Studio"
         )
     lines = [
-        "## Complexité technique du projet",
-        f"- Profil détecté : {label} (confiance : {confidence})",
+        f"- Profil technique : {label} (confiance : {confidence})",
         studio_line,
         f"- Développement custom : {'présent' if dev.get('detected') else 'non détecté'}"
         f" ({dev.get('manifest_count') or 0} manifests custom, {dev.get('python_files') or 0} fichiers Python, {dev.get('xml_files') or 0} fichiers XML)",
@@ -470,4 +523,4 @@ def build_technical_complexity_context(raw: Optional[str]) -> str:
         lines.append("- Attention : analyse Studio incomplète ; demander confirmation si la réponse dépend de Studio.")
     if installed.get("error"):
         lines.append("- Attention : liste des modules installés indisponible ; prudence sur les hypothèses de customisation.")
-    return "\n".join(lines)
+    return lines

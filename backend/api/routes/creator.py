@@ -27,7 +27,7 @@ from ...services.ai_service import stream_chat
 from ...services.context_service import load_context_for_prompt, complexity_profile_block
 from ...services.localization_service import active_company_from_cache, build_localization_context
 from ...services.technical_complexity_service import (
-    build_technical_complexity_context, parse_technical_complexity,
+    build_project_context_block, parse_technical_complexity,
     complexity_mode_from_raw,
 )
 from ...services.creator_service import (
@@ -175,7 +175,13 @@ def _build_context_md(profile: Profile, version, user_prompt, company_id, disabl
     active_company = active_company_from_cache(profile.company_ids, company_id)
     localization_md = build_localization_context(
         profile.company_ids, company_id, version, user_prompt, "developer")
-    complexity_md = build_technical_complexity_context(profile.technical_complexity)
+    complexity_md = build_project_context_block(
+        profile.technical_complexity,
+        company_name=profile.company_name,
+        company_city=profile.company_city,
+        country_code=active_company.get("country_code") if active_company else None,
+        country_name=active_company.get("country_name") if active_company else None,
+    )
     # Detect the kind of Creator operation the user is asking for (compute,
     # cron, automation, report, bulk records…) and inject a focused snippet —
     # routed as a priority block so it sits before the general routed sections.
