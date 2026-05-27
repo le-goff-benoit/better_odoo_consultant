@@ -7,10 +7,23 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.99.0',
+    version: '0.99.1',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bugfix critique — le catalogue statique OpenAI contenait des IDs **hallucinés** (`gpt-5.5`, `gpt-5.5-pro`, `gpt-5.4`, `gpt-5.4-pro`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.3-codex`) qui n\'existent pas dans le catalogue réel exposé par `/v1/models`. `gpt-5.5` était marqué `recommended: true`, donc les utilisateurs qui suivaient le défaut ou cliquaient « Recommandés seulement » tombaient sur `400 unsupported_api_for_model` au premier prompt. Nettoyage du catalogue : ne reste que des IDs vérifiés accessibles via `/v1/chat/completions` — gpt-5, gpt-5-mini, gpt-4o (nouveau recommandé), gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, o3, o3-mini, o4-mini',
+      'Catalogue Gemini idem nettoyé — sunset officiel de gemini-1.5-* côté Google début 2026. Liste à jour : gemini-2.5-pro (nouveau recommandé), gemini-2.5-flash, gemini-2.0-flash, gemini-2.0-flash-lite',
+      'Catalogue Copilot statique resserré aux IDs réellement servis par `api.githubcopilot.com/models` : suppression des `gpt-5.2`, `gpt-5.3-codex`, `gpt-5.4`, `gemini-3.1-pro`, `gemini-3-flash`, `claude-opus-4-5`, `claude-opus-4-6` (hallucinés). Comme le fetch live override le statique depuis 0.98.1, c\'était surtout une cohérence du fallback offline',
+      'Régression connexe — `buildConfiguredProviders` synthétisait les IDs inconnus en `{id, label: id, desc: \'\'}` pour TOUS les providers. Conséquence : un ID périmé sauvé dans `model-config.json` (ex. `gpt-5.5` d\'un ancien build) survivait à la mise à jour du catalogue et réapparaissait dans le sélecteur d\'Assistant/Migration/Creator, où l\'utilisateur pouvait le re-sélectionner. Désormais : nouveau export `LIVE_FETCH_PROVIDERS = new Set([\'github\', \'copilot\'])` ; la synthèse est restreinte à ces deux providers. Pour openai/claude/gemini, la liste statique est la source de vérité — les IDs inconnus sont silencieusement écartés. +2 tests régressifs',
+      'Settings → purge inline lors d\'un toggle — `toggleModel` filtre désormais l\'état stocké contre `allIds` (catalogue statique courant + IDs live pour les providers concernés). Dès qu\'un utilisateur interagit avec le sélecteur d\'un provider, les IDs périmés présents dans son `model-config.json` sont nettoyés sans qu\'il ait à le savoir. Suite frontend 86 verts (+2), backend 809 verts',
+    ],
+  },
+  {
+    version: '0.99.0',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Refonte UX Settings → API & Modèles. Avant : deux blocs disjoints (cartes Configurés en haut + grille Modèles disponibles en bas) reliés uniquement visuellement, un bouton Enregistrer global tout en bas, chips compactes sans contexte (label seul, ni description ni tags ni indicateur de recommandation). Après : une carte unifiée par provider — la clé API et la sélection de modèles vivent dans la même carte, plus de duplication',
       'Sélecteur de modèles in-card — collapsible (chevron), compteur N/M activés en header, badge `live`/`liste statique` quand applicable, bouton refresh à droite. Actions bulk : Tout cocher / Recommandés seulement (★ avec compteur) / Tout décocher, en chips de tête. Lignes riches : checkbox dédiée (accent color du provider), ★ doré sur les modèles recommandés, label + description courte + jusqu\'à 2 tags, fond légèrement teinté quand activé. Pour GitHub Models et Copilot, regroupement par famille (OpenAI / Anthropic / Google / Mistral / Meta Llama / Microsoft Phi / DeepSeek / xAI Grok / Cohere / AI21 / Autres) avec mini en-têtes et compteur par famille. Les providers mono-vendor (Claude, OpenAI, Gemini) n\'affichent pas de sous-en-tête (un seul groupe)',

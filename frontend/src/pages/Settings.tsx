@@ -1865,7 +1865,15 @@ function ApiSection() {
 
   const toggleModel = useCallback((provider: string, modelId: string, allIds: string[]) => {
     setModelLocal(prev => {
-      const current = prev[provider] ?? allIds
+      // Purge des IDs périmés au passage : pour les providers sans live fetch
+      // (openai/claude/gemini), allIds = catalogue statique courant. Si la
+      // config sauvée contient un ancien ID qui n'y figure plus (ex.
+      // `gpt-5.5` supprimé en 0.99.1), il est silencieusement dropé.
+      // Pour les providers à live fetch, allIds inclut les IDs live → la
+      // purge reste un no-op.
+      const stored = prev[provider] ?? allIds
+      const allIdsSet = new Set(allIds)
+      const current = stored.filter(id => allIdsSet.has(id))
       const next = current.includes(modelId)
         ? current.filter(id => id !== modelId)
         : [...current, modelId]
@@ -1876,6 +1884,8 @@ function ApiSection() {
   }, [scheduleModelSave])
 
   const setProviderModels = useCallback((provider: string, ids: string[]) => {
+    // Bulk-set : on suppose que ids est déjà filtré contre allIds par le
+    // caller (selectAll/selectRecommended/selectNone).
     setModelLocal(prev => ({ ...prev, [provider]: ids }))
     modelDirtyRef.current.add(provider)
     scheduleModelSave()

@@ -92,20 +92,42 @@ describe('buildConfiguredProviders', () => {
     expect(known.label).not.toBe(knownId) // a real human label
   })
 
-  it('drops a provider whose enabled list is non-empty but matches no model', () => {
-    // Edge case: user enabled IDs that are neither in static nor in the live
-    // result. We don't keep an empty provider — synthetic entries handle the
-    // common case where the saved IDs do exist live.
-    // Here the saved IDs are present in the saved list, so they become
-    // synthetic — provider stays. To actually drop, you'd need an empty list,
-    // which is covered by the "empty = keep static" branch instead. So this
-    // test documents that current behavior: any non-empty enabled list keeps
-    // the provider via synthesis.
+  it('synthesises unknown IDs for live-fetch providers (copilot)', () => {
+    // Edge case kept for live-fetch providers: any non-empty enabled list
+    // keeps the provider via synthesis, because the user may legitimately
+    // have cocked an ID that exists live but not in the static fallback.
     const result = buildConfiguredProviders(
       { copilot: true },
-      { copilot: ['unknown-id'] },
+      { copilot: ['unknown-live-id'] },
     )
     expect(result).toHaveLength(1)
-    expect(result[0].models.map(m => m.id)).toEqual(['unknown-id'])
+    expect(result[0].models.map(m => m.id)).toEqual(['unknown-live-id'])
+  })
+
+  it('regression 0.99.1 — drops stale IDs for static-only providers (openai)', () => {
+    // OpenAI/Anthropic/Gemini have no live fetch: the static list IS the
+    // source of truth. An enabled ID that no longer exists in the static
+    // list (e.g. `gpt-5.5` removed in 0.99.1 as hallucinated) must be
+    // silently dropped, never synthesised — otherwise the user would still
+    // be able to pick it and the API would 400.
+    const result = buildConfiguredProviders(
+      { openai: true },
+      { openai: ['gpt-4o', 'gpt-5.5-which-never-existed'] },
+    )
+    expect(result).toHaveLength(1)
+    const ids = result[0].models.map(m => m.id)
+    expect(ids).toContain('gpt-4o')
+    expect(ids).not.toContain('gpt-5.5-which-never-existed')
+  })
+
+  it('regression 0.99.1 — drops a static-only provider if all its enabled IDs are stale', () => {
+    // If the user's only saved OpenAI IDs are all hallucinated/removed,
+    // the provider must disappear from the selector (better than offering
+    // models that all 400). User has to re-pick valid IDs in Settings.
+    const result = buildConfiguredProviders(
+      { openai: true },
+      { openai: ['gpt-5.5', 'gpt-5.4'] },
+    )
+    expect(result).toEqual([])
   })
 })
