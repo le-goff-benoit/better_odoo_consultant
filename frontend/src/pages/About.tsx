@@ -7,10 +7,19 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.2',
+    version: '0.100.3',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Section transverse « Consignes transverses » ajoutée aux 4 agents (Support / BA / Architect / Developer, FR + EN). 6 directives qui s\'appliquent universellement quel que soit le sujet : (1) **Mémoire conversation** — avant d\'appeler un outil, vérifier si un tour précédent a déjà ramené l\'info ; (2) **Confiance affichée** — quand la réponse repose sur une seule lecture ou rien de vérifié, le dire (« je m\'appuie sur la seule lecture de X — à valider sur 2-3 autres ») ; (3) **Curiosité proactive sur le custom** — si le bloc Contexte projet flag Studio / custom / `dev_and_studio`, échantillonner 1-2 enregistrements concrets via `odoo_query_records` AVANT de répondre, citer en `odoo://` ; (4) **Handoff prononcé** — quand >30 % de la réponse touche un autre profil, le dire textuellement et pas juste compter sur les chips d\'avis complémentaire ; (5) **Actions non-redondantes** — les « prochaines actions » doivent être à faire APRÈS la réponse, pas réembarquer ce qui vient d\'être fait ; (6) **TL;DR sur réponses longues** — au-delà de ~600 mots, ouvrir par « En bref : … » en 1-2 phrases verdict + action principale',
+    ],
+  },
+  {
+    version: '0.100.2',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Bloc code fenced enrichi — petit badge langage en haut à gauche (Python / XML / TypeScript…) + bouton copier au hover en haut à droite (avec feedback ✓ pendant 1.5s). Pas d\'opacité 1 par défaut (ne distrait pas la lecture), apparaît au survol/focus. Câblé sur tous les fences via le nouveau composant `CodeBlock` qui remplace le `<pre>` nu — Mermaid reste rendu par `MermaidBlock`. Le copy est particulièrement utile pour la nouvelle exception BA « modification proposée » (cf. ci-dessous) : l\'utilisateur peut appliquer le snippet sans le retaper',
       'BA — exception « code court pour les actions techniques automatisées ». Avant : interdit absolu de snippet de code → impossible de répondre précisément sur une `ir.cron`, une `base.automation` ou un mail template avec logique, alors que le code EST la logique métier. Désormais, le BA peut citer un fenced ```python``` (ou ```xml```) de ≤15 lignes précédé d\'une phrase business, et proposer une modification au format **deux blocs consécutifs « Actuellement » / « Proposé »** chacun ≤10 lignes, avec impact métier en 1-2 phrases. Plafond 25 lignes cumulées — au-delà handoff explicite à `agent_developer`. Reste l\'exception, pas la règle : 0 snippet sur une question de paramétrage ou de cadrage',
