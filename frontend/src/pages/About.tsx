@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.99.2',
+    version: '0.99.3',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bugfix Markdown — les sous-bullets indentés (`  - sub item`) n\'étaient pas reconnus par le renderer custom. La regex `^[-*]\\s+` exigeait le tiret en début de ligne sans tolérance pour l\'indentation ; les lignes indentées tombaient dans le rendu `<p>` et le tiret apparaissait comme texte brut, le contenu décollé du parent visuel',
+      'Fix dans `frontend/src/components/Markdown.tsx` — nouvelles regex `UNORDERED_LIST_RE = /^(\\s*)[-*]\\s+(.+)/` et `ORDERED_LIST_RE = /^(\\s*)(\\d+)\\.\\s+(.+)/` qui capturent l\'indentation. Helper `indentDepth(indent)` qui convertit l\'indentation en profondeur de nidification (2 espaces ou 1 tabulation = 1 niveau, cap à 3 niveaux). Rendu : `paddingLeft: depth * 18px` + marqueur creux `◦` aux niveaux ≥1 pour visuellement distinguer les sous-bullets. Ordonnées idem',
+      '+2 tests régressifs dans `Markdown.test.tsx` qui vérifient que les sous-bullets à 2 espaces ET à 4 espaces sont rendus comme bullets, et que le préfixe littéral « - » n\'apparaît jamais dans le texte rendu. Suite frontend 88 verts',
+    ],
+  },
+  {
+    version: '0.99.2',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Bugfix BA — un BA qui demandait « y a-t-il des modifications Studio sur cette instance » récupérait le template `technical_review` (orienté developer / architect : file:line, slots `Correction proposée` avec Python, blockquotes scaffolding « > Ce qui empêche la mise en prod. Vide si rien. » recopiées telles quelles dans la sortie). Deux problèmes corrigés : (1) le template scaffolding fuyait littéralement, (2) le mauvais template était sélectionné pour le persona BA',
       'Template `technical_review.md` nettoyé — toutes les blockquotes d\'instruction supprimées (`> Ce qui empêche…`, `> Pas bloquants mais…`, `> Améliorations qualitatives…`). Bloc directives en `<!-- … -->` HTML comment ajouté en tête pour expliciter ce qui est consigne auteur vs livrable. Slot « Correction proposée » devient conditionnel (seulement si un patch concret existe). Sections optionnelles : si vide, supprimer plutôt qu\'écrire « Aucun »',

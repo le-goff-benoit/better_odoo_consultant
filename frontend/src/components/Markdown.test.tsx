@@ -107,4 +107,42 @@ describe('Markdown table parsing', () => {
       '2. Synthèse.',
     ].join('\n'))).toEqual([])
   })
+
+  it('regression 0.99.3 — recognises indented sub-bullets as list items', () => {
+    // Pre-fix, the LLM produced «   - Sub-item » (2 spaces +
+    // hyphen) for nested bullets and the regex anchored at `^[-*]` missed
+    // them. They fell into the <p> renderer and showed up as literal
+    // "- Sub-item" text instead of bullets.
+    const { container } = render(
+      <Markdown
+        text={[
+          '- **Top item** :',
+          '  - sub item 1',
+          '  - sub item 2',
+        ].join('\n')}
+      />,
+    )
+    // Both top and sub items should be present in the rendered DOM as
+    // bullets, not as literal "- " text inside <p>.
+    expect(container.querySelectorAll('p').length).toBe(0)
+    expect(container.textContent).toContain('Top item')
+    expect(container.textContent).toContain('sub item 1')
+    expect(container.textContent).toContain('sub item 2')
+    // The literal "- " prefix must NOT appear in the rendered text.
+    expect(container.textContent).not.toMatch(/-\s+sub item/)
+  })
+
+  it('regression 0.99.3 — 4-space-indented sub-bullets also render properly', () => {
+    const { container } = render(
+      <Markdown
+        text={[
+          '- Parent',
+          '    - Deep child',
+        ].join('\n')}
+      />,
+    )
+    expect(container.querySelectorAll('p').length).toBe(0)
+    expect(container.textContent).toContain('Deep child')
+    expect(container.textContent).not.toMatch(/-\s+Deep child/)
+  })
 })

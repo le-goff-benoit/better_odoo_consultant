@@ -267,8 +267,26 @@ function actionPrompt(actionText: string): string {
   ].join('\n')
 }
 
+/**
+ * Indented list markers : the LLM produces nested sub-bullets with 2 or 4
+ * spaces of leading whitespace (`  - sub item`). Pre-fix v0.99.3, the regex
+ * anchored at `^` (start of line, no leading space) so indented sub-items
+ * fell through to the `<p>` renderer and the literal `- ` was visible in
+ * the output. We now allow any amount of leading whitespace and report it
+ * back so the renderer can apply a nesting indent.
+ */
+const UNORDERED_LIST_RE = /^(\s*)[-*]\s+(.+)/
+const ORDERED_LIST_RE = /^(\s*)(\d+)\.\s+(.+)/
+
 function isListLine(line: string): boolean {
-  return /^[-*]\s+(.+)/.test(line) || /^(\d+)\.\s+(.+)/.test(line)
+  return UNORDERED_LIST_RE.test(line) || ORDERED_LIST_RE.test(line)
+}
+
+/** Convert leading whitespace into a nesting depth (2 spaces or 1 tab = 1 level). */
+function indentDepth(indent: string): number {
+  // Tabs count as 4 spaces (de-facto standard for the Markdown indent column).
+  const cols = indent.replace(/\t/g, '    ').length
+  return Math.min(3, Math.floor(cols / 2))
 }
 
 function nextContentLine(lines: string[], start: number): string {
@@ -315,9 +333,9 @@ export function extractActionItems(text: string): string[] {
       inActionList = true
       continue
     }
-    const listMatch = line.match(/^[-*]\s+(.+)/)
+    const listMatch = line.match(UNORDERED_LIST_RE)
     if (listMatch) {
-      if (inActionList) out.push(stripMarkdownInline(listMatch[1]))
+      if (inActionList) out.push(stripMarkdownInline(listMatch[2]))
       continue
     }
     const olMatch = line.match(/^(\d+)\.\s+(.+)/)
@@ -382,23 +400,27 @@ export default function Markdown({ text }: { text: string }) {
       i++; continue
     }
 
-    const listMatch = line.match(/^[-*]\s+(.+)/)
+    const listMatch = line.match(UNORDERED_LIST_RE)
     if (listMatch) {
+      const depth = indentDepth(listMatch[1])
+      // Use a hollow bullet at depth ≥1 to visually distinguish nested items.
+      const marker = depth === 0 ? '•' : '◦'
       result.push(
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brandFg, flexShrink: 0 }}>•</span>
-          <span>{inlineMarkdown(listMatch[1])}</span>
+        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3, paddingLeft: depth * 18 }}>
+          <span style={{ color: t.brandFg, flexShrink: 0 }}>{marker}</span>
+          <span>{inlineMarkdown(listMatch[2])}</span>
         </div>
       )
       i++; continue
     }
 
-    const olMatch = line.match(/^(\d+)\.\s+(.+)/)
+    const olMatch = line.match(ORDERED_LIST_RE)
     if (olMatch) {
+      const depth = indentDepth(olMatch[1])
       result.push(
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-          <span style={{ color: t.brandFg, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[1]}.</span>
-          <span>{inlineMarkdown(olMatch[2])}</span>
+        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3, paddingLeft: depth * 18 }}>
+          <span style={{ color: t.brandFg, flexShrink: 0, minWidth: 18, textAlign: 'right' }}>{olMatch[2]}.</span>
+          <span>{inlineMarkdown(olMatch[3])}</span>
         </div>
       )
       i++; continue
