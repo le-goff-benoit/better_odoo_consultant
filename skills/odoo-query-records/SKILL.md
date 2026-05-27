@@ -46,6 +46,7 @@ Utilise `odoo_query_records` pour lire des enregistrements concrets via `search_
 - Si `truncated=true`, annonce explicitement que l'analyse est partielle et explique le plafond ou la limite utilisée.
 - Pour un total, utilise `odoo_count_records`; pour un KPI groupé, utilise `odoo_aggregate_records`.
 - Dans la réponse, indique le domain utilisé et distingue faits vérifiés, hypothèses et recommandations.
+- Quand tu cites un enregistrement exact dans la réponse, transforme son libellé en lien Markdown `odoo://<model>/<id>`. Pour les relations many2one retournées sous forme `[id, name]`, utilise le modèle métier attendu (ex. `partner_id` → `res.partner`) et l'id de la relation. Si l'id manque, relance la query avec `id`, `display_name` et le champ relationnel utile plutôt que de laisser un libellé non cliquable.
 
 ## Déclencheurs
 - "analyse cette commande/facture/fiche", "liste les lignes", "montre les enregistrements", "exporte", "vérifie l'état".
