@@ -351,7 +351,8 @@ async def update_profile(profile_id: int, body: ProfileUpdate, session: AsyncSes
         raise HTTPException(404, "Projet introuvable")
     for k, v in body.model_dump(exclude_none=True).items():
         if k == "api_key":
-            store_profile_secrets(profile.name, v)
+            if v:
+                store_profile_secrets(profile.name, v)
         else:
             setattr(profile, k, v)
     profile.updated_at = datetime.utcnow()

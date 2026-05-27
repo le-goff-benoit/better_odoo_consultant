@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.97.3',
-    date: '2026-05-26',
+    version: '0.97.4',
+    date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bugfix — édition de profil : la clé API n\'est plus écrasée quand l\'utilisateur sauvegarde sans la modifier. Cause racine : `update_profile` dans `backend/api/routes/profiles.py` utilisait `model_dump(exclude_none=True)` qui exclut `None` mais **pas la chaîne vide**, donc `store_profile_secrets(name, "")` était appelé et wipait le secret. L\'UI annonçait « clé API inchangée » mais le prochain appel IA échouait silencieusement avec une clé absente. Fix une ligne : garde `if v:` autour de `store_profile_secrets`, alignée sur le comportement déjà correct de `update_environment`',
+      'Frontend — ceinture+bretelles : `Profiles.tsx` mutation `update` retire explicitement `api_key` du payload quand le champ est vide en mode édition, pour ne pas dépendre de la robustesse backend',
+      'Tests — `tests/test_profile_api_key_preserved.py` (2 cas) verrouille la régression : PATCH avec `api_key=""` et PATCH qui omet `api_key` préservent tous les deux le secret existant ; PATCH avec une nouvelle valeur la propage. Suite 809 passed',
+    ],
+  },
+  {
+    version: '0.97.3',
+    date: '2026-05-26',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Skill dispatcher — résolution des 4 faiblesses identifiées en 0.97.2. Chaque xfail portait le wording exact du fix à appliquer : (1) `list` ajouté aux `_BOUNDARY_TOKENS` pour que le keyword anglais "list" de `odoo_inspect_view` ne match plus le verbe français "liste" (cause racine de la sur-sélection sur les prompts de listing) ; (2) extension d\'`explicit_list_terms` et nouvelle prune de `odoo_inspect_view/navigation/security` quand des marqueurs list-detail (`avec nom`, `avec montant`, `avec date`, `liste des`) accompagnent une intention query (p04b) ; (3) nouveau pattern `manifest-read-pattern` au scoring (score 100) qui détecte `verbe lecture + __manifest__.py` et route vers `source_read_odoo_file` (ou `repo_read_file` selon un signal projet/custom), couplé à une prune de `repo_list_modules` / `inspect_module_graph` / `odoo_inspect_modules` (p06b) ; (4) nouvelle rule `pruned:sha-focus` qui élimine les skills source frères quand `source_show_commit` est sélectionné via SHA (\\b[0-9a-f]{7,40}\\b), tout en préservant `repo_*` quand le prompt mentionne un override/projet client — sinon les tests goldens commit-analysis cassaient (p10a) ; (5) `financial_terms` enrichi de `rapport tva`, `vat report`, `rapport balance`, `rapport bilan`, `rapport grand livre`, `trial balance` pour que la pruning rule `financial-report-focus` déjà en place se déclenche sur les vrais phrasings (p11a)',
       'Résultats : Skill dispatcher 311 cas, 100 % accuracy / 100 % positive / 100 % negative / 100 % paraphrase, 0 known weakness restante. Agent response eval inchangé à 90.5 % / 98.5 % / 4 golden failures (pas de régression côté agents). Suite 807 passed',

@@ -387,14 +387,19 @@ export default function Profiles() {
   })
 
   const update = useMutation({
-    mutationFn: () => updateProfile(editingId!, {
-      ...form,
-      environments: JSON.stringify(envs),
-      company_name: companyInfo?.name,
-      company_city: companyInfo?.city,
-      company_logo: companyInfo?.logo,
-      company_ids: availableCompanies.length > 0 ? JSON.stringify(availableCompanies) : undefined,
-    }),
+    mutationFn: () => {
+      const { api_key, ...rest } = form
+      const payload: Record<string, unknown> = {
+        ...rest,
+        environments: JSON.stringify(envs),
+        company_name: companyInfo?.name,
+        company_city: companyInfo?.city,
+        company_logo: companyInfo?.logo,
+        company_ids: availableCompanies.length > 0 ? JSON.stringify(availableCompanies) : undefined,
+      }
+      if (api_key && api_key.trim() !== '') payload.api_key = api_key
+      return updateProfile(editingId!, payload)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] })
       setEditingId(null); setShowWizard(false); setStep(1); setForm(EMPTY); setDiag(null); setEnvs([]); setCompanyInfo(null); setAvailableCompanies([]); setAccessInfo(null); setShowAccessWarning(false)
