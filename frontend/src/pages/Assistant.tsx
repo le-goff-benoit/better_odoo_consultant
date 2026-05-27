@@ -49,7 +49,7 @@ const _msgBuffer = new Map<string, Message[]>()
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string; technical_complexity?: string; project_context?: string }
+interface Profile { id: number; name: string; company_name?: string; company_logo?: string; odoo_version?: string; company_ids?: string; selected_company_id?: number; user_access_info?: string; environments?: string; active_env_id?: string; technical_complexity?: string; project_context?: string; db_url?: string }
 interface EnvEntry { id: string; name: string; db_url: string; db_name: string; login: string; odoo_version?: string; branch?: string; github_repo?: string; repo_branch?: string }
 interface L10nModule { name: string; source?: string; path?: string }
 interface InstalledModule { name?: string; shortdesc?: string; author?: string; installed_version?: string; application?: boolean }
@@ -803,6 +803,7 @@ export default function Assistant() {
     return envs.find(e => e.id === effectiveId) ?? envs[0] ?? null
   })()
   const activeEnvRepo = activeEnvObj?.github_repo ?? null
+  const activeOdooBaseUrl = isGeneralMode ? undefined : (activeEnvObj?.db_url ?? selectedProfile?.db_url ?? undefined)
   const handleRefreshContext = useRefreshProjectContext(
     isGeneralMode ? null : (selectedProfile?.id ?? null),
     activeEnvObj?.id ?? null,
@@ -1548,6 +1549,7 @@ export default function Assistant() {
                   outputTokens={msg.outputTokens}
                   projectName={isGeneralMode ? undefined : selectedProfile?.name}
                   perspective={msg.perspective ?? perspective}
+                  odooBaseUrl={activeOdooBaseUrl}
                   onAskMore={askMoreOnSelection}
                   onEditTable={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
                   onPromptAction={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
@@ -2050,11 +2052,12 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, perspective, onAskMore, onEditTable, onPromptAction, onSecondOpinion }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, perspective, odooBaseUrl, onAskMore, onEditTable, onPromptAction, onSecondOpinion }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
   perspective?: Perspective
+  odooBaseUrl?: string
   onAskMore?: (selectedText: string) => void
   onEditTable?: (prompt: string) => void
   onPromptAction?: (prompt: string) => void
@@ -2146,7 +2149,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               </button>
             </div>
             <div ref={markdownRef} className="assistant-msg-body">
-              <MarkdownActionsProvider onEditTable={onEditTable} onPromptAction={onPromptAction}>
+              <MarkdownActionsProvider onEditTable={onEditTable} onPromptAction={onPromptAction} odooBaseUrl={odooBaseUrl}>
                 <Markdown text={textEvt.content} />
               </MarkdownActionsProvider>
               <ActionProposals
@@ -2185,6 +2188,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
           >
             <MarkdownActionsProvider
               onEditTable={onEditTable}
+              odooBaseUrl={odooBaseUrl}
               onPromptAction={prompt => {
                 setExpanded(false)
                 onPromptAction?.(prompt)

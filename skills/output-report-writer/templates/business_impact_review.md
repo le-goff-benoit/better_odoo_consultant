@@ -43,6 +43,30 @@ INSTRUCTIONS AUTEUR (ne pas reproduire dans la réponse) :
 
 - {{ Question ouverte à poser en atelier ou au sponsor métier }}
 
+## Exemples concrets sur cette base
+
+<!--
+Cette section est obligatoire quand on parle d'une fonctionnalité ou d'une
+personnalisation active sur l'instance connectée. Le frontend la rend en
+carte tintée (callout « ampoule ») pour la rendre immédiatement repérable
+côté consultant.
+
+Règles de remplissage :
+- Lance d'abord `odoo_query_records` (limit ≤ 3) pour ramener 1-3
+  enregistrements RÉELS qui illustrent le point. Pas d'invention.
+- Encadre chaque référence d'enregistrement en lien Markdown avec le
+  schéma custom `[label](odoo://<model>/<id>)`. Le frontend résoudra
+  l'URL et rendra un lien cliquable qui ouvre directement la fiche dans
+  Odoo (icône ↗ ajoutée automatiquement).
+- Format conseillé : « **{{ flux }}** : sur [{{ label métier }}](odoo://{{ model }}/{{ id }}), {{ ce qui rend l'exemple parlant }} »
+- Si la query ne retourne rien, écrire « *aucun enregistrement trouvé sur
+  cette base — vérifier si le flux est réellement utilisé* » plutôt que
+  d'inventer.
+-->
+
+- **{{ Flux 1 }}** : sur [{{ libellé client }}](odoo://{{ model }}/{{ id }}), {{ ce qui rend l'exemple parlant en 1 phrase }}.
+- **{{ Flux 2 }}** : sur [{{ libellé client }}](odoo://{{ model }}/{{ id }}), {{ … }}.
+
 ## Prochaines actions (BA / AM)
 
 1. {{ Action priorisée — propriétaire métier, livrable attendu }}

@@ -1,24 +1,48 @@
 import React, { createContext, useContext, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Pencil, Send, X } from 'lucide-react'
+import { ExternalLink, Lightbulb, Pencil, Send, X } from 'lucide-react'
 import { t } from '../theme'
 import MermaidBlock from './MermaidBlock'
 
 // Lets a parent renderer hand the Markdown subtree a callback so the
 // MarkdownTable "edit with AI" button can dispatch a contextualised prompt
-// back to the assistant composer.
+// back to the assistant composer. Since v0.100.0 it also carries the
+// active Odoo base URL so `odoo://<model>/<id>` links produced by the LLM
+// can be resolved to clickable URLs that open the actual record in Odoo.
 const MarkdownActionsCtx = createContext<{
   onEditTable?: (prompt: string) => void
   onPromptAction?: (prompt: string) => void
+  odooBaseUrl?: string
 }>({})
 export function MarkdownActionsProvider({
-  onEditTable, onPromptAction, children,
+  onEditTable, onPromptAction, odooBaseUrl, children,
 }: {
   onEditTable?: (prompt: string) => void
   onPromptAction?: (prompt: string) => void
+  odooBaseUrl?: string
   children: React.ReactNode
 }) {
-  return <MarkdownActionsCtx.Provider value={{ onEditTable, onPromptAction }}>{children}</MarkdownActionsCtx.Provider>
+  return <MarkdownActionsCtx.Provider value={{ onEditTable, onPromptAction, odooBaseUrl }}>{children}</MarkdownActionsCtx.Provider>
+}
+
+/**
+ * Resolve an `odoo://<model>/<id>` URI to a clickable URL on the active
+ * Odoo instance. The pattern is LLM-friendly (standard Markdown link with
+ * a custom scheme) and the renderer rewrites it at display time using the
+ * profile's base URL passed via {@link MarkdownActionsProvider}.
+ *
+ * We use the canonical `/web#id=<id>&model=<model>&view_type=form` URL
+ * because it works across Odoo 15 → 19 without needing the action id of
+ * the relevant menu. Returns null when the URI is invalid or no base URL
+ * is available (the renderer falls back to a disabled-style label).
+ */
+export function resolveOdooUri(uri: string, baseUrl: string | undefined): string | null {
+  if (!baseUrl) return null
+  const match = uri.match(/^odoo:\/\/([a-zA-Z0-9_.]+)\/(\d+)(?:[?#].*)?$/)
+  if (!match) return null
+  const [, model, id] = match
+  const trimmed = baseUrl.replace(/\/+$/, '')
+  return `${trimmed}/web#id=${encodeURIComponent(id)}&model=${encodeURIComponent(model)}&view_type=form`
 }
 
 // ── Markdown table with CSV export ────────────────────────────
@@ -238,16 +262,110 @@ function MarkdownTable({ headers, aligns, dataRows }: ParsedMarkdownTable) {
 
 // ── Markdown renderer ─────────────────────────────────────────
 
+// Captures Markdown links `[label](url)` AND inline emphasis tokens. Links
+// must come first so we don't split through a label/URL with `**` inside.
+const INLINE_SPLIT_RE = /(\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g
+
 export function inlineMarkdown(text: string): React.ReactNode {
-  return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, i) => {
+  return text.split(INLINE_SPLIT_RE).map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} style={{ color: 'color-mix(in srgb, var(--brand) 40%, var(--th-text))' }}>{part.slice(2, -2)}</strong>
     if (part.startsWith('*') && part.endsWith('*') && part.length > 2) return <em key={i}>{part.slice(1, -1)}</em>
     if (part.startsWith('`') && part.endsWith('`')) return <code key={i} style={{ background: t.bgMuted, borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em' }}>{part.slice(1, -1)}</code>
+    const link = part.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/)
+    if (link) return <MarkdownLink key={i} label={link[1]} href={link[2]} />
     return part
   })
 }
 
+function MarkdownLink({ label, href }: { label: string; href: string }) {
+  const ctx = useContext(MarkdownActionsCtx)
+  if (href.startsWith('odoo://')) {
+    const resolved = resolveOdooUri(href, ctx.odooBaseUrl)
+    if (!resolved) {
+      // Pas de profil actif → on rend le label mais on grise pour signaler
+      // que le lien n'est pas opérant dans ce contexte (mode général).
+      return (
+        <span
+          title={`Lien Odoo indisponible (aucun projet actif) : ${href}`}
+          style={{ color: t.muted, textDecoration: 'underline dotted', cursor: 'help' }}
+        >
+          {label}
+        </span>
+      )
+    }
+    return (
+      <a
+        href={resolved}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`Ouvrir dans Odoo : ${href}`}
+        style={{
+          color: t.brandFg,
+          textDecoration: 'underline',
+          textUnderlineOffset: 2,
+          display: 'inline-flex',
+          alignItems: 'baseline',
+          gap: 3,
+        }}
+      >
+        {label}
+        <ExternalLink size={11} style={{ alignSelf: 'center', flexShrink: 0, opacity: 0.7 }} />
+      </a>
+    )
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: t.brandFg, textDecoration: 'underline', textUnderlineOffset: 2 }}
+    >
+      {label}
+    </a>
+  )
+}
+
 const ACTION_HEADING_RE = /\b(prochaines?\s+(?:actions?|[eé]tapes?)|[eé]tapes?\s+suivantes?|points?\s+d['’]actions?|actions?\s+(?:à\s+faire|recommand[ée]es?)|next\s+(?:actions?|steps?)|recommended\s+actions?|action\s+items?|todo)\b/i
+
+// Section heading that triggers the « Exemples concrets » callout. Matches
+// both FR and EN variants the LLM is encouraged to produce in the BA
+// template (cf. business_impact_review.md).
+const CONCRETE_EXAMPLES_HEADING_RE = /^\s*(exemples?\s+(?:concrets?|r[ée]els?)(?:\s+sur\s+cette\s+base)?|concrete\s+examples?(?:\s+(?:in|on)\s+this\s+(?:database|base))?)\s*[:?]?\s*$/i
+
+/**
+ * Tinted card used to render the « Exemples concrets sur cette base »
+ * section the BA produces with grounded data + clickable `odoo://` links.
+ * Goal : make this section visually distinct so the consultant immediately
+ * spots the « voici la preuve en live sur ta base » bloc and can click
+ * straight through to Odoo.
+ */
+function ConcreteExamplesCallout({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      style={{
+        margin: '14px 0',
+        padding: '12px 16px 10px',
+        background: `${t.brand}10`,
+        border: `1px solid ${t.brand}40`,
+        borderLeft: `3px solid ${t.brand}`,
+        borderRadius: t.radius,
+      }}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        marginBottom: 6, color: t.brand, fontWeight: 700, fontSize: 13,
+      }}>
+        <Lightbulb size={14} />
+        <span>{title}</span>
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.55 }}>
+        {/* Recursive render — odoo:// links resolve through the same provider. */}
+        {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
+        <Markdown text={body} />
+      </div>
+    </div>
+  )
+}
 
 function stripMarkdownInline(text: string): string {
   return text
@@ -389,8 +507,44 @@ export default function Markdown({ text }: { text: string }) {
       continue
     }
 
+    // Horizontal rule — `---` (or `***`, `___`) seuls sur une ligne. Avant
+    // 0.100.0, ces marqueurs passaient en `<p>` et apparaissaient comme
+    // texte brut au lieu d'un séparateur visuel.
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      result.push(
+        <hr key={i} style={{
+          border: 'none',
+          borderTop: `1px solid ${t.border}`,
+          margin: '14px 0',
+          opacity: 0.6,
+        }} />
+      )
+      i++; continue
+    }
+
     const hMatch = line.match(/^(#{1,6})\s+(.+)/)
     if (hMatch) {
+      // « Exemples concrets sur cette base » et variantes → callout dédié.
+      // Le LLM produit cette section depuis le template business_impact_review
+      // (v0.100.0) avec des liens `odoo://<model>/<id>` pour pointer
+      // vers les enregistrements réels. On la rend en carte tintée pour
+      // la rendre immédiatement repérable côté consultant.
+      const headingText = hMatch[2].trim()
+      if (CONCRETE_EXAMPLES_HEADING_RE.test(stripMarkdownInline(headingText))) {
+        // Collect lines until the next heading of same-or-higher level, or EOF.
+        const startLevel = hMatch[1].length
+        const collected: string[] = []
+        let j = i + 1
+        while (j < lines.length) {
+          const peek = lines[j]
+          const peekH = peek.match(/^(#{1,6})\s+/)
+          if (peekH && peekH[1].length <= startLevel) break
+          collected.push(peek)
+          j++
+        }
+        result.push(<ConcreteExamplesCallout key={i} title={headingText} body={collected.join('\n')} />)
+        i = j; continue
+      }
       const sizes = [18, 16, 14, 13, 12, 12]
       const margins = ['14px 0 4px', '12px 0 4px', '10px 0 3px', '8px 0 3px', '8px 0 3px', '8px 0 3px']
       const level = hMatch[1].length

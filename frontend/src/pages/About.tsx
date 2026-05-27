@@ -7,10 +7,22 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.99.4',
+    version: '0.100.0',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Séparateurs horizontaux — `---` (ainsi que `***` et `___`) seuls sur une ligne sont désormais rendus comme `<hr>` stylé (filet fin couleur muted, marges 14px). Avant : ces marqueurs tombaient dans le rendu `<p>` et apparaissaient comme texte brut « --- » au milieu de la réponse',
+      'Liens cliquables vers Odoo — nouveau scheme custom `odoo://<model>/<id>` que le LLM peut produire en Markdown standard `[libellé](odoo://sale.order/12345)`. Le composant `Markdown.tsx` détecte ce scheme et le résout en URL cliquable `https://<db_url>/web#id=12345&model=sale.order&view_type=form` (forme universelle qui marche d\'Odoo 15 à 19, pas de dépendance sur l\'action id). Le lien ouvre dans un nouvel onglet avec une petite icône externe (`↗`) pour signaler la sortie. En mode général (sans projet actif), le label reste visible mais grisé avec un tooltip explicatif',
+      'Section « Exemples concrets sur cette base » — nouveau callout dédié dans `Markdown.tsx` qui détecte les headings « Exemples concrets / Concrete examples » et rend la section dans une carte tintée (background `brand10`, bordure gauche `brand`, icône ampoule). Visuellement repérable au premier coup d\'œil pour signaler « voici la preuve en live sur ta base ». Template `business_impact_review.md` mis à jour pour inclure cette section obligatoire quand on décrit une feature ou personnalisation active. BA `AGENT.md` (FR + EN) renforcé : « Ancre la réponse dans la donnée client » — lancer `odoo_query_records` (limit ≤ 3) et citer 1-3 enregistrements RÉELS via `odoo://`, jamais inventer un id',
+      'Plomberie — `MarkdownActionsProvider` accepte un nouveau prop `odooBaseUrl` qui résout les `odoo://` au rendu. Câblage depuis Assistant.tsx (mode projet) et Migration.tsx (source profile). En mode général ou sans profil, les `odoo://` rendent un span désactivé (label visible, pas de clic). Nouveau helper `resolveOdooUri(uri, baseUrl)` exporté pour testabilité. +10 tests Vitest dans `Markdown.test.tsx`, suite frontend 98 verts, backend 822 verts',
+    ],
+  },
+  {
+    version: '0.99.4',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Validation backend défensive des IDs de modèle — même après le nettoyage du catalogue front en 0.99.1 (retrait de `gpt-5.5` halluciné), les navigateurs servant un bundle en cache continuaient à POSTer `gpt-5.5` au chat endpoint, déclenchant un `400 unsupported_api_for_model` côté OpenAI. Nouvelle constante `KNOWN_MODELS` dans `backend/services/ai_service.py` qui mirror le catalogue front pour openai / claude / gemini. Helper `_validate_or_fallback_model(provider, requested)` appelé en tête de `stream_chat` : si l\'ID est inconnu pour un provider statique, on retombe sur `DEFAULT_MODELS[provider]` et on émet un event SSE `model_fallback` (+ warning log) avec la raison « id périmé en cache navigateur, vide le cache ou réenregistre tes modèles ». GitHub Models et Copilot passent sans validation (catalogue live côté API du provider)',
       'Effet utilisateur — au lieu de recevoir un 400 cryptique, l\'utilisateur reçoit une vraie réponse (sur le modèle par défaut du provider) avec une notification claire que sa sélection était périmée. +7 tests régressifs (`tests/test_model_validation.py`) qui pinent : acceptation des IDs connus, fallback sur les hallucinés, no-op sur empty, pass-through github/copilot, gemini-1.5-pro deprecated tombe sur 2.5-pro, et sync entre `KNOWN_MODELS` et `DEFAULT_MODELS`. Suite backend 822 verts',

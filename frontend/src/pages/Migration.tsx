@@ -53,11 +53,13 @@ interface Profile {
   company_ids?: string | null
   selected_company_id?: number | null
   technical_complexity?: string | null
+  db_url?: string | null
 }
 
 interface EnvEntry {
   id: string
   name: string
+  db_url?: string | null
   odoo_version?: string | null
   github_repo?: string | null
 }
@@ -777,12 +779,13 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, perspective, onAskMore, onPromptAction }: {
+function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, perspective, onAskMore, onPromptAction, odooBaseUrl }: {
   events: AiEvent[]; loading?: boolean; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   perspective?: Perspective
   onAskMore?: (selectedText: string) => void
   onPromptAction?: (prompt: string) => void
+  odooBaseUrl?: string
 }) {
   const lang = useUiLanguage()
   const c = lang === 'en'
@@ -888,7 +891,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
               </button>
             </div>
             <div ref={markdownRef}>
-              <MarkdownActionsProvider onPromptAction={onPromptAction}>
+              <MarkdownActionsProvider onPromptAction={onPromptAction} odooBaseUrl={odooBaseUrl}>
                 <Markdown text={textEvt.content} />
               </MarkdownActionsProvider>
               <ActionProposals
@@ -912,6 +915,7 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
             askMoreDisabled={loading}
           >
             <MarkdownActionsProvider
+              odooBaseUrl={odooBaseUrl}
               onPromptAction={prompt => {
                 setExpanded(false)
                 onPromptAction?.(prompt)
@@ -1248,7 +1252,8 @@ export default function Migration() {
   const sourceRepo    = resolveRepoPath(source, profiles)
   const sourceRepoName = resolveRepoName(source, profiles)
   const sourceProfile = source.mode === 'environment' ? profiles.find(p => p.id === source.profileId) : undefined
-  const sourceEnv = sourceProfile ? profileEnvs(sourceProfile).find(e => e.id === source.envId) : undefined
+  const sourceEnv = sourceProfile ? (profileEnvs(sourceProfile).find(e => e.id === source.envId) ?? profileEnvs(sourceProfile)[0]) : undefined
+  const sourceOdooBaseUrl = sourceEnv?.db_url ?? sourceProfile?.db_url ?? undefined
   const handleRefreshContext = useRefreshProjectContext(sourceProfile?.id ?? null, sourceEnv?.id ?? null)
   const sourceCompany = activeCompany(sourceProfile)
   const sourceLocalization = companyLocalizationLabel(sourceCompany)
@@ -1865,6 +1870,7 @@ export default function Migration() {
                 inputTokens={m.inputTokens}
                 outputTokens={m.outputTokens}
                 perspective={perspective}
+                odooBaseUrl={sourceOdooBaseUrl}
                 onAskMore={askMoreOnSelection}
                 onPromptAction={(prompt: string) => { if (!streaming) sendWithText(prompt) }}
               />
