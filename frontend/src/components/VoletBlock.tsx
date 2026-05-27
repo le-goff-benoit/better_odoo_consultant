@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { AlertTriangle, BookOpen, ChevronDown, ChevronRight, Info, Layers, Lightbulb, StickyNote, XCircle } from 'lucide-react'
+import { AlertTriangle, BookOpen, ChevronDown, ChevronRight, Info, Layers, Lightbulb, LucideIcon, StickyNote, XCircle } from 'lucide-react'
 
 /** Semantic types for a volet block — each maps to a distinct color + icon. */
 export type VoletType = 'info' | 'warning' | 'error' | 'tip' | 'note' | 'section'
 
 interface VoletConfig {
-  Icon: React.FC<{ size?: number; color?: string }>
+  Icon: LucideIcon
   /** Header icon and accent color */
   color: string
   /** Header background */
