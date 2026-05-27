@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowRight, Bot, Check, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileText, FolderOpen, Globe2, HardDrive, KeyRound, LayoutPanelTop, Lock, Loader2, Network, RefreshCw, Search, Server, Settings2, Sparkles, Terminal, UserRound, Workflow, Wrench, X, Zap } from 'lucide-react'
-import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getSkillDiagram, getSkillMarkdown, getSkillReference, getSkillTemplate, getSkillExample, getSkillEvalQueries, getUserProfile, saveUserProfile, getDataDir, openDataFolder } from '../api/client'
+import { getAiProviders, saveAiKey, deleteAiKey, testAiKey, copilotLogin, copilotPoll, listContextFiles, getContextFile, saveContextFile, deleteContextFile, getModelConfig, saveModelConfig, getToolConfig, saveToolConfig, getAiSkills, getSkillDiagram, getSkillMarkdown, getSkillReference, getSkillTemplate, getSkillExample, getSkillEvalQueries, getUserProfile, saveUserProfile, getDataDir, openDataFolder, getGithubLiveModels, getCopilotLiveModels } from '../api/client'
 import { PROVIDERS as AI_PROVIDERS } from '../constants/providers'
 import { t } from '../theme'
 import PageHeader from '../components/PageHeader'
@@ -2111,12 +2111,17 @@ function ApiSection() {
 
 // ── Model config editor ──────────────────────────────────────────
 
-const ALL_MODELS = AI_PROVIDERS.map(p => ({
+const STATIC_PROVIDER_MODELS = AI_PROVIDERS.map(p => ({
   provider: p.id,
   label: `${p.label} (${p.id === 'claude' ? 'Anthropic' : p.id === 'openai' ? 'OpenAI' : p.id === 'gemini' ? 'Google' : p.id === 'copilot' ? 'GitHub' : p.id === 'github' ? 'GitHub Models' : p.id})`,
   color: p.color,
   models: p.models.map((m: { id: string; label: string }) => ({ id: m.id, label: m.label })),
 }))
+
+// Static label lookup for merging live model ids with known descriptions
+const STATIC_LABEL: Record<string, Record<string, string>> = Object.fromEntries(
+  AI_PROVIDERS.map(p => [p.id, Object.fromEntries(p.models.map((m: { id: string; label: string }) => [m.id, m.label]))])
+)
 
 function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: string[] }) {
   const lang = useUiLanguage()
@@ -2125,24 +2130,53 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
   const [local, setLocal] = useState<Record<string, string[]>>({})
   const [saved, setSaved] = useState(false)
 
+  const githubConfigured = configuredProviderIds.includes('github')
+  const copilotConfigured = configuredProviderIds.includes('copilot')
+
+  // Live model lists — only fetched when the provider is connected
+  const { data: ghLive, isLoading: ghLoading, isError: ghError, refetch: refetchGh } = useQuery({
+    queryKey: ['live-models-github'],
+    queryFn: getGithubLiveModels,
+    enabled: githubConfigured,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  const { data: cpLive, isLoading: cpLoading, isError: cpError, refetch: refetchCp } = useQuery({
+    queryKey: ['live-models-copilot'],
+    queryFn: getCopilotLiveModels,
+    enabled: copilotConfigured,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+
   useEffect(() => { setLocal(data?.data ?? {}) }, [data])
 
-  const visibleModels = ALL_MODELS.filter(p => configuredProviderIds.includes(p.provider))
+  // Merge live ids with static metadata; fall back to static list on error/loading
+  function resolveModels(providerId: string): { id: string; label: string; isNew?: boolean }[] {
+    const meta = STATIC_LABEL[providerId] ?? {}
+    const staticList = STATIC_PROVIDER_MODELS.find(p => p.provider === providerId)?.models ?? []
+    if (providerId === 'github' && ghLive?.data?.models) {
+      return ghLive.data.models.map(id => ({ id, label: meta[id] ?? id, isNew: !meta[id] }))
+    }
+    if (providerId === 'copilot' && cpLive?.data?.models) {
+      return cpLive.data.models.map(id => ({ id, label: meta[id] ?? id, isNew: !meta[id] }))
+    }
+    return staticList
+  }
 
-  const toggle = (provider: string, modelId: string) => {
+  const visibleProviders = STATIC_PROVIDER_MODELS.filter(p => configuredProviderIds.includes(p.provider))
+
+  const toggle = (provider: string, modelId: string, allIds: string[]) => {
     setLocal(prev => {
-      const providerModels = ALL_MODELS.find(p => p.provider === provider)!.models.map(m => m.id)
-      const current: string[] = prev[provider] ?? providerModels
+      const current: string[] = prev[provider] ?? allIds
       const next = current.includes(modelId) ? current.filter(id => id !== modelId) : [...current, modelId]
       return { ...prev, [provider]: next }
     })
     setSaved(false)
   }
 
-  const isEnabled = (provider: string, modelId: string) => {
-    const providerModels = ALL_MODELS.find(p => p.provider === provider)!.models.map(m => m.id)
-    return (local[provider] ?? providerModels).includes(modelId)
-  }
+  const isEnabled = (provider: string, modelId: string, allIds: string[]) =>
+    (local[provider] ?? allIds).includes(modelId)
 
   const handleSave = async () => {
     await saveModelConfig(local)
@@ -2151,30 +2185,80 @@ function ModelConfigEditor({ configuredProviderIds }: { configuredProviderIds: s
     setTimeout(() => setSaved(false), 2000)
   }
 
-  if (visibleModels.length === 0) return null
+  if (visibleProviders.length === 0) return null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {visibleModels.map(prov => (
-        <div key={prov.provider} style={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, padding: '12px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: prov.color, marginBottom: 8 }}>{prov.label}</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {prov.models.map(m => {
-              const on = isEnabled(prov.provider, m.id)
-              return (
-                <button key={m.id} onClick={() => toggle(prov.provider, m.id)} className={`ui-chip-button${on ? ' is-active' : ''}`} style={{
-                  background: on ? `${prov.color}15` : undefined,
-                  borderColor: on ? prov.color : undefined,
-                  color: on ? prov.color : undefined,
-                }}>
-                  <span style={{ fontSize: 10 }}>{on ? <Check size={11} /> : null}</span>
-                  {m.label}
-                </button>
-              )
-            })}
+      {visibleProviders.map(prov => {
+        const isLive = prov.provider === 'github' || prov.provider === 'copilot'
+        const isLoading = (prov.provider === 'github' && ghLoading) || (prov.provider === 'copilot' && cpLoading)
+        const hasError = (prov.provider === 'github' && ghError) || (prov.provider === 'copilot' && cpError)
+        const refetch = prov.provider === 'github' ? refetchGh : prov.provider === 'copilot' ? refetchCp : undefined
+        const hasLiveData = isLive && (
+          (prov.provider === 'github' && !!ghLive?.data?.models) ||
+          (prov.provider === 'copilot' && !!cpLive?.data?.models)
+        )
+        const models = resolveModels(prov.provider)
+        const allIds = models.map(m => m.id)
+
+        return (
+          <div key={prov.provider} style={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, padding: '12px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: prov.color, flex: 1 }}>{prov.label}</div>
+              {isLive && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {hasLiveData && !hasError && (
+                    <span style={{ fontSize: 10, color: t.success, background: `${t.success}18`, border: `1px solid ${t.success}40`, borderRadius: 4, padding: '1px 5px' }}>
+                      live
+                    </span>
+                  )}
+                  {hasError && (
+                    <span style={{ fontSize: 10, color: t.warning }}>
+                      {lang === 'en' ? 'static list' : 'liste statique'}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => refetch?.()}
+                    disabled={isLoading}
+                    title={lang === 'en' ? 'Refresh live model list' : 'Actualiser la liste live'}
+                    style={{ background: 'none', border: 'none', cursor: isLoading ? 'default' : 'pointer', color: t.muted, padding: 2, display: 'flex', alignItems: 'center' }}
+                  >
+                    <RefreshCw size={12} style={{ opacity: isLoading ? 0.4 : 1 }} />
+                  </button>
+                </div>
+              )}
+            </div>
+            {isLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.muted, marginBottom: 8 }}>
+                <Loader2 size={12} />
+                {lang === 'en' ? 'Fetching available models…' : 'Récupération des modèles disponibles…'}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {models.map(m => {
+                const on = isEnabled(prov.provider, m.id, allIds)
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => toggle(prov.provider, m.id, allIds)}
+                    className={`ui-chip-button${on ? ' is-active' : ''}`}
+                    title={m.isNew ? m.id : undefined}
+                    style={{
+                      background: on ? `${prov.color}15` : undefined,
+                      borderColor: on ? prov.color : undefined,
+                      color: on ? prov.color : undefined,
+                    }}
+                  >
+                    <span style={{ fontSize: 10 }}>{on ? <Check size={11} /> : null}</span>
+                    {m.label}
+                    {m.isNew && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 3 }}>·new</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
       <div>
         <button onClick={handleSave} className="btn btn-primary btn-sm">
           {saved ? <Check size={13} /> : null}

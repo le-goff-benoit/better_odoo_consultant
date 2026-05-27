@@ -7,10 +7,19 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.98.0',
+    version: '0.98.1',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Settings — modèles GitHub Models et GitHub Copilot désormais chargés en live depuis les APIs respectives au lieu d\'une liste codée en dur. Deux nouveaux endpoints backend : `GET /api/ai/github/models` (appelle `models.inference.ai.azure.com/v1/models` avec le token stocké) et `GET /api/ai/copilot/models` (échange OAuth → token Copilot, appelle `api.githubcopilot.com/models`). `ModelConfigEditor` mis à jour côté frontend : fetch live avec `staleTime` 5 min, fusion avec les métadonnées statiques (labels, descriptions) pour les modèles connus, id brut + marqueur `·new` pour les modèles inconnus du catalogue. Badge `live` quand les données viennent de l\'API, mention `liste statique` en cas d\'erreur réseau ou de plan insuffisant. Bouton refresh sans rechargement de page. Résultat : la liste reflète ce qui est réellement accessible pour l\'abonnement de l\'utilisateur — Copilot Free voit moins que Copilot Enterprise, les nouveaux modèles ajoutés par GitHub apparaissent automatiquement',
+    ],
+  },
+  {
+    version: '0.98.0',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'Qualité IA — trois faiblesses remontées en tests utilisateurs corrigées d\'un coup, autour de la même promesse produit (« contexte défini et vivant, consultant-first, réponses actionnables ») : (1) preuves systématiques exigées, (2) contexte projet vraiment lu et factorisé dans chaque réponse, (3) ton différencié par agent avec un step further explicite pour support et BA',
       'Bloc « Contexte projet » prioritaire (non tronqué) — unification dans `runtime-complexity-analyzer` : un seul bloc rassemble client + ville, localisation fiscale, profil technique calculé (vanilla / studio / dev / studio_dev) avec confiance, Studio détecté ou non, modules custom installés, modules communautaires (OCA…), apps Odoo installées, et la stratégie de réponse correspondante. Quand la complexité n\'a pas été calculée, le bloc affiche explicitement « non calculée — lancer le diagnostic » pour que l\'IA ne suppose plus que la base est vanilla par défaut. Nouvelle fonction `build_project_context_block` dans `technical_complexity_service.py`, câblée dans `ai.py` et `creator.py`. L\'ancienne `build_technical_complexity_context` reste en place pour les tests existants',
