@@ -7,9 +7,18 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.9',
+    version: '0.100.10',
     date: '2026-05-28',
     badge: 'Actuel',
+    badgeColor: t.brand,
+    items: [
+      'BA agent — qualité des réponses : 5 renforcements coordonnés. (1) Distinction input/output explicite dans « Tu n\'es pas un inventaire technique » : liste concrète de ce qui doit rester dans l\'analyse (noms de méthodes Python, champs custom bruts, tableaux MODÈLE/HÉRITAGE/PREUVE) avec la reformulation business attendue en sortie. (2) Section Standard/Config/Studio/Dev limitée à 3-4 bullets, un verdict + une phrase par catégorie, sans sous-bullets ni liste de preuves. (3) TL;DR rendu obligatoire pour toute réponse listant des personnalisations ou des faits techniques (plus conditionné à 600 mots). (4) Triggers volets ajoutés : scope risk/limite → warning, conseil/workshop → tip, info contextuelle → info. (5) Lien odoo:// obligatoire dans les tableaux et listes, pas seulement dans le corps courant.',
+    ],
+  },
+  {
+    version: '0.100.9',
+    date: '2026-05-28',
+    badge: '',
     badgeColor: t.brand,
     items: [
       'Volets structurels — nouveau type de bloc Markdown `:::volet[type] Titre` rendu par le composant VoletBlock. 6 types : section (violet), tip (vert), warning (ambre), error (rouge), info (bleu), note (gris). Pliable au clic. Support des alias FR (attention→warning, conseil→tip, erreur→error, information→info, section/defaut→section).',
