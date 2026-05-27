@@ -402,6 +402,50 @@ async def list_providers():
     return {p: bool(_ai_key(p)) for p in _PROVIDERS}
 
 
+@router.get("/github/models")
+async def list_github_models():
+    """Retourne la liste live des modèles disponibles via GitHub Models pour ce token."""
+    token = _ai_key("github")
+    if not token:
+        raise HTTPException(401, "Token GitHub non configuré")
+    async with httpx.AsyncClient(timeout=12) as client:
+        resp = await client.get(
+            f"{GITHUB_MODELS_BASE_URL}/v1/models",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    if not resp.is_success:
+        raise HTTPException(resp.status_code, f"GitHub Models API : {resp.text[:300]}")
+    data = resp.json()
+    models = sorted(
+        [m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m]
+    )
+    return {"models": models}
+
+
+@router.get("/copilot/models")
+async def list_copilot_models():
+    """Retourne la liste live des modèles disponibles via GitHub Copilot pour ce token."""
+    oauth_token = _ai_key("copilot")
+    if not oauth_token:
+        raise HTTPException(401, "Token Copilot non configuré")
+    try:
+        copilot_token = await _exchange_copilot_token(oauth_token)
+    except Exception as exc:
+        raise HTTPException(401, f"Échange token Copilot échoué : {exc}") from exc
+    async with httpx.AsyncClient(timeout=12) as client:
+        resp = await client.get(
+            f"{COPILOT_BASE_URL}/models",
+            headers={**COPILOT_HEADERS, "Authorization": f"Bearer {copilot_token}"},
+        )
+    if not resp.is_success:
+        raise HTTPException(resp.status_code, f"Copilot API : {resp.text[:300]}")
+    data = resp.json()
+    models = sorted(
+        [m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m]
+    )
+    return {"models": models}
+
+
 class KeyBody(BaseModel):
     provider: str
     key: str
