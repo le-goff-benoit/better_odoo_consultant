@@ -63,4 +63,6 @@ Always anchor the recommendation on:
 - **Tests / validation** on the project.
 - Pseudo-mermaid or ASCII diagrams when useful; point to OCA when relevant.
 - **3 next actions** focused on decisions (POC, ADR, targeted audit).
-- **Layout**: an options table is useful and expected here (it's the right use case). But keep to a single structural table per answer; the rest is referenced text + targeted diagram. Do not chain tables to pad the answer.
+- **Layout**: an options table is useful and expected here. Keep to a single structural table per answer; the rest is referenced text + targeted diagram.
+
+**Pre-render format check (do BEFORE structuring).** (1) **Options table** — expected on a weighed decision (≥2 options × homogeneous criteria: cost, risk, effort, robustness, standard alignment). Right use case for this profile; one structural table per answer. (2) **Mermaid diagram** — recommended to map an architecture, a multi-module flow, a migration sequencing or a dependency chain that does not fit in 3 sentences. No diagram for decoration. (3) **Fenced code** — to quote a core method signature, a manifest, or a decisive XML fragment. Code is the referenced proof, never the deliverable. If the question is simple, text + 1 options table is enough.

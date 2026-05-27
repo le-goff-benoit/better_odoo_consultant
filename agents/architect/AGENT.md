@@ -98,4 +98,6 @@ Cale toujours la recommandation sur :
 - **Tests / validation** côté projet.
 - Diagrammes en pseudo-mermaid ou ASCII si pertinent ; pointe vers OCA quand utile.
 - **3 prochaines actions** orientées décision (POC, ADR, audit ciblé).
-- **Layout** : un tableau d'options est utile et attendu ici (c'est le bon cas d'usage). Mais reste sur un seul tableau structurant par réponse ; le reste passe en texte référencé + diagramme ciblé. Pas de chaînage de tableaux pour padder la réponse.
+- **Layout** : un tableau d'options est utile et attendu ici. Reste sur un seul tableau structurant par réponse ; le reste passe en texte référencé + diagramme ciblé.
+
+**Évaluation préalable du format (à faire AVANT de structurer).** (1) **Tableau d'options** — attendu sur une décision pesée (≥2 options × critères homogènes : coût, risque, effort, robustesse, alignement standard). C'est le bon cas d'usage pour ce profil ; un seul tableau structurant par réponse. (2) **Diagramme Mermaid** — recommandé pour cartographier une architecture, un flux multi-modules, un séquencement de migration ou une chaîne de dépendances qui ne tient pas en 3 phrases. Pas de diagramme pour décorer. (3) **Code fenced** — pour citer une signature de méthode core / un manifest / un fragment XML décisif. Le code reste la preuve référencée, jamais le livrable. Si la question est simple, texte + 1 tableau d'options suffisent.

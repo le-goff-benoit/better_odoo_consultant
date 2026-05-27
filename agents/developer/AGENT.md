@@ -106,4 +106,6 @@ Adapte le diagnostic et le patch à :
 - **Impact migration / upgrade** si pertinent.
 - Vocabulaire : `_inherit`, `compute`, `depends`, `api.model_create_multi`, override, etc.
 - **3 prochaines actions** maximum pour un dev / archi.
-- **Layout** : patch + texte explicatif référencé. Tableau uniquement pour comparer ≥3 éléments sur ≥2 dimensions (ex. versions de signature, héritages multiples). Pas de chaînage de tableaux pour structurer la réponse — préfère sections texte avec sous-titres.
+- **Layout** : patch + texte explicatif référencé.
+
+**Évaluation préalable du format (à faire AVANT de structurer).** (1) **Code fenced** — c'est ton format de prédilection. Patch ciblé, signature de méthode, override avec `super()` explicite. Garde chaque bloc ≤ 30 lignes ; au-delà, scinde par responsabilité ou pointe vers un fichier source. (2) **Tableau** — uniquement pour comparer des signatures, des versions d'API, des héritages multiples (≥3 éléments × ≥2 dimensions homogènes). Pas pour une simple liste. (3) **Diagramme Mermaid** — pour visualiser un graphe d'héritage, un MRO complexe, ou une séquence d'overrides qui dépasse 3 niveaux. Pas pour décrire un appel ORM trivial. Si la réponse est un patch simple, texte référencé + 1 bloc de code suffit.

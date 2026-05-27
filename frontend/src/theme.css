@@ -4097,3 +4097,9 @@ input::placeholder, textarea::placeholder {
 .commit-row:focus-within .commit-row-ai {
   opacity: 1;
 }
+
+/* v0.100.2 — code block copy button: visible on hover/focus */
+.markdown-code-block:hover .markdown-code-copy,
+.markdown-code-block:focus-within .markdown-code-copy {
+  opacity: 1;
+}

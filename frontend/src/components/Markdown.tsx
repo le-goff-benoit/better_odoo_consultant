@@ -1,8 +1,56 @@
 import React, { createContext, useContext, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ExternalLink, Lightbulb, Pencil, Send, X } from 'lucide-react'
+import { Check, Copy, ExternalLink, Lightbulb, Pencil, Send, X } from 'lucide-react'
 import { t } from '../theme'
 import MermaidBlock from './MermaidBlock'
+
+// v0.100.2 — fenced code block with language badge + copy button.
+// Replaces the bare <pre><code> rendering. The label and copy affordance
+// matter for BA "Actuellement / Proposé" snippets the user wants to apply,
+// and for any short Python/XML excerpt of a cron / server action.
+const LANGUAGE_LABELS: Record<string, string> = {
+  python: 'Python', py: 'Python', xml: 'XML', javascript: 'JavaScript', js: 'JavaScript',
+  ts: 'TypeScript', typescript: 'TypeScript', json: 'JSON', yaml: 'YAML', yml: 'YAML',
+  sql: 'SQL', bash: 'Bash', sh: 'Shell', diff: 'Diff', text: 'Texte',
+}
+
+export function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false)
+  const label = language ? (LANGUAGE_LABELS[language] ?? language) : undefined
+  const onCopy = async () => {
+    try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* ignored */ }
+  }
+  return (
+    <div style={{ position: 'relative', margin: '8px 0' }} className="markdown-code-block">
+      {label && (
+        <span style={{
+          position: 'absolute', top: 4, left: 8, fontSize: 10, fontFamily: 'monospace',
+          color: t.muted, textTransform: 'uppercase', letterSpacing: '0.06em', userSelect: 'none',
+        }}>{label}</span>
+      )}
+      <button
+        type="button"
+        onClick={onCopy}
+        title={copied ? 'Copié' : 'Copier'}
+        aria-label={copied ? 'Code copié' : 'Copier le code'}
+        className="markdown-code-copy"
+        style={{
+          position: 'absolute', top: 4, right: 4, background: 'transparent', border: 'none',
+          padding: 4, borderRadius: t.radiusSm, cursor: 'pointer', color: copied ? t.brand : t.muted,
+          opacity: 0.6, transition: 'opacity 120ms',
+        }}
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+      </button>
+      <pre style={{
+        background: 'var(--code-bg)', borderRadius: t.radiusSm,
+        padding: label ? '22px 14px 10px 14px' : '10px 14px', overflowX: 'auto', margin: 0,
+      }}>
+        <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{code}</code>
+      </pre>
+    </div>
+  )
+}
 
 // Lets a parent renderer hand the Markdown subtree a callback so the
 // MarkdownTable "edit with AI" button can dispatch a contextualised prompt
@@ -490,11 +538,7 @@ export default function Markdown({ text }: { text: string }) {
       const code = codeLines.join('\n')
       result.push(language === 'mermaid'
         ? <MermaidBlock key={i} code={code} />
-        : (
-          <pre key={i} style={{ background: 'var(--code-bg)', borderRadius: t.radiusSm, padding: '10px 14px', overflowX: 'auto', margin: '8px 0' }}>
-            <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--code-fg)' }}>{code}</code>
-          </pre>
-        )
+        : <CodeBlock key={i} code={code} language={language} />
       )
       i++; continue
     }

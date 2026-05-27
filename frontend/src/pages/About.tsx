@@ -7,10 +7,21 @@ const VERSION = APP_VERSION
 
 const CHANGELOG = [
   {
-    version: '0.100.1',
+    version: '0.100.2',
     date: '2026-05-27',
     badge: 'Actuel',
     badgeColor: t.brand,
+    items: [
+      'Bloc code fenced enrichi — petit badge langage en haut à gauche (Python / XML / TypeScript…) + bouton copier au hover en haut à droite (avec feedback ✓ pendant 1.5s). Pas d\'opacité 1 par défaut (ne distrait pas la lecture), apparaît au survol/focus. Câblé sur tous les fences via le nouveau composant `CodeBlock` qui remplace le `<pre>` nu — Mermaid reste rendu par `MermaidBlock`. Le copy est particulièrement utile pour la nouvelle exception BA « modification proposée » (cf. ci-dessous) : l\'utilisateur peut appliquer le snippet sans le retaper',
+      'BA — exception « code court pour les actions techniques automatisées ». Avant : interdit absolu de snippet de code → impossible de répondre précisément sur une `ir.cron`, une `base.automation` ou un mail template avec logique, alors que le code EST la logique métier. Désormais, le BA peut citer un fenced ```python``` (ou ```xml```) de ≤15 lignes précédé d\'une phrase business, et proposer une modification au format **deux blocs consécutifs « Actuellement » / « Proposé »** chacun ≤10 lignes, avec impact métier en 1-2 phrases. Plafond 25 lignes cumulées — au-delà handoff explicite à `agent_developer`. Reste l\'exception, pas la règle : 0 snippet sur une question de paramétrage ou de cadrage',
+      'Tous les agents (Support / BA / Architect / Developer, FR + EN) — **évaluation préalable du format** ajoutée dans la section « Format de sortie ». L\'agent se pose 3 questions explicites AVANT de structurer : (1) Tableau ? — uniquement si ≥3 lignes comparables × ≥2 dimensions homogènes. (2) Diagramme Mermaid ? — uniquement pour un vrai flux ou graphe, jamais pour décorer. (3) Code fenced ? — selon le profil (preuve référencée pour BA/Support/Architect, format de prédilection pour Developer). Si rien n\'est justifié, texte + bullets suffit — souvent le meilleur format. Adapté par profil : tableau d\'options « expected » pour Architect, code « default » pour Developer, parcimonie pour BA/Support',
+    ],
+  },
+  {
+    version: '0.100.1',
+    date: '2026-05-27',
+    badge: '',
+    badgeColor: t.muted,
     items: [
       'IA — suivi systématique des objets liés Odoo. Une fiche Odoo n\'a de sens que reliée à ses enfants (commande → lignes, facture → écritures, projet → tâches, BL → mouvements). Avant : l\'IA s\'arrêtait souvent à l\'entête, parce que les champs `one2many` ramenés par `search_read` ne contiennent que des ids et qu\'aucune instruction n\'imposait au LLM la seconde query. Désormais, le skill `odoo_query_records` SKILL.md ajoute une section « Suivre les relations » avec un tableau de recettes prêtes (10 modèles parent → enfant + champ relationnel) et le pattern explicite à appliquer ; le BA `AGENT.md` (FR + EN) gagne une consigne « Charge systématiquement les objets liés ». +3 eval queries qui verrouillent le déclenchement sur « commande + lignes », « projet + tâches », « delivery + stock moves »',
       'Bugfix UX critique — perte de conversation après reprise depuis l\'historique puis navigation. Cause racine : le buffer en mémoire `_msgBuffer` (qui sert à survivre aux unmounts React pendant le streaming) n\'était pas synchronisé quand `resumeConv` ou `resetCurrentConversation` modifiaient l\'état via `setConversations` directement (et non via `setMessages` qui, lui, écrit dans le buffer). Au mount suivant, l\'effet de fusion buffer→état (l. 628 de `Assistant.tsx`) voyait que le buffer contenait des messages différents et écrasait le contenu repris par l\'ancien. Résultat utilisateur : on reprend une vieille conv, on bascule sur Sources / Projets / une autre conv, on revient et la conv reprise a disparu. Fix : nouveau helper `overwriteCurrentConversation(next)` qui met simultanément à jour `_msgBuffer`, LocalStorage et `setConversations` ; utilisé par les deux call sites concernés. Side effects sortis du callback de `setConversations` (sûr en mode strict React)',

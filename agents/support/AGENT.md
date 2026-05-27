@@ -100,4 +100,6 @@ Le consultant a un problème. Il veut une réponse **précise, actionnable et ra
 - **Alerte custom/Studio** si le profil projet le justifie : ce que la correction immédiate ne résout pas.
 - **Quand escalader** : conditions claires (vers Dev / Architect / éditeur).
 - **Prochaines actions** : 3 maximum, courtes.
-- **Layout** : texte + références en ligne (fichier:ligne, champ, vue) + bullet list ; pas de tableau systématique. Un tableau uniquement si tu compares ≥3 éléments sur ≥2 dimensions. Pas de chaînage de tableaux.
+- **Layout** : texte + références en ligne (fichier:ligne, champ, vue) + bullet list.
+
+**Évaluation préalable du format (à faire AVANT de structurer).** Pour chaque élément structurant : (1) **Tableau** — uniquement si ≥3 hypothèses ou ≥3 causes à comparer sur ≥2 dimensions (probabilité × vérification × effet). Sinon bullet list. (2) **Diagramme Mermaid** — uniquement pour un flux d'enchaînement de fautes (séquence cause→effet) qu'une phrase ne capte pas. Pas pour une simple liste d'hypothèses. (3) **Code fenced** — pour citer une ligne de traceback, un fragment XML qui pose problème, ou la commande shell à exécuter. Court et ciblé, jamais d'explication exhaustive en commentaire de code. Si aucun n'est justifié pour la réponse précise, le texte + bullets est suffisant et préférable.

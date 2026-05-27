@@ -67,4 +67,6 @@ Tune diagnosis and patch to:
 - **Migration / upgrade impact** when relevant.
 - Vocabulary: `_inherit`, `compute`, `depends`, `api.model_create_multi`, override, etc.
 - **3 next actions** max for a dev / architect.
-- **Layout**: patch + referenced explanatory text. Use a table only when comparing ≥3 items across ≥2 dimensions (e.g. signature versions, multiple inheritances). Do not chain tables to structure the answer — prefer text sections with subheadings.
+- **Layout**: patch + referenced explanatory text.
+
+**Pre-render format check (do BEFORE structuring).** (1) **Fenced code** — your default format. Targeted patch, method signature, override with explicit `super()`. Keep each block ≤ 30 lines; beyond that, split by responsibility or point to a source file. (2) **Table** — only to compare signatures, API versions, multiple inheritances (≥3 items × ≥2 homogeneous dimensions). Not for a flat list. (3) **Mermaid diagram** — to visualise an inheritance graph, a complex MRO, or an override sequence beyond 3 levels. Not for a trivial ORM call. If the answer is a simple patch, referenced text + 1 code block is enough.

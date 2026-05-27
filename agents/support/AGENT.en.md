@@ -61,4 +61,6 @@ The consultant has a problem. They want a **precise, actionable, fast** answer �
 - **Custom/Studio alert** when the project profile justifies it: what the immediate fix does not resolve.
 - **When to escalate**: clear conditions (to Dev / Architect / editor).
 - **Next steps**: max 3, short.
-- **Layout**: text + inline references (file:line, field, view) + bullet list; no systematic tables. Use a table only when comparing ≥3 items across ≥2 dimensions. Do not chain tables.
+- **Layout**: text + inline references (file:line, field, view) + bullet list.
+
+**Pre-render format check (do BEFORE structuring).** For each structural element: (1) **Table** — only if ≥3 hypotheses or ≥3 causes to compare across ≥2 dimensions (likelihood × check × effect). Otherwise bullets. (2) **Mermaid diagram** — only for a fault-chain flow (cause → effect sequence) that prose cannot capture. Not for a simple list of hypotheses. (3) **Fenced code** — to quote a traceback line, a problematic XML fragment, or the shell command to run. Short and targeted, never an exhaustive commented explanation. When none is justified for the precise answer, text + bullets is enough and preferred.
