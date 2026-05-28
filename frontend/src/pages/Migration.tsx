@@ -15,6 +15,7 @@ import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
 import Markdown, { MarkdownActionsProvider, extractActionItems } from '../components/Markdown'
+import { StreamingText } from '../components/StreamingText'
 import ActionProposals from '../components/ActionProposals'
 import AiSelector from '../components/AiSelector'
 import { useWorkspaceContext } from '../components/Layout'
@@ -109,7 +110,8 @@ function technicalComplexityLabel(raw?: string | null) {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'orchestration_selected' | 'orchestration_step' | 'text' | 'error' | 'warning' | 'done' | 'end'
+  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'orchestration_selected' | 'orchestration_step' | 'text' | 'text_delta' | 'error' | 'warning' | 'done' | 'end'
+  delta?: string
   name?: string
   args?: Record<string, unknown>
   skills?: string[]
@@ -165,6 +167,7 @@ interface Message {
   startTime?: number
   inputTokens?: number
   outputTokens?: number
+  streamingText?: string
 }
 
 interface MigSavedConv {
@@ -779,8 +782,8 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, perspective, onAskMore, onPromptAction, odooBaseUrl }: {
-  events: AiEvent[]; loading?: boolean; provider: string
+function AssistantBubble({ events, loading, streamingText, provider, timestamp, startTime, inputTokens, outputTokens, perspective, onAskMore, onPromptAction, odooBaseUrl }: {
+  events: AiEvent[]; loading?: boolean; streamingText?: string; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   perspective?: Perspective
   onAskMore?: (selectedText: string) => void
@@ -839,6 +842,17 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
         <OrchestrationStrip orchestration={orchestrationEvt?.orchestration} stepEvents={orchestrationSteps} />
 
         {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} />}
+
+        {/* Streaming phase: lightweight renderer while tokens arrive */}
+        {loading && streamingText && !textEvt && (
+          <div style={{
+            background: t.bgCard, border: `1px solid ${t.border}`,
+            borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
+            padding: '12px 16px',
+          }}>
+            <StreamingText text={streamingText} />
+          </div>
+        )}
 
         {textEvt?.content && (
           <div style={{
@@ -944,7 +958,8 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
           </div>
         )}
 
-        {loading && !textEvt && !errorEvt && (
+        {/* Spinner: only while waiting for the first token (no streaming text yet) */}
+        {loading && !streamingText && !textEvt && !errorEvt && (
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
             marginTop: toolEvents.length > 0 ? 10 : 0,
@@ -1498,13 +1513,31 @@ export default function Migration() {
           if (!line.startsWith('data: ')) continue
           let evt: AiEvent
           try { evt = JSON.parse(line.slice(6)) } catch { continue }
-          if (evt.type === 'done') {
+          if (evt.type === 'text_delta') {
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id
+                ? { ...m, streamingText: (m.streamingText ?? '') + (evt.delta ?? '') }
+                : m
+            ))
+          } else if (evt.type === 'tool_call') {
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id ? { ...m, streamingText: '' } : m
+            ))
+            appendEvent(assistantMsg.id, evt)
+          } else if (evt.type === 'text') {
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id ? { ...m, streamingText: '' } : m
+            ))
+            appendEvent(assistantMsg.id, evt)
+          } else if (evt.type === 'done') {
             setMessages(prev => prev.map(m => m.id === assistantMsg.id
               ? { ...m, timestamp: Date.now(), inputTokens: evt.input_tokens, outputTokens: evt.output_tokens }
               : m
             ))
+            appendEvent(assistantMsg.id, evt)
+          } else if (evt.type !== 'end') {
+            appendEvent(assistantMsg.id, evt)
           }
-          if (evt.type !== 'end') appendEvent(assistantMsg.id, evt)
         }
       }
     } catch (err: unknown) {
@@ -1516,7 +1549,7 @@ export default function Migration() {
     } finally {
       setStreaming(false)
       setMessages(prev => prev.map(m =>
-        m.id === assistantMsg.id ? { ...m, loading: false } : m
+        m.id === assistantMsg.id ? { ...m, loading: false, streamingText: '' } : m
       ))
       // If user is watching right now, no need for the "done" indicator — clear directly
       if (isMountedRef.current) streamingSignals.clear(migKeyRef.current)
@@ -1864,6 +1897,7 @@ export default function Migration() {
               <AssistantBubble
                 events={m.events ?? []}
                 loading={m.loading}
+                streamingText={m.streamingText}
                 provider={activeProvider}
                 timestamp={m.timestamp}
                 startTime={m.startTime}

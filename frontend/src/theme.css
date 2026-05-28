@@ -4169,3 +4169,19 @@ input::placeholder, textarea::placeholder {
 }
 
 /* Dark-mode: nothing to override, backgrounds are already dark by default */
+
+/* ── Streaming text cursor (StreamingText.tsx) ────────────────────────── */
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--brand-fg, #6366f1);
+  border-radius: 1px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: streaming-blink 1s step-end infinite;
+}
+@keyframes streaming-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}

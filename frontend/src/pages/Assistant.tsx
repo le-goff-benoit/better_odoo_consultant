@@ -40,6 +40,7 @@ import ResponseModal from '../components/ResponseModal'
 import SelectionAskMore from '../components/SelectionAskMore'
 import ToolCallGroup from '../components/ToolCallGroup'
 import Markdown, { MarkdownActionsProvider, extractActionItems } from '../components/Markdown'
+import { StreamingText } from '../components/StreamingText'
 import ActionProposals from '../components/ActionProposals'
 import SecondOpinionChips, { buildSecondOpinionPrompt } from '../components/SecondOpinionChips'
 
@@ -65,7 +66,8 @@ interface CompanyOption {
 }
 
 interface AiEvent {
-  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'orchestration_selected' | 'orchestration_step' | 'text' | 'error' | 'warning' | 'done' | 'end' | 'routing_confidence' | 'agent_drift'
+  type: 'tool_call' | 'tool_result' | 'skills_selected' | 'runtime_event' | 'orchestration_selected' | 'orchestration_step' | 'text' | 'text_delta' | 'error' | 'warning' | 'done' | 'end' | 'routing_confidence' | 'agent_drift'
+  delta?: string
   name?: string
   args?: Record<string, unknown>
   skills?: string[]
@@ -134,6 +136,9 @@ interface Message {
   // messages and only since v0.96.x — older saved conversations leave it
   // undefined; consumers must fall back to the current page perspective.
   perspective?: Perspective
+  // Accumulated text_delta content during streaming.  Cleared and replaced
+  // by the events[] `text` entry once the final response arrives.
+  streamingText?: string
 }
 
 interface SavedConv {
@@ -1011,23 +1016,36 @@ export default function Assistant() {
           try {
             const evt: AiEvent = JSON.parse(line.slice(5).trim())
             if (evt.type === 'end') break
-            setMessages(prev => {
-              const msgs = [...prev]
-              const last = msgs[msgs.length - 1]
-              if (last?.role === 'assistant') {
-                const extra = evt.type === 'done'
-                  ? { timestamp: Date.now(), inputTokens: evt.input_tokens, outputTokens: evt.output_tokens }
-                  : {}
-                msgs[msgs.length - 1] = { ...last, ...extra, events: [...(last.events ?? []), evt], loading: evt.type !== 'done' && evt.type !== 'error' }
-              }
-              return msgs
-            })
+            if (evt.type === 'text_delta') {
+              setMessages(prev => {
+                const msgs = [...prev]; const last = msgs[msgs.length - 1]
+                if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, streamingText: (last.streamingText ?? '') + (evt.delta ?? '') }
+                return msgs
+              })
+            } else if (evt.type === 'tool_call') {
+              // A tool call starts: clear any preamble text that was streamed
+              setMessages(prev => { const msgs = [...prev]; const last = msgs[msgs.length - 1]; if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, streamingText: '' }; return msgs })
+              setMessages(prev => { const msgs = [...prev]; const last = msgs[msgs.length - 1]; if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, events: [...(last.events ?? []), evt] }; return msgs })
+            } else {
+              setMessages(prev => {
+                const msgs = [...prev]
+                const last = msgs[msgs.length - 1]
+                if (last?.role === 'assistant') {
+                  const extra = evt.type === 'done'
+                    ? { timestamp: Date.now(), inputTokens: evt.input_tokens, outputTokens: evt.output_tokens }
+                    : {}
+                  const clearStreaming = evt.type === 'text' ? { streamingText: '' } : {}
+                  msgs[msgs.length - 1] = { ...last, ...extra, ...clearStreaming, events: [...(last.events ?? []), evt], loading: evt.type !== 'done' && evt.type !== 'error' }
+                }
+                return msgs
+              })
+            }
           } catch { /* skip malformed */ }
         }
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== 'AbortError') {
-        setMessages(prev => { const msgs = [...prev]; const last = msgs[msgs.length - 1]; if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, events: [{ type: 'error', msg: String(e) }], loading: false }; return msgs })
+        setMessages(prev => { const msgs = [...prev]; const last = msgs[msgs.length - 1]; if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, streamingText: '', events: [{ type: 'error', msg: String(e) }], loading: false }; return msgs })
       }
     } finally { setStreaming(false) }
   }
@@ -1108,13 +1126,34 @@ export default function Assistant() {
           if (!line.startsWith('data: ')) continue
           let evt: AiEvent
           try { evt = JSON.parse(line.slice(6)) } catch { continue }
-          if (evt.type === 'done') {
+          if (evt.type === 'text_delta') {
+            // Accumulate streaming text — shown via StreamingText until `text` arrives
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id
+                ? { ...m, streamingText: (m.streamingText ?? '') + (evt.delta ?? '') }
+                : m
+            ))
+          } else if (evt.type === 'tool_call') {
+            // Tool call starting: clear any preamble streaming text, then add event
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id ? { ...m, streamingText: '' } : m
+            ))
+            appendEvent(assistantMsg.id, evt)
+          } else if (evt.type === 'text') {
+            // Final text received: clear streamingText, add full text event
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id ? { ...m, streamingText: '' } : m
+            ))
+            appendEvent(assistantMsg.id, evt)
+          } else if (evt.type === 'done') {
             setMessages(prev => prev.map(m => m.id === assistantMsg.id
               ? { ...m, timestamp: Date.now(), inputTokens: evt.input_tokens, outputTokens: evt.output_tokens }
               : m
             ))
+            appendEvent(assistantMsg.id, evt)
+          } else if (evt.type !== 'end') {
+            appendEvent(assistantMsg.id, evt)
           }
-          if (evt.type !== 'end') appendEvent(assistantMsg.id, evt)
         }
       }
     } catch (err: unknown) {
@@ -1123,7 +1162,7 @@ export default function Assistant() {
     } finally {
       setStreaming(false)
       setMessages(prev => prev.map(m =>
-        m.id === assistantMsg.id ? { ...m, loading: false } : m
+        m.id === assistantMsg.id ? { ...m, loading: false, streamingText: '' } : m
       ))
       // If user is watching right now, no need for the "done" indicator — clear directly
       if (convKey) {
@@ -1567,6 +1606,7 @@ export default function Assistant() {
                 <AssistantBubble
                   events={msg.events ?? []}
                   loading={msg.loading}
+                  streamingText={msg.streamingText}
                   provider={provider}
                   timestamp={msg.timestamp}
                   startTime={msg.startTime}
@@ -2077,8 +2117,8 @@ function UserBubble({ text, attachments, timestamp }: { text: string; attachment
   )
 }
 
-function AssistantBubble({ events, loading, provider, timestamp, startTime, inputTokens, outputTokens, projectName, perspective, odooBaseUrl, onAskMore, onEditTable, onPromptAction, onSecondOpinion }: {
-  events: AiEvent[]; loading?: boolean; provider: string
+function AssistantBubble({ events, loading, streamingText, provider, timestamp, startTime, inputTokens, outputTokens, projectName, perspective, odooBaseUrl, onAskMore, onEditTable, onPromptAction, onSecondOpinion }: {
+  events: AiEvent[]; loading?: boolean; streamingText?: string; provider: string
   timestamp?: number; startTime?: number; inputTokens?: number; outputTokens?: number
   projectName?: string
   perspective?: Perspective
@@ -2139,6 +2179,17 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
         <OrchestrationStrip orchestration={orchestrationEvt?.orchestration} stepEvents={orchestrationSteps} />
 
         {toolEvents.length > 0 && <ToolCallGroup events={toolEvents} projectName={projectName} />}
+
+        {/* Streaming phase: lightweight renderer while tokens arrive */}
+        {loading && streamingText && !textEvt && (
+          <div style={{
+            background: t.bgCard, border: `1px solid ${t.border}`,
+            borderRadius: `4px ${t.radiusLg} ${t.radiusLg} ${t.radiusLg}`,
+            padding: '12px 16px',
+          }}>
+            <StreamingText text={streamingText} />
+          </div>
+        )}
 
         {textEvt?.content && (
           <div style={{
@@ -2267,7 +2318,8 @@ function AssistantBubble({ events, loading, provider, timestamp, startTime, inpu
           </div>
         ))}
 
-        {loading && !textEvt && !errorEvt && (
+        {/* Spinner: only while waiting for the first token (no streaming text yet) */}
+        {loading && !streamingText && !textEvt && !errorEvt && (
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
             marginTop: toolEvents.length > 0 ? 10 : 0,

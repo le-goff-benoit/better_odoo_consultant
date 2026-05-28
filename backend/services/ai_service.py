@@ -2364,20 +2364,29 @@ async def _chat_claude(api_key: str, model_id: str, system, messages: list, odoo
 
     _seen_calls: list[tuple[str, str]] = []  # (name, args_json) — loop guard
     for _ in range(25):
-        response = await client.messages.create(
+        # Stream the response token by token.  The final message is retrieved
+        # inside the context manager so token counts and structured content
+        # (including tool_use blocks) are available after text streaming ends.
+        accumulated_text = ""
+        async with client.messages.stream(
             model=model_id,
             max_tokens=_CLAUDE_MAX_OUTPUT_TOKENS,
             system=system_payload,
             messages=loop_msgs,
             tools=tools,
-        )
-        if hasattr(response, "usage") and response.usage:
-            total_in     += getattr(response.usage, "input_tokens",  0) or 0
-            total_out    += getattr(response.usage, "output_tokens", 0) or 0
-            cache_create += getattr(response.usage, "cache_creation_input_tokens", 0) or 0
-            cache_read   += getattr(response.usage, "cache_read_input_tokens",     0) or 0
+        ) as stream:
+            async for text_chunk in stream.text_stream:
+                yield {"type": "text_delta", "delta": text_chunk}
+                accumulated_text += text_chunk
+            final = await stream.get_final_message()
 
-        stop_reason = response.stop_reason
+        if hasattr(final, "usage") and final.usage:
+            total_in     += getattr(final.usage, "input_tokens",  0) or 0
+            total_out    += getattr(final.usage, "output_tokens", 0) or 0
+            cache_create += getattr(final.usage, "cache_creation_input_tokens", 0) or 0
+            cache_read   += getattr(final.usage, "cache_read_input_tokens",     0) or 0
+
+        stop_reason = final.stop_reason
 
         if stop_reason == "tool_use":
             # Strip any previous cache_control on tool_results — we only keep
@@ -2386,7 +2395,7 @@ async def _chat_claude(api_key: str, model_id: str, system, messages: list, odoo
             _strip_cache_control_from_messages(loop_msgs)
 
             tool_results = []
-            for block in response.content:
+            for block in final.content:
                 if block.type == "tool_use":
                     call_sig = (block.name, json.dumps(block.input, sort_keys=True, ensure_ascii=False))
                     _seen_calls.append(call_sig)
@@ -2406,14 +2415,15 @@ async def _chat_claude(api_key: str, model_id: str, system, messages: list, odoo
             if tool_results:
                 tool_results[-1]["cache_control"] = {"type": "ephemeral"}
 
-            loop_msgs.append({"role": "assistant", "content": response.content})
+            loop_msgs.append({"role": "assistant", "content": final.content})
             loop_msgs.append({"role": "user", "content": tool_results})
             continue
 
-        # Terminal response.
-        text = "".join(getattr(b, "text", "") for b in response.content)
-        if text:
-            yield {"type": "text", "content": text}
+        # Terminal response — emit the full text event so the frontend can
+        # switch from the lightweight streaming renderer to the rich Markdown
+        # renderer.  The content matches what was streamed via text_delta.
+        if accumulated_text:
+            yield {"type": "text", "content": accumulated_text}
 
         if stop_reason == "max_tokens":
             yield {
@@ -2450,31 +2460,81 @@ async def _chat_openai_client(client, model_id: str, system: str, messages: list
     total_in = total_out = 0
     _seen_calls_oai: list[tuple[str, str]] = []
     for _ in range(25):
-        response = await client.chat.completions.create(
+        accumulated_text = ""
+        # tool_call_accum: index → {id, name, args_str}
+        tool_call_accum: dict[int, dict] = {}
+        finish_reason = None
+
+        stream = await client.chat.completions.create(
             model=model_id, messages=oai_msgs, tools=tools,
+            stream=True, stream_options={"include_usage": True},
         )
-        if hasattr(response, "usage") and response.usage:
-            total_in  += getattr(response.usage, "prompt_tokens",     0) or 0
-            total_out += getattr(response.usage, "completion_tokens",  0) or 0
-        choice = response.choices[0]
-        if choice.finish_reason == "tool_calls":
-            oai_msgs.append(choice.message)
-            for tc in choice.message.tool_calls:
-                args = json.loads(tc.function.arguments)
-                call_sig = (tc.function.name, json.dumps(args, sort_keys=True, ensure_ascii=False))
+        async for chunk in stream:
+            if not chunk.choices:
+                # Final usage-only chunk sent when stream_options.include_usage=True
+                if hasattr(chunk, "usage") and chunk.usage:
+                    total_in  += getattr(chunk.usage, "prompt_tokens",    0) or 0
+                    total_out += getattr(chunk.usage, "completion_tokens", 0) or 0
+                continue
+            choice = chunk.choices[0]
+            delta  = choice.delta
+            if delta.content:
+                yield {"type": "text_delta", "delta": delta.content}
+                accumulated_text += delta.content
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tool_call_accum:
+                        tool_call_accum[idx] = {"id": "", "name": "", "args": ""}
+                    if tc_delta.id:
+                        tool_call_accum[idx]["id"] = tc_delta.id
+                    if tc_delta.function and tc_delta.function.name:
+                        tool_call_accum[idx]["name"] += tc_delta.function.name
+                    if tc_delta.function and tc_delta.function.arguments:
+                        tool_call_accum[idx]["args"] += tc_delta.function.arguments
+            if choice.finish_reason is not None:
+                finish_reason = choice.finish_reason
+
+        if finish_reason == "tool_calls":
+            # Reconstruct the assistant message with accumulated tool calls
+            tool_calls_list = [
+                {
+                    "id": tool_call_accum[i]["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tool_call_accum[i]["name"],
+                        "arguments": tool_call_accum[i]["args"],
+                    },
+                }
+                for i in sorted(tool_call_accum.keys())
+            ]
+            oai_msgs.append({
+                "role": "assistant",
+                "content": accumulated_text or None,
+                "tool_calls": tool_calls_list,
+            })
+            for i in sorted(tool_call_accum.keys()):
+                tc_data = tool_call_accum[i]
+                try:
+                    args = json.loads(tc_data["args"])
+                except json.JSONDecodeError:
+                    args = {}
+                call_sig = (tc_data["name"], json.dumps(args, sort_keys=True, ensure_ascii=False))
                 _seen_calls_oai.append(call_sig)
                 if _seen_calls_oai.count(call_sig) >= 3:
                     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
                     return
-                yield {"type": "tool_call", "name": tc.function.name, "args": args}
-                result = await _run_tool(tc.function.name, args, odoo, source_path, repo_path, target_path)
-                yield {"type": "tool_result", "name": tc.function.name, **result}
+                yield {"type": "tool_call", "name": tc_data["name"], "args": args}
+                result = await _run_tool(tc_data["name"], args, odoo, source_path, repo_path, target_path)
+                yield {"type": "tool_result", "name": tc_data["name"], **result}
                 oai_msgs.append({
-                    "role": "tool", "tool_call_id": tc.id,
-                    "content": _compress_tool_result(result, tc.function.name),
+                    "role": "tool",
+                    "tool_call_id": tc_data["id"],
+                    "content": _compress_tool_result(result, tc_data["name"]),
                 })
         else:
-            yield {"type": "text", "content": choice.message.content or ""}
+            # Terminal response
+            yield {"type": "text", "content": accumulated_text}
             yield {"type": "done", "model": model_id, "input_tokens": total_in, "output_tokens": total_out}
             return
     yield {"type": "error", "msg": "Trop d'appels d'outils en boucle."}
